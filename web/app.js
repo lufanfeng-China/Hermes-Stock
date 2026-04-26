@@ -76,6 +76,13 @@ function formatNumber(value) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
 }
 
+function formatIntegerNumber(value) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
 function formatVolumeMillions(value) {
   return `${formatNumber(scaleVolumeMillions(value))} M`;
 }
@@ -240,7 +247,8 @@ function renderChart(chart, rows, viewport, history, movingAverageRows) {
   const domainValues = values.concat(movingAverageValues.filter((value) => Number.isFinite(value)));
   const min = Math.min(...domainValues);
   const max = Math.max(...domainValues);
-  const paddedMin = min === max ? min * 0.98 : min - (max - min) * 0.08;
+  const paddedMinBase = min === max ? min * 0.98 : min - (max - min) * 0.08;
+  const paddedMin = chart.isVolume ? Math.max(0, paddedMinBase) : paddedMinBase;
   const paddedMax = min === max ? max * 1.02 || 1 : max + (max - min) * 0.08;
   const valueRange = paddedMax - paddedMin || 1;
   const stepX = rows.length === 1 ? 0 : plotWidth / (rows.length - 1);
@@ -269,7 +277,7 @@ function renderChart(chart, rows, viewport, history, movingAverageRows) {
     const y = getY(tick);
     return `
       <line class="grid-line" x1="${CHART_PADDING.left}" y1="${y}" x2="${width - CHART_PADDING.right}" y2="${y}"></line>
-      <text class="axis-label axis-label-y" x="${width - CHART_PADDING.right + 10}" y="${y + 4}">${chart.isVolume ? `${formatNumber(tick)} M` : formatNumber(tick)}</text>
+      <text class="axis-label axis-label-y" x="${width - CHART_PADDING.right + 10}" y="${y + 4}">${chart.isVolume ? `${formatIntegerNumber(tick)} M` : formatIntegerNumber(tick)}</text>
     `;
   }).join("");
 
