@@ -1,0 +1,170 @@
+{
+  "trading_day": "2026-04-24",
+  "run_id": "archive_20260424_01",
+  "archive_revision": 1,
+  "archive_status": "success",
+  "started_at": "2026-04-24T15:10:00+08:00",
+  "completed_at": "2026-04-24T18:42:31+08:00",
+  "generated_at": "2026-04-24T18:42:31+08:00",
+  "data_cutoff_time": "2026-04-24T15:00:00+08:00",
+  "source_summary": {
+    "primary_source": "local_tdx",
+    "secondary_sources": ["tdx_api"],
+    "data_status": "final",
+    "price_mode_default": "qfq",
+    "intraday_base_interval": "1m",
+    "derived_base_interval": "5m",
+    "fallback_enabled": true
+  },
+  "versions": {
+    "api_version": "v1",
+    "schema_version": "1.0.0",
+    "rule_version": "1.0.0",
+    "derivation_version": "1.0.0",
+    "data_pipeline_version": "1.0.0",
+    "model_version": "gpt-5.4"
+  },
+  "datasets_included": [
+    {
+      "dataset_name": "bars_15m",
+      "dataset_category": "bars",
+      "dataset_scope": "stock",
+      "subject_type": "time_series",
+      "storage_layer": "derived_store",
+      "data_status": "final",
+      "base_interval": "5m",
+      "target_interval": "15m",
+      "partition": "trading_day=2026-04-24",
+      "path": "data/archive/trading_day=2026-04-24/bars/bars_15m.parquet",
+      "row_count": 125600,
+      "symbol_count": 4521,
+      "generated_at": "2026-04-24T18:10:22+08:00",
+      "data_cutoff_time": "2026-04-24T15:00:00+08:00",
+      "validation_status": "passed"
+    },
+    {
+      "dataset_name": "features_intraday_momentum",
+      "dataset_category": "features",
+      "dataset_scope": "stock",
+      "subject_type": "feature_series",
+      "storage_layer": "derived_store",
+      "data_status": "final",
+      "base_interval": "5m",
+      "target_interval": "15m",
+      "partition": "trading_day=2026-04-24",
+      "path": "data/archive/trading_day=2026-04-24/features/features_intraday_momentum.parquet",
+      "row_count": 84500,
+      "generated_at": "2026-04-24T18:12:10+08:00",
+      "data_cutoff_time": "2026-04-24T15:00:00+08:00",
+      "validation_status": "passed"
+    },
+    {
+      "dataset_name": "dataset_stock_candidate_pool",
+      "dataset_category": "dataset",
+      "dataset_scope": "stock",
+      "subject_type": "tabular_dataset",
+      "storage_layer": "final_archive",
+      "data_status": "final",
+      "base_interval": null,
+      "target_interval": "daily",
+      "partition": "trading_day=2026-04-24",
+      "path": "data/archive/trading_day=2026-04-24/datasets/dataset_stock_candidate_pool.parquet",
+      "row_count": 236,
+      "generated_at": "2026-04-24T18:20:11+08:00",
+      "data_cutoff_time": "2026-04-24T15:00:00+08:00",
+      "validation_status": "passed"
+    },
+    {
+      "dataset_name": "snapshot_market_overview",
+      "dataset_category": "snapshot",
+      "dataset_scope": "market",
+      "subject_type": "snapshot",
+      "storage_layer": "final_archive",
+      "data_status": "final",
+      "base_interval": null,
+      "target_interval": "daily",
+      "partition": "trading_day=2026-04-24",
+      "path": "data/archive/trading_day=2026-04-24/snapshots/snapshot_market_overview.json",
+      "row_count": 1,
+      "generated_at": "2026-04-24T18:22:00+08:00",
+      "data_cutoff_time": "2026-04-24T15:00:00+08:00",
+      "validation_status": "passed"
+    },
+    {
+      "dataset_name": "audit_signal_events",
+      "dataset_category": "audit",
+      "dataset_scope": "stock",
+      "subject_type": "event_log",
+      "storage_layer": "final_archive",
+      "data_status": "final",
+      "base_interval": null,
+      "target_interval": null,
+      "partition": "trading_day=2026-04-24",
+      "path": "data/archive/trading_day=2026-04-24/audit/audit_signal_events.jsonl",
+      "row_count": 1824,
+      "generated_at": "2026-04-24T18:25:03+08:00",
+      "data_cutoff_time": "2026-04-24T15:00:00+08:00",
+      "validation_status": "passed"
+    }
+  ],
+  "snapshot_summary": {
+    "market_snapshot": "available",
+    "sector_snapshot": "available",
+    "stock_snapshot": "available",
+    "portfolio_snapshot": "not_enabled"
+  },
+  "validation_summary": {
+    "overall_status": "passed",
+    "checks_total": 12,
+    "checks_passed": 12,
+    "checks_failed": 0,
+    "warnings": 1,
+    "validation_items": [
+      {
+        "name": "final_data_status_check",
+        "status": "passed"
+      },
+      {
+        "name": "dataset_presence_check",
+        "status": "passed"
+      },
+      {
+        "name": "timestamp_consistency_check",
+        "status": "passed"
+      }
+    ]
+  },
+  "exception_summary": {
+    "has_exceptions": true,
+    "exception_count": 1,
+    "retryable_count": 1,
+    "non_retryable_count": 0,
+    "top_errors": [
+      {
+        "error_code": "BJ_5M_READ_SKIPPED",
+        "count": 1
+      }
+    ]
+  },
+  "rerun_info": {
+    "is_rerun": false,
+    "rerun_of": null,
+    "rerun_reason": null,
+    "supersedes_revision": null
+  },
+  "artifacts": {
+    "success_marker": "data/archive/trading_day=2026-04-24/_SUCCESS.json",
+    "failure_marker": null,
+    "manifest_path": "data/archive/trading_day=2026-04-24/manifests/day_manifest.json",
+    "audit_root": "data/archive/trading_day=2026-04-24/audit/",
+    "bars_root": "data/archive/trading_day=2026-04-24/bars/",
+    "features_root": "data/archive/trading_day=2026-04-24/features/",
+    "datasets_root": "data/archive/trading_day=2026-04-24/datasets/",
+    "snapshots_root": "data/archive/trading_day=2026-04-24/snapshots/"
+  },
+  "notes": [
+    "沪深主市场 5m 数据已作为 15m/30m/60m 主派生基底。",
+    "北交所 5m 派生未纳入本次正式主基底。",
+    "所有正式结果均基于 final 数据生成。"
+  ]
+}

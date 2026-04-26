@@ -8,3 +8,7 @@ __pycache__/
 node_modules/
 dist/
 build/
+
+# Runtime archive/derived data
+/data/
+!/docs/*.example.json

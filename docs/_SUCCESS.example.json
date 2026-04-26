@@ -1,0 +1,13 @@
+{
+  "trading_day": "2026-04-24",
+  "archive_status": "success",
+  "run_id": "archive_20260424_01",
+  "archive_revision": 1,
+  "started_at": "2026-04-24T15:10:00+08:00",
+  "completed_at": "2026-04-24T18:42:31+08:00",
+  "data_cutoff_time": "2026-04-24T15:00:00+08:00",
+  "dataset_count": 27,
+  "validation_passed": true,
+  "manifest_path": "data/archive/trading_day=2026-04-24/manifests/day_manifest.json",
+  "generated_at": "2026-04-24T18:42:31+08:00"
+}

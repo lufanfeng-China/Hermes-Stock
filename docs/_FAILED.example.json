@@ -1,0 +1,14 @@
+{
+  "trading_day": "2026-04-24",
+  "archive_status": "failed",
+  "run_id": "archive_20260424_02",
+  "archive_revision": 2,
+  "started_at": "2026-04-24T19:05:00+08:00",
+  "failed_at": "2026-04-24T19:07:12+08:00",
+  "failed_stage": "phase_4_archive_finalize",
+  "error_code": "DATASET_WRITE_FAILED",
+  "error_summary": "final features parquet write failed",
+  "retryable": true,
+  "manifest_path": "data/archive/trading_day=2026-04-24/manifests/day_manifest.json",
+  "generated_at": "2026-04-24T19:07:12+08:00"
+}
