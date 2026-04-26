@@ -5,7 +5,15 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+import subprocess
 from typing import Any
+
+
+TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
+TONGDAXIN_DIR = "/mnt/c/new_tdx64"
+TARGET_MARKET = "sh"
+TARGET_SYMBOL = "601600"
+REAL_FEATURE_DATASET_NAME = "features_intraday_volume_windows"
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -80,27 +88,78 @@ def freeze_intraday_state(ctx: Any) -> dict[str, Any]:
 
 
 def load_final_inputs(ctx: Any) -> dict[str, Any]:
+    script = """
+import json
+import sys
+from mootdx.reader import Reader
+
+trading_day = sys.argv[1]
+symbol = sys.argv[2]
+tdxdir = sys.argv[3]
+reader = Reader.factory(market="std", tdxdir=tdxdir)
+frame = reader.minute(symbol=symbol, suffix=1)
+day_frame = frame.loc[trading_day]
+rows = []
+for index, row in day_frame.iterrows():
+    rows.append(
+        {
+            "timestamp": index.isoformat(sep=" ", timespec="seconds"),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "amount": float(row["amount"]),
+            "volume": int(row["volume"]),
+        }
+    )
+payload = {
+    "market": sys.argv[4],
+    "symbol": symbol,
+    "trading_day": trading_day,
+    "row_count": len(rows),
+    "first_timestamp": rows[0]["timestamp"] if rows else None,
+    "last_timestamp": rows[-1]["timestamp"] if rows else None,
+    "rows": rows,
+}
+print(json.dumps(payload, ensure_ascii=False))
+""".strip()
+    result = subprocess.run(
+        [TONGDAXIN_PYTHON, "-c", script, ctx.trading_day, TARGET_SYMBOL, TONGDAXIN_DIR, TARGET_MARKET],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    minute_payload = json.loads(result.stdout)
     metadata = {
         "source_summary": {
-            "primary_source": "local_tdx",
-            "secondary_sources": ["tdx_api"],
+            "primary_source": "local_tongdaxin_minute",
+            "secondary_sources": [],
             "data_status": "final",
-            "price_mode_default": "qfq",
+            "price_mode_default": "raw",
             "intraday_base_interval": "1m",
-            "derived_base_interval": "5m",
-            "fallback_enabled": True,
+            "derived_base_interval": "1m",
+            "fallback_enabled": False,
         },
         "versions": {
             "api_version": "v1",
             "schema_version": "1.0.0",
             "rule_version": "1.0.0",
-            "derivation_version": "1.0.0",
+            "derivation_version": "real-volume-window-v1",
             "data_pipeline_version": "1.0.0",
-            "model_version": "stdlib-stub",
+            "model_version": "stdlib-subprocess-tdx",
         },
         "notes": [
-            "This archive run uses stdlib-only placeholder outputs.",
-            "Final source loading is stubbed and returns metadata only.",
+            "Loaded local Tongdaxin 1-minute data via subprocess for one stock.",
+            "Real feature aggregation is enabled only for symbol 601600.",
+        ],
+        "symbols_loaded": [
+            {
+                "market": minute_payload["market"],
+                "symbol": minute_payload["symbol"],
+                "row_count": minute_payload["row_count"],
+                "first_timestamp": minute_payload["first_timestamp"],
+                "last_timestamp": minute_payload["last_timestamp"],
+            }
         ],
         "exception_summary": {
             "has_exceptions": False,
@@ -109,6 +168,7 @@ def load_final_inputs(ctx: Any) -> dict[str, Any]:
             "non_retryable_count": 0,
             "top_errors": [],
         },
+        "minute_data": minute_payload,
     }
     _write_json(ctx.archive_root / "audit" / "final_inputs_metadata.json", metadata)
     return metadata
@@ -125,29 +185,98 @@ def build_final_bars(ctx: Any, final_inputs: dict[str, Any]) -> list[dict[str, A
             subject_type="time_series",
             storage_layer="derived_store",
             relative_path=f"data/archive/trading_day={ctx.trading_day}/bars/bars_15m.parquet",
-            row_count=10,
-            symbol_count=3,
-            base_interval="5m",
+            row_count=1,
+            symbol_count=1,
+            base_interval="1m",
             target_interval="15m",
         )
     ]
 
 
-def build_final_features(ctx: Any, bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _sum_window(
+    minute_rows: list[dict[str, Any]],
+    *,
+    trading_day: str,
+    window_start: str,
+    window_end: str,
+) -> tuple[int, float, int]:
+    start_ts = f"{trading_day} {window_start}:00"
+    end_ts = f"{trading_day} {window_end}:00"
+    selected_rows = [row for row in minute_rows if start_ts <= row["timestamp"] <= end_ts]
+    volume_sum = sum(int(row["volume"]) for row in selected_rows)
+    amount_sum = sum(float(row["amount"]) for row in selected_rows)
+    return volume_sum, amount_sum, len(selected_rows)
+
+
+def build_final_features(ctx: Any, final_inputs: dict[str, Any], bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
     del bars
-    return [
-        _dataset_entry(
-            ctx=ctx,
-            dataset_name="features_intraday_momentum",
-            dataset_category="features",
-            dataset_scope="stock",
-            subject_type="feature_series",
-            storage_layer="derived_store",
-            relative_path=f"data/archive/trading_day={ctx.trading_day}/features/features_intraday_momentum.parquet",
-            row_count=10,
-            base_interval="5m",
-            target_interval="15m",
+    minute_data = final_inputs["minute_data"]
+    minute_rows = minute_data["rows"]
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    indicators: list[dict[str, Any]] = []
+    for indicator_name, window_start, window_end in (
+        ("open_15m_volume", "09:31", "09:45"),
+        ("window_1430_1445_volume", "14:30", "14:45"),
+    ):
+        volume_sum, amount_sum, bar_count = _sum_window(
+            minute_rows,
+            trading_day=ctx.trading_day,
+            window_start=window_start,
+            window_end=window_end,
         )
+        indicators.append(
+            {
+                "trading_day": ctx.trading_day,
+                "market": minute_data["market"],
+                "symbol": minute_data["symbol"],
+                "indicator_name": indicator_name,
+                "window_start": window_start,
+                "window_end": window_end,
+                "base_interval": "1m",
+                "volume_sum": volume_sum,
+                "amount_sum": amount_sum,
+                "bar_count": bar_count,
+                "data_status": "final",
+                "data_source": "local_tongdaxin_minute",
+                "generated_at": generated_at,
+                "data_cutoff_time": ctx.data_cutoff_time,
+            }
+        )
+
+    relative_path = f"data/archive/trading_day={ctx.trading_day}/features/{REAL_FEATURE_DATASET_NAME}.json"
+    artifact_path = ctx.project_root / relative_path
+    artifact_payload = {
+        "dataset_name": REAL_FEATURE_DATASET_NAME,
+        "trading_day": ctx.trading_day,
+        "market": minute_data["market"],
+        "symbol": minute_data["symbol"],
+        "base_interval": "1m",
+        "data_source": "local_tongdaxin_minute",
+        "data_status": "final",
+        "generated_at": generated_at,
+        "data_cutoff_time": ctx.data_cutoff_time,
+        "indicator_count": len(indicators),
+        "indicators": indicators,
+    }
+    _write_json(artifact_path, artifact_payload)
+    return [
+        {
+            "dataset_name": REAL_FEATURE_DATASET_NAME,
+            "dataset_category": "features",
+            "dataset_scope": "stock",
+            "subject_type": "feature_series",
+            "storage_layer": "derived_store",
+            "data_status": "final",
+            "base_interval": "1m",
+            "target_interval": "window",
+            "partition": f"trading_day={ctx.trading_day}",
+            "path": relative_path,
+            "row_count": len(indicators),
+            "symbol_count": 1,
+            "generated_at": generated_at,
+            "data_cutoff_time": ctx.data_cutoff_time,
+            "validation_status": "passed",
+        }
     ]
 
 

@@ -9,7 +9,7 @@ from typing import Any
 
 REQUIRED_DATASETS = {
     "bars_15m",
-    "features_intraday_momentum",
+    "features_intraday_volume_windows",
     "dataset_stock_candidate_pool",
     "snapshot_market_overview",
 }

@@ -201,7 +201,7 @@ def execute_pipeline(ctx: ArchiveContext) -> dict[str, Any]:
     set_stage(ctx, "phase_3_final_recompute")
     final_inputs = load_final_inputs(ctx)
     bars = build_final_bars(ctx, final_inputs)
-    features = build_final_features(ctx, bars)
+    features = build_final_features(ctx, final_inputs, bars)
     datasets = build_final_datasets(ctx, features)
     snapshots = build_final_snapshots(ctx, datasets)
     audit = build_audit_artifacts(ctx, final_inputs)
