@@ -56,5 +56,6 @@
 - success 标记示例见：`docs/_SUCCESS.example.json`
 - failed 标记示例见：`docs/_FAILED.example.json`
 - datasets_included 命名规范见：`docs/dataset-catalog-schema.md`
+- 行业与概念标准化 schema 见：`docs/industry-concept-schema.md`
 - 归档脚本执行顺序与伪代码见：`docs/archive-script-plan.md`
 - 代码目录与运行数据目录边界见：`docs/code-data-boundary.md`

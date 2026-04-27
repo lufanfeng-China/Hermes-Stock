@@ -18,6 +18,12 @@ def build_day_manifest(
 ) -> dict[str, Any]:
     del freeze_state
     rerun_of = ctx.archive_revision - 1 if ctx.archive_revision > 1 else None
+    has_market_snapshot = any(
+        item["dataset_category"] == "snapshot" and item["dataset_scope"] == "market" for item in datasets_included
+    )
+    has_stock_snapshot = any(
+        item["dataset_category"] == "snapshot" and item["dataset_scope"] == "stock" for item in datasets_included
+    )
     return {
         "trading_day": ctx.trading_day,
         "run_id": ctx.run_id,
@@ -31,9 +37,9 @@ def build_day_manifest(
         "versions": final_inputs["versions"],
         "datasets_included": datasets_included,
         "snapshot_summary": {
-            "market_snapshot": "available",
+            "market_snapshot": "available" if has_market_snapshot else "not_enabled",
             "sector_snapshot": "not_enabled",
-            "stock_snapshot": "not_enabled",
+            "stock_snapshot": "available" if has_stock_snapshot else "not_enabled",
             "portfolio_snapshot": "not_enabled",
         },
         "validation_summary": validation_summary,

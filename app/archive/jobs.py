@@ -8,12 +8,30 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from app.tdx.parsers import (
+    CONCEPT_CURRENT_DATASET,
+    CONCEPT_DICTIONARY_DATASET,
+    CONCEPT_SNAPSHOT_DATASET,
+    DEFAULT_CONCEPT_SOURCE_FILE,
+    DEFAULT_INDUSTRY_SOURCE_FILE,
+    INDUSTRY_CURRENT_DATASET,
+    INDUSTRY_SNAPSHOT_DATASET,
+    build_concept_datasets,
+    build_industry_datasets,
+    load_text_file,
+    with_dataset_name,
+)
+
 
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 TONGDAXIN_DIR = "/mnt/c/new_tdx64"
 TARGET_MARKET = "sh"
 TARGET_SYMBOL = "601600"
 REAL_FEATURE_DATASET_NAME = "features_intraday_volume_windows"
+TDXHY_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxhy.cfg")
+TDXZS3_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxzs3.cfg")
+TDXZS_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxzs.cfg")
+EXTERN_SYS_PATH = Path("/mnt/c/new_tdx64/T0002/signals/extern_sys.txt")
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -24,6 +42,11 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 def _touch_placeholder(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.touch()
+
+
+def _write_json_rows_with_placeholder(path: Path, rows: list[dict[str, Any]]) -> None:
+    _touch_placeholder(path)
+    _write_json(path.with_suffix(".json"), rows)
 
 
 def _dataset_entry(
@@ -73,6 +96,73 @@ def _dataset_entry(
     if symbol_count is not None:
         entry["symbol_count"] = symbol_count
     return entry
+
+
+def _rows_to_dataset_entry(
+    *,
+    ctx: Any,
+    dataset_name: str,
+    dataset_category: str,
+    dataset_scope: str,
+    subject_type: str,
+    storage_layer: str,
+    relative_path: str,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    artifact_path = ctx.project_root / relative_path
+    _write_json_rows_with_placeholder(artifact_path, rows)
+    entry = {
+        "dataset_name": dataset_name,
+        "dataset_category": dataset_category,
+        "dataset_scope": dataset_scope,
+        "subject_type": subject_type,
+        "storage_layer": storage_layer,
+        "data_status": "final",
+        "base_interval": None,
+        "target_interval": "daily",
+        "partition": f"trading_day={ctx.trading_day}",
+        "path": relative_path,
+        "row_count": len(rows),
+        "generated_at": rows[0]["generated_at"] if rows else ctx.generated_at,
+        "data_cutoff_time": ctx.data_cutoff_time,
+        "validation_status": "passed",
+    }
+    symbols = {str(row.get("market", "")) + ":" + str(row.get("symbol", "")) for row in rows if row.get("symbol")}
+    if symbols:
+        entry["symbol_count"] = len(symbols)
+    return entry
+
+
+def _load_industry_concept_datasets(ctx: Any) -> dict[str, list[dict[str, Any]]]:
+    cached = getattr(ctx, "_industry_concept_cache", None)
+    if cached is not None:
+        return cached
+
+    industry_code_path = TDXZS3_PATH if TDXZS3_PATH.exists() else TDXZS_PATH
+    industry_current_rows, industry_snapshot_rows = build_industry_datasets(
+        stock_mapping_text=load_text_file(TDXHY_PATH, preferred_encoding="utf-8"),
+        industry_code_text=load_text_file(industry_code_path, preferred_encoding="gbk"),
+        trading_day=ctx.trading_day,
+        generated_at=ctx.generated_at,
+        data_cutoff_time=ctx.data_cutoff_time,
+        source_file=DEFAULT_INDUSTRY_SOURCE_FILE if str(TDXHY_PATH).startswith("/mnt/c/new_tdx64/") else str(TDXHY_PATH),
+    )
+    concept_dictionary_rows, concept_current_rows, concept_snapshot_rows = build_concept_datasets(
+        concept_text=load_text_file(EXTERN_SYS_PATH, preferred_encoding="gbk"),
+        trading_day=ctx.trading_day,
+        generated_at=ctx.generated_at,
+        data_cutoff_time=ctx.data_cutoff_time,
+        source_file=DEFAULT_CONCEPT_SOURCE_FILE if str(EXTERN_SYS_PATH).startswith("/mnt/c/new_tdx64/") else str(EXTERN_SYS_PATH),
+    )
+    cached = {
+        "industry_current": industry_current_rows,
+        "industry_snapshot": with_dataset_name(industry_snapshot_rows, INDUSTRY_SNAPSHOT_DATASET),
+        "concept_dictionary": concept_dictionary_rows,
+        "concept_current": concept_current_rows,
+        "concept_snapshot": with_dataset_name(concept_snapshot_rows, CONCEPT_SNAPSHOT_DATASET),
+    }
+    setattr(ctx, "_industry_concept_cache", cached)
+    return cached
 
 
 def freeze_intraday_state(ctx: Any) -> dict[str, Any]:
@@ -282,6 +372,7 @@ def build_final_features(ctx: Any, final_inputs: dict[str, Any], bars: list[dict
 
 def build_final_datasets(ctx: Any, features: list[dict[str, Any]]) -> list[dict[str, Any]]:
     del features
+    reference_rows = _load_industry_concept_datasets(ctx)
     return [
         _dataset_entry(
             ctx=ctx,
@@ -294,12 +385,43 @@ def build_final_datasets(ctx: Any, features: list[dict[str, Any]]) -> list[dict[
             row_count=3,
             base_interval=None,
             target_interval="daily",
-        )
+        ),
+        _rows_to_dataset_entry(
+            ctx=ctx,
+            dataset_name=INDUSTRY_CURRENT_DATASET,
+            dataset_category="dataset",
+            dataset_scope="stock",
+            subject_type="tabular_dataset",
+            storage_layer="derived_store",
+            relative_path=f"data/derived/datasets/final/{INDUSTRY_CURRENT_DATASET}.parquet",
+            rows=reference_rows["industry_current"],
+        ),
+        _rows_to_dataset_entry(
+            ctx=ctx,
+            dataset_name=CONCEPT_DICTIONARY_DATASET,
+            dataset_category="dataset",
+            dataset_scope="market",
+            subject_type="tabular_dataset",
+            storage_layer="derived_store",
+            relative_path=f"data/derived/datasets/final/{CONCEPT_DICTIONARY_DATASET}.parquet",
+            rows=reference_rows["concept_dictionary"],
+        ),
+        _rows_to_dataset_entry(
+            ctx=ctx,
+            dataset_name=CONCEPT_CURRENT_DATASET,
+            dataset_category="dataset",
+            dataset_scope="stock",
+            subject_type="tabular_dataset",
+            storage_layer="derived_store",
+            relative_path=f"data/derived/datasets/final/{CONCEPT_CURRENT_DATASET}.parquet",
+            rows=reference_rows["concept_current"],
+        ),
     ]
 
 
 def build_final_snapshots(ctx: Any, datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     del datasets
+    reference_rows = _load_industry_concept_datasets(ctx)
     return [
         _dataset_entry(
             ctx=ctx,
@@ -312,7 +434,27 @@ def build_final_snapshots(ctx: Any, datasets: list[dict[str, Any]]) -> list[dict
             row_count=1,
             base_interval=None,
             target_interval="daily",
-        )
+        ),
+        _rows_to_dataset_entry(
+            ctx=ctx,
+            dataset_name=INDUSTRY_SNAPSHOT_DATASET,
+            dataset_category="snapshot",
+            dataset_scope="stock",
+            subject_type="snapshot",
+            storage_layer="archive",
+            relative_path=f"data/archive/trading_day={ctx.trading_day}/snapshots/{INDUSTRY_SNAPSHOT_DATASET}.parquet",
+            rows=reference_rows["industry_snapshot"],
+        ),
+        _rows_to_dataset_entry(
+            ctx=ctx,
+            dataset_name=CONCEPT_SNAPSHOT_DATASET,
+            dataset_category="snapshot",
+            dataset_scope="stock",
+            subject_type="snapshot",
+            storage_layer="archive",
+            relative_path=f"data/archive/trading_day={ctx.trading_day}/snapshots/{CONCEPT_SNAPSHOT_DATASET}.parquet",
+            rows=reference_rows["concept_snapshot"],
+        ),
     ]
 
 
