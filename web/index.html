@@ -20,6 +20,75 @@
         </form>
       </header>
 
+      <section class="search-grid">
+        <article class="search-card">
+          <div class="search-card-header">
+            <div>
+              <p class="eyebrow">STOCK LOOKUP</p>
+              <h2>Code / Name / Initials</h2>
+            </div>
+            <p id="stock-search-meta" class="search-meta">TNF-backed local search</p>
+          </div>
+          <form id="stock-search-form" class="search-form">
+            <input id="stock-search-input" name="q" type="search" autocomplete="off" placeholder="601600 / 中国铝业 / ZGLY">
+            <button type="submit">Find</button>
+          </form>
+          <div id="stock-search-results" class="result-list" aria-live="polite"></div>
+        </article>
+
+        <article class="search-card">
+          <div class="search-card-header">
+            <div>
+              <p class="eyebrow">CONCEPT LOOKUP</p>
+              <h2>Concept / Industry Members</h2>
+            </div>
+            <p id="concept-search-meta" class="search-meta">Derived dataset search</p>
+          </div>
+          <form id="concept-search-form" class="search-form">
+            <input id="concept-search-input" name="q" type="search" autocomplete="off" placeholder="DeepSeek / 苹果 / 稀土永磁">
+            <button type="submit">Find</button>
+          </form>
+          <div id="concept-search-results" class="result-list concept-results" aria-live="polite"></div>
+        </article>
+      </section>
+
+      <section id="stock-profile" class="profile-card" aria-live="polite">
+        <div class="profile-header">
+          <div>
+            <p class="eyebrow">STOCK PROFILE</p>
+            <h2 id="profile-title">Awaiting stock load</h2>
+          </div>
+          <p id="profile-meta" class="profile-meta">Industry and concepts appear after a stock loads.</p>
+        </div>
+        <div class="profile-grid">
+          <div class="profile-field">
+            <span class="profile-label">Code</span>
+            <strong id="profile-symbol" class="profile-value">-</strong>
+          </div>
+          <div class="profile-field">
+            <span class="profile-label">Name</span>
+            <strong id="profile-name" class="profile-value">-</strong>
+          </div>
+          <div class="profile-field">
+            <span class="profile-label">Initials</span>
+            <strong id="profile-initials" class="profile-value">-</strong>
+          </div>
+          <div class="profile-field profile-field-wide">
+            <span class="profile-label">Industry</span>
+            <strong id="profile-industry" class="profile-value">-</strong>
+          </div>
+        </div>
+        <div class="profile-concepts">
+          <div class="profile-concepts-header">
+            <span class="profile-label">Concepts</span>
+            <span id="profile-concept-count" class="profile-count">0</span>
+          </div>
+          <div id="profile-concepts" class="tag-list">
+            <span class="result-empty">No concepts loaded.</span>
+          </div>
+        </div>
+      </section>
+
       <section class="metrics">
         <article class="metric-card">
           <p class="metric-label">Latest open_15m_volume (M)</p>
@@ -90,6 +159,7 @@
     </main>
 
     <script src="/viewport.js"></script>
+    <script src="/profile-utils.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

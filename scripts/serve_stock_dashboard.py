@@ -13,11 +13,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.search.index import concept_search_response, stock_profile_response, stock_search_response
+
+
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 TONGDAXIN_DIR = "/mnt/c/new_tdx64"
 DEFAULT_SYMBOL = "601600"
 DEFAULT_HISTORY_LIMIT = 120
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 WEB_ROOT = PROJECT_ROOT / "web"
 
 
@@ -140,6 +146,15 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-window-volume":
             self.handle_api(parsed.query)
             return
+        if parsed.path == "/api/search/stocks":
+            self.handle_stock_search(parsed.query)
+            return
+        if parsed.path == "/api/search/concepts":
+            self.handle_concept_search(parsed.query)
+            return
+        if parsed.path == "/api/stock-profile":
+            self.handle_stock_profile(parsed.query)
+            return
         if parsed.path == "/":
             self.serve_static("index.html")
             return
@@ -197,6 +212,61 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+
+    def handle_stock_search(self, query: str) -> None:
+        params = parse_qs(query)
+        search_query = params.get("q", [""])[0].strip()
+        limit = self.parse_limit(params.get("limit", ["20"])[0], default=20, maximum=50)
+        try:
+            self.respond_json(HTTPStatus.OK, stock_search_response(search_query, limit=limit))
+        except Exception as exc:  # pragma: no cover - exercised by manual integration
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "search_unavailable", "message": str(exc)}},
+            )
+
+    def handle_concept_search(self, query: str) -> None:
+        params = parse_qs(query)
+        search_query = params.get("q", [""])[0].strip()
+        limit = self.parse_limit(params.get("limit", ["20"])[0], default=20, maximum=50)
+        try:
+            self.respond_json(HTTPStatus.OK, concept_search_response(search_query, limit=limit))
+        except Exception as exc:  # pragma: no cover - exercised by manual integration
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "search_unavailable", "message": str(exc)}},
+            )
+
+    def handle_stock_profile(self, query: str) -> None:
+        params = parse_qs(query)
+        symbol = params.get("symbol", [DEFAULT_SYMBOL])[0].strip() or DEFAULT_SYMBOL
+        try:
+            self.respond_json(HTTPStatus.OK, stock_profile_response(symbol))
+        except ValueError as exc:
+            self.respond_json(
+                HTTPStatus.NOT_FOUND,
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "stock_not_found",
+                        "message": str(exc),
+                        "symbol": symbol,
+                    },
+                },
+            )
+        except Exception as exc:  # pragma: no cover - exercised by manual integration
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "search_unavailable", "message": str(exc)}},
+            )
+
+    @staticmethod
+    def parse_limit(raw_value: str, *, default: int, maximum: int) -> int:
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return default
+        return max(1, min(maximum, value))
 
     def respond_json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

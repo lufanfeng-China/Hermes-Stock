@@ -165,9 +165,13 @@ class ArchivePipelineTests(unittest.TestCase):
             )
 
             industry_rows = json.loads((project_root / "data/derived/datasets/final/dataset_stock_industry_current.json").read_text(encoding="utf-8"))
-            concept_rows = json.loads((project_root / "data/archive/trading_day=2026-04-24/snapshots/snapshot_stock_concept_membership.json").read_text(encoding="utf-8"))
+            concept_rows = json.loads((project_root / f"data/archive/trading_day={ctx.trading_day}/snapshots/snapshot_stock_concept_membership.json").read_text(encoding="utf-8"))
             self.assertEqual("dataset_stock_industry_current", industry_rows[0]["dataset_name"])
             self.assertEqual("snapshot_stock_concept_membership", concept_rows[0]["dataset_name"])
+            self.assertIn("concept_filter_version", concept_rows[0])
+            self.assertIn("concept_filter_bucket", concept_rows[0])
+            self.assertIn("concept_filter_decision", concept_rows[0])
+            self.assertIn("concept_filter_rule_id", concept_rows[0])
 
     def test_execute_pipeline_registers_new_datasets_and_stock_snapshots(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

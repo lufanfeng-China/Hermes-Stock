@@ -1,0 +1,172 @@
+{
+  "version": "concept_filter_rules_v1",
+  "scope": "Tongdaxin local concept labels",
+  "default_decision": "keep_core",
+  "default_bucket": "core",
+  "notes": [
+    "v1 uses classify-and-hide, not physical deletion",
+    "matched rules should normally map to hide_from_default_ui",
+    "high-risk keywords such as 重组/突破/放量 are intentionally not globally filtered in v1",
+    "v1.1 adds narrow numeric fragment filters for financial ratios and shareholder percentage suffixes",
+    "v1.2 adds narrow business-description fragment filters for comma-joined operating scope text"
+  ],
+  "rules": [
+    {
+      "id": "drop_empty",
+      "priority": 10,
+      "decision": "hide_from_default_ui",
+      "bucket": "empty",
+      "match_type": "exact",
+      "patterns": ["无", "个人"],
+      "reason": "空值或无概念语义"
+    },
+    {
+      "id": "drop_historical_alias",
+      "priority": 20,
+      "decision": "hide_from_default_ui",
+      "bucket": "alias",
+      "match_type": "contains",
+      "patterns": ["<-"] ,
+      "reason": "历史简称链条/证券名演化，不属于概念展示"
+    },
+    {
+      "id": "drop_business_description",
+      "priority": 30,
+      "decision": "hide_from_default_ui",
+      "bucket": "description",
+      "match_type": "regex_any",
+      "patterns": ["[；;]"],
+      "reason": "经营范围或业务描述型长文本，不属于概念标签"
+    },
+    {
+      "id": "drop_business_description_fragment",
+      "priority": 31,
+      "decision": "hide_from_default_ui",
+      "bucket": "description",
+      "match_type": "regex_any",
+      "patterns": [
+        "^(?=[^;；]{8,}$)(?=.*[、，,]).*的(?:生产|销售|技术研发|研发)(?:[、，,及与和].*)?$",
+        "^(?=[^;；]{8,}$)(?=.*[、，,]).*(?:等资源)?的(?:勘探开采|勘探|开采)(?:[、，,及与和].*)?$"
+      ],
+      "reason": "逗号拼接的经营范围残片，属于业务描述而非核心概念"
+    },
+    {
+      "id": "drop_date_prefix",
+      "priority": 40,
+      "decision": "hide_from_default_ui",
+      "bucket": "timestamped",
+      "match_type": "regex_any",
+      "patterns": ["^(19|20|21|22|23|24|25|26)\\d{4}\\s*"],
+      "reason": "带时点快照前缀，适合作为辅助事件/快照标签"
+    },
+    {
+      "id": "drop_financial_report",
+      "priority": 50,
+      "decision": "hide_from_default_ui",
+      "bucket": "financial",
+      "match_type": "regex_any",
+      "patterns": [
+        "评级",
+        "目标价",
+        "综合评级",
+        "营业收入",
+        "净利润",
+        "扣非",
+        "每股收益",
+        "一季报",
+        "中报",
+        "三季报",
+        "年报",
+        "半年报",
+        "业绩预亏",
+        "业绩预增",
+        "业绩公告预警",
+        "财报亏损"
+      ],
+      "reason": "财报/评级/业绩类标签，不作为核心概念展示"
+    },
+    {
+      "id": "drop_financial_numeric_fragment",
+      "priority": 55,
+      "decision": "hide_from_default_ui",
+      "bucket": "financial",
+      "match_type": "regex_any",
+      "patterns": [
+        "^(同比|环比|增长|下降|增幅|降幅)\\s*-?\\d+(?:\\.\\d+)?%[.。]?$"
+      ],
+      "reason": "纯数值型财务摘要片段，不作为核心概念展示"
+    },
+    {
+      "id": "drop_shareholder_ratio_fragment",
+      "priority": 58,
+      "decision": "hide_from_default_ui",
+      "bucket": "shareholder",
+      "match_type": "regex_any",
+      "patterns": [
+        "^占(?:总股本比例|总股本|流通股比例|流通股本比例)?\\s*\\d+(?:\\.\\d+)?%[.。]?$",
+        "^[^()（）%]{2,}(?:\\(|（)\\d+(?:\\.\\d+)?%(?:\\)|）)$"
+      ],
+      "reason": "股东占比/股东名称附带持股比例片段，作为辅助持股信息隐藏"
+    },
+    {
+      "id": "drop_holding_unlock",
+      "priority": 60,
+      "decision": "hide_from_default_ui",
+      "bucket": "shareholder",
+      "match_type": "regex_any",
+      "patterns": [
+        "解禁",
+        "增持",
+        "减持",
+        "持股",
+        "万股",
+        "亿股",
+        "保险持股",
+        "知名投行持股",
+        "高盛持股"
+      ],
+      "reason": "解禁/增减持/机构持股类辅助标签"
+    },
+    {
+      "id": "drop_technical",
+      "priority": 70,
+      "decision": "hide_from_default_ui",
+      "bucket": "technical",
+      "match_type": "regex_any",
+      "patterns": [
+        "上穿",
+        "下穿",
+        "BOLL",
+        "MACD",
+        "KDJ",
+        "RSI",
+        "CCI",
+        "多头排列",
+        "平台整理",
+        "金叉",
+        "死叉",
+        "超卖",
+        "超买",
+        "底背离"
+      ],
+      "reason": "技术指标/形态信号类标签"
+    },
+    {
+      "id": "drop_membership_style",
+      "priority": 80,
+      "decision": "hide_from_default_ui",
+      "bucket": "membership",
+      "match_type": "regex_any",
+      "patterns": [
+        "罗素",
+        "转板A股",
+        "注册制",
+        "融资融券",
+        "沪股通",
+        "深股通"
+      ],
+      "reason": "指数/成分/制度/风格属性标签"
+    }
+  ],
+  "manual_review_keywords": ["重组", "突破", "放量"]
+}

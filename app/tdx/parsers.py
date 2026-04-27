@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from datetime import date, datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -19,6 +20,8 @@ INDUSTRY_PARSER_VERSION = "industry_parser_v1"
 CONCEPT_PARSER_VERSION = "concept_parser_v1"
 DEFAULT_INDUSTRY_SOURCE_FILE = "T0002/hq_cache/tdxhy.cfg"
 DEFAULT_CONCEPT_SOURCE_FILE = "T0002/signals/extern_sys.txt"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CONCEPT_FILTER_CONFIG_PATH = PROJECT_ROOT / "config" / "concept_filter_rules.v1.json"
 
 
 def today_trading_day() -> str:
@@ -149,6 +152,48 @@ def stable_concept_id(normalized_name: str) -> str:
     return hashlib.sha1(f"tdx_local:{normalized_name}".encode("utf-8")).hexdigest()
 
 
+@lru_cache(maxsize=1)
+def load_concept_filter_rules(path: str | Path = CONCEPT_FILTER_CONFIG_PATH) -> dict[str, object]:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _matches_concept_rule(concept_name: str, rule: dict[str, object]) -> bool:
+    match_type = str(rule.get("match_type", "")).strip()
+    patterns = [str(item) for item in rule.get("patterns", []) if str(item)]
+    if match_type == "exact":
+        return concept_name in patterns
+    if match_type == "contains":
+        return any(pattern in concept_name for pattern in patterns)
+    if match_type == "regex_any":
+        return any(re.search(pattern, concept_name) for pattern in patterns)
+    return False
+
+
+def classify_concept_name_v1(concept_name: str) -> dict[str, str]:
+    rules = load_concept_filter_rules()
+    version = str(rules.get("version", "")).strip() or "concept_filter_rules_v1"
+    sorted_rules = sorted(
+        (rule for rule in rules.get("rules", []) if isinstance(rule, dict)),
+        key=lambda item: int(item.get("priority", 0)),
+    )
+    for rule in sorted_rules:
+        if _matches_concept_rule(concept_name, rule):
+            return {
+                "concept_filter_version": version,
+                "concept_filter_rule_id": str(rule.get("id", "")).strip(),
+                "concept_filter_bucket": str(rule.get("bucket", "")).strip() or "core",
+                "concept_filter_decision": str(rule.get("decision", "")).strip() or "keep_core",
+                "concept_filter_reason": str(rule.get("reason", "")).strip(),
+            }
+    return {
+        "concept_filter_version": version,
+        "concept_filter_rule_id": "default_keep_core",
+        "concept_filter_bucket": str(rules.get("default_bucket", "")).strip() or "core",
+        "concept_filter_decision": str(rules.get("default_decision", "")).strip() or "keep_core",
+        "concept_filter_reason": "default keep_core/core classification",
+    }
+
+
 def build_concept_datasets(
     *,
     concept_text: str,
@@ -173,6 +218,7 @@ def build_concept_datasets(
         normalized_raw = ",".join(concept_names)
         for rank, concept_name in enumerate(concept_names, start=1):
             concept_id = stable_concept_id(concept_name)
+            concept_filter = classify_concept_name_v1(concept_name)
             current_rows.append(
                 {
                     "dataset_name": CONCEPT_CURRENT_DATASET,
@@ -191,6 +237,7 @@ def build_concept_datasets(
                     "generated_at": generated_at,
                     "data_cutoff_time": data_cutoff_time,
                     "validation_status": "passed",
+                    **concept_filter,
                 }
             )
             dictionary_index.setdefault(
@@ -209,6 +256,7 @@ def build_concept_datasets(
                     "alias_names": [],
                     "parser_version": CONCEPT_PARSER_VERSION,
                     "generated_at": generated_at,
+                    **concept_filter,
                 },
             )
 
@@ -222,4 +270,3 @@ def with_dataset_name(rows: list[dict[str, object]], dataset_name: str) -> list[
     for row in renamed:
         row["dataset_name"] = dataset_name
     return renamed
-

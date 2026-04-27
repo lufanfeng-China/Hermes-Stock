@@ -43,10 +43,27 @@ const {
   scaleVolumeMillions,
   computeMovingAverageSeries,
 } = window.StockViewport;
+const { formatAuxiliaryBucketLabel } = window.ProfileUtils;
 
 const form = document.querySelector("#symbol-form");
 const symbolInput = document.querySelector("#symbol-input");
 const statusEl = document.querySelector("#status");
+const stockSearchForm = document.querySelector("#stock-search-form");
+const stockSearchInput = document.querySelector("#stock-search-input");
+const stockSearchMetaEl = document.querySelector("#stock-search-meta");
+const stockSearchResultsEl = document.querySelector("#stock-search-results");
+const conceptSearchForm = document.querySelector("#concept-search-form");
+const conceptSearchInput = document.querySelector("#concept-search-input");
+const conceptSearchMetaEl = document.querySelector("#concept-search-meta");
+const conceptSearchResultsEl = document.querySelector("#concept-search-results");
+const profileTitleEl = document.querySelector("#profile-title");
+const profileMetaEl = document.querySelector("#profile-meta");
+const profileSymbolEl = document.querySelector("#profile-symbol");
+const profileNameEl = document.querySelector("#profile-name");
+const profileInitialsEl = document.querySelector("#profile-initials");
+const profileIndustryEl = document.querySelector("#profile-industry");
+const profileConceptCountEl = document.querySelector("#profile-concept-count");
+const profileConceptsEl = document.querySelector("#profile-concepts");
 const zoomControlsEl = document.querySelector("#zoom-controls");
 const zoomButtons = Array.from(document.querySelectorAll(".zoom-button"));
 const windowSliderEl = document.querySelector("#window-slider");
@@ -55,11 +72,18 @@ const volumeMaWindowEl = document.querySelector("#volume-ma-window");
 
 const dashboardState = {
   payload: null,
+  profile: null,
   visibleWindow: 120,
   windowStart: 0,
   hoveredIndex: null,
   dragState: null,
   volumeMaWindow: DEFAULT_VOLUME_MA_WINDOW,
+};
+const searchState = {
+  stockRequestId: 0,
+  conceptRequestId: 0,
+  stockTimer: null,
+  conceptTimer: null,
 };
 
 const charts = SERIES_CONFIG.map((config) => {
@@ -114,6 +138,11 @@ function formatLongDate(value) {
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
   statusEl.classList.toggle("error", isError);
+}
+
+function setSearchMeta(element, message, isError = false) {
+  element.textContent = message;
+  element.classList.toggle("error", isError);
 }
 
 function setMetric(idPrefix, value, meta) {
@@ -192,6 +221,239 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function isChartSupportedMarket(market) {
+  return market === "sh" || market === "sz";
+}
+
+function renderStockSearchResults(results, query) {
+  if (!query.trim()) {
+    stockSearchResultsEl.innerHTML = '<p class="result-empty">Enter a code, Chinese name, or initials.</p>';
+    return;
+  }
+  if (!results.length) {
+    stockSearchResultsEl.innerHTML = '<p class="result-empty">No matching stocks.</p>';
+    return;
+  }
+
+  stockSearchResultsEl.innerHTML = results
+    .map((row) => {
+      const supported = isChartSupportedMarket(row.market);
+      return `
+        <button
+          type="button"
+          class="result-row stock-result-row"
+          data-symbol="${escapeHtml(row.symbol)}"
+          data-market="${escapeHtml(row.market)}"
+          ${supported ? "" : 'disabled aria-disabled="true"'}
+        >
+          <span class="result-main">
+            <strong>${escapeHtml(row.symbol)}</strong>
+            <span>${escapeHtml(row.stock_name)}</span>
+          </span>
+          <span class="result-side">
+            <span>${escapeHtml(row.market.toUpperCase())}</span>
+            <span>${escapeHtml((row.name_initials || "").toUpperCase())}</span>
+          </span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderConceptSearchResults(results, query) {
+  if (!query.trim()) {
+    conceptSearchResultsEl.innerHTML = '<p class="result-empty">Search a concept to inspect member stocks.</p>';
+    return;
+  }
+  if (!results.length) {
+    conceptSearchResultsEl.innerHTML = '<p class="result-empty">No matching concepts.</p>';
+    return;
+  }
+
+  conceptSearchResultsEl.innerHTML = results
+    .map(
+      (concept) => `
+        <section class="concept-result-card">
+          <div class="concept-result-header">
+            <div>
+              <h3>${escapeHtml(concept.concept_name)}</h3>
+              <p>${escapeHtml(concept.concept_id)}</p>
+            </div>
+            <span class="concept-count">${escapeHtml(String(concept.member_count))} members</span>
+          </div>
+          <div class="concept-member-list">
+            ${concept.members
+              .map((member) => {
+                const supported = isChartSupportedMarket(member.market);
+                return `
+                  <button
+                    type="button"
+                    class="result-row concept-member-row"
+                    data-symbol="${escapeHtml(member.symbol)}"
+                    data-market="${escapeHtml(member.market)}"
+                    ${supported ? "" : 'disabled aria-disabled="true"'}
+                  >
+                    <span class="result-main">
+                      <strong>${escapeHtml(member.symbol)}</strong>
+                      <span>${escapeHtml(member.stock_name || "-")}</span>
+                    </span>
+                    <span class="result-side result-side-wide">
+                      <span>${escapeHtml(member.market.toUpperCase())}</span>
+                      <span>${escapeHtml(member.industry_display || "-")}</span>
+                    </span>
+                  </button>
+                `;
+              })
+              .join("")}
+          </div>
+        </section>
+      `
+    )
+    .join("");
+}
+
+function renderStockProfile(profile) {
+  if (!profile) {
+    profileTitleEl.textContent = "Awaiting stock load";
+    profileMetaEl.textContent = "Industry and concepts appear after a stock loads.";
+    profileSymbolEl.textContent = "-";
+    profileNameEl.textContent = "-";
+    profileInitialsEl.textContent = "-";
+    profileIndustryEl.textContent = "-";
+    profileConceptCountEl.textContent = "0";
+    profileConceptsEl.innerHTML = '<span class="result-empty">No concepts loaded.</span>';
+    return;
+  }
+
+  profileTitleEl.textContent = `${profile.stock_name || "-"} · ${profile.symbol || "-"}`;
+  profileMetaEl.textContent = `${(profile.market || "-").toUpperCase()} market profile`;
+  profileSymbolEl.textContent = profile.symbol || "-";
+  profileNameEl.textContent = profile.stock_name || "-";
+  profileInitialsEl.textContent = (profile.name_initials || "-").toUpperCase();
+  profileIndustryEl.textContent = profile.industry_display || "-";
+  profileConceptCountEl.textContent = String(profile.concept_count || 0);
+  const coreConcepts = Array.isArray(profile.core_concepts)
+    ? profile.core_concepts
+    : Array.isArray(profile.concepts)
+      ? profile.concepts
+      : [];
+  const auxiliaryGroups = profile.auxiliary_concepts && typeof profile.auxiliary_concepts === "object"
+    ? Object.entries(profile.auxiliary_concepts).filter(([, concepts]) => Array.isArray(concepts) && concepts.length)
+    : [];
+  if (!coreConcepts.length && !auxiliaryGroups.length) {
+    profileConceptsEl.innerHTML = '<span class="result-empty">No concepts tagged for this stock.</span>';
+    return;
+  }
+  const coreMarkup = coreConcepts.length
+    ? `
+      <div class="tag-list">
+        ${coreConcepts
+          .map((concept) => `<span class="concept-tag">${escapeHtml(concept.concept_name || "-")}</span>`)
+          .join("")}
+      </div>
+    `
+    : '<span class="result-empty">No core concepts for default display.</span>';
+  const auxiliaryMarkup = auxiliaryGroups.length
+    ? `
+      <section class="profile-auxiliary">
+        <div class="profile-auxiliary-header">
+          <span class="profile-label">More tags</span>
+        </div>
+        <div class="profile-auxiliary-groups">
+          ${auxiliaryGroups
+            .map(
+              ([bucket, concepts]) => `
+                <div class="auxiliary-group">
+                  <span class="auxiliary-group-label">${escapeHtml(formatAuxiliaryBucketLabel(bucket))}</span>
+                  <div class="tag-list">
+                    ${concepts
+                      .map((concept) => `<span class="concept-tag concept-tag-aux">${escapeHtml(concept.concept_name || "-")}</span>`)
+                      .join("")}
+                  </div>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      </section>
+    `
+    : "";
+  profileConceptsEl.innerHTML = `${coreMarkup}${auxiliaryMarkup}`;
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url);
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error?.message || "Request failed");
+  }
+  return payload;
+}
+
+async function performStockSearch(query) {
+  const trimmed = query.trim();
+  const requestId = ++searchState.stockRequestId;
+  if (!trimmed) {
+    setSearchMeta(stockSearchMetaEl, "TNF-backed local search");
+    renderStockSearchResults([], "");
+    return;
+  }
+
+  setSearchMeta(stockSearchMetaEl, `Searching ${trimmed}...`);
+  try {
+    const payload = await fetchJson(`/api/search/stocks?q=${encodeURIComponent(trimmed)}&limit=12`);
+    if (requestId !== searchState.stockRequestId) {
+      return;
+    }
+    setSearchMeta(stockSearchMetaEl, `${payload.count} stock matches`);
+    renderStockSearchResults(payload.results, trimmed);
+  } catch (error) {
+    if (requestId !== searchState.stockRequestId) {
+      return;
+    }
+    setSearchMeta(stockSearchMetaEl, error.message, true);
+    stockSearchResultsEl.innerHTML = '<p class="result-empty">Search failed.</p>';
+  }
+}
+
+async function performConceptSearch(query) {
+  const trimmed = query.trim();
+  const requestId = ++searchState.conceptRequestId;
+  if (!trimmed) {
+    setSearchMeta(conceptSearchMetaEl, "Derived dataset search");
+    renderConceptSearchResults([], "");
+    return;
+  }
+
+  setSearchMeta(conceptSearchMetaEl, `Searching ${trimmed}...`);
+  try {
+    const payload = await fetchJson(`/api/search/concepts?q=${encodeURIComponent(trimmed)}&limit=8`);
+    if (requestId !== searchState.conceptRequestId) {
+      return;
+    }
+    setSearchMeta(conceptSearchMetaEl, `${payload.count} concept matches`);
+    renderConceptSearchResults(payload.results, trimmed);
+  } catch (error) {
+    if (requestId !== searchState.conceptRequestId) {
+      return;
+    }
+    setSearchMeta(conceptSearchMetaEl, error.message, true);
+    conceptSearchResultsEl.innerHTML = '<p class="result-empty">Search failed.</p>';
+  }
+}
+
+function queueSearch(kind, query) {
+  const timerKey = kind === "stock" ? "stockTimer" : "conceptTimer";
+  window.clearTimeout(searchState[timerKey]);
+  searchState[timerKey] = window.setTimeout(() => {
+    if (kind === "stock") {
+      performStockSearch(query);
+    } else {
+      performConceptSearch(query);
+    }
+  }, 160);
 }
 
 function getRelativePoint(svg, event) {
@@ -410,13 +672,13 @@ function renderDashboard() {
 async function loadSymbol(symbol) {
   setStatus(`Loading ${symbol}…`);
   try {
-    const response = await fetch(`/api/stock-window-volume?symbol=${encodeURIComponent(symbol)}`);
-    const payload = await response.json();
-    if (!response.ok || !payload.ok) {
-      throw new Error(payload.error?.message || "Request failed");
-    }
+    const [payload, profilePayload] = await Promise.all([
+      fetchJson(`/api/stock-window-volume?symbol=${encodeURIComponent(symbol)}`),
+      fetchJson(`/api/stock-profile?symbol=${encodeURIComponent(symbol)}`),
+    ]);
 
     dashboardState.payload = payload;
+    dashboardState.profile = profilePayload.profile;
     dashboardState.hoveredIndex = null;
     dashboardState.dragState = null;
 
@@ -428,8 +690,11 @@ async function loadSymbol(symbol) {
       dashboardState.windowStart = 0;
     }
 
+    renderStockProfile(dashboardState.profile);
     renderDashboard();
+    symbolInput.value = symbol;
   } catch (error) {
+    renderStockProfile(dashboardState.profile);
     setStatus(`Load failed: ${error.message}`, true);
   }
 }
@@ -582,4 +847,41 @@ form.addEventListener("submit", (event) => {
   loadSymbol(symbol);
 });
 
+stockSearchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  performStockSearch(stockSearchInput.value);
+});
+
+stockSearchInput.addEventListener("input", () => {
+  queueSearch("stock", stockSearchInput.value);
+});
+
+stockSearchResultsEl.addEventListener("click", (event) => {
+  const row = event.target.closest(".stock-result-row");
+  if (!row || row.disabled) {
+    return;
+  }
+  loadSymbol(row.dataset.symbol || DEFAULT_SYMBOL);
+});
+
+conceptSearchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  performConceptSearch(conceptSearchInput.value);
+});
+
+conceptSearchInput.addEventListener("input", () => {
+  queueSearch("concept", conceptSearchInput.value);
+});
+
+conceptSearchResultsEl.addEventListener("click", (event) => {
+  const row = event.target.closest(".concept-member-row");
+  if (!row || row.disabled) {
+    return;
+  }
+  loadSymbol(row.dataset.symbol || DEFAULT_SYMBOL);
+});
+
+renderStockSearchResults([], "");
+renderConceptSearchResults([], "");
+renderStockProfile(null);
 loadSymbol(DEFAULT_SYMBOL);

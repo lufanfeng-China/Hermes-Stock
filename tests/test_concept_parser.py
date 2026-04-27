@@ -19,6 +19,7 @@ class ConceptParserTests(unittest.TestCase):
             [
                 "0|000001|10001| 跨境支付CIPS , 不可减持(新规),跨境支付CIPS |0.00",
                 "1|600000|10001| 人工智能， 华为概念 |0.00",
+                "1|601600|10001| 20260326 评级系数:4.00 综合评级:增持, KDJ超卖 |0.00",
             ]
         )
 
@@ -29,8 +30,8 @@ class ConceptParserTests(unittest.TestCase):
             data_cutoff_time="2026-04-27T13:10:00+08:00",
         )
 
-        self.assertEqual(4, len(dictionary_rows))
-        self.assertEqual(4, len(current_rows))
+        self.assertEqual(6, len(dictionary_rows))
+        self.assertEqual(6, len(current_rows))
         self.assertEqual(current_rows, snapshot_rows)
 
         first = current_rows[0]
@@ -45,12 +46,33 @@ class ConceptParserTests(unittest.TestCase):
         self.assertEqual(1, first["concept_rank_in_stock"])
         self.assertEqual("跨境支付CIPS,不可减持(新规)", first["concept_list_raw"])
         self.assertEqual("concept_parser_v1", first["parser_version"])
+        self.assertEqual("concept_filter_rules_v1", first["concept_filter_version"])
+        self.assertEqual("keep_core", first["concept_filter_decision"])
+        self.assertEqual("core", first["concept_filter_bucket"])
+
+        shareholder_row = next(row for row in current_rows if row["concept_name"] == "不可减持(新规)")
+        self.assertEqual("hide_from_default_ui", shareholder_row["concept_filter_decision"])
+        self.assertEqual("shareholder", shareholder_row["concept_filter_bucket"])
+        self.assertEqual("drop_holding_unlock", shareholder_row["concept_filter_rule_id"])
+
+        date_row = next(row for row in current_rows if row["concept_name"].startswith("20260326 "))
+        self.assertEqual("hide_from_default_ui", date_row["concept_filter_decision"])
+        self.assertEqual("timestamped", date_row["concept_filter_bucket"])
+        self.assertEqual("drop_date_prefix", date_row["concept_filter_rule_id"])
+
+        technical_row = next(row for row in current_rows if row["concept_name"] == "KDJ超卖")
+        self.assertEqual("hide_from_default_ui", technical_row["concept_filter_decision"])
+        self.assertEqual("technical", technical_row["concept_filter_bucket"])
+        self.assertEqual("drop_technical", technical_row["concept_filter_rule_id"])
 
         dictionary = {row["concept_name_normalized"]: row for row in dictionary_rows}
         self.assertEqual("2026-04-27", dictionary["人工智能"]["first_seen_date"])
         self.assertEqual("2026-04-27", dictionary["人工智能"]["last_seen_date"])
         self.assertEqual(True, dictionary["华为概念"]["is_active"])
         self.assertEqual([], dictionary["华为概念"]["alias_names"])
+        self.assertEqual("concept_filter_rules_v1", dictionary["人工智能"]["concept_filter_version"])
+        self.assertEqual("keep_core", dictionary["人工智能"]["concept_filter_decision"])
+        self.assertEqual("hide_from_default_ui", dictionary["KDJ超卖"]["concept_filter_decision"])
 
     def test_normalizes_and_deduplicates_concept_names(self) -> None:
         from app.tdx.parsers import normalize_concept_name, split_concept_names
@@ -60,6 +82,38 @@ class ConceptParserTests(unittest.TestCase):
             ["跨境支付CIPS", "不可减持(新规)", "华为概念"],
             split_concept_names(" 跨境支付CIPS ,不可减持(新规)，华为概念,跨境支付CIPS "),
         )
+
+    def test_classify_concept_name_v11_filters_numeric_and_ratio_fragments(self) -> None:
+        from app.tdx.parsers import classify_concept_name_v1
+
+        yoy = classify_concept_name_v1("同比56.24%.")
+        self.assertEqual("hide_from_default_ui", yoy["concept_filter_decision"])
+        self.assertEqual("financial", yoy["concept_filter_bucket"])
+
+        holding_ratio = classify_concept_name_v1("占总股本比例0.18%")
+        self.assertEqual("hide_from_default_ui", holding_ratio["concept_filter_decision"])
+        self.assertEqual("shareholder", holding_ratio["concept_filter_bucket"])
+
+        holder_name = classify_concept_name_v1("国务院国有资产监督管理委员会(33.55%)")
+        self.assertEqual("hide_from_default_ui", holder_name["concept_filter_decision"])
+        self.assertEqual("shareholder", holder_name["concept_filter_bucket"])
+
+        self.assertEqual("keep_core", classify_concept_name_v1("PEEK材料")["concept_filter_decision"])
+        self.assertEqual("keep_core", classify_concept_name_v1("DeepSeek概念")["concept_filter_decision"])
+
+    def test_classify_concept_name_v12_filters_business_description_fragments(self) -> None:
+        from app.tdx.parsers import classify_concept_name_v1
+
+        production = classify_concept_name_v1("氧化铝、原铝、铝合金及炭素产品的生产、销售、技术研发")
+        self.assertEqual("hide_from_default_ui", production["concept_filter_decision"])
+        self.assertEqual("description", production["concept_filter_bucket"])
+
+        mining = classify_concept_name_v1("铝土矿、煤炭等资源的勘探开采")
+        self.assertEqual("hide_from_default_ui", mining["concept_filter_decision"])
+        self.assertEqual("description", mining["concept_filter_bucket"])
+
+        self.assertEqual("keep_core", classify_concept_name_v1("DeepSeek概念")["concept_filter_decision"])
+        self.assertEqual("keep_core", classify_concept_name_v1("稀土永磁")["concept_filter_decision"])
 
     def test_cli_writes_expected_json_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
