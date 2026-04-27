@@ -8,7 +8,8 @@
     "matched rules should normally map to hide_from_default_ui",
     "high-risk keywords such as 重组/突破/放量 are intentionally not globally filtered in v1",
     "v1.1 adds narrow numeric fragment filters for financial ratios and shareholder percentage suffixes",
-    "v1.2 adds narrow business-description fragment filters for comma-joined operating scope text"
+    "v1.2 adds narrow business-description fragment filters for comma-joined operating scope text",
+    "v1.3 adds narrow business-portrait fragment filters for operating-scope style rankings, trading, and power-generation phrases"
   ],
   "rules": [
     {
@@ -49,6 +50,19 @@
         "^(?=[^;；]{8,}$)(?=.*[、，,]).*(?:等资源)?的(?:勘探开采|勘探|开采)(?:[、，,及与和].*)?$"
       ],
       "reason": "逗号拼接的经营范围残片，属于业务描述而非核心概念"
+    },
+    {
+      "id": "drop_business_portrait_fragment",
+      "priority": 32,
+      "decision": "hide_from_default_ui",
+      "bucket": "description",
+      "match_type": "regex_any",
+      "patterns": [
+        "^全球排名前[一二三四五六七八九十0-9]+的.+生产商(?:及.+生产商)?$",
+        "^[^,，；;]{2,}贸易$",
+        "^火力及新能源发电等$"
+      ],
+      "reason": "经营画像型业务短语，属于业务描述而非核心概念"
     },
     {
       "id": "drop_date_prefix",

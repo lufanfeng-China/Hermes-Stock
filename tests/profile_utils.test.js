@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { formatAuxiliaryBucketLabel } = require("../web/profile-utils.js");
+const { formatAuxiliaryBucketLabel, sortAuxiliaryBuckets } = require("../web/profile-utils.js");
 
 test("formatAuxiliaryBucketLabel maps auxiliary buckets to Chinese labels", () => {
   assert.equal(formatAuxiliaryBucketLabel("membership"), "风格/成分");
@@ -11,4 +11,20 @@ test("formatAuxiliaryBucketLabel maps auxiliary buckets to Chinese labels", () =
   assert.equal(formatAuxiliaryBucketLabel("description"), "业务描述");
   assert.equal(formatAuxiliaryBucketLabel("alias"), "历史简称");
   assert.equal(formatAuxiliaryBucketLabel("unknown_bucket"), "其他标签");
+});
+
+test("sortAuxiliaryBuckets enforces stable bucket order", () => {
+  const input = [
+    ["description", [{}]],
+    ["membership", [{}]],
+    ["timestamped", [{}]],
+    ["technical", [{}]],
+    ["shareholder", [{}]],
+    ["financial", [{}]],
+    ["alias", [{}]],
+  ];
+  assert.deepEqual(
+    sortAuxiliaryBuckets(input).map(([bucket]) => bucket),
+    ["financial", "shareholder", "technical", "timestamped", "membership", "description", "alias"]
+  );
 });

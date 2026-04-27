@@ -43,7 +43,7 @@ const {
   scaleVolumeMillions,
   computeMovingAverageSeries,
 } = window.StockViewport;
-const { formatAuxiliaryBucketLabel } = window.ProfileUtils;
+const { formatAuxiliaryBucketLabel, sortAuxiliaryBuckets } = window.ProfileUtils;
 
 const form = document.querySelector("#symbol-form");
 const symbolInput = document.querySelector("#symbol-input");
@@ -340,7 +340,9 @@ function renderStockProfile(profile) {
       ? profile.concepts
       : [];
   const auxiliaryGroups = profile.auxiliary_concepts && typeof profile.auxiliary_concepts === "object"
-    ? Object.entries(profile.auxiliary_concepts).filter(([, concepts]) => Array.isArray(concepts) && concepts.length)
+    ? sortAuxiliaryBuckets(
+      Object.entries(profile.auxiliary_concepts).filter(([, concepts]) => Array.isArray(concepts) && concepts.length)
+    )
     : [];
   if (!coreConcepts.length && !auxiliaryGroups.length) {
     profileConceptsEl.innerHTML = '<span class="result-empty">No concepts tagged for this stock.</span>';

@@ -115,6 +115,24 @@ class ConceptParserTests(unittest.TestCase):
         self.assertEqual("keep_core", classify_concept_name_v1("DeepSeek概念")["concept_filter_decision"])
         self.assertEqual("keep_core", classify_concept_name_v1("稀土永磁")["concept_filter_decision"])
 
+    def test_classify_concept_name_v13_filters_business_portrait_fragments(self) -> None:
+        from app.tdx.parsers import classify_concept_name_v1
+
+        ranking = classify_concept_name_v1("全球排名前三的氧化铝生产商及电解铝生产商")
+        self.assertEqual("hide_from_default_ui", ranking["concept_filter_decision"])
+        self.assertEqual("description", ranking["concept_filter_bucket"])
+
+        trading = classify_concept_name_v1("有色金属贸易")
+        self.assertEqual("hide_from_default_ui", trading["concept_filter_decision"])
+        self.assertEqual("description", trading["concept_filter_bucket"])
+
+        power = classify_concept_name_v1("火力及新能源发电等")
+        self.assertEqual("hide_from_default_ui", power["concept_filter_decision"])
+        self.assertEqual("description", power["concept_filter_bucket"])
+
+        self.assertEqual("keep_core", classify_concept_name_v1("DeepSeek概念")["concept_filter_decision"])
+        self.assertEqual("keep_core", classify_concept_name_v1("国际化工巨头")["concept_filter_decision"])
+
     def test_cli_writes_expected_json_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
