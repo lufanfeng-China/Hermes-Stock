@@ -2041,6 +2041,10 @@ button:hover {
   background: rgba(82, 179, 255, 0.08);
 }
 
+.sub-table tr.stock-score-subdiag-row:hover td {
+  background: transparent;
+}
+
 .sub-table .sub-name {
   color: var(--text);
 }
@@ -2052,6 +2056,145 @@ button:hover {
 .sub-table .sub-rank {
   color: var(--muted);
   font-size: 12px;
+}
+
+.stock-score-subdiag-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(124, 224, 195, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(14, 26, 37, 0.96), rgba(9, 18, 27, 0.96));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.stock-score-subdiag-trigger:hover {
+  border-color: rgba(124, 224, 195, 0.34);
+  background: linear-gradient(180deg, rgba(18, 33, 46, 0.98), rgba(10, 20, 29, 0.98));
+}
+
+.stock-score-subdiag-trigger[aria-expanded="true"] {
+  border-color: rgba(82, 179, 255, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(82, 179, 255, 0.12);
+}
+
+.stock-score-subdiag-row > td {
+  padding: 0 0 14px;
+  border-bottom: 1px solid rgba(127, 153, 170, 0.12);
+}
+
+.stock-score-subdiag {
+  margin: 4px 10px 0;
+  padding: 14px;
+  border: 1px solid rgba(82, 179, 255, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(12, 23, 34, 0.96), rgba(7, 16, 24, 0.98)),
+    radial-gradient(circle at top right, rgba(124, 224, 195, 0.08), transparent 38%);
+  box-shadow: inset 0 0 0 1px rgba(124, 224, 195, 0.04);
+}
+
+.stock-score-subdiag-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stock-score-subdiag-attribution,
+.stock-score-subdiag-impact,
+.stock-score-subdiag-explanation {
+  min-height: 100%;
+  background: rgba(7, 16, 24, 0.78);
+}
+
+.stock-score-subdiag-attribution {
+  border-color: rgba(124, 224, 195, 0.18);
+}
+
+.stock-score-subdiag-impact {
+  border-color: rgba(255, 159, 67, 0.22);
+}
+
+.stock-score-subdiag-explanation {
+  border-color: rgba(82, 179, 255, 0.22);
+}
+
+.subdiag-explanation-terminal-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(82, 179, 255, 0.22);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(8, 18, 29, 0.96), rgba(4, 11, 18, 0.98)),
+    repeating-linear-gradient(0deg, rgba(125, 224, 196, 0.03) 0 1px, transparent 1px 24px);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 224, 196, 0.04),
+    0 12px 24px rgba(0, 0, 0, 0.22);
+}
+
+.subdiag-explanation-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  padding: 4px 8px;
+  border: 1px solid rgba(125, 224, 196, 0.28);
+  border-radius: 999px;
+  background: rgba(125, 224, 196, 0.08);
+  color: #9ff4dc;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.subdiag-explanation-terminal-line {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px 10px;
+  border: 1px solid rgba(82, 179, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(12, 24, 36, 0.76);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.subdiag-explanation-terminal-line:first-child {
+  border-top: 1px solid rgba(82, 179, 255, 0.14);
+  padding-top: 8px;
+}
+
+.subdiag-explanation-terminal-label {
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.subdiag-explanation-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.subdiag-explanation-signal-chip {
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  padding: 10px;
+  border: 1px solid rgba(127, 153, 170, 0.14);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(10, 21, 31, 0.9), rgba(8, 16, 26, 0.92));
+  box-shadow: inset 0 0 0 1px rgba(82, 179, 255, 0.04);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .score-90 {
@@ -2165,6 +2308,14 @@ button:hover {
   .stock-score-profile-card,
   .stock-score-metrics {
     grid-column: auto;
+  }
+
+  .stock-score-subdiag-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .subdiag-explanation-signal-grid {
+    grid-template-columns: 1fr;
   }
 
   .stock-score-dates {

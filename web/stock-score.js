@@ -61,6 +61,11 @@ const AI_REPORT_PLACEHOLDERS = {
   negative: "",
 };
 
+const SUB_DIAG_EXPLANATION_STATUS = {
+  idle: "点击按钮生成解释，默认不自动调用 AI。",
+  loading: "AI 正在生成该指标的业务解释...",
+};
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -587,9 +592,262 @@ function yoyClassName(yoy) {
   return yoy > 0 ? "ai-report-yoy-positive" : "ai-report-yoy-negative";
 }
 
-function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSubIndicators) {
+function describeYoyDirection(yoy, meta) {
+  if (yoy == null) return "缺少可比上期数据";
+  if (yoy === 0) return "与上期基本持平";
+  if (meta?.higherBetter === false) {
+    return yoy < 0 ? "指标下降，方向偏正面" : "指标抬升，方向偏谨慎";
+  }
+  return yoy > 0 ? "指标改善，方向偏正面" : "指标走弱，方向偏谨慎";
+}
+
+function getSubDiagnosticSummaryList(value, fallback = []) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+  return fallback;
+}
+
+function formatNeedsTextValidation(value) {
+  return value ? "是" : "否";
+}
+
+function formatValidationSources(value) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).map((item) => String(item).trim()).filter(Boolean).join(" / ");
+  }
+  return String(value || "未标注").trim() || "未标注";
+}
+
+function getStoredSubdiagExplanation(subKey) {
+  return searchState.currentStock?.subdiagExplanations?.[subKey] || null;
+}
+
+function buildIdleSubdiagExplanationState() {
+  return {
+    status: "idle",
+    summary: "",
+    hypotheses: [],
+    validation_focus: [],
+    confidence: "",
+  };
+}
+
+function normalizeSubdiagExplanationState(explanation) {
+  const base = buildIdleSubdiagExplanationState();
+  const merged = { ...base, ...(explanation || {}) };
+  const normalizeList = (value) => Array.isArray(value)
+    ? value.filter(Boolean).map((item) => String(item).trim()).filter(Boolean)
+    : [];
+  return {
+    status: ["idle", "loading", "ready", "error"].includes(merged.status) ? merged.status : "idle",
+    summary: String(merged.summary || "").trim(),
+    hypotheses: normalizeList(merged.hypotheses),
+    validation_focus: normalizeList(merged.validation_focus),
+    confidence: String(merged.confidence || "").trim(),
+    error: String(merged.error || "").trim(),
+  };
+}
+
+function resolveSubdiagExplanationState(subKey, backendDiagnostic) {
+  const stored = getStoredSubdiagExplanation(subKey);
+  if (stored) return normalizeSubdiagExplanationState(stored);
+  if (backendDiagnostic?.explanation?.status === "ready") {
+    return normalizeSubdiagExplanationState(backendDiagnostic.explanation);
+  }
+  return buildIdleSubdiagExplanationState();
+}
+
+function explanationButtonText(state) {
+  if (state.status === "loading") return "生成中...";
+  if (state.status === "ready") return "重新生成解释";
+  return "生成解释";
+}
+
+function explanationConfidenceLabel(value) {
+  const key = String(value || "").trim().toLowerCase();
+  if (key === "high") return "高";
+  if (key === "low") return "低";
+  return "中";
+}
+
+function shortenTerminalLine(value, limit = 24) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const head = text.split(/[；;。.!?]/)[0].trim().replace(/[，、;；:：]+$/g, "");
+  if (head.length <= limit) return head;
+  return head.slice(0, limit).replace(/[，、;；:：]+$/g, "");
+}
+
+function renderTerminalExplanationLine(label, value, limit = 24) {
+  const text = shortenTerminalLine(value, limit);
+  if (!text) return "";
+  return `<div class="subdiag-explanation-terminal-line"><span class="subdiag-explanation-terminal-label">${label}</span><span>${escapeHtml(text)}</span></div>`;
+}
+
+function renderTerminalExplanationChip(label, value, limit = 24) {
+  const text = shortenTerminalLine(value, limit);
+  if (!text) return "";
+  return `<div class="subdiag-explanation-signal-chip"><span class="subdiag-explanation-terminal-label">${label}</span><span>${escapeHtml(text)}</span></div>`;
+}
+
+function renderSubdiagExplanationContent(subKey, explanationState) {
+  if (explanationState.status === "loading") {
+    return {
+      statusText: SUB_DIAG_EXPLANATION_STATUS.loading,
+      statusClassName: "profile-meta",
+      bodyHtml: "",
+      bodyMuted: true,
+    };
+  }
+
+  if (explanationState.status === "error") {
+    const message = explanationState.error || "生成失败，请重试。";
+    return {
+      statusText: `${message} 点击按钮生成解释，默认不自动调用 AI。`,
+      statusClassName: "profile-meta error subdiag-explanation-retry",
+      bodyHtml: '<div class="profile-meta subdiag-explanation-retry">可重试生成该指标解释。</div>',
+      bodyMuted: false,
+    };
+  }
+
+  if (explanationState.status === "ready") {
+    const summaryLine = explanationState.summary
+      ? renderTerminalExplanationLine("结论:", explanationState.summary, 30)
+      : "";
+    const chips = ['<div class="subdiag-explanation-status-chip">SIGNAL READY</div>'];
+    if (explanationState.hypotheses.length) {
+      explanationState.hypotheses.slice(0, 2).forEach((item) => {
+        chips.push(renderTerminalExplanationChip("原因:", item, 18));
+      });
+    }
+    if (explanationState.validation_focus.length) {
+      explanationState.validation_focus.slice(0, 2).forEach((item) => {
+        chips.push(renderTerminalExplanationChip("验证:", item, 18));
+      });
+    }
+    if (explanationState.confidence) {
+      chips.push(renderTerminalExplanationChip("置信:", explanationConfidenceLabel(explanationState.confidence), 4));
+    }
+    const signalGrid = chips.length
+      ? `<div class="subdiag-explanation-signal-grid">${chips.join("")}</div>`
+      : "";
+    const bodyHtml = summaryLine || signalGrid
+      ? `<div class="subdiag-explanation-terminal-panel">${summaryLine}${signalGrid}</div>`
+      : "";
+    return {
+      statusText: "已生成该指标解释",
+      statusClassName: "profile-meta",
+      bodyHtml,
+      bodyMuted: !(summaryLine || signalGrid),
+    };
+  }
+
+  return {
+    statusText: SUB_DIAG_EXPLANATION_STATUS.idle,
+    statusClassName: "profile-meta",
+    bodyHtml: "",
+    bodyMuted: true,
+  };
+}
+
+function renderSubIndicatorDiagnostic(subKey, meta, context) {
+  const {
+    currentDisplay,
+    previousDisplay,
+    yoy,
+    marketScore,
+    industryScore,
+    backendDiagnostic,
+    explanationState,
+  } = context;
+  const yoyBadge = `<span class="${yoyClassName(yoy)}">${formatYoy(yoy)}</span>`;
+  const scoreGap = marketScore - industryScore;
+  const gapDirection = scoreGap === 0 ? "双口径评分接近" : scoreGap > 0 ? "全市场口径略强" : "行业口径略强";
+  const rankBasis = meta?.higherBetter === false ? "数值越低通常越优" : "数值越高通常越优";
+  const changeSummary = backendDiagnostic?.change?.summary || `当期 ${currentDisplay} / 上期 ${previousDisplay} / 同比 ${formatYoy(yoy)}`;
+  const attributionLines = backendDiagnostic
+    ? getSubDiagnosticSummaryList(backendDiagnostic.attribution?.summary, [
+      "已接入后端诊断模板",
+      `模板类型: ${backendDiagnostic.attribution?.template_type || "未标注"}`,
+    ])
+    : [
+      "详细归因待接入",
+      "当前仅展示固定模板，不伪造未接线的驱动拆解。",
+      `口径提示: ${rankBasis}`,
+    ];
+  const impactLines = backendDiagnostic
+    ? getSubDiagnosticSummaryList(backendDiagnostic.impact?.impact_risks, [
+      backendDiagnostic.impact?.impact_summary || "已接入后端影响摘要",
+    ])
+    : [
+      `全市场分 ${marketScore.toFixed(1)} / 行业内分 ${industryScore.toFixed(1)}`,
+      `分差 ${scoreGap.toFixed(1)}，${gapDirection}。`,
+      "详细分值贡献链路待后端接入。",
+    ];
+  const explanationView = renderSubdiagExplanationContent(subKey, explanationState);
+  const impactHeadline = backendDiagnostic
+    ? (backendDiagnostic.impact?.impact_summary || `全市场分 ${marketScore.toFixed(1)} / 行业内分 ${industryScore.toFixed(1)}`)
+    : `全市场分 ${marketScore.toFixed(1)} / 行业内分 ${industryScore.toFixed(1)}`;
+  const attributionHeadline = backendDiagnostic
+    ? (backendDiagnostic.attribution?.template_type || "已接入模板")
+    : "固定占位模板";
+  const evidenceStrength = backendDiagnostic?.attribution?.evidence_strength || "未标注";
+  const needsTextValidation = formatNeedsTextValidation(backendDiagnostic?.attribution?.needs_text_validation);
+  const validationSources = formatValidationSources(backendDiagnostic?.attribution?.validation_sources);
+  const industryScope = backendDiagnostic?.attribution?.industry_scope || "未标注";
+
+  return `
+    <div class="stock-score-subdiag" data-subdiag-key="${escapeHtml(subKey)}">
+      <div class="stock-score-subdiag-grid">
+        <section class="profile-field stock-score-profile-field">
+          <span class="profile-label">变动快照</span>
+          <div class="profile-value">
+            <div><strong>${escapeHtml(meta.name)}</strong> · ${escapeHtml(DIM_NAMES[meta.dim] || "未分类")}</div>
+            <div>当期 ${escapeHtml(currentDisplay)} / 上期 ${escapeHtml(previousDisplay)} / 同比 ${yoyBadge}</div>
+            <div class="profile-meta">${escapeHtml(changeSummary)}</div>
+            <div class="profile-meta">${escapeHtml(describeYoyDirection(yoy, meta))}</div>
+          </div>
+        </section>
+        <section class="profile-field stock-score-profile-field stock-score-subdiag-attribution">
+          <span class="profile-label">归因卡</span>
+          <div class="profile-value">
+            <div>${escapeHtml(attributionHeadline)}</div>
+            ${backendDiagnostic ? `<div class="profile-meta">证据强度: ${escapeHtml(evidenceStrength)}</div>` : ""}
+            ${backendDiagnostic ? `<div class="profile-meta">需文本验证: ${escapeHtml(needsTextValidation)}</div>` : ""}
+            ${backendDiagnostic ? `<div class="profile-meta">建议验证来源: ${escapeHtml(validationSources)}</div>` : ""}
+            ${backendDiagnostic ? `<div class="profile-meta">行业适用: ${escapeHtml(industryScope)}</div>` : ""}
+            ${attributionLines.map((line) => `<div class="profile-meta">${escapeHtml(line)}</div>`).join("")}
+            ${backendDiagnostic ? `<div class="profile-meta">口径提示: ${escapeHtml(rankBasis)}</div>` : ""}
+          </div>
+        </section>
+        <section class="profile-field stock-score-profile-field stock-score-subdiag-impact">
+          <span class="profile-label">影响卡</span>
+          <div class="profile-value">
+            <div>${escapeHtml(impactHeadline)}</div>
+            ${impactLines.map((line) => `<div class="profile-meta">${escapeHtml(line)}</div>`).join("")}
+            <div class="profile-meta">分差 ${escapeHtml(scoreGap.toFixed(1))}，${escapeHtml(gapDirection)}。</div>
+          </div>
+        </section>
+        <section class="profile-field stock-score-profile-field stock-score-subdiag-explanation">
+          <span class="profile-label">解释卡</span>
+          <div class="ai-report-action-row">
+            <button type="button" class="stock-score-subdiag-trigger" data-subdiag-action="explain" data-subdiag-key="${escapeHtml(subKey)}"${explanationState.status === "loading" ? " disabled" : ""}>${escapeHtml(explanationButtonText(explanationState))}</button>
+            <div class="${escapeHtml(explanationView.statusClassName)}" id="subdiag-explanation-status-${escapeHtml(subKey)}">${escapeHtml(explanationView.statusText)}</div>
+          </div>
+          <div class="profile-value${explanationView.bodyMuted ? " muted" : ""}" id="subdiag-explanation-${escapeHtml(subKey)}">${explanationView.bodyHtml}</div>
+        </section>
+      </div>
+    </div>`;
+}
+
+function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSubIndicators, subIndicatorDiagnostics = {}) {
   const tbody = document.getElementById("sub-tbody");
   tbody.innerHTML = "";
+  const columnCount = document.querySelectorAll("#sub-table thead th").length || 8;
 
   Object.entries(scoreData).forEach(([key, val]) => {
     if (typeof val !== "number") return;
@@ -603,11 +861,21 @@ function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSu
     const yoy = computeYoy(key, rawVal, prevRawSubIndicators || {});
     const currentDisplay = key === "free_cf" ? formatAmountYi(rawVal) : formatRawValue(key, rawVal);
     const previousDisplay = key === "free_cf" ? formatAmountYi(prevVal) : formatRawValue(key, prevVal);
+    const isExpanded = searchState.expandedSubDiagKey === key;
+    const backendDiagnostic = subIndicatorDiagnostics[key] || null;
+    const explanationState = resolveSubdiagExplanationState(key, backendDiagnostic);
 
     const row = document.createElement("tr");
+    row.className = "stock-score-subrow";
+    row.dataset.subdiagKey = key;
     row.innerHTML = `
       <td style="color:${DIM_COLORS[meta.dim] || "#888"};font-size:13px;">${DIM_NAMES[meta.dim]}</td>
-      <td class="sub-name">${meta.name}</td>
+      <td class="sub-name">
+        <button type="button" class="stock-score-subdiag-trigger" data-subdiag-action="toggle" data-subdiag-key="${escapeHtml(key)}" aria-expanded="${isExpanded ? "true" : "false"}">
+          <span>${meta.name}</span>
+          <span>${isExpanded ? "收起" : "诊断"}</span>
+        </button>
+      </td>
       <td class="sub-period-current">${currentDisplay}</td>
       <td class="sub-period-previous">${previousDisplay}</td>
       <td class="sub-period-yoy"><span class="${yoyClassName(yoy)}">${formatYoy(yoy)}</span></td>
@@ -615,6 +883,23 @@ function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSu
       <td class="sub-score ${scoreColor(indVal)}" style="color:${INDUSTRY_COLOR};">${indVal.toFixed(1)}</td>
       <td class="sub-rank">${meta.desc}</td>`;
     tbody.appendChild(row);
+
+    const detailRow = document.createElement("tr");
+    detailRow.className = "stock-score-subdiag-row";
+    detailRow.hidden = !isExpanded;
+    detailRow.innerHTML = `
+      <td colspan="${columnCount}">
+        ${renderSubIndicatorDiagnostic(key, meta, {
+          currentDisplay,
+          previousDisplay,
+          yoy,
+          marketScore: val,
+          industryScore: indVal,
+          backendDiagnostic,
+          explanationState,
+        })}
+      </td>`;
+    tbody.appendChild(detailRow);
   });
 }
 
@@ -629,6 +914,7 @@ function renderScore(result) {
     raw_sub_indicators,
     prev_raw_sub_indicators,
     score_methodology,
+    sub_indicator_diagnostics,
     market_total_rank,
     market_total_universe_size,
     industry_total_rank,
@@ -702,7 +988,7 @@ function renderScore(result) {
 
   // ── Sub-table ───────────────────────────────────────────────────────────
   // sd (score_data) contains the flat sub_indicators dict from the snapshot
-  renderSubTable(sd || {}, ind_sub_indicators || {}, raw_sub_indicators || {}, prev_raw_sub_indicators || {});
+  renderSubTable(sd || {}, ind_sub_indicators || {}, raw_sub_indicators || {}, prev_raw_sub_indicators || {}, result.sub_indicator_diagnostics || sub_indicator_diagnostics || {});
 }
 
 // ── API ─────────────────────────────────────────────────────────────────────
@@ -745,6 +1031,14 @@ async function fetchAiFinancialReport(market, symbol) {
   return payload;
 }
 
+async function fetchSubdiagExplanation(market, symbol, subKey) {
+  const url = `/api/stock-score-subdiag-explanation?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&sub_key=${encodeURIComponent(subKey)}`;
+  const r = await fetch(url);
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
 function normalizeMarket(code) {
   if (!code) return null;
   const s = String(code).trim();
@@ -765,7 +1059,36 @@ const searchState = {
   selectedStock: null,
   suggestions: [],
   currentStock: null,
+  expandedSubDiagKey: null,
 };
+
+function rerenderCurrentSubdiagTable() {
+  if (!searchState.currentStock?.scoreResult) return;
+  renderSubTable(
+    searchState.currentStock.scoreResult.score_data || {},
+    searchState.currentStock.scoreResult.ind_sub_indicators || {},
+    searchState.currentStock.scoreResult.raw_sub_indicators || {},
+    searchState.currentStock.scoreResult.prev_raw_sub_indicators || {},
+    searchState.currentStock.scoreResult.sub_indicator_diagnostics || {},
+  );
+}
+
+function currentStockIdentity() {
+  if (!searchState.currentStock?.market || !searchState.currentStock?.symbol) return null;
+  return `${searchState.currentStock.market}:${searchState.currentStock.symbol}`;
+}
+
+function isCurrentStockIdentity(identity) {
+  return Boolean(identity) && identity === currentStockIdentity();
+}
+
+function setSubdiagExplanationState(subKey, nextState) {
+  if (!searchState.currentStock) return;
+  if (!searchState.currentStock.subdiagExplanations) {
+    searchState.currentStock.subdiagExplanations = {};
+  }
+  searchState.currentStock.subdiagExplanations[subKey] = normalizeSubdiagExplanationState(nextState);
+}
 
 function renderSuggestions(results) {
   searchState.suggestions = results;
@@ -871,6 +1194,41 @@ recentSearchesEl.addEventListener("click", e => {
     stock_name: button.dataset.name,
   });
 });
+document.getElementById("sub-tbody").addEventListener("click", e => {
+  const trigger = e.target.closest("[data-subdiag-action][data-subdiag-key]");
+  if (!trigger) return;
+
+  const { subdiagAction, subdiagKey } = trigger.dataset;
+  if (subdiagAction === "toggle") {
+    searchState.expandedSubDiagKey = searchState.expandedSubDiagKey === subdiagKey ? null : subdiagKey;
+    rerenderCurrentSubdiagTable();
+    return;
+  }
+
+  if (subdiagAction === "explain") {
+    if (!searchState.currentStock?.market || !searchState.currentStock?.symbol) {
+      return;
+    }
+    const { market, symbol } = searchState.currentStock;
+    const stockIdentity = currentStockIdentity();
+    setSubdiagExplanationState(subdiagKey, { status: "loading" });
+    rerenderCurrentSubdiagTable();
+    fetchSubdiagExplanation(market, symbol, subdiagKey)
+      .then((payload) => {
+        if (!isCurrentStockIdentity(stockIdentity)) return;
+        setSubdiagExplanationState(subdiagKey, payload.explanation || { status: "ready" });
+        rerenderCurrentSubdiagTable();
+      })
+      .catch((err) => {
+        if (!isCurrentStockIdentity(stockIdentity)) return;
+        setSubdiagExplanationState(subdiagKey, {
+          status: "error",
+          error: `生成失败: ${err.message}`,
+        });
+        rerenderCurrentSubdiagTable();
+      });
+  }
+});
 document.addEventListener("click", e => {
   if (!e.target.closest(".search-input-wrap")) {
     hideSuggestions();
@@ -971,6 +1329,7 @@ async function doSearch(selectedRow = null) {
   document.getElementById("score-header").classList.remove("visible");
   resetProfileSummary();
   searchState.currentStock = null;
+  searchState.expandedSubDiagKey = null;
   resetAiFinancialReport("查询完成后可生成分析");
   renderScoreMethodology(null);
   hideSuggestions();
@@ -989,7 +1348,9 @@ async function doSearch(selectedRow = null) {
       market,
       symbol,
       stock_name: searchState.selectedStock?.stock_name || result?.stock_name || symbol,
+      scoreResult: result,
       aiReportReady: false,
+      subdiagExplanations: {},
     };
     const reportHistory = reportHistoryPayload || {};
     renderAiFinancialReport(null);

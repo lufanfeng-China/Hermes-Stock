@@ -825,6 +825,27 @@ _SUB_DEFS = [
 ]
 
 _SUB_KEYS = [d[0] for d in _SUB_DEFS]
+_SUB_INDICATOR_LABELS = {
+    "roe_ex": "扣非ROE",
+    "net_margin": "净利率",
+    "roe_pct": "净资产收益率",
+    "revenue_growth": "营收增速",
+    "profit_growth": "净利润增速",
+    "ex_profit_growth": "扣非增速",
+    "ar_days": "应收周转天数",
+    "inv_days": "存货周转天数",
+    "asset_turn": "总资产周转率",
+    "ocf_to_profit": "净现比",
+    "ocf_to_rev": "现金流/营收",
+    "free_cf": "自由现金流",
+    "debt_ratio": "资产负债率",
+    "current_ratio": "流动比率",
+    "quick_ratio": "速动比率",
+    "ar_to_asset": "应收占比",
+    "inv_to_asset": "存货占比",
+    "goodwill_ratio": "商誉占比",
+    "impair_to_rev": "减值损失率",
+}
 _CROSS_INDUSTRY_SENSITIVE_DIMS = {"operating", "solvency", "asset_quality"}
 _PURE_MARKET_DIMS = {"profitability", "growth", "cashflow"}
 
@@ -1430,6 +1451,852 @@ def _build_latest_report_analysis(score_data: dict[str, object], raw_sub_indicat
     return {"strengths": strengths[:4], "risks": risks[:4]}
 
 
+def _safe_float(value: object) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _signed_delta_text(delta: float | None, suffix: str = "") -> str:
+    if delta is None:
+        return "缺少可比上期数据"
+    sign = "+" if delta > 0 else ""
+    return f"{sign}{delta:.2f}{suffix}"
+
+
+def _metric_change_summary(current: float | None, previous: float | None, *, suffix: str = "") -> dict[str, object]:
+    delta = None
+    if current is not None and previous is not None:
+        delta = current - previous
+    return {
+        "current_value": current,
+        "previous_value": previous,
+        "delta_value": delta,
+        "summary": "当期较上期 " + _signed_delta_text(delta, suffix),
+    }
+
+
+def _load_sub_indicator_component_context(market: str, symbol: str) -> dict[str, dict[str, float | None]]:
+    """
+    Load supporting raw financial components for a single stock.
+    Returns empty current/previous dicts when local financial data is unavailable.
+    """
+    empty = {"current": {}, "previous": {}}
+
+    try:
+        all_files = _all_financial_files()
+    except Exception:
+        return empty
+    if not all_files:
+        return empty
+
+    found_rows: list[object] = []
+    for _date_str, fp in all_files:
+        try:
+            loaded = _load_file(fp)
+        except Exception:
+            loaded = None
+        if loaded is None:
+            continue
+        _loaded_date, df = loaded
+        idx_candidates = [symbol]
+        if market == "sz" and len(symbol) == 6:
+            idx_candidates.extend([symbol.lstrip("0"), symbol[1:] if symbol.startswith("0") else symbol])
+        row = None
+        for idx in idx_candidates:
+            if idx and idx in df.index:
+                row = df.loc[idx]
+                break
+        if row is None:
+            continue
+        found_rows.append(row)
+        if len(found_rows) >= 2:
+            break
+
+    if not found_rows:
+        return empty
+
+    def _extract_components(frow: object | None) -> dict[str, float | None]:
+        if frow is None or not hasattr(frow, "get"):
+            return {}
+
+        def vv(col: str) -> float | None:
+            return _pick(frow.get(col))
+
+        return {
+            "revenue": vv("营业收入"),
+            "ex_net_profit": vv("扣除非经常性损益后的净利润"),
+            "op_cf": vv("经营活动产生的现金流量净额"),
+            "net_profit": vv("归属于母公司所有者的净利润"),
+            "capex": vv("购建固定资产、无形资产和其他长期资产支付的现金"),
+            "total_debt": vv("负债合计"),
+            "total_assets": vv("资产总计"),
+            "equity": vv("归属于母公司股东权益(资产负债表)"),
+            "ar": vv("应收账款"),
+            "inventory": vv("存货"),
+            "goodwill": vv("商誉"),
+            "impair_loss": vv("资产减值损失"),
+            "current_assets": vv("流动资产合计"),
+            "current_liabilities": vv("流动负债合计"),
+            "operating_cost": vv("营业成本"),
+        }
+
+    current_row = found_rows[0] if found_rows else None
+    previous_row = found_rows[1] if len(found_rows) > 1 else None
+    return {
+        "current": _extract_components(current_row),
+        "previous": _extract_components(previous_row),
+    }
+
+
+def _build_sub_indicator_diagnostics(
+    score_data: dict[str, object],
+    ind_sub_indicators: dict[str, object],
+    raw_sub_indicators: dict[str, object],
+    prev_raw_sub_indicators: dict[str, object],
+    component_context: dict[str, dict[str, object]] | None,
+    ind1: str | None = None,
+    ind2: str | None = None,
+) -> dict[str, dict[str, object]]:
+    current_components = (component_context or {}).get("current") or {}
+    previous_components = (component_context or {}).get("previous") or {}
+    industry_labels = [str(v) for v in (ind1, ind2) if v]
+    industry_text = " / ".join(industry_labels)
+    is_insurance = any(label == "保险" for label in industry_labels)
+    is_non_bank_finance = any(label == "非银金融" for label in industry_labels)
+    is_industrial_metal = any(label == "工业金属" for label in industry_labels)
+
+    def attribution_metadata(template_type: str, sub_key: str) -> dict[str, object]:
+        evidence_strength = "medium"
+        needs_text_validation = True
+        validation_sources: list[str] = ["公告正文", "MD&A"]
+        if template_type == "formula_decomposition":
+            evidence_strength = "high"
+            needs_text_validation = False
+            validation_sources = ["无需额外文本验证"]
+        elif template_type == "efficiency_misalignment":
+            validation_sources = ["公告正文", "财报附注"]
+        elif template_type == "direct_field_signal":
+            evidence_strength = "low" if sub_key == "roe_pct" else "medium"
+            validation_sources = ["公告正文", "行业价格数据", "监管披露"] if sub_key == "roe_pct" else ["公告正文", "MD&A"]
+
+        if sub_key in {"revenue_growth", "profit_growth", "ex_profit_growth"}:
+            validation_sources = ["公告正文", "MD&A", "行业景气数据"]
+        elif sub_key in {"current_ratio", "quick_ratio", "debt_ratio"} and (is_insurance or is_non_bank_finance):
+            validation_sources = ["公告正文", "监管披露", "财报附注"]
+        elif sub_key in {"goodwill_ratio", "impair_to_rev"}:
+            validation_sources = ["公告正文", "财报附注", "审计说明"] if needs_text_validation else validation_sources
+
+        industry_scope = "全行业通用"
+        if sub_key in {"inv_to_asset", "inv_days"}:
+            if is_industrial_metal:
+                industry_scope = "工业金属更适用，也可供其他重资产制造链横向参考"
+            else:
+                industry_scope = "制造业与重资产行业更适用"
+        elif sub_key in {"free_cf", "revenue_growth", "profit_growth", "ex_profit_growth", "asset_turn"}:
+            industry_scope = "全行业通用"
+        elif sub_key in {"current_ratio", "quick_ratio", "roe_ex", "roe_pct"} and (is_insurance or is_non_bank_finance):
+            industry_scope = "保险/非银金融更适合作为辅助观察，需结合负债结构与资本约束理解"
+        elif sub_key == "debt_ratio" and (is_insurance or is_non_bank_finance):
+            industry_scope = "保险/非银金融更适用，需结合杠杆经营与监管资本约束解读"
+        elif sub_key in {"ar_days", "ar_to_asset"}:
+            industry_scope = "赊销占比较高行业更适用"
+        elif sub_key in {"goodwill_ratio", "impair_to_rev"}:
+            industry_scope = "并购活跃或资产波动较大的行业更适用"
+        return {
+            "evidence_strength": evidence_strength,
+            "needs_text_validation": needs_text_validation,
+            "validation_sources": validation_sources,
+            "industry_scope": industry_scope,
+        }
+
+    def pct_score(source: dict[str, object], key: str) -> float | None:
+        return _safe_float(source.get(key))
+
+    def risk_from_trend(current: float | None, previous: float | None, *, lower_is_better: bool = False) -> list[str]:
+        if current is None or previous is None:
+            return ["缺少完整的当期/上期对比数据"]
+        if lower_is_better:
+            return ["指标抬升，方向偏谨慎"] if current > previous else ["指标回落，方向改善"]
+        return ["指标走弱，方向偏谨慎"] if current < previous else ["指标改善，方向偏正面"]
+
+    def component_values(keys: list[str]) -> dict[str, dict[str, float | None]]:
+        return {
+            "current": {key: _safe_float(current_components.get(key)) for key in keys},
+            "previous": {key: _safe_float(previous_components.get(key)) for key in keys},
+        }
+
+    def component_delta(key: str) -> float | None:
+        current = _safe_float(current_components.get(key))
+        previous = _safe_float(previous_components.get(key))
+        if current is None or previous is None:
+            return None
+        return current - previous
+
+    def component_fragment(
+        key: str,
+        label: str,
+        *,
+        positive_text: str = "抬升",
+        negative_text: str = "回落",
+    ) -> str:
+        delta = component_delta(key)
+        if delta is None:
+            return ""
+        if delta > 0:
+            return f"{label}{positive_text}"
+        if delta < 0:
+            return f"{label}{negative_text}"
+        return f"{label}基本持平"
+
+    def component_weight(key: str) -> float:
+        current = _safe_float(current_components.get(key))
+        previous = _safe_float(previous_components.get(key))
+        if current is None or previous is None:
+            return 0.0
+        delta = current - previous
+        if previous not in (None, 0):
+            return abs(delta) / abs(previous)
+        return abs(delta)
+
+    def driver_item(
+        key: str,
+        label: str,
+        *,
+        sensitivity: int,
+        positive_text: str = "抬升",
+        negative_text: str = "回落",
+    ) -> dict[str, object] | None:
+        fragment = component_fragment(key, label, positive_text=positive_text, negative_text=negative_text)
+        if not fragment:
+            return None
+        delta = component_delta(key)
+        if delta is None or delta == 0:
+            effect = 0
+        else:
+            effect = (1 if delta > 0 else -1) * sensitivity
+        return {
+            "fragment": fragment,
+            "effect": effect,
+            "weight": component_weight(key),
+        }
+
+    def triplet_parts(
+        metric_current: float | None,
+        metric_previous: float | None,
+        drivers: list[dict[str, object] | None],
+    ) -> tuple[str, str, str] | None:
+        if metric_current is None or metric_previous is None or metric_current == metric_previous:
+            return None
+        metric_effect = 1 if metric_current > metric_previous else -1
+        usable = [driver for driver in drivers if driver]
+        aligned = sorted(
+            [driver for driver in usable if driver.get("effect") == metric_effect],
+            key=lambda item: float(item.get("weight", 0.0)),
+            reverse=True,
+        )
+        opposing = sorted(
+            [driver for driver in usable if driver.get("effect") == -metric_effect],
+            key=lambda item: float(item.get("weight", 0.0)),
+            reverse=True,
+        )
+        neutral = sorted(
+            [driver for driver in usable if driver.get("effect") == 0],
+            key=lambda item: float(item.get("weight", 0.0)),
+            reverse=True,
+        )
+        main_text = str(aligned[0]["fragment"]) if aligned else "暂无更强主因信号"
+        secondary_text = str(aligned[1]["fragment"]) if len(aligned) > 1 else (
+            str(neutral[0]["fragment"]) if neutral else "暂无更强同向次因"
+        )
+        hedge_text = str(opposing[0]["fragment"]) if opposing else "暂无明显对冲项"
+        return main_text, secondary_text, hedge_text
+
+    def triplet_summary(
+        metric_current: float | None,
+        metric_previous: float | None,
+        drivers: list[dict[str, object] | None],
+    ) -> str:
+        parts = triplet_parts(metric_current, metric_previous, drivers)
+        if not parts:
+            return ""
+        main_text, secondary_text, hedge_text = parts
+        return f"主因：{main_text}；次因：{secondary_text}；对冲项：{hedge_text}。"
+
+    def driver_aware_formula_summary(sub_key: str) -> str:
+        metric_current = _safe_float(raw_sub_indicators.get(sub_key))
+        metric_previous = _safe_float(prev_raw_sub_indicators.get(sub_key))
+        if sub_key == "roe_ex":
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("ex_net_profit", "扣非利润", sensitivity=1),
+                driver_item("equity", "归母权益", sensitivity=-1),
+            ])
+            if is_insurance or is_non_bank_finance:
+                prefix = f"{industry_text or '保险'}公司"
+                base = (
+                    f"{prefix}的扣非ROE主要看盈利端相对归母权益的产出效率，"
+                    "需结合承保表现、投资收益与资本消耗综合判断。"
+                )
+                return f"{base}{triplet}" if triplet else base
+            base = "扣非ROE主要衡量盈利端相对归母权益的回报效率，反映核心利润对股东资本的占用产出。"
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "ocf_to_profit":
+            base = "净现比反映利润表利润与经营现金流之间的匹配度，用于判断盈利含金量。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("op_cf", "经营现金流", sensitivity=1),
+                driver_item("net_profit", "净利润", sensitivity=-1),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "net_margin":
+            base = "净利润率反映每单位营收最终能沉淀多少利润，是观察盈利兑现效率的核心切口。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("net_profit", "净利润", sensitivity=1),
+                driver_item("revenue", "营收", sensitivity=-1),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "ocf_to_rev":
+            base = "现金流/营收反映收入转化为经营现金流的效率，用于观察销售回笼质量。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("op_cf", "经营现金流", sensitivity=1),
+                driver_item("revenue", "营收", sensitivity=-1),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "free_cf":
+            base = "自由现金流聚焦经营现金流扣除资本开支后的现金沉淀能力，可用于判断自我造血空间。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("op_cf", "经营现金流", sensitivity=1),
+                driver_item("capex", "资本开支", sensitivity=-1, positive_text="扩张", negative_text="收缩"),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "ar_to_asset":
+            base = "应收占比反映资产中被客户信用占用的比例，用于观察赊销扩张与资产沉淀压力。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("ar", "应收账款", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "inv_to_asset":
+            if is_industrial_metal:
+                base = "工业金属企业的存货占比可用于观察资源备货、在产品与产成品沉淀，对资产周转和价格波动都较敏感。"
+            else:
+                base = "存货占比反映资产中被备货和在制品占用的比例，可用于观察库存沉淀压力。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("inventory", "存货", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "goodwill_ratio":
+            base = "商誉占比反映并购形成资产在总资产中的占用程度，比例偏高通常意味着后续减值敏感性更强。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("goodwill", "商誉", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        if sub_key == "impair_to_rev":
+            base = "减值占比反映收入中被资产减值侵蚀的部分，可用于观察资产质量和利润稳定性。"
+            triplet = triplet_summary(metric_current, metric_previous, [
+                driver_item("impair_loss", "减值损失", sensitivity=1),
+                driver_item("revenue", "营收", sensitivity=-1),
+            ])
+            return f"{base}{triplet}" if triplet else base
+        return ""
+
+    def formula_impact_triplet_lines(sub_key: str, metric_current: float | None, metric_previous: float | None) -> list[str]:
+        if sub_key == "free_cf":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("op_cf", "经营现金流", sensitivity=1),
+                driver_item("capex", "资本开支", sensitivity=-1, positive_text="扩张", negative_text="收缩"),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}意味着可支配现金与资本配置空间首先承压。",
+                f"次影响：{secondary_text}会继续影响分红、回购与扩产弹性。",
+                f"缓冲项：{hedge_text}对现金沉淀压力形成一定缓冲。",
+            ]
+        if sub_key == "ocf_to_profit":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("op_cf", "经营现金流", sensitivity=1),
+                driver_item("net_profit", "净利润", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变利润兑现为现金的含金量判断。",
+                f"次影响：{secondary_text}继续影响现金流质量评分弹性。",
+                f"缓冲项：{hedge_text}对现金兑现压力形成一定对冲。",
+            ]
+        if sub_key == "net_margin":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("net_profit", "净利润", sensitivity=1),
+                driver_item("revenue", "营收", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变每单位营收的利润沉淀效率。",
+                f"次影响：{secondary_text}继续影响盈利能力评分的稳定性。",
+                f"缓冲项：{hedge_text}对利润率波动形成一定缓冲。",
+            ]
+        if sub_key == "ocf_to_rev":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("op_cf", "经营现金流", sensitivity=1),
+                driver_item("revenue", "营收", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变销售回笼效率判断。",
+                f"次影响：{secondary_text}继续影响现金流质量与收入含金量评估。",
+                f"缓冲项：{hedge_text}对回款压力形成一定对冲。",
+            ]
+        if sub_key == "ar_to_asset":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("ar", "应收账款", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变资产被信用占用的压力判断。",
+                f"次影响：{secondary_text}继续影响回款风险与资产质量预期。",
+                f"缓冲项：{hedge_text}对应收占压形成一定缓冲。",
+            ]
+        if sub_key == "inv_to_asset":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("inventory", "存货", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            prefix = "库存沉淀压力" if not is_industrial_metal else "备库与库存沉淀压力"
+            return [
+                f"主影响：{main_text}会首先改变{prefix}判断。",
+                f"次影响：{secondary_text}继续影响周转效率与资产质量预期。",
+                f"缓冲项：{hedge_text}对库存占压形成一定缓冲。",
+            ]
+        if sub_key == "goodwill_ratio":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("goodwill", "商誉", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变商誉占比对应的减值敏感度。",
+                f"次影响：{secondary_text}继续影响市场对并购资产质量的判断。",
+                f"缓冲项：{hedge_text}对潜在减值压力形成一定缓冲。",
+            ]
+        if sub_key == "impair_to_rev":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("impair_loss", "减值损失", sensitivity=1),
+                driver_item("revenue", "营收", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变利润表对资产质量折价的压力。",
+                f"次影响：{secondary_text}继续影响市场对盈利稳定性的判断。",
+                f"缓冲项：{hedge_text}对减值冲击形成一定缓冲。",
+            ]
+        return []
+
+    def efficiency_impact_triplet_lines(sub_key: str, metric_current: float | None, metric_previous: float | None) -> list[str]:
+        if sub_key == "debt_ratio":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("total_debt", "负债规模", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变杠杆与偿债压力判断。",
+                f"次影响：{secondary_text}继续影响融资空间与财务弹性预期。",
+                f"缓冲项：{hedge_text}对杠杆抬升压力形成一定缓冲。",
+            ]
+        if sub_key == "ar_days":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("ar", "应收账款", sensitivity=1),
+                driver_item("revenue", "营收", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变现金回笼节奏判断。",
+                f"次影响：{secondary_text}继续影响坏账敏感度与运营效率预期。",
+                f"缓冲项：{hedge_text}对应收周转压力形成一定缓冲。",
+            ]
+        if sub_key == "inv_days":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("inventory", "存货", sensitivity=1),
+                driver_item("operating_cost", "营业成本", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            prefix = "产销节奏" if not is_industrial_metal else "备库与产销节奏"
+            return [
+                f"主影响：{main_text}会首先改变{prefix}与库存消化判断。",
+                f"次影响：{secondary_text}继续影响周转效率与减值敏感度预期。",
+                f"缓冲项：{hedge_text}对库存周转压力形成一定缓冲。",
+            ]
+        if sub_key == "asset_turn":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("revenue", "营收", sensitivity=1),
+                driver_item("total_assets", "总资产", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            return [
+                f"主影响：{main_text}会首先改变资产使用效率判断。",
+                f"次影响：{secondary_text}继续影响运营效率评分与回报率预期。",
+                f"缓冲项：{hedge_text}对周转效率压力形成一定缓冲。",
+            ]
+        if sub_key == "current_ratio":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("current_assets", "流动资产", sensitivity=1),
+                driver_item("current_liabilities", "流动负债", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            if is_insurance:
+                return [
+                    f"主影响：{main_text}会首先改变保险负债对应的短期流动性观察。",
+                    f"次影响：{secondary_text}继续影响资产配置与久期匹配评估。",
+                    f"缓冲项：{hedge_text}对流动性压力形成一定缓冲。",
+                ]
+            return [
+                f"主影响：{main_text}会首先改变短期偿债缓冲判断。",
+                f"次影响：{secondary_text}继续影响流动性安全边际评估。",
+                f"缓冲项：{hedge_text}对短债压力形成一定缓冲。",
+            ]
+        if sub_key == "quick_ratio":
+            parts = triplet_parts(metric_current, metric_previous, [
+                driver_item("current_assets", "流动资产", sensitivity=1),
+                driver_item("current_liabilities", "流动负债", sensitivity=-1),
+                driver_item("inventory", "存货", sensitivity=-1),
+            ])
+            if not parts:
+                return []
+            main_text, secondary_text, hedge_text = parts
+            if is_insurance:
+                return [
+                    f"主影响：{main_text}会首先改变保险负债对应的高流动性资产覆盖判断。",
+                    f"次影响：{secondary_text}继续影响可快速变现资产配置评估。",
+                    f"缓冲项：{hedge_text}对速动性压力形成一定缓冲。",
+                ]
+            return [
+                f"主影响：{main_text}会首先改变高流动资产覆盖短债的判断。",
+                f"次影响：{secondary_text}继续影响速动性安全边际评估。",
+                f"缓冲项：{hedge_text}对速动比率压力形成一定缓冲。",
+            ]
+        return []
+
+    def formula_summary(sub_key: str) -> str:
+        if sub_key == "roe_ex":
+            return driver_aware_formula_summary("roe_ex")
+        if sub_key == "net_margin":
+            return driver_aware_formula_summary("net_margin")
+        if sub_key == "ocf_to_profit":
+            return driver_aware_formula_summary("ocf_to_profit")
+        if sub_key == "ocf_to_rev":
+            return driver_aware_formula_summary("ocf_to_rev")
+        if sub_key == "free_cf":
+            return driver_aware_formula_summary("free_cf")
+        if sub_key == "ar_to_asset":
+            return driver_aware_formula_summary("ar_to_asset")
+        if sub_key == "inv_to_asset":
+            return driver_aware_formula_summary("inv_to_asset")
+        if sub_key == "goodwill_ratio":
+            return driver_aware_formula_summary("goodwill_ratio")
+        if sub_key == "impair_to_rev":
+            return driver_aware_formula_summary("impair_to_rev")
+        return ""
+
+    def period_summary(sub_key: str) -> str:
+        if sub_key == "revenue_growth":
+            return "收入动能通过当期与上期营收增速对比来观察，可直接反映需求扩张或收缩的方向。"
+        if sub_key == "profit_growth":
+            return "利润释放节奏通过当期与上期净利润增速对比来观察，可判断盈利弹性的变化。"
+        if sub_key == "ex_profit_growth":
+            return "核心经营改善程度通过扣非利润增速的期间对比来观察，更能剔除非经常性扰动。"
+        return ""
+
+    def efficiency_summary(sub_key: str) -> str:
+        if sub_key == "ar_days":
+            return "应收周转天数用于观察回款节奏与收入确认是否匹配，天数拉长往往意味着资金占用上升。"
+        if sub_key == "inv_days":
+            if is_industrial_metal:
+                return "工业金属链条的存货周转天数用于观察产销节奏、备库安排与成本结转是否匹配。"
+            return "存货周转天数用于观察产销节奏与库存消化是否匹配，天数抬升通常意味着周转放慢。"
+        if sub_key == "asset_turn":
+            return "总资产周转率用于观察收入扩张与资产投入的匹配度，反映资产使用效率。"
+        if sub_key == "debt_ratio":
+            return "资产负债率用于观察负债扩张与资产承接能力是否匹配，能反映杠杆使用强度。"
+        if sub_key == "current_ratio":
+            if is_insurance:
+                return "保险公司的流动比率更适合作为补充观察，需结合负债久期、赔付准备和资产配置结构综合判断。"
+            return "流动比率用于观察流动资产对流动负债的覆盖程度，是短期偿债缓冲的重要刻画。"
+        if sub_key == "quick_ratio":
+            if is_insurance:
+                return "保险公司的速动比率更适合作为补充观察，需结合保险负债特征与可快速变现资产配置一并评估。"
+            return "速动比率用于观察剔除存货后的流动性覆盖能力，更强调高流动资产的短债保障。"
+        return ""
+
+    def direct_summary(sub_key: str) -> str:
+        if sub_key == "roe_pct":
+            if is_insurance or is_non_bank_finance:
+                prefix = f"{industry_text or '保险'}行业"
+                return f"{prefix}的净资产收益率需要结合投资收益、承保利润和资本运用效率一起看，能直接反映股东回报水平。"
+            return "净资产收益率直接反映股东资本的回报水平，是观察综合盈利能力的核心读数。"
+        return ""
+
+    formula_specs = {
+        "roe_ex": {
+            "summary": formula_summary("roe_ex"),
+            "components": ["ex_net_profit", "equity"],
+            "impact_summary": "扣非利润相对股东权益的产出效率影响盈利质量评分。",
+            "suffix": "%",
+        },
+        "net_margin": {
+            "summary": formula_summary("net_margin"),
+            "components": ["net_profit", "revenue"],
+            "impact_summary": "每单位营收沉淀利润的能力影响盈利能力评分。",
+            "suffix": "%",
+        },
+        "ocf_to_profit": {
+            "summary": formula_summary("ocf_to_profit"),
+            "components": ["op_cf", "net_profit"],
+            "impact_summary": "利润兑现为经营现金流的能力影响现金流质量评分。",
+            "suffix": "",
+        },
+        "ocf_to_rev": {
+            "summary": formula_summary("ocf_to_rev"),
+            "components": ["op_cf", "revenue"],
+            "impact_summary": "营收对应的现金回笼效率影响现金流质量评分。",
+            "suffix": "",
+        },
+        "free_cf": {
+            "summary": formula_summary("free_cf"),
+            "components": ["op_cf", "capex"],
+            "impact_summary": "资本开支后的现金沉淀影响现金流质量评分。",
+            "suffix": "",
+            "change_summary": "自由现金流变动由经营现金流与资本开支共同驱动",
+        },
+        "ar_to_asset": {
+            "summary": formula_summary("ar_to_asset"),
+            "components": ["ar", "total_assets"],
+            "impact_summary": "应收款占用资产越多，通常越压制资产质量评分。",
+            "suffix": "%",
+            "lower_is_better": True,
+        },
+        "inv_to_asset": {
+            "summary": formula_summary("inv_to_asset"),
+            "components": ["inventory", "total_assets"],
+            "impact_summary": "存货占用资产越多，通常越压制资产质量评分。",
+            "suffix": "%",
+            "lower_is_better": True,
+        },
+        "goodwill_ratio": {
+            "summary": formula_summary("goodwill_ratio"),
+            "components": ["goodwill", "total_assets"],
+            "impact_summary": "商誉占比抬升通常会增加后续减值压力。",
+            "suffix": "%",
+            "lower_is_better": True,
+        },
+        "impair_to_rev": {
+            "summary": formula_summary("impair_to_rev"),
+            "components": ["impair_loss", "revenue"],
+            "impact_summary": "减值损失占收入越高，通常越压制资产质量评分。",
+            "suffix": "%",
+            "lower_is_better": True,
+        },
+    }
+    period_specs = {
+        "revenue_growth": {
+            "summary": period_summary("revenue_growth"),
+            "impact_summary": "营收增速走弱会直接拖累成长维度评分。",
+        },
+        "profit_growth": {
+            "summary": period_summary("profit_growth"),
+            "impact_summary": "净利润增速变化会直接影响成长维度评分。",
+        },
+        "ex_profit_growth": {
+            "summary": period_summary("ex_profit_growth"),
+            "impact_summary": "扣非利润增速反映核心经营增长质量。",
+        },
+    }
+    efficiency_specs = {
+        "ar_days": {
+            "summary": efficiency_summary("ar_days"),
+            "components": ["ar", "revenue"],
+            "impact_summary": "回款周期拉长通常会压制运营效率评分。",
+            "suffix": "",
+            "lower_is_better": True,
+        },
+        "inv_days": {
+            "summary": efficiency_summary("inv_days"),
+            "components": ["inventory", "operating_cost"],
+            "impact_summary": "库存周转放慢通常会压制运营效率评分。",
+            "suffix": "",
+            "lower_is_better": True,
+        },
+        "asset_turn": {
+            "summary": efficiency_summary("asset_turn"),
+            "components": ["revenue", "total_assets"],
+            "impact_summary": "资产使用效率变化会直接影响运营效率评分。",
+            "suffix": "",
+        },
+        "debt_ratio": {
+            "summary": efficiency_summary("debt_ratio"),
+            "components": ["total_debt", "total_assets"],
+            "impact_summary": "杠杆水平抬升通常压制偿债能力评分。",
+            "suffix": "%",
+            "lower_is_better": True,
+        },
+        "current_ratio": {
+            "summary": efficiency_summary("current_ratio"),
+            "components": ["current_assets", "current_liabilities"],
+            "impact_summary": "短期偿债缓冲变化会直接影响偿债能力评分。",
+            "suffix": "",
+        },
+        "quick_ratio": {
+            "summary": efficiency_summary("quick_ratio"),
+            "components": ["current_assets", "inventory", "current_liabilities"],
+            "impact_summary": "更快可变现资产的覆盖能力影响偿债能力评分。",
+            "suffix": "",
+        },
+    }
+    direct_specs = {
+        "roe_pct": {
+            "summary": direct_summary("roe_pct"),
+            "impact_summary": "净资产收益率变化会直接影响盈利能力评分。",
+            "suffix": "%",
+        }
+    }
+
+    diagnostics: dict[str, dict[str, object]] = {}
+    for sub_key in _SUB_KEYS:
+        current_value = _safe_float(raw_sub_indicators.get(sub_key))
+        previous_value = _safe_float(prev_raw_sub_indicators.get(sub_key))
+
+        if sub_key in formula_specs:
+            spec = formula_specs[sub_key]
+            change = _metric_change_summary(current_value, previous_value, suffix=spec["suffix"])
+            if spec.get("change_summary"):
+                change["summary"] = spec["change_summary"]
+            diagnostics[sub_key] = {
+                "indicator_name": _SUB_INDICATOR_LABELS.get(sub_key, sub_key),
+                "change": change,
+                "attribution": {
+                    "template_type": "formula_decomposition",
+                    "summary": spec["summary"],
+                    "components": component_values(spec["components"]),
+                    **attribution_metadata("formula_decomposition", sub_key),
+                },
+                "impact": {
+                    "market_score": pct_score(score_data, sub_key),
+                    "industry_score": pct_score(ind_sub_indicators, sub_key),
+                    "impact_summary": spec["impact_summary"],
+                    "impact_risks": formula_impact_triplet_lines(sub_key, current_value, previous_value) or risk_from_trend(
+                        current_value,
+                        previous_value,
+                        lower_is_better=bool(spec.get("lower_is_better")),
+                    ),
+                },
+                "explanation": {"status": "idle", "content": ""},
+            }
+            continue
+
+        if sub_key in period_specs:
+            spec = period_specs[sub_key]
+            diagnostics[sub_key] = {
+                "indicator_name": _SUB_INDICATOR_LABELS.get(sub_key, sub_key),
+                "change": _metric_change_summary(current_value, previous_value, suffix="%"),
+                "attribution": {
+                    "template_type": "period_compare",
+                    "summary": spec["summary"],
+                    "periods": {
+                        "current": current_value,
+                        "previous": previous_value,
+                    },
+                    **attribution_metadata("period_compare", sub_key),
+                },
+                "impact": {
+                    "market_score": pct_score(score_data, sub_key),
+                    "industry_score": pct_score(ind_sub_indicators, sub_key),
+                    "impact_summary": spec["impact_summary"],
+                    "impact_risks": risk_from_trend(current_value, previous_value),
+                },
+                "explanation": {"status": "idle", "content": ""},
+            }
+            continue
+
+        if sub_key in efficiency_specs:
+            spec = efficiency_specs[sub_key]
+            diagnostics[sub_key] = {
+                "indicator_name": _SUB_INDICATOR_LABELS.get(sub_key, sub_key),
+                "change": _metric_change_summary(current_value, previous_value, suffix=spec["suffix"]),
+                "attribution": {
+                    "template_type": "efficiency_misalignment",
+                    "summary": spec["summary"],
+                    "components": component_values(spec["components"]),
+                    **attribution_metadata("efficiency_misalignment", sub_key),
+                },
+                "impact": {
+                    "market_score": pct_score(score_data, sub_key),
+                    "industry_score": pct_score(ind_sub_indicators, sub_key),
+                    "impact_summary": spec["impact_summary"],
+                    "impact_risks": efficiency_impact_triplet_lines(sub_key, current_value, previous_value) or risk_from_trend(
+                        current_value,
+                        previous_value,
+                        lower_is_better=bool(spec.get("lower_is_better")),
+                    ),
+                },
+                "explanation": {"status": "idle", "content": ""},
+            }
+            continue
+
+        spec = direct_specs.get(sub_key)
+        diagnostics[sub_key] = {
+            "indicator_name": _SUB_INDICATOR_LABELS.get(sub_key, sub_key),
+            "change": _metric_change_summary(current_value, previous_value, suffix=spec["suffix"]),
+            "attribution": {
+                "template_type": "direct_field_signal",
+                "summary": spec["summary"],
+                "signal": {
+                    "current": current_value,
+                    "previous": previous_value,
+                },
+                **attribution_metadata("direct_field_signal", sub_key),
+            },
+            "impact": {
+                "market_score": pct_score(score_data, sub_key),
+                "industry_score": pct_score(ind_sub_indicators, sub_key),
+                "impact_summary": spec["impact_summary"],
+                "impact_risks": risk_from_trend(current_value, previous_value),
+            },
+            "explanation": {"status": "idle", "content": ""},
+        }
+
+    return diagnostics
+
+
 def _load_snapshot_score_rankings():
     snap = _load_financial_snapshot()
     if snap is None:
@@ -1498,6 +2365,8 @@ def compute_stock_score(market, symbol):
     res = compute_financial_scores([(market, symbol)])
     score_data = res["scores"].get((market, symbol), {})
     stock_name = _stock_name_lookup().get((market, symbol), "")
+    industry_map = _load_industry_map()
+    ind2, ind1 = industry_map.get((market, symbol), (None, None))
     ranking_meta = _load_snapshot_score_rankings()
     market_total_rank = ranking_meta.get("market_total_rank", {}).get((market, symbol))
     market_total_universe_size = ranking_meta.get("market_total_universe_size") or None
@@ -1520,11 +2389,23 @@ def compute_stock_score(market, symbol):
     latest_period = score_data.pop("latest_period", "") if score_data else ""
     score_methodology = score_data.pop("score_methodology", None) if score_data else None
     latest_report_analysis = _build_latest_report_analysis(score_data, raw_sub_indicators, prev_raw_sub_indicators) if score_data else {"strengths": [], "risks": []}
+    component_context = _load_sub_indicator_component_context(market, symbol) if score_data else {"current": {}, "previous": {}}
+    sub_indicator_diagnostics = _build_sub_indicator_diagnostics(
+        score_data,
+        ind_sub_indicators,
+        raw_sub_indicators,
+        prev_raw_sub_indicators,
+        component_context,
+        ind1,
+        ind2,
+    ) if score_data else {}
     return {
         "ok": True,
         "market": market,
         "symbol": symbol,
         "stock_name": stock_name,
+        "ind1": ind1,
+        "ind2": ind2,
         "report_date": report_date,
         "announce_date": announce_date,
         "latest_period": latest_period,
@@ -1537,6 +2418,7 @@ def compute_stock_score(market, symbol):
         "market_total_universe_size": market_total_universe_size,
         "industry_total_rank": industry_total_rank,
         "industry_total_universe_size": industry_total_universe_size,
+        "sub_indicator_diagnostics": sub_indicator_diagnostics,
         "sub_indicators": sub_indicators,
         "raw_sub_indicators": raw_sub_indicators,
         "prev_raw_sub_indicators": prev_raw_sub_indicators,

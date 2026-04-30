@@ -40,6 +40,39 @@ WEB_ROOT = PROJECT_ROOT / "web"
 DEFAULT_HERMES_MODEL = os.environ.get("HERMES_MODEL", "").strip()
 
 
+def _industry_template_tags(ind1: str, ind2: str) -> set[str]:
+    text = f"{ind1 or ''}/{ind2 or ''}"
+    tags: set[str] = set()
+
+    if any(token in text for token in ("保险", "非银金融", "证券", "多元金融")):
+        tags.add("nonbank_finance")
+    if any(token in text for token in ("银行", "全国性银行", "地方性银行")):
+        tags.add("bank")
+    if any(token in text for token in ("工业金属", "有色", "钢铁", "建材", "化工", "石油", "煤炭")):
+        tags.add("materials_resources")
+    if any(token in text for token in ("工业金属", "有色")):
+        tags.add("industrial_metal")
+    if any(token in text for token in ("食品饮料", "酿酒", "商贸", "轻工制造", "家电", "纺织服饰", "社会服务", "消费")):
+        tags.add("consumer")
+    if any(token in text for token in ("医药医疗", "医药生物", "化学制药", "中药", "生物制品", "医疗服务", "医疗器械")):
+        tags.add("pharma")
+    if any(token in text for token in ("电子", "半导体", "计算机", "通信", "传媒")):
+        tags.add("tech_media")
+    if any(token in text for token in ("半导体", "消费电子")):
+        tags.add("semiconductor")
+    if any(token in text for token in ("机械设备", "工程机械", "通用设备", "专用设备", "电力设备", "汽车", "国防军工", "建筑", "交通运输")):
+        tags.add("cyclical_manufacturing")
+    if any(token in text for token in ("公用事业", "环保")):
+        tags.add("utilities_env")
+    if any(token in text for token in ("农林牧渔", "养殖业", "种植业")):
+        tags.add("agriculture")
+    if any(token in text for token in ("房地产", "房地产开发", "房产服务")):
+        tags.add("real_estate")
+    if any(token in text for token in ("综合", "综合类")):
+        tags.add("composite")
+    return tags
+
+
 def infer_market(symbol: str) -> tuple[str, int]:
     if symbol.startswith(("60", "68", "90")):
         return "sh", 1
@@ -296,8 +329,13 @@ def load_recent_three_year_financial_reports(market: str, symbol: str) -> dict[s
 
     matched_reports: list[dict[str, object]] = []
     stock_name = search_index._stock_name_lookup().get((market, symbol), "")
+    latest_year: int | None = None
+    earliest_year: int | None = None
 
     for report_date, fp in search_index._all_financial_files():
+        report_year = int(str(report_date or "0")[:4] or "0")
+        if earliest_year is not None and report_year < earliest_year:
+            break
         loaded = search_index._load_file(fp)
         if loaded is None:
             continue
@@ -330,6 +368,9 @@ def load_recent_three_year_financial_reports(market: str, symbol: str) -> dict[s
                 "row": matched_row,
             }
         )
+        if latest_year is None:
+            latest_year = report_year
+            earliest_year = latest_year - 2
 
     if not matched_reports:
         raise ValueError(f"no recent financial reports found for {market}:{symbol}")
@@ -437,6 +478,62 @@ def build_ai_financial_report_prompt(
     )
 
 
+def load_sub_indicator_score_context(market: str, symbol: str) -> dict[str, object]:
+    search_index = importlib.import_module("app.search.index")
+
+    market = str(market or "").strip().lower()
+    symbol = str(symbol or "").strip()
+    if market not in {"sh", "sz", "bj"}:
+        raise ValueError("market must be sh, sz or bj")
+    if not symbol.isdigit() or len(symbol) != 6:
+        raise ValueError("symbol must be a 6-digit code")
+
+    return search_index.compute_stock_score(market, symbol)
+
+
+def build_sub_indicator_explanation_prompt(
+    *,
+    stock_name: str,
+    market: str,
+    symbol: str,
+    sub_key: str,
+    diagnostic: dict[str, object],
+    latest_report: dict[str, object] | None,
+    reports: list[dict[str, object]],
+    ind1: str = "",
+    ind2: str = "",
+) -> str:
+    indicator_name = str(diagnostic.get("indicator_name") or sub_key).strip() or sub_key
+    diagnostic_blob = json.dumps(diagnostic, ensure_ascii=False, indent=2)
+    latest_blob = json.dumps(latest_report or {}, ensure_ascii=False, indent=2)
+    report_blob = json.dumps(reports, ensure_ascii=False, indent=2)
+    industry_context = " / ".join([part for part in [str(ind1 or "").strip(), str(ind2 or "").strip()] if part]) or "未提供行业标签"
+    return (
+        f"你是一名A股财报分析师。请只解释 {stock_name}（{market}:{symbol}）的单个财务指标 {indicator_name}（sub_key={sub_key}），"
+        "输出严格 JSON，不要输出任何额外说明。\n"
+        "默认不要分析其他指标，不要扩展到公司整体结论，只围绕这一个指标的变化、归因、影响、可能原因与验证重点作答。\n"
+        "分析顺序必须先看最新一期 latest_report，再优先对比上年同期（同季度对同季度、年报对上年年报），再把 reports 里的更早历史作为辅助验证。\n"
+        "请明确使用 change、attribution、impact、latest_report、reports 这些上下文，并把最新一期放在最前面。\n"
+        "请特别关注：变化、归因、影响、可能原因、验证重点。\n"
+        "输出必须是终端风格短句：一句结论 + 若干条原因/验证短句，不要写成长段分析。\n"
+        "不要照抄 latest_report、change、attribution、impact、reports 这些字段名；直接写中文结论。\n"
+        "单条尽量不超过 24 个汉字；优先使用动宾短句、判断短句、研究终端口吻。\n"
+        "JSON 字段必须且只能包含：summary, hypotheses, validation_focus, confidence。\n"
+        "其中 summary 为字符串；hypotheses 与 validation_focus 为字符串数组；confidence 为字符串，只能使用 low / medium / high。\n"
+        "如果现有证据不足，请在 hypotheses 和 validation_focus 中直接说明要核查的公告、附注或业务口径；不要编造未提供的数据。\n"
+        f"行业上下文: {industry_context}\n"
+        "若行业标签显示保险/非银金融，请优先使用保费收现、赔付支出、投资收付、负债久期等行业表达。\n"
+        "若行业标签显示工业金属，请优先使用金属价格、库存周期、产销节奏、在途库存等行业表达。\n"
+        "latest_report:\n"
+        f"{latest_blob}\n"
+        "reports:\n"
+        f"{report_blob}\n"
+        "sub_indicator_diagnostic:\n"
+        f"{diagnostic_blob}\n"
+        "请返回 JSON。"
+    )
+
+
 def generate_stock_ai_report(market: str, symbol: str) -> dict[str, object]:
     history = load_recent_three_year_financial_reports(market, symbol)
     prompt = build_ai_financial_report_prompt(
@@ -504,6 +601,289 @@ def generate_stock_ai_report(market: str, symbol: str) -> dict[str, object]:
     }
 
 
+def generate_sub_indicator_ai_explanation(market: str, symbol: str, sub_key: str) -> dict[str, object]:
+    history = load_recent_three_year_financial_reports(market, symbol)
+    score_context = load_sub_indicator_score_context(market, symbol)
+    diagnostics = score_context.get("sub_indicator_diagnostics") or {}
+    diagnostic = diagnostics.get(sub_key)
+    if not diagnostic:
+        raise ValueError(f"invalid sub_key for {market}:{symbol}: {sub_key}")
+
+    prompt = build_sub_indicator_explanation_prompt(
+        stock_name=str(score_context.get("stock_name") or history.get("stock_name") or symbol),
+        market=str(score_context.get("market") or history.get("market") or market),
+        symbol=str(score_context.get("symbol") or history.get("symbol") or symbol),
+        sub_key=sub_key,
+        diagnostic=diagnostic,
+        latest_report=history.get("latest_report"),
+        reports=list(history.get("reports") or []),
+        ind1=str(score_context.get("ind1") or ""),
+        ind2=str(score_context.get("ind2") or ""),
+    )
+
+    command = [
+        "hermes",
+        "chat",
+        "-Q",
+        "--ignore-rules",
+        "--source",
+        "tool",
+    ]
+    if DEFAULT_HERMES_MODEL:
+        command.extend(["-m", DEFAULT_HERMES_MODEL])
+    command.extend(["-q", prompt])
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or "hermes command failed").strip())
+
+    stdout = (result.stdout or "").strip()
+    match = re.search(r"(\{.*\})", stdout, re.DOTALL)
+    if not match:
+        raise RuntimeError("hermes output did not contain JSON")
+
+    parsed = json.loads(match.group(1), strict=False)
+
+    def _short_terminal_line(value: object, *, limit: int = 24, keep_terminal_punctuation: bool = True) -> str:
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        text = re.sub(r"^(latest_report|change|attribution|impact|reports|summary|hypotheses|validation_focus)\s*[:：-]\s*", "", text, flags=re.IGNORECASE)
+        if not text:
+            return ""
+        head_match = re.match(r"^(.*?)([；;。.!?]|$)", text)
+        head = (head_match.group(1) if head_match else text).strip(" ，、;；:：")
+        suffix = head_match.group(2) if head_match else ""
+        if not keep_terminal_punctuation and any(sep in head for sep in ("，", ",", "、")):
+            head = re.split(r"[，,、]", head, maxsplit=1)[0].strip(" ，、;；:：")
+        if not keep_terminal_punctuation and "与" in head:
+            head = head.split("与", 1)[0].strip(" ，、;；:：")
+        if len(head) > limit:
+            truncated = head[:limit].rstrip(" ，、;；:：")
+            if keep_terminal_punctuation:
+                split_points = [truncated.rfind(sep) for sep in ("，", ",", "、")]
+                split_points = [pos for pos in split_points if pos > 0]
+                if split_points:
+                    truncated = truncated[:max(split_points)].rstrip(" ，、;；:：")
+            head = truncated
+        if keep_terminal_punctuation and suffix in {"。", "！", "？"} and head:
+            return f"{head}{suffix}"
+        return head
+
+    def _normalize_list(value: object, *, limit: int = 24) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            items = value
+        else:
+            items = [value]
+        normalized = []
+        for item in items:
+            text = _short_terminal_line(item, limit=limit, keep_terminal_punctuation=False)
+            if text:
+                normalized.append(text)
+        return normalized
+
+    def _summary_unit(sub_key_name: str) -> str:
+        return {
+            "roe_ex": "%",
+            "net_margin": "%",
+            "roe_pct": "%",
+            "revenue_growth": "%",
+            "profit_growth": "%",
+            "ex_profit_growth": "%",
+            "ar_days": "天",
+            "inv_days": "天",
+            "asset_turn": "次",
+            "ocf_to_profit": "倍",
+            "ocf_to_rev": "%",
+            "debt_ratio": "%",
+            "current_ratio": "倍",
+            "quick_ratio": "倍",
+            "ar_to_asset": "%",
+            "inv_to_asset": "%",
+            "goodwill_ratio": "%",
+            "impair_to_rev": "%",
+        }.get(sub_key_name, "")
+
+    def _polish_summary_text(text: object, sub_key_name: str, latest_period_label: str) -> str:
+        summary = _short_terminal_line(text, limit=30)
+        if not summary:
+            return ""
+        summary = re.sub(r"(?<!\d)(\d{2})Q([1-4])", r"20\1Q\2", summary)
+        if latest_period_label:
+            short_period = latest_period_label[2:] if len(latest_period_label) == 6 else ""
+            if short_period and short_period in summary and latest_period_label not in summary:
+                summary = summary.replace(short_period, latest_period_label)
+        unit = _summary_unit(sub_key_name)
+        if unit:
+            match_num_tail = re.search(r"(\d+(?:\.\d+)?)([。！？]?)$", summary)
+            if match_num_tail:
+                number = match_num_tail.group(1)
+                punct = match_num_tail.group(2) or "。"
+                prefix = summary[: match_num_tail.start(1)]
+                summary = f"{prefix}{number}{unit}{punct}"
+        elif summary[-1] not in "。！？":
+            summary = f"{summary}。"
+        return summary
+
+    def _canonical_terminal_item(value: str) -> str:
+        text = str(value or "").strip()
+        text = re.sub(r"^(核对|查看|跟踪|补齐|对比|核查|关注)", "", text)
+        return text.strip(" ，、;；:：")
+
+    def _compress_terminal_items(items: list[str], *, limit: int = 18, max_items: int = 4) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            text = _short_terminal_line(item, limit=limit, keep_terminal_punctuation=False)
+            canonical = _canonical_terminal_item(text)
+            if not canonical or canonical in seen:
+                continue
+            seen.add(canonical)
+            out.append(canonical)
+            if len(out) >= max_items:
+                break
+        return out
+
+    def _prepend_unique(items: list[str], extras: list[str], *, limit: int = 18) -> list[str]:
+        return _compress_terminal_items(extras + items, limit=limit, max_items=8)
+
+    def _apply_industry_short_templates(explanation: dict[str, object]) -> dict[str, object]:
+        ind1_text = str(score_context.get("ind1") or "")
+        ind2_text = str(score_context.get("ind2") or "")
+        latest_period_label = str(score_context.get("latest_period") or history.get("latest_period_label") or history.get("latest_report", {}).get("period") or "")
+        industry_text = f"{ind1_text}/{ind2_text}"
+        industry_tags = _industry_template_tags(ind1_text, ind2_text)
+        hypotheses = list(explanation.get("hypotheses") or [])
+        validation_focus = list(explanation.get("validation_focus") or [])
+        summary = str(explanation.get("summary") or "")
+
+        if "nonbank_finance" in industry_tags:
+            if sub_key == "free_cf":
+                hypotheses = _prepend_unique(hypotheses, ["投资收付", "保费收现节奏"])
+                validation_focus = _prepend_unique(validation_focus, ["保费收现", "赔付支出", "投资收付"])
+                if "保险" in ind2_text and summary and "保险" not in summary:
+                    summary = _short_terminal_line(f"保险资金口径下，{summary}", limit=30)
+            elif sub_key in {"roe_ex", "roe_pct"}:
+                hypotheses = _prepend_unique(hypotheses, ["投资收益波动", "资本消耗变化"])
+                validation_focus = _prepend_unique(validation_focus, ["投资收益变动", "资本约束"])
+
+        if "bank" in industry_tags:
+            if sub_key in {"asset_turn", "revenue_growth", "profit_growth", "ex_profit_growth", "roe_ex", "roe_pct"}:
+                hypotheses = _prepend_unique(hypotheses, ["息差", "资产扩张"])
+                validation_focus = _prepend_unique(validation_focus, ["存贷", "净息差"])
+                if summary and "银行" not in summary:
+                    summary = _short_terminal_line(f"银行口径下，{summary}", limit=30)
+            elif sub_key in {"current_ratio", "quick_ratio", "debt_ratio"}:
+                hypotheses = _prepend_unique(hypotheses, ["负债成本", "资产久期"])
+                validation_focus = _prepend_unique(validation_focus, ["负债久期", "资本充足率"])
+
+        if "industrial_metal" in industry_tags:
+            if sub_key in {"inv_to_asset", "inv_days"}:
+                hypotheses = _prepend_unique(hypotheses, ["金属价格", "库存周期"])
+                validation_focus = _prepend_unique(validation_focus, ["产销节奏", "库存附注"])
+                if "工业金属" in ind2_text and summary and "工业金属" not in summary:
+                    summary = _short_terminal_line(f"工业金属链条里，{summary}", limit=30)
+            elif sub_key in {"revenue_growth", "profit_growth", "ex_profit_growth"}:
+                hypotheses = _prepend_unique(hypotheses, ["金属价格波动", "加工费变化"])
+                validation_focus = _prepend_unique(validation_focus, ["量价拆分", "产销节奏"])
+
+        if "consumer" in industry_tags:
+            if sub_key in {"revenue_growth", "profit_growth", "ex_profit_growth", "net_margin"}:
+                hypotheses = _prepend_unique(hypotheses, ["渠道动销", "提价节奏"])
+                validation_focus = _prepend_unique(validation_focus, ["终端动销", "渠道库存"])
+                if summary and not any(token in summary for token in ("消费", "白酒", "食品饮料")):
+                    summary = _short_terminal_line(f"消费品口径下，{summary}", limit=30)
+
+        if "pharma" in industry_tags:
+            if sub_key in {"revenue_growth", "profit_growth", "ex_profit_growth", "roe_ex", "net_margin"}:
+                hypotheses = _prepend_unique(hypotheses, ["集采", "产品放量"])
+                validation_focus = _prepend_unique(validation_focus, ["院内销售", "研发投入"])
+                if summary and "医药" not in summary:
+                    summary = _short_terminal_line(f"医药口径下，{summary}", limit=30)
+
+        if "tech_media" in industry_tags:
+            if sub_key in {"inv_days", "inv_to_asset", "revenue_growth", "profit_growth", "ex_profit_growth"}:
+                hypotheses = _prepend_unique(hypotheses, ["景气周期", "稼动率"])
+                validation_focus = _prepend_unique(validation_focus, ["订单能见度", "库存周转"])
+                if summary and "半导体" not in summary and "电子" not in summary:
+                    summary = _short_terminal_line(f"电子链条里，{summary}", limit=30)
+            elif sub_key in {"asset_turn", "ar_days"}:
+                hypotheses = _prepend_unique(hypotheses, ["客户订单", "产品周期"])
+                validation_focus = _prepend_unique(validation_focus, ["订单能见度", "回款周期"])
+
+        if "cyclical_manufacturing" in industry_tags:
+            if sub_key in {"revenue_growth", "profit_growth", "ex_profit_growth", "asset_turn", "ar_days"}:
+                hypotheses = _prepend_unique(hypotheses, ["订单节奏", "产能利用率"])
+                validation_focus = _prepend_unique(validation_focus, ["在手订单", "开工率"])
+                if summary and "机械" not in summary and "制造" not in summary:
+                    summary = _short_terminal_line(f"周期制造口径下，{summary}", limit=30)
+            elif sub_key in {"inv_days", "inv_to_asset"}:
+                hypotheses = _prepend_unique(hypotheses, ["补库节奏", "排产变化"])
+                validation_focus = _prepend_unique(validation_focus, ["产销节奏", "库存周转"])
+
+        if "utilities_env" in industry_tags:
+            hypotheses = _prepend_unique(hypotheses, ["成本传导", "价格机制"])
+            validation_focus = _prepend_unique(validation_focus, ["电价气价", "燃料成本"])
+            if summary and "公用" not in summary and "环保" not in summary:
+                summary = _short_terminal_line(f"公用环保口径下，{summary}", limit=30)
+
+        if "materials_resources" in industry_tags:
+            if sub_key not in {"inv_to_asset", "inv_days", "revenue_growth", "profit_growth", "ex_profit_growth"}:
+                hypotheses = _prepend_unique(hypotheses, ["价格周期", "成本价差"])
+                validation_focus = _prepend_unique(validation_focus, ["量价拆分", "库存附注"])
+
+        if "agriculture" in industry_tags:
+            hypotheses = _prepend_unique(hypotheses, ["养殖周期", "农产品价格"])
+            validation_focus = _prepend_unique(validation_focus, ["出栏节奏", "原料成本"])
+            if summary and "农林牧渔" not in summary:
+                summary = _short_terminal_line(f"农业口径下，{summary}", limit=30)
+
+        if "real_estate" in industry_tags:
+            hypotheses = _prepend_unique(hypotheses, ["去化", "拿地节奏"])
+            validation_focus = _prepend_unique(validation_focus, ["销售回款", "土储结构"])
+            if summary and "地产" not in summary:
+                summary = _short_terminal_line(f"地产口径下，{summary}", limit=30)
+
+        if "composite" in industry_tags:
+            hypotheses = _prepend_unique(hypotheses, ["业务结构", "资产处置"])
+            validation_focus = _prepend_unique(validation_focus, ["分部口径", "非经常损益"])
+            if summary and "综合" not in summary:
+                summary = _short_terminal_line(f"综合口径下，{summary}", limit=30)
+
+        explanation["summary"] = _polish_summary_text(summary, sub_key, latest_period_label)
+        explanation["hypotheses"] = _compress_terminal_items(hypotheses, limit=18, max_items=4)
+        explanation["validation_focus"] = _compress_terminal_items(validation_focus, limit=18, max_items=4)
+        return explanation
+
+    confidence = str(parsed.get("confidence") or "").strip().lower()
+    if confidence not in {"low", "medium", "high"}:
+        confidence = "medium"
+
+    explanation = {
+        "status": "ready",
+        "summary": _short_terminal_line(parsed.get("summary"), limit=30),
+        "hypotheses": _normalize_list(parsed.get("hypotheses"), limit=18),
+        "validation_focus": _normalize_list(parsed.get("validation_focus"), limit=18),
+        "confidence": confidence,
+    }
+    explanation = _apply_industry_short_templates(explanation)
+
+    return {
+        "ok": True,
+        "market": str(score_context.get("market") or history.get("market") or market),
+        "symbol": str(score_context.get("symbol") or history.get("symbol") or symbol),
+        "stock_name": score_context.get("stock_name") or history.get("stock_name") or symbol,
+        "sub_key": sub_key,
+        "indicator_name": str(diagnostic.get("indicator_name") or sub_key),
+        "explanation": explanation,
+    }
+
+
 class StockDashboardHandler(BaseHTTPRequestHandler):
     server_version = "StockDashboard/0.1"
 
@@ -547,6 +927,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/stock-score-ai-report":
             self.handle_stock_score_ai_report(parsed.query)
+            return
+        if parsed.path == "/api/stock-score-subdiag-explanation":
+            self.handle_stock_score_subdiag_explanation(parsed.query)
             return
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
@@ -801,6 +1184,24 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 {"ok": False, "error": {"code": "ai_report_error", "message": str(exc)}},
             )
 
+    def handle_stock_score_subdiag_explanation(self, query: str) -> None:
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        sub_key = params.get("sub_key", [""])[0].strip()
+        try:
+            self.respond_json(HTTPStatus.OK, generate_sub_indicator_ai_explanation(market, symbol, sub_key))
+        except ValueError as exc:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_sub_indicator", "message": str(exc)}},
+            )
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "subdiag_explanation_error", "message": str(exc)}},
+            )
+
     def handle_stock_score_report_history(self, query: str) -> None:
         params = parse_qs(query)
         market = params.get("market", [""])[0].strip().lower()
@@ -836,13 +1237,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             raise ValueError("window must be 20, 50, 120 or 250")
         return value
 
-    def respond_json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
+    def respond_json(self, status: HTTPStatus, payload: dict[str, object]) -> bool:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return True
+        except (BrokenPipeError, ConnectionResetError):
+            return False
 
     def log_message(self, format: str, *args: object) -> None:
         sys.stderr.write("%s - - [%s] %s\n" % (self.address_string(), self.log_date_time_string(), format % args))
