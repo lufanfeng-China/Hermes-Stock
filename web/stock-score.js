@@ -1,26 +1,138 @@
 // stock-score.js — Financial Score Viewer (dual radar: market + industry)
 
 const SUB_META = {
-  roe_ex:           { name: "扣非ROE",        dim: "profitability",  higherBetter: true,  zeroPenalty: true,  unit: "%",  desc: "扣除非经常性损益ROE" },
-  net_margin:        { name: "净利率",          dim: "profitability",  higherBetter: true,  zeroPenalty: true,  unit: "%",  desc: "净利润率(非金融)" },
-  roe_pct:          { name: "净资产收益率",     dim: "profitability",  higherBetter: true,  zeroPenalty: true,  unit: "%",  desc: "ROE（净资产收益率）" },
-  revenue_growth:    { name: "营收增速",         dim: "growth",         higherBetter: true,  zeroPenalty: false, unit: "%",  desc: "营业收入同比" },
-  profit_growth:     { name: "净利润增速",        dim: "growth",         higherBetter: true,  zeroPenalty: false, unit: "%",  desc: "净利润同比" },
-  ex_profit_growth: { name: "扣非增速",          dim: "growth",         higherBetter: true,  zeroPenalty: false, unit: "%",  desc: "扣非净利润同比" },
-  ar_days:          { name: "应收周转天数",      dim: "operating",      higherBetter: false, zeroPenalty: true,  unit: "天", desc: "应收帐款周转天数" },
-  inv_days:          { name: "存货周转天数",       dim: "operating",      higherBetter: false, zeroPenalty: true,  unit: "天", desc: "存货周转天数" },
-  asset_turn:       { name: "总资产周转率",      dim: "operating",      higherBetter: true,  zeroPenalty: true,  unit: "次", desc: "总资产周转率" },
-  ocf_to_profit:    { name: "净现比",             dim: "cashflow",       higherBetter: true,  zeroPenalty: true,  unit: "倍", desc: "经营现金流/净利润" },
-  ocf_to_rev:        { name: "现金流/营收",         dim: "cashflow",       higherBetter: true,  zeroPenalty: true,  unit: "%",  desc: "经营现金流/营业收入" },
-  free_cf:           { name: "自由现金流",         dim: "cashflow",       higherBetter: true,  zeroPenalty: true,  unit: "元", desc: "经营现金流-资本支出" },
-  debt_ratio:        { name: "资产负债率",         dim: "solvency",       higherBetter: false, zeroPenalty: true,  unit: "%",  desc: "资产负债率" },
-  current_ratio:     { name: "流动比率",           dim: "solvency",       higherBetter: true,  zeroPenalty: true,  unit: "倍", desc: "流动资产/流动负债" },
-  quick_ratio:       { name: "速动比率",           dim: "solvency",       higherBetter: true,  zeroPenalty: true,  unit: "倍", desc: "(流动资产-存货)/流动负债" },
-  ar_to_asset:       { name: "应收占比",           dim: "asset_quality",  higherBetter: false, zeroPenalty: true,  unit: "%",  desc: "应收账款/总资产" },
-  inv_to_asset:      { name: "存货占比",            dim: "asset_quality",  higherBetter: false, zeroPenalty: true,  unit: "%",  desc: "存货/总资产" },
-  goodwill_ratio:    { name: "商誉占比",            dim: "asset_quality",  higherBetter: false, zeroPenalty: true,  unit: "%",  desc: "商誉/总资产" },
-  impair_to_rev:     { name: "减值损失率",          dim: "asset_quality",  higherBetter: false, zeroPenalty: true,  unit: "%",  desc: "资产减值损失/营业收入" },
+  roe_ex: { name: "扣非ROE", dim: "profitability", higherBetter: true, zeroPenalty: true, unit: "%", desc: "扣除非经常性损益ROE", formula: "扣除非经常性损益后的净利润 / 归属于母公司股东权益", meaning: "反映股东资本的核心回报效率" },
+  net_margin: { name: "净利率", dim: "profitability", higherBetter: true, zeroPenalty: true, unit: "%", desc: "净利润率(非金融)", formula: "归属于母公司所有者的净利润 / 营业收入", meaning: "反映每单位营收最终沉淀多少利润" },
+  roe_pct: { name: "净资产收益率", dim: "profitability", higherBetter: true, zeroPenalty: true, unit: "%", desc: "ROE（净资产收益率）", formula: "净利润 / 归属于母公司股东权益", meaning: "反映股东资本的整体回报水平" },
+  revenue_growth: { name: "营收增速", dim: "growth", higherBetter: true, zeroPenalty: false, unit: "%", desc: "营业收入同比", formula: "(本期营业收入 - 上年同期营业收入) / 上年同期营业收入", meaning: "反映收入扩张速度与需求变化" },
+  profit_growth: { name: "净利润增速", dim: "growth", higherBetter: true, zeroPenalty: false, unit: "%", desc: "净利润同比", formula: "(本期净利润 - 上年同期净利润) / 上年同期净利润", meaning: "反映利润释放速度与盈利弹性" },
+  ex_profit_growth: { name: "扣非增速", dim: "growth", higherBetter: true, zeroPenalty: false, unit: "%", desc: "扣非净利润同比", formula: "(本期扣非净利润 - 上年同期扣非净利润) / 上年同期扣非净利润", meaning: "反映核心经营利润的增长质量" },
+  ar_days: { name: "应收周转天数", dim: "operating", higherBetter: false, zeroPenalty: true, unit: "天", desc: "应收帐款周转天数", formula: "应收账款 / (营业收入 / 365)", meaning: "反映销售回款速度与资金占用程度" },
+  inv_days: { name: "存货周转天数", dim: "operating", higherBetter: false, zeroPenalty: true, unit: "天", desc: "存货周转天数", formula: "存货 / (营业成本 / 365)", meaning: "反映库存消化速度与周转压力" },
+  asset_turn: { name: "总资产周转率", dim: "operating", higherBetter: true, zeroPenalty: true, unit: "次", desc: "总资产周转率", formula: "营业收入 / 总资产", meaning: "反映资产投入转化为收入的效率" },
+  ocf_to_profit: { name: "净现比", dim: "cashflow", higherBetter: true, zeroPenalty: true, unit: "倍", desc: "经营现金流/净利润", formula: "经营活动产生的现金流量净额 / 净利润", meaning: "反映利润转化为现金的含金量" },
+  ocf_to_rev: { name: "现金流/营收", dim: "cashflow", higherBetter: true, zeroPenalty: true, unit: "%", desc: "经营现金流/营业收入", formula: "经营活动产生的现金流量净额 / 营业收入", meaning: "反映收入回笼成经营现金的效率" },
+  free_cf: { name: "自由现金流", dim: "cashflow", higherBetter: true, zeroPenalty: true, unit: "元", desc: "经营现金流-资本支出", formula: "经营活动产生的现金流量净额 - 资本支出", meaning: "反映资本开支后的现金沉淀能力" },
+  debt_ratio: { name: "资产负债率", dim: "solvency", higherBetter: false, zeroPenalty: true, unit: "%", desc: "资产负债率", formula: "总负债 / 总资产", meaning: "反映资产中有多少比例由负债支撑" },
+  current_ratio: { name: "流动比率", dim: "solvency", higherBetter: true, zeroPenalty: true, unit: "倍", desc: "流动资产/流动负债", formula: "流动资产 / 流动负债", meaning: "反映短期资产覆盖短期负债的能力" },
+  quick_ratio: { name: "速动比率", dim: "solvency", higherBetter: true, zeroPenalty: true, unit: "倍", desc: "(流动资产-存货)/流动负债", formula: "(流动资产 - 存货) / 流动负债", meaning: "反映高流动性资产覆盖短债的能力" },
+  ar_to_asset: { name: "应收占比", dim: "asset_quality", higherBetter: false, zeroPenalty: true, unit: "%", desc: "应收账款/总资产", formula: "应收账款 / 总资产", meaning: "反映资产中被客户信用占用的比例" },
+  inv_to_asset: { name: "存货占比", dim: "asset_quality", higherBetter: false, zeroPenalty: true, unit: "%", desc: "存货/总资产", formula: "存货 / 总资产", meaning: "反映资产中被库存占用的比例" },
+  goodwill_ratio: { name: "商誉占比", dim: "asset_quality", higherBetter: false, zeroPenalty: true, unit: "%", desc: "商誉/总资产", formula: "商誉 / 总资产", meaning: "反映并购形成资产对总资产的占用程度" },
+  impair_to_rev: { name: "减值损失率", dim: "asset_quality", higherBetter: false, zeroPenalty: true, unit: "%", desc: "资产减值损失/营业收入", formula: "资产减值损失 / 营业收入", meaning: "反映减值损失对收入与利润稳定性的侵蚀" },
 };
+
+function subIndicatorDirectionText(meta) {
+  const directionText = meta?.higherBetter === false ? "越小越好" : "越大越好";
+  return directionText;
+}
+
+function currentValueTrendClass(meta, currentVal, previousVal) {
+  const currentNum = Number(currentVal);
+  const previousNum = Number(previousVal);
+  if (!Number.isFinite(currentNum) || !Number.isFinite(previousNum) || currentNum === previousNum) {
+    return "value-trend-flat";
+  }
+  const improved = meta?.higherBetter === false ? currentNum < previousNum : currentNum > previousNum;
+  return improved ? "value-trend-positive" : "value-trend-negative";
+}
+
+function renderSubIndicatorInfo(meta) {
+  const formula = meta?.formula || meta?.desc || "—";
+  const meaning = meta?.meaning || "—";
+  const directionText = subIndicatorDirectionText(meta);
+  return `
+    <div class="sub-rank-formula">formula: ${escapeHtml(formula)}</div>
+    <div class="sub-rank-meaning">meaning: ${escapeHtml(meaning)}</div>
+    <div class="sub-rank-direction">${escapeHtml(directionText)}</div>`;
+}
+
+function renderIndustryPeerFinancialInputs(row, subKey) {
+  const inputs = Array.isArray(row?.financial_inputs) ? row.financial_inputs : [];
+  if (!inputs.length) return "—";
+  return inputs.map((item) => {
+    const label = escapeHtml(item?.label || item?.key || "—");
+    const currentValue = formatAmountYi(item?.current_value);
+    const previousValue = item && Object.prototype.hasOwnProperty.call(item, "previous_value")
+      ? formatAmountYi(item.previous_value)
+      : null;
+    return `<div><strong>${label}</strong>: ${escapeHtml(currentValue)}${previousValue ? ` / 上年同期 ${escapeHtml(previousValue)}` : ""}</div>`;
+  }).join("");
+}
+
+function renderIndustryPeerDialog(payload) {
+  const tbody = document.getElementById("industry-peer-tbody");
+  const title = document.getElementById("industry-peer-title");
+  const status = document.getElementById("industry-peer-status");
+  const indicatorName = payload?.indicator_name || payload?.sub_key || "细分指标";
+  const industryName = payload?.ind2 || "当前行业";
+  title.textContent = `${industryName} · ${indicatorName} 同业对照`;
+  status.textContent = payload?.rows?.length
+    ? `共 ${payload.rows.length} 只股票，按${subIndicatorDirectionText(SUB_META[payload.sub_key])}排序`
+    : "当前行业暂无可展示样本";
+
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  tbody.innerHTML = rows.map((row) => `
+    <tr class="${row?.is_current_stock ? "industry-peer-row-current" : ""}">
+      <td>${escapeHtml(row?.stock_name || "—")}</td>
+      <td>${escapeHtml(`${String(row?.market || "").toUpperCase()}:${row?.symbol || "—"}`)}</td>
+      <td>${escapeHtml(formatPrice(row?.current_price))}</td>
+      <td class="industry-peer-financial-data">${renderIndustryPeerFinancialInputs(row, payload.sub_key)}</td>
+      <td>${escapeHtml(formatRawValue(payload.sub_key, row?.metric_value))}</td>
+      <td>${escapeHtml(row?.report_date || "—")}</td>
+    </tr>`).join("");
+}
+
+function renderIndustryScorePeerDialog(payload) {
+  const tbody = document.getElementById("industry-score-peer-tbody");
+  const title = document.getElementById("industry-score-peer-title");
+  const status = document.getElementById("industry-score-peer-status");
+  const industryName = payload?.ind2 || "当前行业";
+  title.textContent = `${industryName} · 行业内总分同业对照`;
+  status.textContent = payload?.rows?.length
+    ? `共 ${payload.rows.length} 只股票，按行业总分从高到低排序`
+    : "当前行业暂无可展示样本";
+
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  tbody.innerHTML = rows.map((row) => `
+    <tr class="${row?.is_current_stock ? "industry-score-peer-row-current" : ""}">
+      <td>${escapeHtml(row?.stock_name || "—")}</td>
+      <td>${escapeHtml(`${String(row?.market || "").toUpperCase()}:${row?.symbol || "—"}`)}</td>
+      <td>${escapeHtml(formatPrice(row?.current_price))}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.profitability) || "—")}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.growth) || "—")}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.operating) || "—")}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.cashflow) || "—")}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.solvency) || "—")}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.asset_quality) || "—")}</td>
+      <td>${escapeHtml(formatTotalScore(row?.total_score) || "—")}</td>
+      <td>${escapeHtml(row?.report_date || "—")}</td>
+    </tr>`).join("");
+}
+
+function openIndustryPeerDialog() {
+  const dialog = document.getElementById("industry-peer-dialog");
+  dialog.hidden = false;
+  dialog.setAttribute("aria-hidden", "false");
+}
+
+function closeIndustryPeerDialog() {
+  const dialog = document.getElementById("industry-peer-dialog");
+  dialog.hidden = true;
+  dialog.setAttribute("aria-hidden", "true");
+}
+
+function openIndustryScorePeerDialog() {
+  const dialog = document.getElementById("industry-score-peer-dialog");
+  dialog.hidden = false;
+  dialog.setAttribute("aria-hidden", "false");
+}
+
+function closeIndustryScorePeerDialog() {
+  const dialog = document.getElementById("industry-score-peer-dialog");
+  dialog.hidden = true;
+  dialog.setAttribute("aria-hidden", "true");
+}
 
 const DIM_NAMES = {
   profitability:  "盈利能力",
@@ -65,6 +177,8 @@ const SUB_DIAG_EXPLANATION_STATUS = {
   idle: "点击按钮生成解释，默认不自动调用 AI。",
   loading: "AI 正在生成该指标的业务解释...",
 };
+const INDUSTRY_PEER_STATUS_PLACEHOLDER = "点击行业均分后加载同业样本";
+const INDUSTRY_SCORE_PEER_STATUS_PLACEHOLDER = "点击行业内总分后加载同业样本";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -141,6 +255,16 @@ function formatAmountYi(value) {
 
 function formatProfileMetric(value) {
   if (value == null || value === "" || Number.isNaN(Number(value))) return null;
+  return Number(value).toFixed(2);
+}
+
+function formatTotalScore(value) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return null;
+  return Number(value).toFixed(1);
+}
+
+function formatPrice(value) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
   return Number(value).toFixed(2);
 }
 
@@ -593,8 +717,8 @@ function yoyClassName(yoy) {
 }
 
 function describeYoyDirection(yoy, meta) {
-  if (yoy == null) return "缺少可比上期数据";
-  if (yoy === 0) return "与上期基本持平";
+  if (yoy == null) return "缺少可比上年同期数据";
+  if (yoy === 0) return "与上年同期基本持平";
   if (meta?.higherBetter === false) {
     return yoy < 0 ? "指标下降，方向偏正面" : "指标抬升，方向偏谨慎";
   }
@@ -768,7 +892,7 @@ function renderSubIndicatorDiagnostic(subKey, meta, context) {
   const scoreGap = marketScore - industryScore;
   const gapDirection = scoreGap === 0 ? "双口径评分接近" : scoreGap > 0 ? "全市场口径略强" : "行业口径略强";
   const rankBasis = meta?.higherBetter === false ? "数值越低通常越优" : "数值越高通常越优";
-  const changeSummary = backendDiagnostic?.change?.summary || `当期 ${currentDisplay} / 上期 ${previousDisplay} / 同比 ${formatYoy(yoy)}`;
+  const changeSummary = backendDiagnostic?.change?.summary || `当期 ${currentDisplay} / 上年同期 ${previousDisplay} / 同比 ${formatYoy(yoy)}`;
   const attributionLines = backendDiagnostic
     ? getSubDiagnosticSummaryList(backendDiagnostic.attribution?.summary, [
       "已接入后端诊断模板",
@@ -807,7 +931,7 @@ function renderSubIndicatorDiagnostic(subKey, meta, context) {
           <span class="profile-label">变动快照</span>
           <div class="profile-value">
             <div><strong>${escapeHtml(meta.name)}</strong> · ${escapeHtml(DIM_NAMES[meta.dim] || "未分类")}</div>
-            <div>当期 ${escapeHtml(currentDisplay)} / 上期 ${escapeHtml(previousDisplay)} / 同比 ${yoyBadge}</div>
+            <div>当期 ${escapeHtml(currentDisplay)} / 上年同期 ${escapeHtml(previousDisplay)} / 同比 ${yoyBadge}</div>
             <div class="profile-meta">${escapeHtml(changeSummary)}</div>
             <div class="profile-meta">${escapeHtml(describeYoyDirection(yoy, meta))}</div>
           </div>
@@ -844,7 +968,7 @@ function renderSubIndicatorDiagnostic(subKey, meta, context) {
     </div>`;
 }
 
-function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSubIndicators, subIndicatorDiagnostics = {}) {
+function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSubIndicators, industryRawSubIndicatorAvgs, subIndicatorDiagnostics = {}) {
   const tbody = document.getElementById("sub-tbody");
   tbody.innerHTML = "";
   const columnCount = document.querySelectorAll("#sub-table thead th").length || 8;
@@ -858,9 +982,12 @@ function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSu
     const indVal = indSubIndicators ? (indSubIndicators[key] || 0) : 0;
     const rawVal = rawSubIndicators ? rawSubIndicators[key] : null;
     const prevVal = prevRawSubIndicators ? prevRawSubIndicators[key] : null;
+    const industryAverageVal = industryRawSubIndicatorAvgs ? industryRawSubIndicatorAvgs[key] : null;
     const yoy = computeYoy(key, rawVal, prevRawSubIndicators || {});
     const currentDisplay = key === "free_cf" ? formatAmountYi(rawVal) : formatRawValue(key, rawVal);
     const previousDisplay = key === "free_cf" ? formatAmountYi(prevVal) : formatRawValue(key, prevVal);
+    const industryAverageDisplay = key === "free_cf" ? formatAmountYi(industryAverageVal) : formatRawValue(key, industryAverageVal);
+    const currentTrendClass = currentValueTrendClass(meta, rawVal, prevVal);
     const isExpanded = searchState.expandedSubDiagKey === key;
     const backendDiagnostic = subIndicatorDiagnostics[key] || null;
     const explanationState = resolveSubdiagExplanationState(key, backendDiagnostic);
@@ -876,12 +1003,16 @@ function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSu
           <span>${isExpanded ? "收起" : "诊断"}</span>
         </button>
       </td>
-      <td class="sub-period-current">${currentDisplay}</td>
+      <td class="sub-period-current ${currentTrendClass}">${currentDisplay}</td>
       <td class="sub-period-previous">${previousDisplay}</td>
-      <td class="sub-period-yoy"><span class="${yoyClassName(yoy)}">${formatYoy(yoy)}</span></td>
+      <td class="sub-period-industry-average">
+        <button type="button" class="sub-period-industry-average-btn industry-peer-trigger" data-subdiag-action="industry-peer" data-subdiag-key="${escapeHtml(key)}">
+          ${industryAverageDisplay}
+        </button>
+      </td>
       <td class="sub-score ${scoreColor(val)}" style="color:${MARKET_COLOR};">${val.toFixed(1)}</td>
       <td class="sub-score ${scoreColor(indVal)}" style="color:${INDUSTRY_COLOR};">${indVal.toFixed(1)}</td>
-      <td class="sub-rank">${meta.desc}</td>`;
+      <td class="sub-rank">${renderSubIndicatorInfo(meta)}</td>`;
     tbody.appendChild(row);
 
     const detailRow = document.createElement("tr");
@@ -913,6 +1044,7 @@ function renderScore(result) {
     ind_total_score, ind_dim_scores, ind_sub_indicators,
     raw_sub_indicators,
     prev_raw_sub_indicators,
+    industry_raw_sub_indicator_avgs,
     score_methodology,
     sub_indicator_diagnostics,
     market_total_rank,
@@ -958,10 +1090,8 @@ function renderScore(result) {
   // Total badges
   const mTotal = total_score || 0;
   const iTotal = ind_total_score || 0;
-  document.getElementById("hdr-total-market").innerHTML =
-    `${mTotal.toFixed(1)}<span class="max" style="color:#555577">/100</span>`;
-  document.getElementById("hdr-total-industry").innerHTML =
-    `${iTotal.toFixed(1)}<span class="max" style="color:#555577">/100</span>`;
+  document.getElementById("hdr-total-market").textContent = formatTotalScore(mTotal) || "—";
+  document.getElementById("hdr-total-industry").textContent = formatTotalScore(iTotal) || "—";
   renderScoreMethodology(score_methodology);
   renderRankSummary({
     market_total_rank,
@@ -988,7 +1118,14 @@ function renderScore(result) {
 
   // ── Sub-table ───────────────────────────────────────────────────────────
   // sd (score_data) contains the flat sub_indicators dict from the snapshot
-  renderSubTable(sd || {}, ind_sub_indicators || {}, raw_sub_indicators || {}, prev_raw_sub_indicators || {}, result.sub_indicator_diagnostics || sub_indicator_diagnostics || {});
+  renderSubTable(
+    sd || {},
+    ind_sub_indicators || {},
+    raw_sub_indicators || {},
+    prev_raw_sub_indicators || {},
+    industry_raw_sub_indicator_avgs || {},
+    result.sub_indicator_diagnostics || sub_indicator_diagnostics || {},
+  );
 }
 
 // ── API ─────────────────────────────────────────────────────────────────────
@@ -1031,6 +1168,22 @@ async function fetchAiFinancialReport(market, symbol) {
   return payload;
 }
 
+async function fetchIndustryPeerBenchmark(market, symbol, subKey) {
+  const url = `/api/stock-score-industry-peers?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&sub_key=${encodeURIComponent(subKey)}`;
+  const r = await fetch(url);
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
+async function fetchIndustryTotalPeerBenchmark(market, symbol) {
+  const url = `/api/stock-score-industry-total-peers?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`;
+  const r = await fetch(url);
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
 async function fetchSubdiagExplanation(market, symbol, subKey) {
   const url = `/api/stock-score-subdiag-explanation?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&sub_key=${encodeURIComponent(subKey)}`;
   const r = await fetch(url);
@@ -1053,6 +1206,11 @@ const stockInputEl = document.getElementById("stock-input");
 const stockDropdownEl = document.getElementById("stock-dropdown");
 const recentSearchesEl = document.getElementById("recent-searches");
 const financialDetailToggleEl = document.getElementById("financial-detail-toggle");
+const industryScorePeerTriggerEl = document.querySelector(".industry-score-peer-trigger");
+const industryPeerDialogEl = document.getElementById("industry-peer-dialog");
+const industryPeerStatusEl = document.getElementById("industry-peer-status");
+const industryScorePeerDialogEl = document.getElementById("industry-score-peer-dialog");
+const industryScorePeerStatusEl = document.getElementById("industry-score-peer-status");
 const searchState = {
   timer: null,
   requestId: 0,
@@ -1060,6 +1218,8 @@ const searchState = {
   suggestions: [],
   currentStock: null,
   expandedSubDiagKey: null,
+  industryPeerRequestId: 0,
+  industryScorePeerRequestId: 0,
 };
 
 function rerenderCurrentSubdiagTable() {
@@ -1069,6 +1229,7 @@ function rerenderCurrentSubdiagTable() {
     searchState.currentStock.scoreResult.ind_sub_indicators || {},
     searchState.currentStock.scoreResult.raw_sub_indicators || {},
     searchState.currentStock.scoreResult.prev_raw_sub_indicators || {},
+    searchState.currentStock.scoreResult.industry_raw_sub_indicator_avgs || {},
     searchState.currentStock.scoreResult.sub_indicator_diagnostics || {},
   );
 }
@@ -1227,6 +1388,72 @@ document.getElementById("sub-tbody").addEventListener("click", e => {
         });
         rerenderCurrentSubdiagTable();
       });
+    return;
+  }
+
+  if (subdiagAction === "industry-peer") {
+    if (!searchState.currentStock?.market || !searchState.currentStock?.symbol) {
+      return;
+    }
+    const { market, symbol } = searchState.currentStock;
+    const stockIdentity = currentStockIdentity();
+    const requestId = ++searchState.industryPeerRequestId;
+    document.getElementById("industry-peer-title").textContent = `${SUB_META[subdiagKey]?.name || subdiagKey} 同业对照`;
+    industryPeerStatusEl.textContent = "正在加载同业样本...";
+    document.getElementById("industry-peer-tbody").innerHTML = "";
+    openIndustryPeerDialog();
+    fetchIndustryPeerBenchmark(market, symbol, subdiagKey)
+      .then((payload) => {
+        if (requestId !== searchState.industryPeerRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+        renderIndustryPeerDialog(payload);
+        openIndustryPeerDialog();
+      })
+      .catch((err) => {
+        if (requestId !== searchState.industryPeerRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+        industryPeerStatusEl.textContent = `加载失败: ${err.message}`;
+        document.getElementById("industry-peer-tbody").innerHTML = "";
+        openIndustryPeerDialog();
+      });
+  }
+});
+document.getElementById("industry-peer-close").addEventListener("click", () => closeIndustryPeerDialog());
+industryPeerDialogEl.addEventListener("click", (e) => {
+  if (e.target === industryPeerDialogEl) closeIndustryPeerDialog();
+});
+industryScorePeerTriggerEl.addEventListener("click", () => {
+  if (!searchState.currentStock?.market || !searchState.currentStock?.symbol) {
+    return;
+  }
+  const { market, symbol } = searchState.currentStock;
+  const stockIdentity = currentStockIdentity();
+  const requestId = ++searchState.industryScorePeerRequestId;
+  document.getElementById("industry-score-peer-title").textContent = "行业总分同业对照";
+  industryScorePeerStatusEl.textContent = "正在加载行业总分同业样本...";
+  document.getElementById("industry-score-peer-tbody").innerHTML = "";
+  openIndustryScorePeerDialog();
+  fetchIndustryTotalPeerBenchmark(market, symbol)
+    .then((payload) => {
+      if (requestId !== searchState.industryScorePeerRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      renderIndustryScorePeerDialog(payload);
+      openIndustryScorePeerDialog();
+    })
+    .catch((err) => {
+      if (requestId !== searchState.industryScorePeerRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      industryScorePeerStatusEl.textContent = `加载失败: ${err.message}`;
+      document.getElementById("industry-score-peer-tbody").innerHTML = "";
+      openIndustryScorePeerDialog();
+    });
+});
+document.getElementById("industry-score-peer-close").addEventListener("click", () => closeIndustryScorePeerDialog());
+industryScorePeerDialogEl.addEventListener("click", (e) => {
+  if (e.target === industryScorePeerDialogEl) closeIndustryScorePeerDialog();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !industryPeerDialogEl.hidden) {
+    closeIndustryPeerDialog();
+  }
+  if (e.key === "Escape" && !industryScorePeerDialogEl.hidden) {
+    closeIndustryScorePeerDialog();
   }
 });
 document.addEventListener("click", e => {
@@ -1330,6 +1557,16 @@ async function doSearch(selectedRow = null) {
   resetProfileSummary();
   searchState.currentStock = null;
   searchState.expandedSubDiagKey = null;
+  searchState.industryPeerRequestId += 1;
+  searchState.industryScorePeerRequestId += 1;
+  closeIndustryPeerDialog();
+  closeIndustryScorePeerDialog();
+  industryPeerStatusEl.textContent = INDUSTRY_PEER_STATUS_PLACEHOLDER;
+  document.getElementById("industry-peer-title").textContent = "行业同业对照";
+  document.getElementById("industry-peer-tbody").innerHTML = "";
+  industryScorePeerStatusEl.textContent = INDUSTRY_SCORE_PEER_STATUS_PLACEHOLDER;
+  document.getElementById("industry-score-peer-title").textContent = "行业总分同业对照";
+  document.getElementById("industry-score-peer-tbody").innerHTML = "";
   resetAiFinancialReport("查询完成后可生成分析");
   renderScoreMethodology(null);
   hideSuggestions();

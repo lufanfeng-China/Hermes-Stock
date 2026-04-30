@@ -139,6 +139,343 @@ class StockScoreAdjustmentTests(unittest.TestCase):
         self.assertTrue(analysis["strengths"])
         self.assertTrue(analysis["risks"])
 
+    def test_compute_stock_score_returns_level2_industry_raw_sub_indicator_averages(self) -> None:
+        from app.search import index as idx
+
+        def build_entry(*, ind2: str, roe_ex: float, net_margin: float) -> dict[str, object]:
+            return {
+                "report_date": "20260331",
+                "announce_date": "20260424",
+                "latest_period": "2026Q1",
+                "industry_sw_level_2": ind2,
+                "sub_indicators": {sub_key: 50.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_sub_indicators": {sub_key: 45.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_dim_scores": {},
+                "ind_total_score": 0.0,
+                "raw_sub_indicators": {
+                    "roe_ex": roe_ex,
+                    "net_margin": net_margin,
+                },
+                "prev_raw_sub_indicators": {},
+            }
+
+        snapshot = {
+            "report_date": "2026Q1",
+            "scores": {
+                "sz:000333": build_entry(ind2="白色家电", roe_ex=4.0, net_margin=9.0),
+                "sz:000651": build_entry(ind2="白色家电", roe_ex=6.0, net_margin=12.0),
+                "sh:600690": build_entry(ind2="白色家电", roe_ex=8.0, net_margin=15.0),
+                "sh:600000": build_entry(ind2="银行", roe_ex=99.0, net_margin=88.0),
+            },
+        }
+
+        industry_map = {
+            ("sz", "000333"): ("白色家电", "家用电器"),
+            ("sz", "000651"): ("白色家电", "家用电器"),
+            ("sh", "600690"): ("白色家电", "家用电器"),
+            ("sh", "600000"): ("银行", "银行"),
+        }
+
+        with (
+            mock.patch.object(idx, "_load_financial_snapshot", return_value=snapshot),
+            mock.patch.object(idx, "_stock_name_lookup", return_value={("sz", "000333"): "美的集团"}),
+            mock.patch.object(idx, "_load_industry_map", return_value=industry_map),
+        ):
+            result = idx.compute_stock_score("sz", "000333")
+
+        self.assertEqual("白色家电", result["ind2"])
+        self.assertIn("industry_raw_sub_indicator_avgs", result)
+        self.assertAlmostEqual(6.0, result["industry_raw_sub_indicator_avgs"]["roe_ex"])
+        self.assertAlmostEqual(12.0, result["industry_raw_sub_indicator_avgs"]["net_margin"])
+        self.assertNotEqual(99.0, result["industry_raw_sub_indicator_avgs"]["roe_ex"])
+
+    def test_build_stock_score_industry_peer_benchmark_returns_sorted_rows_with_financial_inputs(self) -> None:
+        from app.search import index as idx
+
+        def build_entry(*, ind2: str, report_date: str, net_margin: float) -> dict[str, object]:
+            return {
+                "report_date": report_date,
+                "announce_date": "20260424",
+                "latest_period": "2026Q1",
+                "industry_sw_level_2": ind2,
+                "sub_indicators": {sub_key: 50.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_sub_indicators": {sub_key: 45.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_dim_scores": {},
+                "ind_total_score": 0.0,
+                "raw_sub_indicators": {"net_margin": net_margin},
+                "prev_raw_sub_indicators": {},
+            }
+
+        snapshot = {
+            "report_date": "2026Q1",
+            "scores": {
+                "sz:000333": build_entry(ind2="白色家电", report_date="20260331", net_margin=9.6),
+                "sz:000651": build_entry(ind2="白色家电", report_date="20260331", net_margin=12.3),
+                "sh:600690": build_entry(ind2="白色家电", report_date="20260331", net_margin=6.1),
+                "sh:600000": build_entry(ind2="银行", report_date="20260331", net_margin=99.0),
+            },
+        }
+        industry_map = {
+            ("sz", "000333"): ("白色家电", "家用电器"),
+            ("sz", "000651"): ("白色家电", "家用电器"),
+            ("sh", "600690"): ("白色家电", "家用电器"),
+            ("sh", "600000"): ("银行", "银行"),
+        }
+        name_lookup = {
+            ("sz", "000333"): "美的集团",
+            ("sz", "000651"): "格力电器",
+            ("sh", "600690"): "海尔智家",
+        }
+        component_context_map = {
+            ("sz", "000333"): {"current": {"net_profit": 126.0, "revenue": 1302.0}, "previous": {}},
+            ("sz", "000651"): {"current": {"net_profit": 151.0, "revenue": 1228.0}, "previous": {}},
+            ("sh", "600690"): {"current": {"net_profit": 61.0, "revenue": 1000.0}, "previous": {}},
+        }
+
+        def fake_component_context(market: str, symbol: str, **_kwargs):
+            return component_context_map[(market, symbol)]
+
+        with (
+            mock.patch.object(idx, "_load_financial_snapshot", return_value=snapshot),
+            mock.patch.object(idx, "_load_industry_map", return_value=industry_map),
+            mock.patch.object(idx, "_stock_name_lookup", return_value=name_lookup),
+            mock.patch.object(idx, "_load_sub_indicator_component_context", side_effect=fake_component_context),
+            mock.patch.object(
+                idx,
+                "_load_latest_close_prices",
+                return_value={
+                    ("sz", "000333"): 72.35,
+                    ("sz", "000651"): 43.21,
+                    ("sh", "600690"): 28.88,
+                },
+            ),
+        ):
+            result = idx.build_stock_score_industry_peer_benchmark("sz", "000333", "net_margin")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("net_margin", result["sub_key"])
+        self.assertEqual("白色家电", result["ind2"])
+        self.assertEqual(["000651", "000333", "600690"], [row["symbol"] for row in result["rows"]])
+        self.assertEqual("格力电器", result["rows"][0]["stock_name"])
+        self.assertEqual(72.35, result["rows"][1]["current_price"])
+        self.assertTrue(result["rows"][1]["is_current_stock"])
+        self.assertEqual("20260331", result["rows"][1]["report_date"])
+        self.assertEqual(["net_profit", "revenue"], [item["key"] for item in result["rows"][1]["financial_inputs"]])
+        self.assertEqual("归属于母公司所有者的净利润", result["rows"][1]["financial_inputs"][0]["label"])
+
+    def test_build_stock_score_industry_total_peer_benchmark_returns_sorted_rows_with_dimension_scores(self) -> None:
+        from app.search import index as idx
+
+        def build_entry(*, ind2: str, ind_total_score: float, ind_dim_scores: dict[str, float]) -> dict[str, object]:
+            return {
+                "report_date": "20260331",
+                "announce_date": "20260424",
+                "latest_period": "2026Q1",
+                "industry_sw_level_2": ind2,
+                "sub_indicators": {sub_key: 50.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_sub_indicators": {sub_key: 45.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_dim_scores": ind_dim_scores,
+                "ind_total_score": ind_total_score,
+                "raw_sub_indicators": {},
+                "prev_raw_sub_indicators": {},
+            }
+
+        snapshot = {
+            "report_date": "2026Q1",
+            "scores": {
+                "sz:000333": build_entry(
+                    ind2="白色家电",
+                    ind_total_score=71.7,
+                    ind_dim_scores={
+                        "profitability": 20.8,
+                        "growth": 15.2,
+                        "operating": 9.0,
+                        "cashflow": 15.2,
+                        "solvency": 6.0,
+                        "asset_quality": 5.3,
+                    },
+                ),
+                "sz:000651": build_entry(
+                    ind2="白色家电",
+                    ind_total_score=80.2,
+                    ind_dim_scores={
+                        "profitability": 23.0,
+                        "growth": 16.0,
+                        "operating": 10.5,
+                        "cashflow": 16.2,
+                        "solvency": 7.5,
+                        "asset_quality": 7.0,
+                    },
+                ),
+                "sh:600690": build_entry(
+                    ind2="白色家电",
+                    ind_total_score=68.5,
+                    ind_dim_scores={
+                        "profitability": 18.0,
+                        "growth": 14.0,
+                        "operating": 8.8,
+                        "cashflow": 14.0,
+                        "solvency": 6.2,
+                        "asset_quality": 7.5,
+                    },
+                ),
+                "sh:600000": build_entry(
+                    ind2="银行",
+                    ind_total_score=99.0,
+                    ind_dim_scores={"profitability": 25.0},
+                ),
+            },
+        }
+        industry_map = {
+            ("sz", "000333"): ("白色家电", "家用电器"),
+            ("sz", "000651"): ("白色家电", "家用电器"),
+            ("sh", "600690"): ("白色家电", "家用电器"),
+            ("sh", "600000"): ("银行", "银行"),
+        }
+        name_lookup = {
+            ("sz", "000333"): "美的集团",
+            ("sz", "000651"): "格力电器",
+            ("sh", "600690"): "海尔智家",
+        }
+
+        with (
+            mock.patch.object(idx, "_load_financial_snapshot", return_value=snapshot),
+            mock.patch.object(idx, "_load_industry_map", return_value=industry_map),
+            mock.patch.object(idx, "_stock_name_lookup", return_value=name_lookup),
+            mock.patch.object(idx, "_load_latest_close_prices", return_value={
+                ("sz", "000333"): 72.35,
+                ("sz", "000651"): 43.21,
+                ("sh", "600690"): 28.88,
+            }),
+        ):
+            result = idx.build_stock_score_industry_total_peer_benchmark("sz", "000333")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("白色家电", result["ind2"])
+        self.assertEqual(["000651", "000333", "600690"], [row["symbol"] for row in result["rows"]])
+        self.assertEqual(80.2, result["rows"][0]["total_score"])
+        self.assertEqual(72.35, result["rows"][1]["current_price"])
+        self.assertTrue(result["rows"][1]["is_current_stock"])
+        self.assertEqual("20260331", result["rows"][1]["report_date"])
+        self.assertEqual(83.2, result["rows"][1]["dimension_scores"]["profitability"])
+        self.assertEqual(76.0, result["rows"][1]["dimension_scores"]["growth"])
+        self.assertEqual(71.7, round(result["rows"][1]["total_score"], 1))
+
+    def test_compute_stock_score_uses_prior_year_same_period_for_free_cf_diagnostics(self) -> None:
+        from app.search import index as idx
+
+        class FakeRow(dict):
+            def get(self, key, default=None):
+                return super().get(key, default)
+
+        class FakeLoc:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def __getitem__(self, key):
+                return self._rows[key]
+
+        class FakeFrame:
+            def __init__(self, rows):
+                self._rows = rows
+                self.index = set(rows.keys())
+                self.loc = FakeLoc(rows)
+
+        snapshot = {
+            "report_date": "2026Q1",
+            "scores": {
+                "sh:600519": {
+                    "report_date": "20260331",
+                    "announce_date": "20260429",
+                    "latest_period": "2026Q1",
+                    "sub_indicators": {sub_key: 50.0 for sub_key, *_ in idx._SUB_DEFS},
+                    "ind_sub_indicators": {sub_key: 45.0 for sub_key, *_ in idx._SUB_DEFS},
+                    "ind_dim_scores": {},
+                    "ind_total_score": 0.0,
+                    "raw_sub_indicators": {
+                        "free_cf": 26305099008.0,
+                        "ocf_to_profit": 0.9878,
+                    },
+                    "prev_raw_sub_indicators": {
+                        "free_cf": 58394611712.0,
+                        "ocf_to_profit": 0.7474,
+                    },
+                }
+            },
+        }
+        file_map = {
+            "/tmp/20260331.dat": (
+                "20260331",
+                FakeFrame(
+                    {
+                        "600519": FakeRow(
+                            {
+                                "经营活动产生的现金流量净额": 26909890560.0,
+                                "购建固定资产、无形资产和其他长期资产支付的现金": 604791552.0,
+                                "归属于母公司所有者的净利润": 27242512384.0,
+                                "营业收入": 53909254144.0,
+                            }
+                        )
+                    }
+                ),
+            ),
+            "/tmp/20251231.dat": (
+                "20251231",
+                FakeFrame(
+                    {
+                        "600519": FakeRow(
+                            {
+                                "经营活动产生的现金流量净额": 61522206720.0,
+                                "购建固定资产、无形资产和其他长期资产支付的现金": 3127595008.0,
+                                "归属于母公司所有者的净利润": 82320064512.0,
+                                "营业收入": 40384393216.0,
+                            }
+                        )
+                    }
+                ),
+            ),
+            "/tmp/20250331.dat": (
+                "20250331",
+                FakeFrame(
+                    {
+                        "600519": FakeRow(
+                            {
+                                "经营活动产生的现金流量净额": 8809195520.0,
+                                "购建固定资产、无形资产和其他长期资产支付的现金": 901104320.0,
+                                "归属于母公司所有者的净利润": 26847473664.0,
+                                "营业收入": 50600955904.0,
+                            }
+                        )
+                    }
+                ),
+            ),
+        }
+
+        with (
+            mock.patch.object(idx, "_load_financial_snapshot", return_value=snapshot),
+            mock.patch.object(idx, "_stock_name_lookup", return_value={("sh", "600519"): "贵州茅台"}),
+            mock.patch.object(idx, "_load_industry_map", return_value={("sh", "600519"): ("酿酒", "食品饮料")}),
+            mock.patch.object(
+                idx,
+                "_all_financial_files",
+                return_value=[
+                    ("20260331", "/tmp/20260331.dat"),
+                    ("20251231", "/tmp/20251231.dat"),
+                    ("20250331", "/tmp/20250331.dat"),
+                ],
+            ),
+            mock.patch.object(idx, "_load_file", side_effect=lambda fp: file_map.get(fp)),
+        ):
+            result = idx.compute_stock_score("sh", "600519")
+
+        self.assertEqual(7908091200.0, result["prev_raw_sub_indicators"]["free_cf"])
+        self.assertEqual(7908091200.0, result["sub_indicator_diagnostics"]["free_cf"]["change"]["previous_value"])
+        self.assertEqual(
+            8809195520.0,
+            result["sub_indicator_diagnostics"]["free_cf"]["attribution"]["components"]["previous"]["op_cf"],
+        )
+        self.assertIn("上年同期", result["sub_indicator_diagnostics"]["free_cf"]["change"]["summary"])
+
     def test_compute_stock_score_returns_structured_sub_indicator_diagnostics_for_mvp_metrics(self) -> None:
         from app.search import index as idx
 

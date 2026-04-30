@@ -846,6 +846,40 @@ _SUB_INDICATOR_LABELS = {
     "goodwill_ratio": "商誉占比",
     "impair_to_rev": "减值损失率",
 }
+_COMPONENT_LABELS = {
+    "revenue": "营业收入",
+    "ex_net_profit": "扣除非经常性损益后的净利润",
+    "op_cf": "经营活动产生的现金流量净额",
+    "net_profit": "归属于母公司所有者的净利润",
+    "capex": "购建固定资产、无形资产和其他长期资产支付的现金",
+    "total_debt": "负债合计",
+    "total_assets": "资产总计",
+    "equity": "归属于母公司股东权益(资产负债表)",
+    "ar": "应收账款",
+    "inventory": "存货",
+    "goodwill": "商誉",
+    "impair_loss": "资产减值损失",
+    "current_assets": "流动资产合计",
+    "current_liabilities": "流动负债合计",
+    "operating_cost": "营业成本",
+}
+_SUB_INDICATOR_COMPONENT_KEYS = {
+    "roe_ex": ["ex_net_profit", "equity"],
+    "net_margin": ["net_profit", "revenue"],
+    "ocf_to_profit": ["op_cf", "net_profit"],
+    "ocf_to_rev": ["op_cf", "revenue"],
+    "free_cf": ["op_cf", "capex"],
+    "ar_to_asset": ["ar", "total_assets"],
+    "inv_to_asset": ["inventory", "total_assets"],
+    "goodwill_ratio": ["goodwill", "total_assets"],
+    "impair_to_rev": ["impair_loss", "revenue"],
+    "ar_days": ["ar", "revenue"],
+    "inv_days": ["inventory", "operating_cost"],
+    "asset_turn": ["revenue", "total_assets"],
+    "debt_ratio": ["total_debt", "total_assets"],
+    "current_ratio": ["current_assets", "current_liabilities"],
+    "quick_ratio": ["current_assets", "inventory", "current_liabilities"],
+}
 _CROSS_INDUSTRY_SENSITIVE_DIMS = {"operating", "solvency", "asset_quality"}
 _PURE_MARKET_DIMS = {"profitability", "growth", "cashflow"}
 
@@ -1439,9 +1473,9 @@ def _build_latest_report_analysis(score_data: dict[str, object], raw_sub_indicat
             continue
         yoy = (cur_f - prev_f) / abs(prev_f) * 100.0
         if yoy <= -20 and len(risks) < 4:
-            risks.append(f"{label} 较上期走弱（同比 {yoy:.1f}%），需要结合后续财报继续跟踪。")
+            risks.append(f"{label} 较上年同期走弱（同比 {yoy:.1f}%），需要结合后续财报继续跟踪。")
         elif yoy >= 20 and len(strengths) < 4:
-            strengths.append(f"{label} 较上期改善明显（同比 +{yoy:.1f}%），最新财报呈现边际向好。")
+            strengths.append(f"{label} 较上年同期改善明显（同比 +{yoy:.1f}%），最新财报呈现边际向好。")
 
     if not strengths:
         strengths.append("最新财报暂无特别突出的高分项，整体表现以中性偏稳为主。")
@@ -1460,14 +1494,20 @@ def _safe_float(value: object) -> float | None:
         return None
 
 
-def _signed_delta_text(delta: float | None, suffix: str = "") -> str:
+def _signed_delta_text(delta: float | None, suffix: str = "", comparison_label: str = "上年同期") -> str:
     if delta is None:
-        return "缺少可比上期数据"
+        return f"缺少可比{comparison_label}数据"
     sign = "+" if delta > 0 else ""
     return f"{sign}{delta:.2f}{suffix}"
 
 
-def _metric_change_summary(current: float | None, previous: float | None, *, suffix: str = "") -> dict[str, object]:
+def _metric_change_summary(
+    current: float | None,
+    previous: float | None,
+    *,
+    suffix: str = "",
+    comparison_label: str = "上年同期",
+) -> dict[str, object]:
     delta = None
     if current is not None and previous is not None:
         delta = current - previous
@@ -1475,26 +1515,32 @@ def _metric_change_summary(current: float | None, previous: float | None, *, suf
         "current_value": current,
         "previous_value": previous,
         "delta_value": delta,
-        "summary": "当期较上期 " + _signed_delta_text(delta, suffix),
+        "summary": f"当期较{comparison_label} " + _signed_delta_text(delta, suffix, comparison_label),
     }
 
 
-def _load_sub_indicator_component_context(market: str, symbol: str) -> dict[str, dict[str, float | None]]:
-    """
-    Load supporting raw financial components for a single stock.
-    Returns empty current/previous dicts when local financial data is unavailable.
-    """
-    empty = {"current": {}, "previous": {}}
+def _previous_same_period_report_date(report_date: str) -> str | None:
+    text = str(report_date or "").strip()
+    if len(text) != 8 or not text.isdigit():
+        return None
+    return f"{int(text[:4]) - 1:04d}{text[4:]}"
 
+
+def _lookup_financial_row(market: str, symbol: str, report_date: str | None = None) -> tuple[str, object] | None:
     try:
         all_files = _all_financial_files()
     except Exception:
-        return empty
+        return None
     if not all_files:
-        return empty
+        return None
 
-    found_rows: list[object] = []
-    for _date_str, fp in all_files:
+    idx_candidates = [symbol]
+    if market == "sz" and len(symbol) == 6:
+        idx_candidates.extend([symbol.lstrip("0"), symbol[1:] if symbol.startswith("0") else symbol])
+
+    for date_str, fp in all_files:
+        if report_date and date_str != report_date:
+            continue
         try:
             loaded = _load_file(fp)
         except Exception:
@@ -1502,21 +1548,49 @@ def _load_sub_indicator_component_context(market: str, symbol: str) -> dict[str,
         if loaded is None:
             continue
         _loaded_date, df = loaded
-        idx_candidates = [symbol]
-        if market == "sz" and len(symbol) == 6:
-            idx_candidates.extend([symbol.lstrip("0"), symbol[1:] if symbol.startswith("0") else symbol])
-        row = None
         for idx in idx_candidates:
             if idx and idx in df.index:
-                row = df.loc[idx]
-                break
-        if row is None:
-            continue
-        found_rows.append(row)
-        if len(found_rows) >= 2:
+                return date_str, df.loc[idx]
+        if report_date:
             break
+    return None
 
-    if not found_rows:
+
+def _load_sub_indicator_component_context(
+    market: str,
+    symbol: str,
+    *,
+    current_report_date: str | None = None,
+    previous_report_date: str | None = None,
+) -> dict[str, dict[str, float | None]]:
+    """
+    Load supporting raw financial components for a single stock.
+    Returns empty current/previous dicts when local financial data is unavailable.
+    """
+    empty = {"current": {}, "previous": {}}
+
+    current_match = _lookup_financial_row(market, symbol, current_report_date)
+    previous_match = _lookup_financial_row(market, symbol, previous_report_date) if previous_report_date else None
+
+    if current_match is None and previous_match is None:
+        current_match = _lookup_financial_row(market, symbol)
+
+    if current_match is not None and previous_match is None:
+        current_date = current_match[0]
+        fallback_previous = None
+        try:
+            all_files = _all_financial_files()
+        except Exception:
+            all_files = []
+        for date_str, _fp in all_files:
+            if current_date and date_str >= current_date:
+                continue
+            fallback_previous = _lookup_financial_row(market, symbol, date_str)
+            if fallback_previous is not None:
+                break
+        previous_match = fallback_previous
+
+    if current_match is None and previous_match is None:
         return empty
 
     def _extract_components(frow: object | None) -> dict[str, float | None]:
@@ -1544,12 +1618,43 @@ def _load_sub_indicator_component_context(market: str, symbol: str) -> dict[str,
             "operating_cost": vv("营业成本"),
         }
 
-    current_row = found_rows[0] if found_rows else None
-    previous_row = found_rows[1] if len(found_rows) > 1 else None
+    current_row = current_match[1] if current_match else None
+    previous_row = previous_match[1] if previous_match else None
     return {
         "current": _extract_components(current_row),
         "previous": _extract_components(previous_row),
     }
+
+
+def _load_latest_close_prices(market_symbols: list[tuple[str, str]]) -> dict[tuple[str, str], float | None]:
+    prices = {(market, symbol): None for market, symbol in market_symbols}
+    if not market_symbols:
+        return prices
+
+    try:
+        from mootdx.reader import Reader
+    except ModuleNotFoundError:
+        return prices
+    except Exception:
+        return prices
+
+    readers: dict[str, object] = {}
+    for market, symbol in market_symbols:
+        if market not in {"sh", "sz", "bj"} or not symbol:
+            continue
+        try:
+            reader = readers.get(market)
+            if reader is None:
+                reader = Reader.factory(market="std", tdxdir=_TDX_DIR)
+                readers[market] = reader
+            daily = reader.daily(symbol=symbol)
+            if daily is None or daily.empty:
+                continue
+            close_value = _pick(daily.iloc[-1].get("close"))
+            prices[(market, symbol)] = close_value
+        except Exception:
+            continue
+    return prices
 
 
 def _build_sub_indicator_diagnostics(
@@ -1618,7 +1723,7 @@ def _build_sub_indicator_diagnostics(
 
     def risk_from_trend(current: float | None, previous: float | None, *, lower_is_better: bool = False) -> list[str]:
         if current is None or previous is None:
-            return ["缺少完整的当期/上期对比数据"]
+            return ["缺少完整的当期/上年同期对比数据"]
         if lower_is_better:
             return ["指标抬升，方向偏谨慎"] if current > previous else ["指标回落，方向改善"]
         return ["指标走弱，方向偏谨慎"] if current < previous else ["指标改善，方向偏正面"]
@@ -2030,9 +2135,9 @@ def _build_sub_indicator_diagnostics(
 
     def period_summary(sub_key: str) -> str:
         if sub_key == "revenue_growth":
-            return "收入动能通过当期与上期营收增速对比来观察，可直接反映需求扩张或收缩的方向。"
+            return "收入动能通过当期与上年同期营收增速对比来观察，可直接反映需求扩张或收缩的方向。"
         if sub_key == "profit_growth":
-            return "利润释放节奏通过当期与上期净利润增速对比来观察，可判断盈利弹性的变化。"
+            return "利润释放节奏通过当期与上年同期净利润增速对比来观察，可判断盈利弹性的变化。"
         if sub_key == "ex_profit_growth":
             return "核心经营改善程度通过扣非利润增速的期间对比来观察，更能剔除非经常性扰动。"
         return ""
@@ -2096,7 +2201,7 @@ def _build_sub_indicator_diagnostics(
             "components": ["op_cf", "capex"],
             "impact_summary": "资本开支后的现金沉淀影响现金流质量评分。",
             "suffix": "",
-            "change_summary": "自由现金流变动由经营现金流与资本开支共同驱动",
+            "change_summary": "自由现金流较上年同期变动由经营现金流与资本开支共同驱动",
         },
         "ar_to_asset": {
             "summary": formula_summary("ar_to_asset"),
@@ -2358,6 +2463,243 @@ def _load_snapshot_score_rankings():
         "industry_total_universe_size": industry_sizes,
     }
 
+
+def _compute_level2_industry_raw_sub_indicator_avgs(
+    market: str,
+    symbol: str,
+    *,
+    industry_map: dict[tuple[str, str], tuple[str | None, str | None]] | None = None,
+) -> dict[str, float]:
+    snap = _load_financial_snapshot()
+    if snap is None:
+        return {}
+
+    resolved_industry_map = industry_map or _load_industry_map()
+    target_ind2, _target_ind1 = resolved_industry_map.get((market, symbol), (None, None))
+    if not target_ind2:
+        return {}
+
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for key_str, entry in snap.get("scores", {}).items():
+        if not isinstance(entry, dict) or ":" not in key_str:
+            continue
+        peer_market, peer_symbol = key_str.split(":", 1)
+        peer_ind2, _peer_ind1 = resolved_industry_map.get((peer_market, peer_symbol), (None, None))
+        if peer_ind2 != target_ind2:
+            continue
+        raw_sub_indicators = entry.get("raw_sub_indicators", {})
+        if not isinstance(raw_sub_indicators, dict):
+            continue
+        for sub_key, value in raw_sub_indicators.items():
+            numeric_value = _safe_float(value)
+            if numeric_value is None:
+                continue
+            totals[sub_key] = totals.get(sub_key, 0.0) + numeric_value
+            counts[sub_key] = counts.get(sub_key, 0) + 1
+
+    averages: dict[str, float] = {}
+    for sub_key, total in totals.items():
+        count = counts.get(sub_key, 0)
+        if count > 0:
+            averages[sub_key] = total / count
+    return averages
+
+
+def build_stock_score_industry_peer_benchmark(market, symbol, sub_key):
+    if sub_key not in _SUB_KEYS:
+        raise ValueError(f"invalid sub_key: {sub_key}")
+
+    snap = _load_financial_snapshot()
+    if snap is None:
+        return {
+            "ok": False,
+            "market": market,
+            "symbol": symbol,
+            "stock_name": _stock_name_lookup().get((market, symbol), ""),
+            "ind1": None,
+            "ind2": None,
+            "sub_key": sub_key,
+            "indicator_name": _SUB_INDICATOR_LABELS.get(sub_key, sub_key),
+            "report_date": "",
+            "rows": [],
+        }
+
+    industry_map = _load_industry_map()
+    ind2, ind1 = industry_map.get((market, symbol), (None, None))
+    stock_name = _stock_name_lookup().get((market, symbol), "")
+    target_entry = snap.get("scores", {}).get(f"{market}:{symbol}", {})
+    report_date = str(target_entry.get("report_date") or "")
+    previous_report_date = _previous_same_period_report_date(report_date) if report_date else None
+    higher_better = next(defn[3] for defn in _SUB_DEFS if defn[0] == sub_key)
+    market_symbols: list[tuple[str, str]] = []
+    peer_entries: list[tuple[str, str, dict[str, object]]] = []
+
+    for key_str, entry in snap.get("scores", {}).items():
+        if not isinstance(entry, dict) or ":" not in key_str:
+            continue
+        peer_market, peer_symbol = key_str.split(":", 1)
+        peer_ind2, _peer_ind1 = industry_map.get((peer_market, peer_symbol), (None, None))
+        if not ind2 or peer_ind2 != ind2:
+            continue
+        market_symbols.append((peer_market, peer_symbol))
+        peer_entries.append((peer_market, peer_symbol, entry))
+
+    latest_close_prices = _load_latest_close_prices(market_symbols)
+    name_lookup = _stock_name_lookup()
+    component_keys = _SUB_INDICATOR_COMPONENT_KEYS.get(sub_key, [])
+    rows: list[dict[str, object]] = []
+
+    for peer_market, peer_symbol, entry in peer_entries:
+        raw_sub_indicators = entry.get("raw_sub_indicators", {})
+        prev_raw_sub_indicators = entry.get("prev_raw_sub_indicators", {})
+        metric_value = _safe_float(raw_sub_indicators.get(sub_key)) if isinstance(raw_sub_indicators, dict) else None
+        peer_report_date = str(entry.get("report_date") or "")
+        peer_previous_report_date = _previous_same_period_report_date(peer_report_date) if peer_report_date else None
+        component_context = _load_sub_indicator_component_context(
+            peer_market,
+            peer_symbol,
+            current_report_date=peer_report_date or None,
+            previous_report_date=peer_previous_report_date,
+        )
+        current_components = (component_context or {}).get("current") or {}
+        previous_components = (component_context or {}).get("previous") or {}
+        financial_inputs = []
+        for component_key in component_keys:
+            item = {
+                "key": component_key,
+                "label": _COMPONENT_LABELS.get(component_key, component_key),
+                "current_value": _safe_float(current_components.get(component_key)),
+            }
+            previous_value = _safe_float(previous_components.get(component_key))
+            if previous_value is not None:
+                item["previous_value"] = previous_value
+            financial_inputs.append(item)
+
+        row = {
+            "stock_name": name_lookup.get((peer_market, peer_symbol), peer_symbol),
+            "market": peer_market,
+            "symbol": peer_symbol,
+            "current_price": latest_close_prices.get((peer_market, peer_symbol)),
+            "metric_value": metric_value,
+            "report_date": peer_report_date,
+            "is_current_stock": peer_market == market and peer_symbol == symbol,
+            "financial_inputs": financial_inputs,
+        }
+        if peer_previous_report_date:
+            row["previous_report_date"] = peer_previous_report_date
+        elif isinstance(prev_raw_sub_indicators, dict) and prev_raw_sub_indicators.get(sub_key) is not None:
+            row["previous_report_date"] = previous_report_date
+        rows.append(row)
+
+    def sort_key(item: dict[str, object]) -> tuple[bool, float, str, str]:
+        metric_value = _safe_float(item.get("metric_value"))
+        if metric_value is None:
+            sort_value = 0.0
+        else:
+            sort_value = -metric_value if higher_better else metric_value
+        return (
+            metric_value is None,
+            sort_value,
+            str(item.get("market") or ""),
+            str(item.get("symbol") or ""),
+        )
+
+    rows.sort(key=sort_key)
+    return {
+        "ok": True,
+        "market": market,
+        "symbol": symbol,
+        "stock_name": stock_name,
+        "ind1": ind1,
+        "ind2": ind2,
+        "sub_key": sub_key,
+        "indicator_name": _SUB_INDICATOR_LABELS.get(sub_key, sub_key),
+        "report_date": report_date,
+        "rows": rows,
+    }
+
+
+def build_stock_score_industry_total_peer_benchmark(market, symbol):
+    snap = _load_financial_snapshot()
+    if snap is None:
+        return {
+            "ok": False,
+            "market": market,
+            "symbol": symbol,
+            "stock_name": _stock_name_lookup().get((market, symbol), ""),
+            "ind1": None,
+            "ind2": None,
+            "report_date": "",
+            "rows": [],
+        }
+
+    industry_map = _load_industry_map()
+    ind2, ind1 = industry_map.get((market, symbol), (None, None))
+    stock_name = _stock_name_lookup().get((market, symbol), "")
+    target_entry = snap.get("scores", {}).get(f"{market}:{symbol}", {})
+    report_date = str(target_entry.get("report_date") or "")
+    market_symbols: list[tuple[str, str]] = []
+    peer_entries: list[tuple[str, str, dict[str, object]]] = []
+
+    for key_str, entry in snap.get("scores", {}).items():
+        if not isinstance(entry, dict) or ":" not in key_str:
+            continue
+        peer_market, peer_symbol = key_str.split(":", 1)
+        peer_ind2, _peer_ind1 = industry_map.get((peer_market, peer_symbol), (None, None))
+        if not ind2 or peer_ind2 != ind2:
+            continue
+        market_symbols.append((peer_market, peer_symbol))
+        peer_entries.append((peer_market, peer_symbol, entry))
+
+    latest_close_prices = _load_latest_close_prices(market_symbols)
+    name_lookup = _stock_name_lookup()
+    rows: list[dict[str, object]] = []
+
+    for peer_market, peer_symbol, entry in peer_entries:
+        ind_dim_scores = entry.get("ind_dim_scores", {})
+        dimension_scores: dict[str, float | None] = {}
+        for dim, weight in _DIM_WEIGHTS.items():
+            raw_score = _safe_float(ind_dim_scores.get(dim)) if isinstance(ind_dim_scores, dict) else None
+            if raw_score is None or not weight:
+                dimension_scores[dim] = None
+                continue
+            dimension_scores[dim] = round(raw_score / weight, 4)
+
+        rows.append(
+            {
+                "stock_name": name_lookup.get((peer_market, peer_symbol), peer_symbol),
+                "market": peer_market,
+                "symbol": peer_symbol,
+                "current_price": latest_close_prices.get((peer_market, peer_symbol)),
+                "total_score": _safe_float(entry.get("ind_total_score")),
+                "report_date": str(entry.get("report_date") or ""),
+                "is_current_stock": peer_market == market and peer_symbol == symbol,
+                "dimension_scores": dimension_scores,
+            }
+        )
+
+    def sort_key(item: dict[str, object]) -> tuple[bool, float, str, str]:
+        total_score = _safe_float(item.get("total_score"))
+        return (
+            total_score is None,
+            -(total_score or 0.0),
+            str(item.get("market") or ""),
+            str(item.get("symbol") or ""),
+        )
+
+    rows.sort(key=sort_key)
+    return {
+        "ok": True,
+        "market": market,
+        "symbol": symbol,
+        "stock_name": stock_name,
+        "ind1": ind1,
+        "ind2": ind2,
+        "report_date": report_date,
+        "rows": rows,
+    }
+
 # -----------------------------------------------------------------------
 # Public API: single stock
 # -----------------------------------------------------------------------
@@ -2367,6 +2709,11 @@ def compute_stock_score(market, symbol):
     stock_name = _stock_name_lookup().get((market, symbol), "")
     industry_map = _load_industry_map()
     ind2, ind1 = industry_map.get((market, symbol), (None, None))
+    industry_raw_sub_indicator_avgs = _compute_level2_industry_raw_sub_indicator_avgs(
+        market,
+        symbol,
+        industry_map=industry_map,
+    )
     ranking_meta = _load_snapshot_score_rankings()
     market_total_rank = ranking_meta.get("market_total_rank", {}).get((market, symbol))
     market_total_universe_size = ranking_meta.get("market_total_universe_size") or None
@@ -2388,8 +2735,18 @@ def compute_stock_score(market, symbol):
     prev_raw_sub_indicators = score_data.pop("prev_raw_sub_indicators", {}) if score_data else {}
     latest_period = score_data.pop("latest_period", "") if score_data else ""
     score_methodology = score_data.pop("score_methodology", None) if score_data else None
+    previous_same_period_report_date = _previous_same_period_report_date(report_date) if report_date else None
+    if score_data and previous_same_period_report_date:
+        previous_same_period_match = _lookup_financial_row(market, symbol, previous_same_period_report_date)
+        if previous_same_period_match is not None:
+            prev_raw_sub_indicators = _derive_sub_fields(previous_same_period_match[1], None)
     latest_report_analysis = _build_latest_report_analysis(score_data, raw_sub_indicators, prev_raw_sub_indicators) if score_data else {"strengths": [], "risks": []}
-    component_context = _load_sub_indicator_component_context(market, symbol) if score_data else {"current": {}, "previous": {}}
+    component_context = _load_sub_indicator_component_context(
+        market,
+        symbol,
+        current_report_date=report_date or None,
+        previous_report_date=previous_same_period_report_date,
+    ) if score_data else {"current": {}, "previous": {}}
     sub_indicator_diagnostics = _build_sub_indicator_diagnostics(
         score_data,
         ind_sub_indicators,
@@ -2422,6 +2779,7 @@ def compute_stock_score(market, symbol):
         "sub_indicators": sub_indicators,
         "raw_sub_indicators": raw_sub_indicators,
         "prev_raw_sub_indicators": prev_raw_sub_indicators,
+        "industry_raw_sub_indicator_avgs": industry_raw_sub_indicator_avgs,
         "ind_total_score": ind_total_score,
         "ind_dim_scores": ind_dim_scores,
         "ind_sub_indicators": ind_sub_indicators,

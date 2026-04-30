@@ -1983,10 +1983,8 @@ button:hover {
 
 .sub-table th:nth-child(5),
 .sub-table th:nth-child(6),
-.sub-table th:nth-child(7),
 .sub-table td:nth-child(5),
-.sub-table td:nth-child(6),
-.sub-table td:nth-child(7) {
+.sub-table td:nth-child(6) {
   text-align: right;
 }
 
@@ -2010,9 +2008,33 @@ button:hover {
 }
 
 .sub-period-current,
-.sub-period-previous,
-.sub-period-yoy {
+.sub-period-previous {
   position: relative;
+}
+
+.sub-period-industry-average-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 159, 67, 0.28);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(53, 30, 12, 0.9), rgba(31, 18, 8, 0.96));
+  color: #ffd8ae;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.sub-period-industry-average-btn:hover {
+  border-color: rgba(255, 159, 67, 0.5);
+  transform: translateY(-1px);
+}
+
+.sub-period-industry-average-btn:focus-visible {
+  outline: 2px solid rgba(255, 159, 67, 0.72);
+  outline-offset: 2px;
 }
 
 .sub-period-current {
@@ -2023,18 +2045,22 @@ button:hover {
   background: linear-gradient(180deg, rgba(127, 153, 170, 0.10), rgba(127, 153, 170, 0.04));
 }
 
-.sub-period-yoy {
-  background: linear-gradient(180deg, rgba(246, 194, 107, 0.08), rgba(246, 194, 107, 0.03));
-}
-
 .sub-table td.sub-period-current,
 .sub-table td.sub-period-previous {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-.sub-table td.sub-period-yoy {
-  text-align: right;
+.value-trend-positive {
+  color: #7ce0c3 !important;
+}
+
+.value-trend-negative {
+  color: #ff9f9f !important;
+}
+
+.value-trend-flat {
+  color: #d7e4ee !important;
 }
 
 .sub-table tr:hover td {
@@ -2056,6 +2082,141 @@ button:hover {
 .sub-table .sub-rank {
   color: var(--muted);
   font-size: 12px;
+  min-width: 320px;
+}
+
+.industry-peer-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 10, 16, 0.74);
+  backdrop-filter: blur(8px);
+}
+
+.industry-peer-dialog[hidden] {
+  display: none !important;
+}
+
+.industry-peer-dialog-card {
+  width: min(1080px, 100%);
+  max-height: min(85vh, 920px);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(82, 179, 255, 0.24);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(10, 21, 31, 0.98), rgba(6, 14, 21, 0.99)),
+    radial-gradient(circle at top right, rgba(255, 159, 67, 0.1), transparent 36%);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.36);
+}
+
+.industry-peer-table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(127, 153, 170, 0.12);
+  border-radius: 14px;
+}
+
+.industry-peer-financial-data {
+  min-width: 260px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.industry-peer-row-current {
+  background: rgba(124, 224, 195, 0.12);
+}
+
+.industry-peer-row-current td {
+  background: rgba(124, 224, 195, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(124, 224, 195, 0.12);
+}
+
+.stock-score-total-trigger {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  cursor: pointer;
+  transition: color 120ms ease, transform 120ms ease;
+}
+
+.industry-score-peer-trigger {
+  font-size: clamp(24px, 4vw, 38px);
+  color: #ffb36b;
+}
+
+.stock-score-total-trigger:hover {
+  color: #ffd8ae;
+  transform: translateY(-1px);
+}
+
+.stock-score-total-trigger:focus-visible {
+  outline: 2px solid rgba(255, 159, 67, 0.72);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.industry-score-peer-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 10, 16, 0.74);
+  backdrop-filter: blur(8px);
+}
+
+.industry-score-peer-dialog[hidden] {
+  display: none !important;
+}
+
+.industry-score-peer-dialog-card {
+  width: min(1280px, 100%);
+  max-height: min(85vh, 920px);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 159, 67, 0.28);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(10, 21, 31, 0.98), rgba(6, 14, 21, 0.99)),
+    radial-gradient(circle at top right, rgba(255, 159, 67, 0.14), transparent 36%);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.36);
+}
+
+.industry-score-peer-table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(127, 153, 170, 0.12);
+  border-radius: 14px;
+}
+
+.industry-score-peer-row-current {
+  background: rgba(255, 216, 174, 0.12);
+}
+
+.industry-score-peer-row-current td {
+  background: rgba(255, 216, 174, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 216, 174, 0.1);
+}
+
+.sub-rank-formula,
+.sub-rank-meaning,
+.sub-rank-direction {
+  line-height: 1.45;
+}
+
+.sub-rank-formula,
+.sub-rank-meaning {
+  color: #d7e4ee;
+}
+
+.sub-rank-direction {
+  color: #8bd3ff;
+  font-weight: 600;
 }
 
 .stock-score-subdiag-trigger {

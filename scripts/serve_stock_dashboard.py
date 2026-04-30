@@ -928,6 +928,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-score-ai-report":
             self.handle_stock_score_ai_report(parsed.query)
             return
+        if parsed.path == "/api/stock-score-industry-peers":
+            self.handle_stock_score_industry_peers(parsed.query)
+            return
+        if parsed.path == "/api/stock-score-industry-total-peers":
+            self.handle_stock_score_industry_total_peers(parsed.query)
+            return
         if parsed.path == "/api/stock-score-subdiag-explanation":
             self.handle_stock_score_subdiag_explanation(parsed.query)
             return
@@ -1182,6 +1188,57 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "ai_report_error", "message": str(exc)}},
+            )
+
+    def handle_stock_score_industry_peers(self, query: str) -> None:
+        from app.search.index import _SUB_KEYS, build_stock_score_industry_peer_benchmark
+
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        sub_key = params.get("sub_key", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol or sub_key not in _SUB_KEYS:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol/sub_key 参数不合法"}},
+            )
+            return
+        try:
+            self.respond_json(HTTPStatus.OK, build_stock_score_industry_peer_benchmark(market, symbol, sub_key))
+        except ValueError as exc:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": str(exc)}},
+            )
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "stock_score_industry_peers_error", "message": str(exc)}},
+            )
+
+    def handle_stock_score_industry_total_peers(self, query: str) -> None:
+        from app.search.index import build_stock_score_industry_total_peer_benchmark
+
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol 参数不合法"}},
+            )
+            return
+        try:
+            self.respond_json(HTTPStatus.OK, build_stock_score_industry_total_peer_benchmark(market, symbol))
+        except ValueError as exc:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": str(exc)}},
+            )
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "stock_score_industry_total_peers_error", "message": str(exc)}},
             )
 
     def handle_stock_score_subdiag_explanation(self, query: str) -> None:
