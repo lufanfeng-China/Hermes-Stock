@@ -151,12 +151,18 @@ const DIM_WEIGHT = {
 const MARKET_COLOR = "#64b5f6";
 const INDUSTRY_COLOR = "#ff9f43";
 const SEARCH_DEBOUNCE_MS = 200;
-const RECENT_SEARCHES_STORAGE_KEY = "stock-score-recent-searches";
-const RECENT_SEARCHES_LIMIT = 6;
 const PROFILE_PLACEHOLDERS = {
   industryL1: "暂无申万一级",
   industryL2: "暂无申万二级",
   concepts: "暂无核心概念",
+  basicPrice: "待加载现价",
+  basicChange: "待加载涨幅",
+  basicVolumeRatio: "待加载量比",
+  basicMarketCap: "待加载A股市值",
+  basicTotalShares: "待加载总股本",
+  basicFloatShares: "待加载流通股本",
+  basicEps: "待加载收益",
+  basicDynamicPe: "待加载动态PE",
   rps20: "RPS20: 暂无",
   rps50: "RPS50: 暂无",
   rps120: "RPS120: 暂无",
@@ -268,51 +274,16 @@ function formatPrice(value) {
   return Number(value).toFixed(2);
 }
 
-function getRecentSearches() {
-  try {
-    const raw = localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
-    const parsed = JSON.parse(raw || "[]");
-    return Array.isArray(parsed) ? parsed.filter((item) => item?.market && item?.symbol) : [];
-  } catch {
-    return [];
-  }
+function formatSignedPercent(value) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+  const num = Number(value);
+  const sign = num > 0 ? "+" : "";
+  return `${sign}${num.toFixed(2)}%`;
 }
 
-function setRecentSearches(items) {
-  try {
-    localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    // Ignore storage failures to avoid breaking the main search flow.
-  }
-}
-
-function saveRecentSearch(entry) {
-  if (!entry?.market || !entry?.symbol) return;
-  const normalized = {
-    market: String(entry.market).trim().toLowerCase(),
-    symbol: String(entry.symbol).trim(),
-    stock_name: String(entry.stock_name || entry.name || entry.symbol).trim(),
-  };
-  const nextItems = [
-    normalized,
-    ...getRecentSearches().filter((item) => !(item.market === normalized.market && item.symbol === normalized.symbol)),
-  ].slice(0, RECENT_SEARCHES_LIMIT);
-  setRecentSearches(nextItems);
-  renderRecentSearches();
-}
-
-function renderRecentSearches() {
-  const container = document.getElementById("recent-searches");
-  const items = getRecentSearches();
-  if (!items.length) {
-    container.innerHTML = '<span class="stock-score-workbench-empty">暂无最近查询</span>';
-    return;
-  }
-  container.innerHTML = items.map((item) => (
-    `<button type="button" class="recent-search-chip" data-market="${item.market}" data-symbol="${item.symbol}" data-name="${item.stock_name}">
-      ${item.stock_name} · ${item.symbol}
-    </button>`
-  )).join("");
+function formatBasicNumber(value, suffix = "", digits = 2) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+  return `${Number(value).toFixed(digits)}${suffix}`;
 }
 
 function setProfileField(elementId, text, placeholder) {
@@ -352,6 +323,50 @@ function resolveIndustryLevels(profile) {
   };
 }
 
+function renderBasicInfoSummary(profile) {
+  const basicInfo = profile?.basic_info || {};
+  setProfileField(
+    "hdr-basic-price",
+    basicInfo.current_price != null ? `${formatPrice(basicInfo.current_price)}元` : "",
+    PROFILE_PLACEHOLDERS.basicPrice,
+  );
+  setProfileField(
+    "hdr-basic-change",
+    basicInfo.change_pct != null ? formatSignedPercent(basicInfo.change_pct) : "",
+    PROFILE_PLACEHOLDERS.basicChange,
+  );
+  setProfileField(
+    "hdr-basic-volume-ratio",
+    basicInfo.volume_ratio != null ? formatBasicNumber(basicInfo.volume_ratio, "", 2) : "",
+    PROFILE_PLACEHOLDERS.basicVolumeRatio,
+  );
+  setProfileField(
+    "hdr-basic-market-cap",
+    basicInfo.a_share_market_cap != null ? formatBasicNumber(basicInfo.a_share_market_cap, "亿", 2) : "",
+    PROFILE_PLACEHOLDERS.basicMarketCap,
+  );
+  setProfileField(
+    "hdr-basic-total-shares",
+    basicInfo.total_shares != null ? formatBasicNumber(basicInfo.total_shares, "亿", 2) : "",
+    PROFILE_PLACEHOLDERS.basicTotalShares,
+  );
+  setProfileField(
+    "hdr-basic-float-shares",
+    basicInfo.float_shares != null ? formatBasicNumber(basicInfo.float_shares, "亿", 2) : "",
+    PROFILE_PLACEHOLDERS.basicFloatShares,
+  );
+  setProfileField(
+    "hdr-basic-eps",
+    basicInfo.eps != null ? formatBasicNumber(basicInfo.eps, "元", 2) : "",
+    PROFILE_PLACEHOLDERS.basicEps,
+  );
+  setProfileField(
+    "hdr-basic-dynamic-pe",
+    basicInfo.dynamic_pe != null ? formatBasicNumber(basicInfo.dynamic_pe, "倍", 2) : "",
+    PROFILE_PLACEHOLDERS.basicDynamicPe,
+  );
+}
+
 function renderProfileSummary(profile) {
   const coreConcepts = Array.isArray(profile?.core_concepts)
     ? profile.core_concepts
@@ -372,6 +387,7 @@ function renderProfileSummary(profile) {
   const rps250 = formatProfileMetric(profile?.rps_250);
   const industryLevels = resolveIndustryLevels(profile);
 
+  renderBasicInfoSummary(profile);
   setProfileField("hdr-industry-l1", industryLevels.level1, PROFILE_PLACEHOLDERS.industryL1);
   setProfileField("hdr-industry-l2", industryLevels.level2, PROFILE_PLACEHOLDERS.industryL2);
   setProfileField("hdr-core-concepts", conceptText, PROFILE_PLACEHOLDERS.concepts);
@@ -415,6 +431,7 @@ function renderRankSummary(result) {
 }
 
 function resetProfileSummary() {
+  renderBasicInfoSummary(null);
   renderProfileSummary(null);
   renderRankSummary(null);
 }
@@ -1204,7 +1221,6 @@ function normalizeMarket(code) {
 // ── Search ───────────────────────────────────────────────────────────────────
 const stockInputEl = document.getElementById("stock-input");
 const stockDropdownEl = document.getElementById("stock-dropdown");
-const recentSearchesEl = document.getElementById("recent-searches");
 const financialDetailToggleEl = document.getElementById("financial-detail-toggle");
 const industryScorePeerTriggerEl = document.querySelector(".industry-score-peer-trigger");
 const industryPeerDialogEl = document.getElementById("industry-peer-dialog");
@@ -1280,19 +1296,6 @@ function applySuggestion(row) {
   doSearch(row);
 }
 
-function triggerSearchFromEntry(entry) {
-  if (!entry?.market || !entry?.symbol) return;
-  const row = {
-    market: String(entry.market).trim().toLowerCase(),
-    symbol: String(entry.symbol).trim(),
-    stock_name: String(entry.stock_name || entry.symbol).trim(),
-  };
-  searchState.selectedStock = row;
-  stockInputEl.value = `${row.stock_name} (${row.symbol})`;
-  hideSuggestions();
-  doSearch(row);
-}
-
 async function loadSuggestions(query) {
   const trimmed = query.trim();
   const requestId = ++searchState.requestId;
@@ -1345,15 +1348,6 @@ stockDropdownEl.addEventListener("click", e => {
   const option = e.target.closest(".search-option[data-index]");
   if (!option) return;
   applySuggestion(searchState.suggestions[Number(option.dataset.index)]);
-});
-recentSearchesEl.addEventListener("click", e => {
-  const button = e.target.closest(".recent-search-chip[data-market][data-symbol]");
-  if (!button) return;
-  triggerSearchFromEntry({
-    market: button.dataset.market,
-    symbol: button.dataset.symbol,
-    stock_name: button.dataset.name,
-  });
 });
 document.getElementById("sub-tbody").addEventListener("click", e => {
   const trigger = e.target.closest("[data-subdiag-action][data-subdiag-key]");
@@ -1608,11 +1602,6 @@ async function doSearch(selectedRow = null) {
       setAiReportStatus("财务明细未加载，可勾选后重新查询；也可直接生成AI解读");
     }
     updateAiReportButtons();
-    saveRecentSearch({
-      market,
-      symbol,
-      stock_name: searchState.currentStock.stock_name,
-    });
   } catch (err) {
     console.error(err);
     document.getElementById("loading-msg").textContent = "加载失败: " + err.message;
@@ -1630,5 +1619,4 @@ document.getElementById("score-header").classList.remove("visible");
 resetProfileSummary();
 resetAiFinancialReport();
 renderScoreMethodology(null);
-renderRecentSearches();
 updateAiReportButtons();

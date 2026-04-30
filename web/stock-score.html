@@ -50,32 +50,65 @@
           </div>
           <section id="loading-msg" class="status stock-score-status stock-score-search-status">输入股票代码查询财务评分</section>
         </article>
-
-        <aside class="stock-score-workbench" aria-label="快捷股票工作台">
-          <div class="stock-score-workbench-grid">
-            <div class="stock-score-workbench-section">
-              <div class="stock-score-profile-cluster-head">
-                <p class="eyebrow">RECENT</p>
-                <h3>最近查询</h3>
+        <div id="stock-score-query-totals" class="stock-score-query-totals">
+          <section id="score-workbench-totals" class="metrics stock-score-metrics">
+            <article class="metric-card stock-score-total-card">
+              <p class="metric-label">全市场总分</p>
+              <p id="hdr-total-market" class="metric-value">—</p>
+              <p class="metric-meta">综合六大维度后的全市场评分</p>
+            </article>
+            <article class="metric-card stock-score-total-card stock-score-total-card-industry">
+              <p class="metric-label">行业内总分</p>
+              <div class="stock-score-total-trigger">
+                <p id="hdr-total-industry" class="industry-score-peer-trigger metric-value">—</p>
               </div>
-              <div id="recent-searches" class="stock-score-workbench-list"></div>
+              <p class="metric-meta">申万二级行业内相对评分</p>
+            </article>
+          </section>
+        </div>
+        <article id="stock-score-basic-info-card" class="search-card stock-score-basic-info-card">
+          <div class="search-card-header">
+            <div>
+              <p class="eyebrow">BASIC INFO</p>
+              <h2>基础行情</h2>
             </div>
-            <section id="score-workbench-totals" class="metrics stock-score-metrics">
-              <article class="metric-card stock-score-total-card">
-                <p class="metric-label">全市场总分</p>
-                <p id="hdr-total-market" class="metric-value">—</p>
-                <p class="metric-meta">综合六大维度后的全市场评分</p>
-              </article>
-              <article class="metric-card stock-score-total-card stock-score-total-card-industry">
-                <p class="metric-label">行业内总分</p>
-                <div class="stock-score-total-trigger">
-                  <p id="hdr-total-industry" class="industry-score-peer-trigger metric-value">—</p>
-                </div>
-                <p class="metric-meta">申万二级行业内相对评分</p>
-              </article>
-            </section>
+            <p class="search-meta">现价、股本、收益与动态估值</p>
           </div>
-        </aside>
+          <div class="stock-score-basic-grid">
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">现价</span>
+              <strong class="profile-value muted" id="hdr-basic-price">待加载现价</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">涨幅</span>
+              <strong class="profile-value muted" id="hdr-basic-change">待加载涨幅</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">量比</span>
+              <strong class="profile-value muted" id="hdr-basic-volume-ratio">待加载量比</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">A股市值</span>
+              <strong class="profile-value muted" id="hdr-basic-market-cap">待加载A股市值</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">总股本</span>
+              <strong class="profile-value muted" id="hdr-basic-total-shares">待加载总股本</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">流通股本</span>
+              <strong class="profile-value muted" id="hdr-basic-float-shares">待加载流通股本</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">收益</span>
+              <strong class="profile-value muted" id="hdr-basic-eps">待加载收益</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">PE(动)</span>
+              <strong class="profile-value muted" id="hdr-basic-dynamic-pe">待加载动态PE</strong>
+            </div>
+          </div>
+        </article>
       </div>
 
       <section id="score-header" class="stock-score-summary">

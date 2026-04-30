@@ -734,6 +734,17 @@ class StockScoreAiReportTests(unittest.TestCase):
         handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
         handler.wfile.write.assert_not_called()
 
+    def test_serve_static_swallows_broken_pipe_from_write(self) -> None:
+        handler = mock.Mock()
+        target = dashboard.WEB_ROOT / "stock-score.js"
+        handler.wfile.write.side_effect = BrokenPipeError()
+
+        dashboard.StockDashboardHandler.serve_static(handler, "stock-score.js")
+
+        handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
+        handler.send_header.assert_any_call("Content-Type", "application/javascript; charset=utf-8")
+        handler.send_header.assert_any_call("Content-Length", str(len(target.read_bytes())))
+
     def test_load_recent_three_year_financial_reports_returns_recent_three_year_quarter_timeline(self) -> None:
         class FakeRow(dict):
             def get(self, key, default=None):

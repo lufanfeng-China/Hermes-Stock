@@ -220,6 +220,8 @@ def build_stock_profile(
     industry_rows: list[dict[str, object]],
     concept_rows: list[dict[str, object]],
     rps_rows: list[dict[str, object]] | None = None,
+    *,
+    basic_info: dict[str, object] | None = None,
 ) -> dict[str, object]:
     security_lookup = {str(row.get("symbol", "")).strip(): row for row in securities}
     security = security_lookup.get(symbol)
@@ -351,8 +353,171 @@ def build_stock_profile(
         "concepts": core_concepts,
         "core_concepts": core_concepts,
         "auxiliary_concepts": auxiliary_concepts,
+        "basic_info": dict(basic_info or {}),
         **rps_metrics,
     }
+
+
+def _load_financial_quarter_frame(period: str):
+    try:
+        import pandas as pd
+    except ModuleNotFoundError:
+        return None
+    except Exception:
+        return None
+    path = _PROJECT_ROOT / "data" / "derived" / "financial_ts" / "by_quarter" / f"{period}.parquet"
+    if not path.exists():
+        return None
+    try:
+        return pd.read_parquet(path)
+    except Exception:
+        return None
+
+
+@lru_cache(maxsize=32)
+def _load_financial_quarter_frame_cached(period: str):
+    return _load_financial_quarter_frame(period)
+
+
+def _load_financial_quarter_row(period: str, symbol: str):
+    frame = _load_financial_quarter_frame_cached(period)
+    if frame is None or getattr(frame, "empty", False):
+        return None
+    candidates = [symbol]
+    stripped = symbol.lstrip("0")
+    if stripped and stripped not in candidates:
+        candidates.append(stripped)
+    if symbol.startswith("0") and symbol[1:] and symbol[1:] not in candidates:
+        candidates.append(symbol[1:])
+    for candidate in candidates:
+        try:
+            if candidate in frame.index:
+                return frame.loc[candidate]
+        except Exception:
+            continue
+    return None
+
+
+def _snapshot_latest_period(market: str, symbol: str) -> str:
+    snap = _load_financial_snapshot()
+    if snap is None:
+        return ""
+    entry = snap.get("scores", {}).get(f"{market}:{symbol}", {})
+    return str(entry.get("latest_period") or "").strip()
+
+
+def _annualized_eps_from_period(period: str, current_eps: float | None) -> float | None:
+    if current_eps is None:
+        return None
+    text = str(period or "").strip()
+    if text.endswith("A"):
+        return current_eps
+    if text.endswith("Q1"):
+        return current_eps * 4.0
+    if text.endswith("Q2"):
+        return current_eps * 2.0
+    if text.endswith("Q3"):
+        return current_eps * 4.0 / 3.0
+    return None
+
+
+def _ttm_eps(period: str, symbol: str, current_eps: float | None) -> float | None:
+    text = str(period or "").strip()
+    if not text:
+        return None
+    if text.endswith("A"):
+        return current_eps
+    if not (len(text) >= 6 and text[:4].isdigit() and text[4] == "Q" and text[5] in {"1", "2", "3"}):
+        return _annualized_eps_from_period(text, current_eps)
+    year = int(text[:4])
+    prev_annual_row = _load_financial_quarter_row(f"{year - 1}A", symbol)
+    prev_same_row = _load_financial_quarter_row(f"{year - 1}{text[4:]}", symbol)
+    prev_annual_eps = _pick(prev_annual_row.get("基本每股收益")) if prev_annual_row is not None else None
+    prev_same_eps = None
+    if prev_same_row is not None:
+        prev_same_eps = _pick(prev_same_row.get("基本每股收益（单季度）"))
+        if prev_same_eps is None:
+            prev_same_eps = _pick(prev_same_row.get("基本每股收益"))
+    if current_eps is not None and prev_annual_eps is not None and prev_same_eps is not None:
+        return current_eps + prev_annual_eps - prev_same_eps
+    return _annualized_eps_from_period(text, current_eps)
+
+
+def _load_stock_basic_info(market: str, symbol: str) -> dict[str, object]:
+    basic_info = {
+        "current_price": None,
+        "change_pct": None,
+        "volume_ratio": None,
+        "a_share_market_cap": None,
+        "total_shares": None,
+        "float_shares": None,
+        "eps": None,
+        "dynamic_pe": None,
+    }
+
+    try:
+        from mootdx.reader import Reader
+    except ModuleNotFoundError:
+        Reader = None
+    except Exception:
+        Reader = None
+
+    if Reader is not None and market in {"sh", "sz", "bj"} and symbol:
+        try:
+            reader = Reader.factory(market="std", tdxdir=_TDX_DIR)
+            daily = reader.daily(symbol=symbol)
+            if daily is not None and not daily.empty:
+                latest_row = daily.iloc[-1]
+                latest_close = _pick(latest_row.get("close"))
+                latest_volume = _pick(latest_row.get("volume"))
+                basic_info["current_price"] = latest_close
+                if len(daily) >= 2:
+                    previous_close = _pick(daily.iloc[-2].get("close"))
+                    if latest_close is not None and previous_close not in (None, 0):
+                        basic_info["change_pct"] = (latest_close - previous_close) / previous_close * 100.0
+                if latest_volume is not None and len(daily) >= 2:
+                    lookback = daily.iloc[max(0, len(daily) - 6):-1]
+                    previous_volumes = [_pick(row.get("volume")) for _idx, row in lookback.iterrows()]
+                    previous_volumes = [value for value in previous_volumes if value not in (None, 0)]
+                    if previous_volumes:
+                        avg_volume = sum(previous_volumes) / len(previous_volumes)
+                        if avg_volume:
+                            basic_info["volume_ratio"] = latest_volume / avg_volume
+        except Exception:
+            pass
+
+    latest_period = _snapshot_latest_period(market, symbol)
+    financial_row = _load_financial_quarter_row(latest_period, symbol) if latest_period else None
+    if financial_row is None:
+        return basic_info
+
+    current_eps = _pick(financial_row.get("基本每股收益（单季度）"))
+    if current_eps is None:
+        current_eps = _pick(financial_row.get("基本每股收益"))
+    if current_eps is None:
+        current_eps = _pick(financial_row.get("稀释每股收益(元)"))
+    total_shares_raw = _pick(financial_row.get("总股本"))
+    if total_shares_raw is None:
+        total_shares_raw = _pick(financial_row.get("实收资本（或股本）"))
+    float_shares_raw = _pick(financial_row.get("已上市流通A股"))
+    if float_shares_raw is None:
+        float_shares_raw = _pick(financial_row.get("自由流通股(股)"))
+    h_shares = _pick(financial_row.get("已上市流通H股")) or 0.0
+    b_shares = _pick(financial_row.get("已上市流通B股")) or 0.0
+    a_share_total_shares_raw = None
+    if total_shares_raw is not None:
+        a_share_total_shares_raw = max(total_shares_raw - h_shares - b_shares, 0.0)
+
+    basic_info["eps"] = current_eps
+    basic_info["total_shares"] = total_shares_raw / 1e8 if total_shares_raw is not None else None
+    basic_info["float_shares"] = float_shares_raw / 1e8 if float_shares_raw is not None else None
+    if basic_info["current_price"] is not None and a_share_total_shares_raw is not None:
+        basic_info["a_share_market_cap"] = basic_info["current_price"] * a_share_total_shares_raw / 1e8
+
+    ttm_eps = _ttm_eps(latest_period, symbol, current_eps)
+    if basic_info["current_price"] is not None and ttm_eps is not None and ttm_eps > 0:
+        basic_info["dynamic_pe"] = basic_info["current_price"] / ttm_eps
+    return basic_info
 
 
 def search_concepts(
@@ -559,12 +724,22 @@ def concept_search_response(query: str, *, limit: int = 20) -> dict[str, object]
 
 
 def stock_profile_response(symbol: str) -> dict[str, object]:
+    symbol_text = symbol.strip()
+    securities = load_security_rows()
+    security_lookup = {str(row.get("symbol", "")).strip(): row for row in securities}
+    security = security_lookup.get(symbol_text)
+    basic_info = None
+    if security is not None:
+        market = str(security.get("market", "")).strip()
+        if market:
+            basic_info = _load_stock_basic_info(market, symbol_text)
     profile = build_stock_profile(
-        symbol.strip(),
-        load_security_rows(),
+        symbol_text,
+        securities,
         load_industry_rows(),
         load_concept_rows(),
         load_rps_rows(),
+        basic_info=basic_info,
     )
     return {
         "ok": True,

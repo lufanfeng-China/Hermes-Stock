@@ -294,6 +294,27 @@ class SearchIndexTests(unittest.TestCase):
         self.assertEqual(2, profile["industry_rank_50"])
         self.assertEqual(2, profile["industry_universe_size"])
 
+    def test_build_stock_profile_includes_basic_info_payload(self) -> None:
+        from app.search.index import build_stock_profile
+
+        securities = [{"market": "sz", "symbol": "000333", "stock_name": "美的集团", "name_initials": "mdjt"}]
+        industry_rows = [{"market": "sz", "symbol": "000333", "industry_level_1_name": "家电", "industry_level_2_name": "白色家电", "industry_level_3_name": "空调"}]
+        concept_rows = []
+        basic_info = {
+            "current_price": 81.10,
+            "change_pct": -0.26,
+            "volume_ratio": 1.23,
+            "a_share_market_cap": 5642.17,
+            "total_shares": 76.03,
+            "float_shares": 68.52,
+            "eps": 1.69,
+            "dynamic_pe": 14.8,
+        }
+
+        profile = build_stock_profile("000333", securities, industry_rows, concept_rows, basic_info=basic_info)
+
+        self.assertEqual(basic_info, profile["basic_info"])
+
     def test_search_rps_ranking_supports_window_and_name_filters(self) -> None:
         from app.search.index import build_rps_index, search_rps_rankings
 
