@@ -229,6 +229,99 @@ class SearchIndexTests(unittest.TestCase):
         self.assertEqual(["KDJ超卖"], [row["concept_name"] for row in profile["auxiliary_concepts"]["technical"]])
         self.assertEqual(["不可减持(新规)"], [row["concept_name"] for row in profile["auxiliary_concepts"]["shareholder"]])
 
+    def test_build_stock_profile_includes_rps_metrics(self) -> None:
+        from app.search.index import build_stock_profile
+
+        securities = [
+            {"market": "sh", "symbol": "601600", "stock_name": "中国铝业", "name_initials": "zgly"},
+            {"market": "sh", "symbol": "601168", "stock_name": "西部矿业", "name_initials": "xbky"},
+            {"market": "sh", "symbol": "600111", "stock_name": "北方稀土", "name_initials": "bfxt"},
+        ]
+        industry_rows = [
+            {"market": "sh", "symbol": "601600", "industry_level_1_name": "有色", "industry_level_2_name": "工业金属", "industry_level_3_name": "铝"},
+            {"market": "sh", "symbol": "601168", "industry_level_1_name": "有色", "industry_level_2_name": "工业金属", "industry_level_3_name": "铜"},
+            {"market": "sh", "symbol": "600111", "industry_level_1_name": "有色", "industry_level_2_name": "稀土", "industry_level_3_name": "稀土永磁"},
+        ]
+        concept_rows = []
+        rps_rows = [
+            {
+                "trading_day": "2026-04-24",
+                "market": "sh",
+                "symbol": "601600",
+                "rps_20": 60.76,
+                "rps_50": 48.97,
+                "return_20_pct": 4.7203,
+                "return_50_pct": -5.2215,
+                "rank_20": 2037,
+                "rank_50": 2649,
+                "universe_size": 5189,
+            },
+            {
+                "trading_day": "2026-04-24",
+                "market": "sh",
+                "symbol": "601168",
+                "rps_20": 82.35,
+                "rps_50": 52.12,
+                "return_20_pct": 12.1203,
+                "return_50_pct": 3.2215,
+                "rank_20": 812,
+                "rank_50": 2210,
+                "universe_size": 5189,
+            },
+            {
+                "trading_day": "2026-04-24",
+                "market": "sh",
+                "symbol": "600111",
+                "rps_20": 77.35,
+                "rps_50": 58.12,
+                "return_20_pct": 9.1203,
+                "return_50_pct": 5.2215,
+                "rank_20": 1200,
+                "rank_50": 1800,
+                "universe_size": 5189,
+            }
+        ]
+
+        profile = build_stock_profile("601600", securities, industry_rows, concept_rows, rps_rows)
+
+        self.assertEqual(60.76, profile["rps_20"])
+        self.assertEqual(48.97, profile["rps_50"])
+        self.assertIsNone(profile["rps_120"])
+        self.assertIsNone(profile["rps_250"])
+        self.assertEqual(2037, profile["rank_20"])
+        self.assertEqual(5189, profile["universe_size"])
+        self.assertEqual(2, profile["industry_rank_20"])
+        self.assertEqual(2, profile["industry_rank_50"])
+        self.assertEqual(2, profile["industry_universe_size"])
+
+    def test_search_rps_ranking_supports_window_and_name_filters(self) -> None:
+        from app.search.index import build_rps_index, search_rps_rankings
+
+        securities = [
+            {"market": "sh", "symbol": "601600", "stock_name": "中国铝业", "name_initials": "zgly"},
+            {"market": "sz", "symbol": "000333", "stock_name": "美的集团", "name_initials": "mdjt"},
+            {"market": "sz", "symbol": "000001", "stock_name": "平安银行", "name_initials": "payh"},
+        ]
+        industry_rows = [
+            {"market": "sh", "symbol": "601600", "industry_level_1_name": "有色", "industry_level_2_name": "工业金属", "industry_level_3_name": "铝"},
+            {"market": "sz", "symbol": "000333", "industry_level_1_name": "家电", "industry_level_2_name": "白色家电", "industry_level_3_name": "空调"},
+            {"market": "sz", "symbol": "000001", "industry_level_1_name": "银行", "industry_level_2_name": "股份制银行", "industry_level_3_name": "全国性银行"},
+        ]
+        rps_rows = [
+            {"trading_day": "2026-04-24", "market": "sh", "symbol": "601600", "rps_20": 60.76, "rps_50": 48.97, "return_20_pct": 4.7203, "return_50_pct": -5.2215, "rank_20": 2037, "rank_50": 2649, "universe_size": 5189},
+            {"trading_day": "2026-04-24", "market": "sz", "symbol": "000333", "rps_20": 88.12, "rps_50": 91.55, "return_20_pct": 12.15, "return_50_pct": 18.73, "rank_20": 615, "rank_50": 438, "universe_size": 5189},
+            {"trading_day": "2026-04-24", "market": "sz", "symbol": "000001", "rps_20": 22.45, "rps_50": 40.10, "return_20_pct": -3.11, "return_50_pct": -7.86, "rank_20": 4025, "rank_50": 3108, "universe_size": 5189},
+        ]
+
+        index = build_rps_index(rps_rows, securities, industry_rows)
+        top_rankings = search_rps_rankings(index, window=20, limit=2)
+        filtered = search_rps_rankings(index, query="zgly", window=20, limit=5)
+
+        self.assertEqual(["000333", "601600"], [row["symbol"] for row in top_rankings])
+        self.assertEqual(["601600"], [row["symbol"] for row in filtered])
+        self.assertEqual(60.76, filtered[0]["rps"])
+        self.assertEqual("rps_20", filtered[0]["metric_key"])
+
 
 if __name__ == "__main__":
     unittest.main()

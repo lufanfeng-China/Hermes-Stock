@@ -1,96 +1,93 @@
-(function initViewportModule(globalScope) {
-  function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
-  }
+/**
+ * Pure viewport math for interactive SVG charts.
+ * No DOM, no dependencies — testable with `node --test`.
+ */
 
-  function resolveViewport(totalCount, visibleWindow, windowStart) {
-    if (!totalCount) {
-      return { start: 0, end: 0, size: 0, isAll: true, maxStart: 0 };
-    }
+export function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
 
-    if (visibleWindow === "all" || totalCount <= visibleWindow) {
-      return { start: 0, end: totalCount, size: totalCount, isAll: true, maxStart: 0 };
-    }
-
-    const size = clamp(Math.round(visibleWindow), 1, totalCount);
-    const maxStart = Math.max(0, totalCount - size);
-    const start = clamp(Math.round(windowStart || 0), 0, maxStart);
-    return { start, end: start + size, size, isAll: false, maxStart };
-  }
-
-  function zoomViewport({ totalCount, viewport, nextSize, anchorRatio = 0.5 }) {
-    const clampedSize = clamp(Math.round(nextSize), 1, totalCount || 1);
-    if (clampedSize >= totalCount) {
-      return { start: 0, size: totalCount };
-    }
-
-    const boundedAnchor = clamp(anchorRatio, 0, 1);
-    const anchorIndex = viewport.start + viewport.size * boundedAnchor;
-    const rawStart = anchorIndex - clampedSize * boundedAnchor;
-    const maxStart = Math.max(0, totalCount - clampedSize);
-    return {
-      start: clamp(Math.round(rawStart), 0, maxStart),
-      size: clampedSize,
-    };
-  }
-
-  function panViewport({ totalCount, viewport, deltaPoints }) {
-    const size = clamp(Math.round(viewport.size), 1, totalCount || 1);
-    const maxStart = Math.max(0, totalCount - size);
-    return {
-      start: clamp(Math.round(viewport.start + deltaPoints), 0, maxStart),
-      size,
-    };
-  }
-
-  function deriveWindowSelection(viewport, presets) {
-    if (viewport.isAll) {
-      return "all";
-    }
-
-    const match = presets.find((preset) => preset === viewport.size);
-    return match ?? null;
-  }
-
-  function scaleVolumeMillions(value) {
-    return Number(value) / 1000000;
-  }
-
-  function computeMovingAverageSeries(values, windowSize) {
-    const size = Math.max(1, Math.round(windowSize || 1));
-    const averages = [];
-    let rollingSum = 0;
-
-    values.forEach((value, index) => {
-      rollingSum += value;
-      if (index >= size) {
-        rollingSum -= values[index - size];
-      }
-
-      if (index < size - 1) {
-        averages.push(null);
-        return;
-      }
-
-      averages.push(rollingSum / size);
-    });
-
-    return averages;
-  }
-
-  const api = {
-    clamp,
-    resolveViewport,
-    zoomViewport,
-    panViewport,
-    deriveWindowSelection,
-    scaleVolumeMillions,
-    computeMovingAverageSeries,
+/**
+ * Resolve the visible window given total data points and desired visible count.
+ * @param {object} opts
+ * @param {number} opts.totalCount   - total rows in dataset
+ * @param {number} opts.visibleWindow - number of rows to show
+ * @param {number} opts.windowStart   - index of first visible row
+ * @returns {{windowStart: number, windowEnd: number, visibleWindow: number}}
+ */
+export function resolveViewport({ totalCount, visibleWindow, windowStart }) {
+  const ws = clamp(windowStart, 0, Math.max(0, totalCount - visibleWindow));
+  return {
+    windowStart: ws,
+    windowEnd: Math.min(ws + visibleWindow, totalCount),
+    visibleWindow: Math.min(visibleWindow, totalCount),
   };
+}
 
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports = api;
+/**
+ * Zoom the viewport.
+ * @param {object} opts
+ * @param {number} opts.totalCount
+ * @param {{windowStart:number, windowEnd:number, visibleWindow:number}} opts.viewport
+ * @param {number} opts.nextSize  - desired new visibleWindow
+ * @param {number} opts.anchorRatio - 0..1, where in the visible window the cursor sits
+ */
+export function zoomViewport({ totalCount, viewport, nextSize, anchorRatio = 0.5 }) {
+  const clampedSize = clamp(nextSize, 10, totalCount);
+  const anchorIndex = viewport.windowStart + Math.round(viewport.visibleWindow * anchorRatio);
+  const rawStart = anchorIndex - Math.round(clampedSize * anchorRatio);
+  return resolveViewport({ totalCount, visibleWindow: clampedSize, windowStart: rawStart });
+}
+
+/**
+ * Pan the viewport by deltaPoints.
+ * @param {object} opts
+ * @param {number} opts.totalCount
+ * @param {{windowStart:number, windowEnd:number, visibleWindow:number}} opts.viewport
+ * @param {number} opts.deltaPoints - positive = pan right (show earlier data), negative = pan left
+ */
+export function panViewport({ totalCount, viewport, deltaPoints }) {
+  return resolveViewport({
+    totalCount,
+    visibleWindow: viewport.visibleWindow,
+    windowStart: viewport.windowStart + deltaPoints,
+  });
+}
+
+/**
+ * Derive window selection state from a preset click.
+ * @param {number} totalCount
+ * @param {number} preset - preset window size (e.g. 20, 60, 120) or -1 for ALL
+ * @returns {{windowStart: number, windowEnd: number, visibleWindow: number}}
+ */
+export function deriveWindowSelection(totalCount, preset) {
+  if (preset === -1 || preset >= totalCount) {
+    return { windowStart: 0, windowEnd: totalCount, visibleWindow: totalCount };
   }
+  return resolveViewport({ totalCount, visibleWindow: preset, windowStart: Math.max(0, totalCount - preset) });
+}
 
-  globalScope.StockViewport = api;
-})(typeof window !== "undefined" ? window : globalThis);
+/**
+ * Compute a trailing moving-average series.
+ * @param {number[]} values - raw values
+ * @param {number} windowSize
+ * @returns {(number|null)[]}
+ */
+export function computeMovingAverageSeries(values, windowSize) {
+  return values.map((_, i) => {
+    if (i < windowSize - 1) return null;
+    const slice = values.slice(i - windowSize + 1, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / windowSize;
+  });
+}
+
+/**
+ * Convert raw volume to display millions.
+ * @param {number} volume
+ * @returns {string}
+ */
+export function scaleVolumeMillions(volume) {
+  if (volume >= 1_000_000) return `${(volume / 1_000_000).toFixed(1)}M`;
+  if (volume >= 1_000) return `${(volume / 1_000).toFixed(0)}K`;
+  return `${volume}`;
+}

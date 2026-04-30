@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>财务评分</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="app-shell stock-score-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">LOCAL SCORE TERMINAL</p>
+        <h1>Six-Dimension Financial Score</h1>
+      </div>
+      <div class="topbar-actions stock-score-topbar-actions">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/rps-pool.html" class="nav-link">RPS</a>
+        <a href="/stock-score.html" class="nav-link active">财务评分</a>
+      </div>
+    </header>
+
+    <section class="search-grid stock-score-lead-grid">
+      <div class="stock-score-search-stack">
+        <article class="search-card stock-score-search-card">
+          <div class="search-card-header">
+            <div>
+              <p class="eyebrow">SCORE LOOKUP</p>
+              <h2>代码 / 名称 / 市场前缀</h2>
+            </div>
+            <p class="search-meta">财报评分与画像摘要联动</p>
+          </div>
+          <form class="search-form stock-score-search-form" onsubmit="return false;">
+            <div class="search-input-wrap">
+              <input type="text" id="stock-input" placeholder="600519 / sh:600519 / 贵州茅台" autocomplete="off">
+              <div class="search-dropdown" id="stock-dropdown"></div>
+            </div>
+            <div class="stock-score-search-actions">
+              <button id="search-btn" type="button">查询评分</button>
+              <label class="stock-score-detail-toggle" for="financial-detail-toggle">
+                <input id="financial-detail-toggle" type="checkbox">
+                <span>财务明细</span>
+              </label>
+            </div>
+          </form>
+          <div class="stock-score-search-hints" aria-label="查询提示">
+            <span class="stock-score-search-hint">支持代码</span>
+            <span class="stock-score-search-hint">支持 market:symbol</span>
+            <span class="stock-score-search-hint">附带行业内对照</span>
+          </div>
+          <section id="loading-msg" class="status stock-score-status stock-score-search-status">输入股票代码查询财务评分</section>
+        </article>
+
+        <aside class="stock-score-workbench" aria-label="快捷股票工作台">
+          <div class="stock-score-workbench-grid">
+            <div class="stock-score-workbench-section">
+              <div class="stock-score-profile-cluster-head">
+                <p class="eyebrow">RECENT</p>
+                <h3>最近查询</h3>
+              </div>
+              <div id="recent-searches" class="stock-score-workbench-list"></div>
+            </div>
+            <section id="score-workbench-totals" class="metrics stock-score-metrics">
+              <article class="metric-card stock-score-total-card">
+                <p class="metric-label">全市场总分</p>
+                <p id="hdr-total-market" class="metric-value">—<span class="max">/100</span></p>
+                <p class="metric-meta">综合六大维度后的全市场评分</p>
+              </article>
+              <article class="metric-card stock-score-total-card stock-score-total-card-industry">
+                <p class="metric-label">行业内总分</p>
+                <p id="hdr-total-industry" class="metric-value">—<span class="max">/100</span></p>
+                <p class="metric-meta">申万二级行业内相对评分</p>
+              </article>
+            </section>
+          </div>
+        </aside>
+      </div>
+
+      <section id="score-header" class="stock-score-summary">
+        <article class="profile-card stock-score-profile-card">
+          <div class="stock-score-profile-card-inner">
+            <div class="profile-header stock-score-profile-header">
+              <div>
+                <p class="eyebrow">SCORE SNAPSHOT</p>
+                <h2><span id="hdr-name">—</span> <span id="hdr-symbol" class="stock-score-symbol">—</span></h2>
+              </div>
+              <div class="stock-score-dates">
+                <span class="profile-meta" id="hdr-report-date"></span>
+                <span class="profile-meta" id="hdr-announce-date"></span>
+              </div>
+            </div>
+
+            <div id="score-profile-strip" class="profile-grid stock-score-profile-grid">
+              <section class="stock-score-profile-cluster">
+                <div class="stock-score-profile-cluster-head">
+                  <p class="eyebrow">PROFILE</p>
+                  <h3>基础画像</h3>
+                </div>
+                <div class="stock-score-profile-cluster-body">
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">申万一级</span>
+                    <strong class="profile-value muted" id="hdr-industry-l1">待加载申万一级</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">申万二级</span>
+                    <strong class="profile-value muted" id="hdr-industry-l2">待加载申万二级</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">核心概念</span>
+                    <strong class="profile-value muted" id="hdr-core-concepts">待加载概念标签</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section class="stock-score-profile-cluster">
+                <div class="stock-score-profile-cluster-head">
+                  <p class="eyebrow">MOMENTUM</p>
+                  <h3>RPS 与排名</h3>
+                </div>
+                <div class="stock-score-profile-cluster-body">
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">RPS</span>
+                    <div id="hdr-rps-summary" class="profile-value muted stock-score-rps-summary">
+                      <div id="hdr-rps20" class="stock-score-rps-row">待加载RPS20</div>
+                      <div id="hdr-rps50" class="stock-score-rps-row">待加载RPS50</div>
+                      <div id="hdr-rps120" class="stock-score-rps-row">待加载RPS120</div>
+                      <div id="hdr-rps250" class="stock-score-rps-row">待加载RPS250</div>
+                    </div>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">排名</span>
+                    <div id="hdr-rank-summary" class="profile-value muted stock-score-rank-summary">
+                      <div id="hdr-rank-market" class="stock-score-rps-row">待加载全市场排名</div>
+                      <div id="hdr-rank-industry" class="stock-score-rps-row">待加载二级行业排名</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div id="score-methodology-note" class="stock-score-methodology-note muted">评分口径说明将在查询后显示</div>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="chart-grid stock-score-analysis-grid">
+      <article class="search-card stock-score-radar-card">
+        <div class="search-card-header">
+          <div>
+            <p class="eyebrow">SCORE MAP</p>
+            <h2>维度雷达对照</h2>
+          </div>
+          <p class="search-meta">全市场 vs 行业内</p>
+        </div>
+        <div class="radar-section">
+          <div class="radar-panel">
+            <div class="radar-panel-title">全市场排名</div>
+            <svg id="radar-market" viewBox="0 0 300 300"></svg>
+          </div>
+          <div class="radar-panel">
+            <div class="radar-panel-title">申万二级行业排名</div>
+            <svg id="radar-industry" viewBox="0 0 300 300"></svg>
+          </div>
+        </div>
+      </article>
+
+      <article class="search-card stock-score-dim-card-section">
+        <div class="search-card-header">
+          <div>
+            <p class="eyebrow">DIMENSIONS</p>
+            <h2>六维拆分</h2>
+          </div>
+          <p class="search-meta">全市场与二级行业双口径对照</p>
+        </div>
+        <div class="stock-score-dim-panels">
+          <section class="stock-score-dim-panel">
+            <div class="stock-score-dim-panel-head">
+              <p class="eyebrow">MARKET VIEW</p>
+              <h3>全市场六维</h3>
+            </div>
+            <div class="dim-cards" id="dim-cards-market"></div>
+          </section>
+          <section class="stock-score-dim-panel">
+            <div class="stock-score-dim-panel-head">
+              <p class="eyebrow">INDUSTRY VIEW</p>
+              <h3>申万二级行业六维</h3>
+            </div>
+            <div class="dim-cards" id="dim-cards-industry"></div>
+          </section>
+        </div>
+      </article>
+
+      <article class="profile-card stock-score-table-card" id="sub-table-section">
+        <div class="search-card-header">
+          <div>
+            <p class="eyebrow">SUB-INDICATORS</p>
+            <h2>细分指标</h2>
+          </div>
+          <p class="search-meta">原始值、同比、双口径评分</p>
+        </div>
+        <div class="stock-score-table-wrap">
+          <table class="sub-table" id="sub-table">
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th>指标</th>
+                <th class="sub-period-current">当期</th>
+                <th class="sub-period-previous">上期</th>
+                <th class="sub-period-yoy">同比%</th>
+                <th>全市场分</th>
+                <th>行业内分</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody id="sub-tbody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="profile-card stock-score-table-card ai-financial-report-card" id="ai-financial-report">
+        <div class="search-card-header">
+          <div>
+            <p class="eyebrow">AI REPORT</p>
+            <h2>AI财报解读</h2>
+          </div>
+          <p class="search-meta">基于最近3年财报生成结构化结论</p>
+        </div>
+        <div class="ai-report-action-row">
+          <button id="ai-report-btn" type="button">生成AI财报解读</button>
+          <button id="ai-report-copy-btn" class="ai-report-copy-btn" type="button">复制摘要</button>
+          <div id="ai-report-status" class="profile-meta muted">查询股票后可生成分析</div>
+        </div>
+        <div class="ai-report-grid">
+          <section class="profile-field stock-score-profile-field">
+            <span class="profile-label">总体评价</span>
+            <div id="ai-report-overall" class="profile-value muted"></div>
+          </section>
+          <section class="profile-field stock-score-profile-field">
+            <span class="profile-label">财报亮点</span>
+            <div id="ai-report-highlights" class="profile-value muted stock-score-analysis-list"></div>
+          </section>
+          <section class="profile-field stock-score-profile-field">
+            <span class="profile-label">风险警示</span>
+            <div id="ai-report-risks" class="profile-value muted stock-score-analysis-list"></div>
+          </section>
+          <section class="profile-field stock-score-profile-field">
+            <span class="profile-label">加分项</span>
+            <div id="ai-report-positive" class="profile-value muted stock-score-analysis-list"></div>
+          </section>
+          <section class="profile-field stock-score-profile-field">
+            <span class="profile-label">减分项</span>
+            <div id="ai-report-negative" class="profile-value muted stock-score-analysis-list"></div>
+          </section>
+        </div>
+        <details id="ai-report-raw-data" class="ai-report-raw-data">
+          <summary id="ai-report-raw-toggle">展开最近3年报告期原始财报数据</summary>
+          <div class="stock-score-table-wrap ai-report-raw-wrap">
+            <table id="ai-report-raw-table" class="sub-table ai-report-raw-table">
+              <thead>
+                <tr>
+                  <th aria-label="报告期">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">报告期</span>
+                      <span class="ai-report-raw-head-sub">&nbsp;</span>
+                    </div>
+                  </th>
+                  <th aria-label="营收(亿)">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">营收</span>
+                      <span class="ai-report-raw-head-sub">亿</span>
+                    </div>
+                  </th>
+                  <th aria-label="营收同比">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">营收</span>
+                      <span class="ai-report-raw-head-sub">同比</span>
+                    </div>
+                  </th>
+                  <th aria-label="净利润(亿)">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">净利润</span>
+                      <span class="ai-report-raw-head-sub">亿</span>
+                    </div>
+                  </th>
+                  <th aria-label="净利润同比">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">净利润</span>
+                      <span class="ai-report-raw-head-sub">同比</span>
+                    </div>
+                  </th>
+                  <th aria-label="扣非净利润(亿)">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">扣非净利润</span>
+                      <span class="ai-report-raw-head-sub">亿</span>
+                    </div>
+                  </th>
+                  <th aria-label="扣非同比">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">扣非</span>
+                      <span class="ai-report-raw-head-sub">同比</span>
+                    </div>
+                  </th>
+                  <th aria-label="扣非ROE">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">扣非ROE</span>
+                      <span class="ai-report-raw-head-sub">&nbsp;</span>
+                    </div>
+                  </th>
+                  <th aria-label="流动比率">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">流动</span>
+                      <span class="ai-report-raw-head-sub">比率</span>
+                    </div>
+                  </th>
+                  <th aria-label="速动比率">
+                    <div class="ai-report-raw-group-head">
+                      <span class="ai-report-raw-head-main">速动</span>
+                      <span class="ai-report-raw-head-sub">比率</span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </details>
+      </article>
+    </section>
+  </main>
+
+  <script type="module" src="/stock-score.js"></script>
+</body>
+</html>

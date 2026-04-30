@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Industry Heatmap</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell heatmap-app-shell">
+      <header class="topbar heatmap-topbar">
+        <div>
+          <p class="eyebrow">LOCAL QUOTE TERMINAL</p>
+          <h1>申万二级行业 Heatmap</h1>
+        </div>
+        <a class="nav-link" href="/">Back To Dashboard</a>
+      </header>
+
+      <section class="profile-card heatmap-panel">
+        <div class="heatmap-panel-header">
+          <div>
+            <p class="eyebrow">EQUAL-WEIGHT DAILY CHANGE</p>
+            <h2 id="heatmap-meta">Awaiting data</h2>
+          </div>
+          <div class="heatmap-actions">
+            <p id="heatmap-summary" class="profile-meta">Each cell shows the equal-weight average constituent return for each year-to-date trading day, newest to oldest.</p>
+            <div class="heatmap-toolbar">
+              <p id="heatmap-cache-status" class="profile-meta">Cache awaiting data.</p>
+              <button id="heatmap-refresh" type="button" class="heatmap-refresh-button">Refresh Cache</button>
+            </div>
+          </div>
+        </div>
+        <div class="legend-row">
+          <span class="legend-label">-5%</span>
+          <div id="heatmap-legend-scale" class="legend-scale" aria-hidden="true"></div>
+          <span class="legend-label">0</span>
+          <span class="legend-label">+5%</span>
+        </div>
+        <p id="heatmap-status" class="status heatmap-status">Preparing year-to-date preview…</p>
+        <div class="heatmap-table-wrap">
+          <table class="heatmap-table">
+            <thead>
+              <tr id="heatmap-header-row">
+                <th class="heatmap-corner">Industry</th>
+              </tr>
+            </thead>
+            <tbody id="heatmap-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/industry-heatmap-utils.js"></script>
+    <script src="/industry-heatmap.js"></script>
+  </body>
+</html>

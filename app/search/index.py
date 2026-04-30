@@ -30,6 +30,27 @@ def _decode_field(raw: bytes, encoding: str) -> str:
     return value.strip()
 
 
+def is_a_share_eligible(symbol: str, stock_name: str) -> bool:
+    """
+    Return True if the stock is an eligible A-share (沪深北交所，排除ST/*ST/S，排除指数).
+    Eligible: 6xxxxx (沪主板+科创板), 00xxxxx (深主板), 30xxxx (创业板), 92xxxx (北交所)
+    Excluded: names containing ST/*ST/S/S (special treatment flags)
+    """
+    if not symbol or len(symbol) != 6:
+        return False
+    # A-share prefix rules
+    if not (symbol.startswith(("6", "00", "30", "92"))):
+        return False
+    # Exclude indices: 999xxx (上证指数), 399xxx (深证指数), 8xxxxx (沪ETF), etc.
+    if symbol.startswith(("999", "399", "8", "4")):
+        return False
+    # Exclude ST/*ST/S stocks
+    name = stock_name or ""
+    if "ST" in name or "*ST" in name or name.startswith("S ") or (name == "S"):
+        return False
+    return True
+
+
 def parse_tnf_file(path: str | Path, *, market: str) -> list[dict[str, str]]:
     """Extract stock code, Chinese name, and initials from a Tongdaxin TNF file."""
 
@@ -198,6 +219,7 @@ def build_stock_profile(
     securities: list[dict[str, str]],
     industry_rows: list[dict[str, object]],
     concept_rows: list[dict[str, object]],
+    rps_rows: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     security_lookup = {str(row.get("symbol", "")).strip(): row for row in securities}
     security = security_lookup.get(symbol)
@@ -239,6 +261,85 @@ def build_stock_profile(
     core_concepts.sort(key=lambda row: str(row["concept_name"]))
     for bucket in auxiliary_concepts:
         auxiliary_concepts[bucket].sort(key=lambda row: str(row["concept_name"]))
+    rps_metrics = {
+        "rps_20": None,
+        "rps_50": None,
+        "rps_120": None,
+        "rps_250": None,
+        "rank_20": None,
+        "rank_50": None,
+        "rank_120": None,
+        "rank_250": None,
+        "universe_size": None,
+        "return_20_pct": None,
+        "return_50_pct": None,
+        "return_120_pct": None,
+        "return_250_pct": None,
+        "industry_rank_20": None,
+        "industry_rank_50": None,
+        "industry_universe_size": None,
+    }
+    if rps_rows:
+        industry_level_2_name = ""
+        for row in industry_rows:
+            if _security_key(row) != key:
+                continue
+            industry_level_2_name = str(row.get("industry_level_2_name", "")).strip()
+            break
+
+        for row in rps_rows:
+            if _security_key(row) != key:
+                continue
+            rps_metrics = {
+                "rps_20": row.get("rps_20"),
+                "rps_50": row.get("rps_50"),
+                "rps_120": row.get("rps_120"),
+                "rps_250": row.get("rps_250"),
+                "rank_20": row.get("rank_20"),
+                "rank_50": row.get("rank_50"),
+                "rank_120": row.get("rank_120"),
+                "rank_250": row.get("rank_250"),
+                "universe_size": row.get("universe_size"),
+                "return_20_pct": row.get("return_20_pct"),
+                "return_50_pct": row.get("return_50_pct"),
+                "return_120_pct": row.get("return_120_pct"),
+                "return_250_pct": row.get("return_250_pct"),
+                "industry_rank_20": None,
+                "industry_rank_50": None,
+                "industry_universe_size": None,
+            }
+            break
+        if industry_level_2_name:
+            members_in_industry: set[tuple[str, str]] = set()
+            rps_by_security = {_security_key(row): row for row in rps_rows}
+            ranked_rows_20: list[tuple[float, str, str]] = []
+            ranked_rows_50: list[tuple[float, str, str]] = []
+            for row in industry_rows:
+                row_key = _security_key(row)
+                if str(row.get("industry_level_2_name", "")).strip() != industry_level_2_name:
+                    continue
+                rps_row = rps_by_security.get(row_key)
+                if not rps_row:
+                    continue
+                members_in_industry.add(row_key)
+                rps_20 = _coerce_float(rps_row.get("rps_20"))
+                rps_50 = _coerce_float(rps_row.get("rps_50"))
+                if rps_20 is not None:
+                    ranked_rows_20.append((rps_20, row_key[0], row_key[1]))
+                if rps_50 is not None:
+                    ranked_rows_50.append((rps_50, row_key[0], row_key[1]))
+
+            def _industry_rank(rows: list[tuple[float, str, str]], target_key: tuple[str, str]) -> int | None:
+                ordered = sorted(rows, key=lambda item: (-item[0], item[1], item[2]))
+                for index, (_, market, stock_symbol) in enumerate(ordered, start=1):
+                    if (market, stock_symbol) == target_key:
+                        return index
+                return None
+
+            if members_in_industry:
+                rps_metrics["industry_universe_size"] = len(members_in_industry)
+                rps_metrics["industry_rank_20"] = _industry_rank(ranked_rows_20, key)
+                rps_metrics["industry_rank_50"] = _industry_rank(ranked_rows_50, key)
     return {
         "market": key[0],
         "symbol": key[1],
@@ -250,6 +351,7 @@ def build_stock_profile(
         "concepts": core_concepts,
         "core_concepts": core_concepts,
         "auxiliary_concepts": auxiliary_concepts,
+        **rps_metrics,
     }
 
 
@@ -275,6 +377,114 @@ def search_concepts(
     return (exact + partial)[:limit]
 
 
+def _coerce_float(value: object) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_int(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def build_rps_index(
+    rps_rows: list[dict[str, object]],
+    securities: list[dict[str, str]],
+    industry_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    security_lookup = {_security_key(row): row for row in securities}
+    industry_lookup = build_industry_lookup(industry_rows, securities)
+    rankings: list[dict[str, object]] = []
+
+    for row in rps_rows:
+        key = _security_key(row)
+        market, symbol = key
+        if not market or not symbol:
+            continue
+        security = security_lookup.get(key, {})
+        industry = industry_lookup.get(key, {})
+        rankings.append(
+            {
+                "trading_day": str(row.get("trading_day", "")).strip(),
+                "market": market,
+                "symbol": symbol,
+                "stock_name": str(security.get("stock_name", row.get("stock_name", ""))).strip(),
+                "name_initials": str(security.get("name_initials", "")).strip(),
+                "industry_display": str(industry.get("industry_display", "")).strip(),
+                "rps_20": _coerce_float(row.get("rps_20")),
+                "rps_50": _coerce_float(row.get("rps_50")),
+                "rps_120": _coerce_float(row.get("rps_120")),
+                "rps_250": _coerce_float(row.get("rps_250")),
+                "return_20_pct": _coerce_float(row.get("return_20_pct")),
+                "return_50_pct": _coerce_float(row.get("return_50_pct")),
+                "return_120_pct": _coerce_float(row.get("return_120_pct")),
+                "return_250_pct": _coerce_float(row.get("return_250_pct")),
+                "rank_20": _coerce_int(row.get("rank_20")),
+                "rank_50": _coerce_int(row.get("rank_50")),
+                "rank_120": _coerce_int(row.get("rank_120")),
+                "rank_250": _coerce_int(row.get("rank_250")),
+                "universe_size": _coerce_int(row.get("universe_size")),
+            }
+        )
+    return rankings
+
+
+def search_rps_rankings(
+    index_rows: list[dict[str, object]],
+    query: str = "",
+    *,
+    window: int = 20,
+    limit: int = 20,
+) -> list[dict[str, object]]:
+    if window not in (20, 50, 120, 250):
+        raise ValueError(f"unsupported RPS window: {window}")
+
+    normalized = _normalized_query(query)
+    metric_key = f"rps_{window}"
+    rank_key = f"rank_{window}"
+    return_key = f"return_{window}_pct"
+    matched: list[dict[str, object]] = []
+
+    for row in index_rows:
+        if normalized:
+            score = _score_stock_match(
+                {
+                    "symbol": str(row.get("symbol", "")).strip(),
+                    "stock_name": str(row.get("stock_name", "")).strip(),
+                    "name_initials": str(row.get("name_initials", "")).strip(),
+                },
+                normalized,
+            )
+            if score is None:
+                continue
+        rank_value = row.get(rank_key)
+        rps_value = row.get(metric_key)
+        if rank_value is None or rps_value is None:
+            continue
+        matched.append(
+            {
+                **row,
+                "rps": rps_value,
+                "rank": rank_value,
+                "return_pct": row.get(return_key),
+                "metric_key": metric_key,
+            }
+        )
+
+    matched.sort(
+        key=lambda row: (
+            int(row.get("rank") if row.get("rank") is not None else 10**9),
+            -float(row.get("rps") if row.get("rps") is not None else -1),
+            str(row.get("symbol", "")),
+        )
+    )
+    return matched[:limit]
+
+
 @lru_cache(maxsize=1)
 def load_security_rows() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
@@ -285,6 +495,9 @@ def load_security_rows() -> list[dict[str, str]]:
         for row in parse_tnf_file(path, market=market):
             key = (row["market"], row["symbol"])
             if key in seen:
+                continue
+            # Apply A-share eligibility filter
+            if not is_a_share_eligible(row["symbol"], row["stock_name"]):
                 continue
             seen.add(key)
             rows.append(row)
@@ -303,9 +516,23 @@ def load_industry_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[di
 
 
 @lru_cache(maxsize=1)
+def load_rps_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
+    return _load_json_rows(Path(dataset_dir) / "dataset_stock_rps_current.json")
+
+
+@lru_cache(maxsize=1)
 def load_concept_index(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
     return build_concept_index(
         load_concept_rows(dataset_dir),
+        load_security_rows(),
+        load_industry_rows(dataset_dir),
+    )
+
+
+@lru_cache(maxsize=1)
+def load_rps_index(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
+    return build_rps_index(
+        load_rps_rows(dataset_dir),
         load_security_rows(),
         load_industry_rows(dataset_dir),
     )
@@ -337,9 +564,983 @@ def stock_profile_response(symbol: str) -> dict[str, object]:
         load_security_rows(),
         load_industry_rows(),
         load_concept_rows(),
+        load_rps_rows(),
     )
     return {
         "ok": True,
         "symbol": symbol,
         "profile": profile,
+    }
+
+
+def rps_ranking_response(query: str = "", *, window: int = 20, limit: int = 20) -> dict[str, object]:
+    matches = search_rps_rankings(load_rps_index(), query, window=window, limit=limit)
+    return {
+        "ok": True,
+        "query": query,
+        "window": window,
+        "count": len(matches),
+        "results": matches,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Pool filter & hierarchy APIs
+# ---------------------------------------------------------------------------
+
+def industry_hierarchy_response() -> dict[str, object]:
+    """Return the full 申万一级/二级 industry tree."""
+    rows = load_industry_rows()
+
+    level1_map: dict[str, dict[str, list[str]]] = {}
+    for row in rows:
+        l1 = row.get("industry_level_1_name") or ""
+        l2 = row.get("industry_level_2_name") or ""
+        if l1 and l2:
+            level1_map.setdefault(l1, {})
+            level1_map[l1].setdefault(l2, [])
+
+    tree = []
+    for l1 in sorted(level1_map.keys()):
+        l2s = sorted(level1_map[l1].keys())
+        tree.append({"name": l1, "level2": l2s})
+
+    return {"ok": True, "industries": tree}
+
+
+def concept_list_response(query: str = "", limit: int = 100) -> dict[str, object]:
+    """Return active concept names, optionally filtered by query prefix match."""
+    concept_dict_path = Path(DEFAULT_DATASET_DIR) / "dataset_concept_dictionary.json"
+    all_concepts = _load_json_rows(concept_dict_path)
+
+    # Only active concepts
+    active = [c for c in all_concepts if c.get("is_active", False)]
+
+    if query:
+        q = query.strip().lower()
+        filtered = [c for c in active if q in (c.get("concept_name") or "").lower()]
+    else:
+        filtered = active
+
+    results = [
+        {
+            "concept_id": c.get("concept_id", ""),
+            "concept_name": c.get("concept_name", ""),
+        }
+        for c in filtered[:limit]
+    ]
+
+    return {"ok": True, "query": query, "count": len(results), "results": results}
+
+
+def pool_filter_response(
+    level1_filters: list[str],
+    level2_filters: list[str],
+    concept_filters: list[str],
+    limit: int = 100,
+) -> dict[str, object]:
+    """
+    Filter stocks by 申万一级/二级 industry and/or concept membership,
+    then re-compute RPS rankings within the filtered pool.
+    Returns top-N stocks sorted by pool-local RPS.
+    """
+    industry_rows = load_industry_rows()
+    concept_rows = load_concept_rows()
+    rps_rows = load_rps_rows()
+    security_rows = load_security_rows()
+
+    # Build symbol → {market, name, industries (set), concepts (set)}
+    symbol_map: dict[str, dict[str, object]] = {}
+
+    for row in security_rows:
+        sym = row.get("symbol") or ""
+        if not sym:
+            continue
+        symbol_map[sym] = {
+            "market": row.get("market", ""),
+            "stock_name": row.get("stock_name", ""),
+            "level1": set(),
+            "level2": set(),
+            "concepts": set(),
+        }
+
+    for row in industry_rows:
+        sym = row.get("symbol") or ""
+        if sym not in symbol_map:
+            continue
+        l1 = row.get("industry_level_1_name") or ""
+        l2 = row.get("industry_level_2_name") or ""
+        if l1:
+            symbol_map[sym]["level1"].add(l1)
+        if l2:
+            symbol_map[sym]["level2"].add(l2)
+
+    for row in concept_rows:
+        sym = row.get("symbol") or ""
+        if sym not in symbol_map:
+            continue
+        cn = row.get("concept_name") or ""
+        if cn:
+            symbol_map[sym]["concepts"].add(cn)
+
+    # Apply filters
+    level1_set = {x.strip() for x in level1_filters}
+    level2_set = {x.strip() for x in level2_filters}
+    concept_set = {x.strip() for x in concept_filters}
+
+    pool_symbols: set[str] = set()
+    for sym, info in symbol_map.items():
+        if level1_set and not (info["level1"] & level1_set):
+            continue
+        if level2_set and not (info["level2"] & level2_set):
+            continue
+        if concept_set and not (info["concepts"] & concept_set):
+            continue
+        pool_symbols.add(sym)
+
+    if not pool_symbols:
+        return {
+            "ok": True,
+            "pool_size": 0,
+            "filter_summary": {
+                "level1": sorted(level1_set),
+                "level2": sorted(level2_set),
+                "concepts": sorted(concept_set),
+            },
+            "results": [],
+        }
+
+    # Build RPS lookup within pool
+    sym_rps: dict[str, dict[str, float | None]] = {}
+    for row in rps_rows:
+        sym = row.get("symbol") or ""
+        if sym in pool_symbols:
+            sym_rps[sym] = {
+                "rps_20": row.get("rps_20"),
+                "rps_50": row.get("rps_50"),
+                "return_20_pct": row.get("return_20_pct"),
+                "return_50_pct": row.get("return_50_pct"),
+            }
+
+    # Sort by pool-local RPS: prefer rps_20, fall back to rps_50
+    ranked = []
+    for sym in pool_symbols:
+        rps_info = sym_rps.get(sym, {})
+        rps_20 = rps_info.get("rps_20") if rps_info else None
+        rps_50 = rps_info.get("rps_50") if rps_info else None
+        ret_20 = rps_info.get("return_20_pct") if rps_info else None
+        ret_50 = rps_info.get("return_50_pct") if rps_info else None
+        sort_key = rps_20 if rps_20 is not None else (rps_50 if rps_50 is not None else -1.0)
+        ranked.append((sort_key, sym, symbol_map[sym], rps_20, rps_50, ret_20, ret_50))
+
+    ranked.sort(key=lambda x: x[0], reverse=True)
+
+    results = []
+    for sort_key, sym, info, rps_20, rps_50, ret_20, ret_50 in ranked[:limit]:
+        results.append({
+            "symbol": sym,
+            "market": info["market"],
+            "stock_name": info["stock_name"],
+            "rps_20": rps_20,
+            "rps_50": rps_50,
+            "return_20_pct": ret_20,
+            "return_50_pct": ret_50,
+            "level1": sorted(info["level1"]),
+            "level2": sorted(info["level2"]),
+            "concepts": sorted(info["concepts"])[:10],  # cap for response size
+        })
+
+    return {
+        "ok": True,
+        "pool_size": len(pool_symbols),
+        "filter_summary": {
+            "level1": sorted(level1_set),
+            "level2": sorted(level2_set),
+            "concepts": sorted(concept_set),
+        },
+        "results": results,
+    }
+
+
+# =============================================================================
+# Financial Score Engine
+# =============================================================================
+
+from pathlib import Path as _Path
+
+try:
+    from mootdx.financial.financial import FinancialReader as _FR
+except ModuleNotFoundError as exc:
+    _FR = None
+    _MOOTDX_IMPORT_ERROR = exc
+else:
+    _MOOTDX_IMPORT_ERROR = None
+
+_TDX_DIR = "/mnt/c/new_tdx64"
+_PROJECT_ROOT = _Path(__file__).resolve().parents[2]
+_INDUSTRY_FILE = _PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_industry_current.json"
+
+# ---------------------------------------------------------------------------
+# Dimension weights
+# ---------------------------------------------------------------------------
+_DIM_WEIGHTS = {
+    "profitability":  0.25,
+    "growth":         0.20,
+    "operating":      0.15,
+    "cashflow":       0.20,
+    "solvency":       0.10,
+    "asset_quality":  0.10,
+}
+
+# ---------------------------------------------------------------------------
+# Sub-indicator definitions
+#   (key, dim, field_or_None, higher_better, zero_penalty)
+# ---------------------------------------------------------------------------
+_SUB_DEFS = [
+    # profitability
+    ("roe_ex",           "profitability", None,                                           True,  True),
+    ("net_margin",       "profitability", "净利润率(非金融类指标)",                         True,  True),
+    ("roe_pct",          "profitability", "净资产收益率",                                  True,  True),
+    # growth (YoY)
+    ("revenue_growth",   "growth",        "营业收入增长率(%)",                              True,  False),
+    ("profit_growth",    "growth",        "净利润增长率(%)",                               True,  False),
+    ("ex_profit_growth", "growth",        "扣非净利润同比(%)",                             True,  False),
+    # operating (industry ranking needed)
+    ("ar_days",          "operating",     "应收帐款周转天数(非金融类指标)",                 False, True),
+    ("inv_days",         "operating",     "存货周转天数(非金融类指标)",                     False, True),
+    ("asset_turn",       "operating",     "总资产周转率(非金融类指标)",                    True,  True),
+    # cashflow (industry ranking needed)
+    ("ocf_to_profit",    "cashflow",      None,                                            True,  True),
+    ("ocf_to_rev",       "cashflow",      "经营活动产生的现金流量净额/营业收入",            True,  True),
+    ("free_cf",          "cashflow",      None,                                            True,  True),
+    # solvency (industry ranking needed)
+    ("debt_ratio",       "solvency",      "资产负债率(%)",                                 False, True),
+    ("current_ratio",    "solvency",      "流动比率(非金融类指标)",                        True,  True),
+    ("quick_ratio",      "solvency",      "速动比率(非金融类指标)",                        True,  True),
+    # asset quality (industry ranking needed)
+    ("ar_to_asset",      "asset_quality", "应收账款",                                       False, False),
+    ("inv_to_asset",     "asset_quality", "存货",                                          False, False),
+    ("goodwill_ratio",   "asset_quality", "商誉",                                          False, False),
+    ("impair_to_rev",    "asset_quality", "资产减值损失",                                  False, False),
+]
+
+_SUB_KEYS = [d[0] for d in _SUB_DEFS]
+_CROSS_INDUSTRY_SENSITIVE_DIMS = {"operating", "solvency", "asset_quality"}
+_PURE_MARKET_DIMS = {"profitability", "growth", "cashflow"}
+
+
+def blend_market_scores_with_industry(market_scores, industry_scores):
+    """Blend snapshot market scores with industry scores for selected dimensions."""
+    adjusted = {}
+    for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+        market_value = float(market_scores.get(sub_key, 0.0) or 0.0)
+        industry_value = industry_scores.get(sub_key)
+        if dim in _CROSS_INDUSTRY_SENSITIVE_DIMS and industry_value is not None:
+            adjusted[sub_key] = round((float(industry_value) * 0.7) + (market_value * 0.3), 4)
+        else:
+            adjusted[sub_key] = market_value
+    return adjusted
+
+
+def _build_score_methodology(market_score_mode):
+    return {
+        "market_score_mode": market_score_mode,
+        "weights": dict(_DIM_WEIGHTS),
+        "dimensions": list(_DIM_WEIGHTS.keys()),
+        "blended_dimensions": sorted(_CROSS_INDUSTRY_SENSITIVE_DIMS),
+        "pure_market_dimensions": sorted(_PURE_MARKET_DIMS),
+    }
+
+# ---------------------------------------------------------------------------
+# Load industry mapping (申万二级)
+# ---------------------------------------------------------------------------
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def _load_industry_map():
+    data = json.loads(_INDUSTRY_FILE.read_text(encoding="utf-8"))
+    out = {}
+    for r in data:
+        out[(r["market"], r["symbol"])] = (r["industry_level_2_name"] or "", r["industry_level_1_name"] or "")
+    return out
+
+# ---------------------------------------------------------------------------
+# Full-market financial snapshot (pre-computed percentiles, loaded at startup)
+# ---------------------------------------------------------------------------
+_SNAPSHOT_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
+
+
+def _require_mootdx() -> None:
+    if _FR is None:
+        raise RuntimeError(
+            "Financial functionality requires the optional dependency 'mootdx'. "
+            "Install it to read Tongdaxin financial data files."
+        ) from _MOOTDX_IMPORT_ERROR
+
+@lru_cache(maxsize=1)
+def _load_financial_snapshot():
+    """
+    Load the pre-built full-market financial snapshot.
+    Scans for the latest financial_snapshot_*.json in _SNAPSHOT_DIR.
+    Returns None if no snapshot is available.
+    """
+    if not _SNAPSHOT_DIR.is_dir():
+        return None
+    files = sorted(_SNAPSHOT_DIR.glob("financial_snapshot_*.json"), reverse=True)
+    if not files:
+        return None
+    try:
+        data = json.loads(files[0].read_text(encoding="utf-8"))
+        return data
+    except Exception:
+        return None
+
+# ---------------------------------------------------------------------------
+# Find latest valid financial file
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Find all available quarterly financial .dat files (newest first)
+# ---------------------------------------------------------------------------
+@lru_cache(maxsize=1)
+def _all_financial_files():
+    """
+    Returns sorted list of (report_date_str, file_path) for all gpcw*.dat files.
+    Uses the filename convention: gpcwYYYYMMDD.dat → YYYYMMDD
+    """
+    cw_dir = _Path(_TDX_DIR) / "vipdoc/cw"
+    files = []
+    for p in cw_dir.glob("gpcw*.dat"):
+        name = p.stem  # e.g. "gpcw20260331"
+        if len(name) == 12:
+            date_str = name[4:]  # "20260331"
+            try:
+                int(date_str)
+                files.append((date_str, str(p)))
+            except ValueError:
+                pass
+    files.sort(reverse=True)  # newest first
+    return files
+
+# ---------------------------------------------------------------------------
+# Financial data access — truly on-demand, incremental file loading.
+# For a batch of stocks, we load files newest-first and stop as soon as
+# each stock is found.  The file-level DataFrame cache avoids re-loading.
+# ---------------------------------------------------------------------------
+
+# Module-level cache: file_path → (date_str, DataFrame)
+_FILE_DF_CACHE = {}
+
+@lru_cache(maxsize=1)
+def _all_financial_files():
+    """
+    Returns sorted list of (report_date_str, file_path) for all gpcw*.dat files.
+    Uses the filename convention: gpcwYYYYMMDD.dat → YYYYMMDD
+    """
+    cw_dir = _Path(_TDX_DIR) / "vipdoc/cw"
+    files = []
+    for p in cw_dir.glob("gpcw*.dat"):
+        name = p.stem  # e.g. "gpcw20260331"
+        if len(name) == 12:
+            date_str = name[4:]  # "20260331"
+            try:
+                int(date_str)
+                files.append((date_str, str(p)))
+            except ValueError:
+                pass
+    files.sort(reverse=True)  # newest first
+    return files
+
+
+def _load_file(fp):
+    """Load and cache a single .dat file, return (date_str, DataFrame) or None."""
+    if fp in _FILE_DF_CACHE:
+        return _FILE_DF_CACHE[fp]
+    try:
+        _require_mootdx()
+        # Extract date from filename
+        name = Path(fp).stem
+        date_str = name[4:]
+        df = _FR.to_data(fp)
+        if df is not None and not df.empty and len(df) > 0:
+            _FILE_DF_CACHE[fp] = (date_str, df)
+            return _FILE_DF_CACHE[fp]
+    except Exception:
+        pass
+    return None
+
+
+def _find_stock_entry(market, symbol, stop_on_first=False):
+    """
+    Search files newest-first for a specific (market, symbol).
+    If stop_on_first=True: return on first match (for single-stock queries).
+    Returns {'row': ..., 'report_date': ...} or None.
+    """
+    all_files = _all_financial_files()
+    for date_str, fp in all_files:
+        result = _load_file(fp)
+        if result is None:
+            continue
+        _, df = result
+        for sym, row in df.iterrows():
+            if not hasattr(row, "get"):
+                continue
+            sym_str = str(sym)
+            # Match market
+            if market == "sh" and sym_str.startswith(("6", "5", "9")):
+                pass
+            elif market == "sz" and sym_str.startswith(("0", "1", "2", "3", "4", "8")):
+                pass
+            else:
+                continue
+            if sym_str == symbol:
+                return {"row": row, "report_date": date_str}
+        if stop_on_first:
+            # For single-stock: we still need to scan all files because we don't
+            # know which one has it without scanning. But we can return early
+            # once found.
+            break
+    return None
+
+
+def _batch_load_for_stocks(market_symbols):
+    """
+    For a batch of (market, symbol) pairs, load the minimum set of files needed.
+    Files are loaded newest-first; each stock uses the first file it appears in.
+    Uses direct pandas index lookup for O(1) per symbol.
+    Returns: { (market, symbol): {'row': ..., 'report_date': ...} }
+    """
+    all_files = _all_financial_files()
+    found = {}
+    needed = {(m, s) for m, s in market_symbols}
+
+    for date_str, fp in all_files:
+        if not needed:
+            break
+
+        result = _load_file(fp)
+        if result is None:
+            continue
+        _, df = result
+
+        # The DataFrame index is the stock code (str), e.g. '600519'
+        # Index is already string type
+        for market, symbol in list(needed):
+            key = (market, symbol)
+            # Try both with and without leading zeros for sz market
+            idx_candidates = [symbol]
+            # For sz symbols like '000001', the index might be '1' or '000001'
+            if market == "sz" and len(symbol) == 6:
+                idx_candidates.append(symbol.lstrip('0'))
+                idx_candidates.append(symbol[1:] if symbol.startswith('0') else symbol)
+
+            row = None
+            for idx in idx_candidates:
+                if idx in df.index:
+                    row = df.loc[idx]
+                    break
+
+            if row is not None:
+                found[key] = {"row": row, "report_date": date_str}
+                needed.discard(key)
+
+    return found
+
+# ---------------------------------------------------------------------------
+# Extract scalar float from pandas Series or scalar
+# ---------------------------------------------------------------------------
+def _pick(v):
+    """
+    Extract a scalar float from a pandas Series (handles duplicate column names
+    where ``row.get(col)`` returns a multi-value Series), a numpy scalar, or a
+    raw Python numeric value.
+    """
+    if v is None:
+        return None
+    # If it's a pandas object with an iloc indexer, dig down until we hit a scalar
+    while hasattr(v, "iloc"):
+        if len(v) == 0:
+            return None
+        v = v.iloc[0]
+    # numpy / pandas scalars have .item() that returns a plain Python type
+    if hasattr(v, "item"):
+        v = v.item()
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+# ---------------------------------------------------------------------------
+# Derive sub-indicator raw values from a financial row dict
+# ---------------------------------------------------------------------------
+def _derive_sub_fields(frow, frow_prev):
+    def vv(col):
+        v = frow.get(col)
+        return _pick(v)
+
+    net_profit    = vv("归属于母公司所有者的净利润")
+    ex_net_prof   = vv("扣除非经常性损益后的净利润")
+    revenue       = vv("营业收入")
+    op_cf         = vv("经营活动产生的现金流量净额")
+    total_assets  = vv("资产总计")
+    total_debt    = vv("负债合计")
+    equity        = vv("归属于母公司股东权益(资产负债表)")
+    ar            = vv("应收账款")
+    inv           = vv("存货")
+    goodwill      = vv("商誉")
+    impair_loss   = vv("资产减值损失")
+    capex         = vv("购建固定资产、无形资产和其他长期资产支付的现金")
+    op_cost       = vv("营业成本")
+    cur_assets    = vv("流动资产合计")
+    cur_liab      = vv("流动负债合计")
+    op_profit_v   = vv("营业利润")
+
+    # Derive 营业成本 if missing
+    if op_cost is None and revenue is not None and op_profit_v is not None:
+        op_cost = revenue - op_profit_v
+
+    out = {}
+
+    # profitability
+    if equity and ex_net_prof is not None and equity != 0:
+        out["roe_ex"] = ex_net_prof / equity * 100.0
+    else:
+        out["roe_ex"] = None
+    out["net_margin"]   = vv("净利润率(非金融类指标)")
+    out["roe_pct"] = vv("净资产收益率")
+
+    # growth (YoY)
+    out["revenue_growth"]   = vv("营业收入增长率(%)")
+    out["profit_growth"]    = vv("净利润增长率(%)")
+    out["ex_profit_growth"] = vv("扣非净利润同比(%)")
+
+    # operating
+    out["ar_days"]    = vv("应收帐款周转天数(非金融类指标)")
+    out["inv_days"]   = vv("存货周转天数(非金融类指标)")
+    out["asset_turn"] = vv("总资产周转率(非金融类指标)")
+
+    # cashflow
+    if op_cf is not None and net_profit and net_profit != 0:
+        out["ocf_to_profit"] = op_cf / net_profit
+    else:
+        out["ocf_to_profit"] = None
+    out["ocf_to_rev"] = vv("经营活动产生的现金流量净额/营业收入")
+    if op_cf is not None and capex is not None:
+        out["free_cf"] = op_cf - capex
+    else:
+        out["free_cf"] = None
+
+    # solvency
+    out["debt_ratio"]    = vv("资产负债率(%)")
+    out["current_ratio"] = vv("流动比率(非金融类指标)")
+    out["quick_ratio"]   = vv("速动比率(非金融类指标)")
+
+    # asset quality
+    if ar and total_assets and total_assets != 0:
+        out["ar_to_asset"] = ar / total_assets * 100.0
+    else:
+        out["ar_to_asset"] = None
+    if inv and total_assets and total_assets != 0:
+        out["inv_to_asset"] = inv / total_assets * 100.0
+    else:
+        out["inv_to_asset"] = None
+    if goodwill and total_assets and total_assets != 0:
+        out["goodwill_ratio"] = goodwill / total_assets * 100.0
+    else:
+        out["goodwill_ratio"] = None
+    if impair_loss and revenue and revenue != 0:
+        out["impair_to_rev"] = impair_loss / revenue * 100.0
+    else:
+        out["impair_to_rev"] = None
+
+    return out
+
+# ---------------------------------------------------------------------------
+# Compute industry percentile ranking
+# ---------------------------------------------------------------------------
+def _industry_percentile(raw_values, higher_better, zero_penalty):
+    """
+    Compute industry-relative percentile scores for a set of raw values.
+
+    For zero_penalty indicators:
+      - higher_better=True  (e.g. ROE, margin): 0 is treated as missing (penalised)
+      - higher_better=False (e.g. ar_days, debt_ratio): 0 is the IDEAL value (top rank)
+        because it means "no such liability/asset" — this is critical for metrics like
+        ar_days where a wine/consumer business with zero receivables is superior.
+    """
+    valid = {k: v for k, v in raw_values.items() if v is not None and v == v}
+    if not valid:
+        return {k: 0.0 for k in raw_values}
+
+    if zero_penalty:
+        if higher_better:
+            # Higher-is-better: 0 means absent/zero — penalise
+            penalized = {k: None if v <= 0 else v for k, v in valid.items()}
+        else:
+            # Lower-is-better: 0 means ideal (no receivables / no debt) — do NOT penalise
+            # Only None if the value itself was None (already excluded above)
+            penalized = valid
+        valid = {k: v for k, v in penalized.items() if v is not None}
+        if not valid:
+            return {k: 0.0 for k in raw_values}
+
+    ascending = not higher_better
+    sorted_keys = sorted(valid, key=lambda k: float(valid[k]), reverse=(not ascending))
+    universe_size = len(sorted_keys)
+    result = {}
+    for rank_idx, k in enumerate(sorted_keys):
+        pct = ((universe_size - rank_idx) / universe_size) * 100.0
+        result[k] = round(pct, 4)
+    return result
+
+# ---------------------------------------------------------------------------
+# Compute scores for one industry group
+# ---------------------------------------------------------------------------
+def _score_industry_group(stocks_with_data, stocks_without_data):
+    raw_by_indicator = {k: {} for k in _SUB_KEYS}
+
+    for market, symbol, frow, frow_prev in stocks_with_data:
+        key = (market, symbol)
+        fields = _derive_sub_fields(frow, frow_prev)
+        for sub_key in _SUB_KEYS:
+            raw_by_indicator[sub_key][key] = fields.get(sub_key)
+
+    scores = {}
+    for sub_key, dim, field, higher_better, zero_penalty in _SUB_DEFS:
+        pct_map = _industry_percentile(raw_by_indicator[sub_key], higher_better, zero_penalty)
+        for market, symbol, frow, frow_prev in stocks_with_data:
+            key = (market, symbol)
+            scores.setdefault(key, {})[sub_key] = pct_map.get(key, 0.0)
+
+    for market, symbol in stocks_without_data:
+        key = (market, symbol)
+        scores[key] = {k: 0.0 for k in _SUB_KEYS}
+
+    return scores
+# ---------------------------------------------------------------------------
+# Public API: batch scores
+# ---------------------------------------------------------------------------
+def compute_financial_scores(market_symbols):
+    """
+    Compute financial scores for a batch of (market, symbol) pairs.
+    Uses the pre-built full-market snapshot for all percentile calculations,
+    falling back to on-demand file loading if no snapshot exists.
+    """
+    snap = _load_financial_snapshot()
+
+    if snap is not None:
+        # Fast path: use pre-computed snapshot
+        scores = {}
+        for market, symbol in market_symbols:
+            key_str = f"{market}:{symbol}"
+            entry = snap.get("scores", {}).get(key_str)
+            if entry:
+                market_sub_indicators = entry.get("sub_indicators", {})
+                industry_sub_indicators = entry.get("ind_sub_indicators", {})
+                sub_indicators = blend_market_scores_with_industry(
+                    market_sub_indicators,
+                    industry_sub_indicators,
+                )
+                dim_scores_raw = {}
+                for sub_key, dim, field, higher_better, zero_penalty in _SUB_DEFS:
+                    dim_scores_raw.setdefault(dim, []).append(sub_indicators.get(sub_key, 0.0))
+                weighted = {}
+                for dim, vals in dim_scores_raw.items():
+                    avg = sum(vals) / len(vals) if vals else 0.0
+                    weighted[dim] = round(avg * _DIM_WEIGHTS.get(dim, 0.0), 2)
+                total = round(sum(weighted.values()), 2)
+                scores[(market, symbol)] = {
+                    "report_date": entry.get("report_date", ""),
+                    "announce_date": entry.get("announce_date", ""),
+                    # Flatten blended market-facing sub-indicators and add dim_scores + total_score.
+                    **{k: v for k, v in sub_indicators.items()},
+                    "dim_scores": weighted,
+                    "total_score": total,
+                    # 行业排名（也在快照里预计算好了）
+                    "ind_sub_indicators": industry_sub_indicators,
+                    "ind_dim_scores": entry.get("ind_dim_scores", {}),
+                    "ind_total_score": entry.get("ind_total_score", 0.0),
+                    "raw_sub_indicators": entry.get("raw_sub_indicators", {}),
+                    "prev_raw_sub_indicators": entry.get("prev_raw_sub_indicators", {}),
+                    "latest_period": entry.get("latest_period", ""),
+                    "score_methodology": _build_score_methodology("industry_adjusted_market_view"),
+                }
+        return {"scores": scores, "source": "snapshot", "report_date": snap.get("report_date", "")}
+
+    # Fallback: on-demand loading (original behaviour)
+    industry_map = _load_industry_map()
+
+    # Group by industry
+    industry_groups = {}
+    no_industry = []
+    for market, symbol in market_symbols:
+        ind2, ind1 = industry_map.get((market, symbol), ("", ""))
+        if ind2:
+            industry_groups.setdefault(ind2, []).append((market, symbol))
+        else:
+            no_industry.append((market, symbol))
+
+    # Load financial data for all stocks in this batch (one pass, incremental)
+    fin_entries = _batch_load_for_stocks(market_symbols)
+
+    stocks_by_group = {}
+    report_dates = {}
+    for ind2, pairs in industry_groups.items():
+        with_data = []
+        without_data = []
+        for market, symbol in pairs:
+            entry = fin_entries.get((market, symbol))
+            if entry is not None:
+                with_data.append((market, symbol, entry["row"], None))
+                report_dates[(market, symbol)] = entry["report_date"]
+            else:
+                without_data.append((market, symbol))
+        if with_data:
+            stocks_by_group[ind2] = (with_data, without_data)
+
+    all_scores = {}
+    for ind2, (with_data, without_data) in stocks_by_group.items():
+        grp_scores = _score_industry_group(with_data, without_data)
+        all_scores.update(grp_scores)
+
+    # Fallback for stocks without industry
+    if no_industry:
+        entries_with = []
+        for m, s in no_industry:
+            entry = fin_entries.get((m, s))
+            if entry is not None:
+                entries_with.append((m, s, entry["row"], None))
+                report_dates[(m, s)] = entry["report_date"]
+        global_without = [(m, s) for m, s in no_industry if (m, s) not in report_dates]
+        if entries_with:
+            gs = _score_industry_group(entries_with, global_without)
+            all_scores.update(gs)
+
+    # Compute weighted dimension scores and total
+    # Sub-indicator scores are 0-100 percentile; each dim score = avg(sub_scores) * dim_weight
+    result = {}
+    for key, sub_scores in all_scores.items():
+        dim_totals = {}
+        dim_counts = {}
+        for sub_key, pct_score in sub_scores.items():
+            dim = next(d[1] for d in _SUB_DEFS if d[0] == sub_key)
+            dim_totals[dim] = dim_totals.get(dim, 0.0) + pct_score
+            dim_counts[dim] = dim_counts.get(dim, 0) + 1
+
+        dim_scores = {}
+        for dim, total in dim_totals.items():
+            count = dim_counts[dim]
+            dim_avg = total / count if count > 0 else 0.0
+            dim_scores[dim] = round(dim_avg * _DIM_WEIGHTS[dim], 4)
+
+        total = sum(dim_scores.values())
+        entry = {
+            **sub_scores,
+            "dim_scores": dim_scores,
+            "total_score": round(total, 4),
+            "score_methodology": _build_score_methodology("pure_market_percentile"),
+        }
+        rd = report_dates.get(key)
+        if rd:
+            entry["report_date"] = rd
+        result[key] = entry
+
+    return {"ok": True, "scores": result}
+
+# -----------------------------------------------------------------------
+# Lookup stock name from market+symbol (memoised via load_security_rows)
+# -----------------------------------------------------------------------
+@lru_cache(maxsize=1)
+def _stock_name_lookup():
+    rows = load_security_rows()
+    return {(r["market"], r["symbol"]): r["stock_name"] for r in rows}
+
+
+def _format_pct_value(value: object) -> str:
+    try:
+        return f"{float(value):.1f}%"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _format_ratio_value(value: object, unit: str = "倍") -> str:
+    try:
+        return f"{float(value):.2f}{unit}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _build_latest_report_analysis(score_data: dict[str, object], raw_sub_indicators: dict[str, object], prev_raw_sub_indicators: dict[str, object]) -> dict[str, list[str]]:
+    strengths: list[str] = []
+    risks: list[str] = []
+
+    def pct(key: str) -> float:
+        try:
+            return float(score_data.get(key, 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if pct("roe_ex") >= 75:
+        strengths.append(f"扣非ROE 较强（{_format_pct_value(raw_sub_indicators.get('roe_ex'))}），盈利质量在当前样本中处于较优区间。")
+    if pct("profit_growth") >= 75:
+        strengths.append(f"净利润增速表现突出（{_format_pct_value(raw_sub_indicators.get('profit_growth'))}），最新财报增长弹性较好。")
+    if pct("ocf_to_profit") >= 70:
+        strengths.append(f"净现比较好（{_format_ratio_value(raw_sub_indicators.get('ocf_to_profit'))}），利润向现金转化能力较稳。")
+    if pct("free_cf") >= 80:
+        strengths.append("自由现金流处于较高分位，资本开支后仍保有较好现金沉淀。")
+
+    debt_ratio = raw_sub_indicators.get("debt_ratio")
+    if debt_ratio is not None:
+        try:
+            debt_ratio = float(debt_ratio)
+        except (TypeError, ValueError):
+            debt_ratio = None
+    if debt_ratio is not None and debt_ratio >= 60:
+        risks.append(f"资产负债率偏高（{debt_ratio:.1f}%），后续需关注杠杆与融资压力。")
+    elif pct("debt_ratio") <= 30:
+        risks.append(f"资产负债率在全市场对比中不占优（{_format_pct_value(raw_sub_indicators.get('debt_ratio'))}），偿债维度仍有短板。")
+
+    if pct("goodwill_ratio") <= 30:
+        risks.append(f"商誉/资产占比偏弱（{_format_pct_value(raw_sub_indicators.get('goodwill_ratio'))}），需留意并购资产后续减值风险。")
+    if pct("current_ratio") <= 35:
+        risks.append(f"流动比率不高（{_format_ratio_value(raw_sub_indicators.get('current_ratio'))}），短期流动性缓冲一般。")
+    if pct("asset_turn") <= 40:
+        risks.append(f"总资产周转率偏弱（{_format_ratio_value(raw_sub_indicators.get('asset_turn'), '次')}），运营效率仍有提升空间。")
+
+    for key, label in (("roe_ex", "扣非ROE"), ("profit_growth", "净利润增速"), ("ocf_to_profit", "净现比")):
+        cur = raw_sub_indicators.get(key)
+        prev = prev_raw_sub_indicators.get(key)
+        try:
+            cur_f = float(cur)
+            prev_f = float(prev)
+        except (TypeError, ValueError):
+            continue
+        if prev_f == 0:
+            continue
+        yoy = (cur_f - prev_f) / abs(prev_f) * 100.0
+        if yoy <= -20 and len(risks) < 4:
+            risks.append(f"{label} 较上期走弱（同比 {yoy:.1f}%），需要结合后续财报继续跟踪。")
+        elif yoy >= 20 and len(strengths) < 4:
+            strengths.append(f"{label} 较上期改善明显（同比 +{yoy:.1f}%），最新财报呈现边际向好。")
+
+    if not strengths:
+        strengths.append("最新财报暂无特别突出的高分项，整体表现以中性偏稳为主。")
+    if not risks:
+        risks.append("最新财报暂无特别突出的硬伤，但仍需结合后续盈利与现金流延续性观察。")
+
+    return {"strengths": strengths[:4], "risks": risks[:4]}
+
+
+def _load_snapshot_score_rankings():
+    snap = _load_financial_snapshot()
+    if snap is None:
+        return {
+            "market_total_rank": {},
+            "market_total_universe_size": 0,
+            "industry_total_rank": {},
+            "industry_total_universe_size": {},
+        }
+
+    industry_map = _load_industry_map()
+    market_rows: list[tuple[float, str, str]] = []
+    industry_rows: dict[str, list[tuple[float, str, str]]] = {}
+
+    for key_str, entry in snap.get("scores", {}).items():
+        if not isinstance(entry, dict) or ":" not in key_str:
+            continue
+        market, symbol = key_str.split(":", 1)
+        adjusted_sub = blend_market_scores_with_industry(
+            entry.get("sub_indicators", {}),
+            entry.get("ind_sub_indicators", {}),
+        )
+        dim_scores_raw: dict[str, list[float]] = {}
+        for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+            dim_scores_raw.setdefault(dim, []).append(float(adjusted_sub.get(sub_key, 0.0) or 0.0))
+        weighted = {}
+        for dim, vals in dim_scores_raw.items():
+            avg = sum(vals) / len(vals) if vals else 0.0
+            weighted[dim] = avg * _DIM_WEIGHTS.get(dim, 0.0)
+        total = round(sum(weighted.values()), 4)
+        market_rows.append((total, market, symbol))
+
+        ind_total_score = entry.get("ind_total_score")
+        ind2, _ind1 = industry_map.get((market, symbol), ("", ""))
+        try:
+            ind_total_value = float(ind_total_score)
+        except (TypeError, ValueError):
+            ind_total_value = None
+        if ind2 and ind_total_value is not None:
+            industry_rows.setdefault(ind2, []).append((ind_total_value, market, symbol))
+
+    market_rows.sort(key=lambda item: (-item[0], item[1], item[2]))
+    market_ranks = {(market, symbol): idx for idx, (_score, market, symbol) in enumerate(market_rows, start=1)}
+
+    industry_ranks: dict[tuple[str, str], int] = {}
+    industry_sizes: dict[tuple[str, str], int] = {}
+    for ind2, rows in industry_rows.items():
+        rows.sort(key=lambda item: (-item[0], item[1], item[2]))
+        size = len(rows)
+        for idx, (_score, market, symbol) in enumerate(rows, start=1):
+            key = (market, symbol)
+            industry_ranks[key] = idx
+            industry_sizes[key] = size
+
+    return {
+        "market_total_rank": market_ranks,
+        "market_total_universe_size": len(market_rows),
+        "industry_total_rank": industry_ranks,
+        "industry_total_universe_size": industry_sizes,
+    }
+
+# -----------------------------------------------------------------------
+# Public API: single stock
+# -----------------------------------------------------------------------
+def compute_stock_score(market, symbol):
+    res = compute_financial_scores([(market, symbol)])
+    score_data = res["scores"].get((market, symbol), {})
+    stock_name = _stock_name_lookup().get((market, symbol), "")
+    ranking_meta = _load_snapshot_score_rankings()
+    market_total_rank = ranking_meta.get("market_total_rank", {}).get((market, symbol))
+    market_total_universe_size = ranking_meta.get("market_total_universe_size") or None
+    industry_total_rank = ranking_meta.get("industry_total_rank", {}).get((market, symbol))
+    industry_total_universe_size = ranking_meta.get("industry_total_universe_size", {}).get((market, symbol))
+    # Pull report_date from score_data if present
+    report_date = score_data.pop("report_date", "") if score_data else ""
+    announce_date = score_data.pop("announce_date", "") if score_data else ""
+    # Keep industry-rank fields before popping
+    ind_total_score = score_data.pop("ind_total_score", 0.0) if score_data else 0.0
+    ind_dim_scores = score_data.pop("ind_dim_scores", {}) if score_data else {}
+    ind_sub_indicators = score_data.pop("ind_sub_indicators", {}) if score_data else {}
+    # Promoted market-rank fields to top level for the "全市场" radar
+    total_score = score_data.pop("total_score", 0.0) if score_data else 0.0
+    dim_scores = score_data.pop("dim_scores", {}) if score_data else {}
+    sub_indicators = score_data.pop("sub_indicators", {}) if score_data else {}
+    # Raw (non-percentile) sub-indicator values and report period
+    raw_sub_indicators = score_data.pop("raw_sub_indicators", {}) if score_data else {}
+    prev_raw_sub_indicators = score_data.pop("prev_raw_sub_indicators", {}) if score_data else {}
+    latest_period = score_data.pop("latest_period", "") if score_data else ""
+    score_methodology = score_data.pop("score_methodology", None) if score_data else None
+    latest_report_analysis = _build_latest_report_analysis(score_data, raw_sub_indicators, prev_raw_sub_indicators) if score_data else {"strengths": [], "risks": []}
+    return {
+        "ok": True,
+        "market": market,
+        "symbol": symbol,
+        "stock_name": stock_name,
+        "report_date": report_date,
+        "announce_date": announce_date,
+        "latest_period": latest_period,
+        "score_data": score_data,
+        "total_score": total_score,
+        "dim_scores": dim_scores,
+        "score_methodology": score_methodology,
+        "latest_report_analysis": latest_report_analysis,
+        "market_total_rank": market_total_rank,
+        "market_total_universe_size": market_total_universe_size,
+        "industry_total_rank": industry_total_rank,
+        "industry_total_universe_size": industry_total_universe_size,
+        "sub_indicators": sub_indicators,
+        "raw_sub_indicators": raw_sub_indicators,
+        "prev_raw_sub_indicators": prev_raw_sub_indicators,
+        "ind_total_score": ind_total_score,
+        "ind_dim_scores": ind_dim_scores,
+        "ind_sub_indicators": ind_sub_indicators,
     }

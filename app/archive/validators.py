@@ -12,10 +12,12 @@ REQUIRED_DATASETS = {
     "features_intraday_volume_windows",
     "dataset_stock_candidate_pool",
     "dataset_stock_industry_current",
+    "dataset_stock_rps_current",
     "dataset_concept_dictionary",
     "dataset_stock_concept_current",
     "snapshot_market_overview",
     "snapshot_stock_industry_membership",
+    "snapshot_stock_rps_current",
     "snapshot_stock_concept_membership",
 }
 

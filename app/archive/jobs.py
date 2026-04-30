@@ -32,6 +32,8 @@ TDXHY_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxhy.cfg")
 TDXZS3_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxzs3.cfg")
 TDXZS_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxzs.cfg")
 EXTERN_SYS_PATH = Path("/mnt/c/new_tdx64/T0002/signals/extern_sys.txt")
+RPS_CURRENT_DATASET = "dataset_stock_rps_current"
+RPS_SNAPSHOT_DATASET = "snapshot_stock_rps_current"
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -109,6 +111,7 @@ def _rows_to_dataset_entry(
     relative_path: str,
     rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    rows = with_dataset_name(rows, dataset_name)
     artifact_path = ctx.project_root / relative_path
     _write_json_rows_with_placeholder(artifact_path, rows)
     entry = {
@@ -163,6 +166,157 @@ def _load_industry_concept_datasets(ctx: Any) -> dict[str, list[dict[str, Any]]]
     }
     setattr(ctx, "_industry_concept_cache", cached)
     return cached
+
+
+def _compute_return_pct(closes: list[float], lookback_sessions: int) -> float | None:
+    minimum_length = lookback_sessions + 1
+    if len(closes) < minimum_length:
+        return None
+    start_close = float(closes[-minimum_length])
+    end_close = float(closes[-1])
+    if start_close == 0:
+        return None
+    return round(((end_close / start_close) - 1.0) * 100.0, 4)
+
+
+def build_stock_rps_rows(ctx: Any) -> list[dict[str, Any]]:
+    reference_rows = _load_industry_concept_datasets(ctx)
+    symbol_keys = {
+        f"{row.get('market', '')}:{row.get('symbol', '')}"
+        for row in reference_rows["industry_current"]
+        if row.get("market") in {"sh", "sz"}
+        and row.get("symbol")
+        and str(row.get("symbol", "")).startswith(("60", "68", "00", "30", "20"))
+    }
+    if not symbol_keys:
+        return []
+
+    request_payload = {
+        "tdxdir": TONGDAXIN_DIR,
+        "stocks": [
+            {"market": market, "symbol": symbol}
+            for market, symbol in sorted(symbol_key.split(":", 1) for symbol_key in symbol_keys)
+        ],
+    }
+    script = r"""
+import json
+import sys
+
+from mootdx.reader import Reader
+
+payload = json.load(sys.stdin)
+reader = Reader.factory(market="std", tdxdir=payload["tdxdir"])
+response = {}
+
+for stock in payload["stocks"]:
+    market = str(stock.get("market", "")).strip()
+    symbol = str(stock.get("symbol", "")).strip()
+    if not market or not symbol:
+        continue
+    try:
+        daily = reader.daily(symbol=symbol)
+    except Exception:
+        continue
+    if daily is None or daily.empty:
+        continue
+    closes = [float(value) for value in daily.sort_index()["close"].astype(float).tolist()]
+    if closes:
+        response[f"{market}:{symbol}"] = closes
+
+print(json.dumps(response, ensure_ascii=False))
+""".strip()
+    result = subprocess.run(
+        [TONGDAXIN_PYTHON, "-c", script],
+        input=json.dumps(request_payload, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    close_history = json.loads(result.stdout or "{}")
+    if not isinstance(close_history, dict):
+        raise RuntimeError("invalid Tongdaxin RPS response")
+
+    rows_by_symbol: list[dict[str, Any]] = []
+    for symbol_key, closes in close_history.items():
+        if not isinstance(closes, list):
+            continue
+        market, symbol = str(symbol_key).split(":", 1)
+        return_20_pct = _compute_return_pct(closes, 20)
+        return_50_pct = _compute_return_pct(closes, 50)
+        return_120_pct = _compute_return_pct(closes, 120)
+        return_250_pct = _compute_return_pct(closes, 250)
+        if all(v is None for v in [return_20_pct, return_50_pct, return_120_pct, return_250_pct]):
+            continue
+        rows_by_symbol.append(
+            {
+                "trading_day": ctx.trading_day,
+                "market": market,
+                "symbol": symbol,
+                "return_20_pct": return_20_pct,
+                "return_50_pct": return_50_pct,
+                "return_120_pct": return_120_pct,
+                "return_250_pct": return_250_pct,
+                "generated_at": ctx.generated_at,
+                "data_cutoff_time": ctx.data_cutoff_time,
+                "data_status": "final",
+                "data_source": "local_tongdaxin_daily",
+            }
+        )
+
+    universe_size = len(rows_by_symbol)
+    if universe_size == 0:
+        return []
+
+    rank_20_map = {
+        (row["market"], row["symbol"]): rank
+        for rank, row in enumerate(
+            sorted(rows_by_symbol, key=lambda item: float(item["return_20_pct"]) if item["return_20_pct"] is not None else float("-inf"), reverse=True),
+            start=1,
+        )
+    }
+    rank_50_map = {
+        (row["market"], row["symbol"]): rank
+        for rank, row in enumerate(
+            sorted(rows_by_symbol, key=lambda item: float(item["return_50_pct"]) if item["return_50_pct"] is not None else float("-inf"), reverse=True),
+            start=1,
+        )
+    }
+    rank_120_map = {
+        (row["market"], row["symbol"]): rank
+        for rank, row in enumerate(
+            sorted(rows_by_symbol, key=lambda item: float(item["return_120_pct"]) if item["return_120_pct"] is not None else float("-inf"), reverse=True),
+            start=1,
+        )
+    }
+    rank_250_map = {
+        (row["market"], row["symbol"]): rank
+        for rank, row in enumerate(
+            sorted(rows_by_symbol, key=lambda item: float(item["return_250_pct"]) if item["return_250_pct"] is not None else float("-inf"), reverse=True),
+            start=1,
+        )
+    }
+
+    rows: list[dict[str, Any]] = []
+    for row in sorted(rows_by_symbol, key=lambda item: (item["market"], item["symbol"])):
+        rank_20 = rank_20_map[(row["market"], row["symbol"])]
+        rank_50 = rank_50_map[(row["market"], row["symbol"])]
+        rank_120 = rank_120_map[(row["market"], row["symbol"])]
+        rank_250 = rank_250_map[(row["market"], row["symbol"])]
+        rows.append(
+            {
+                **row,
+                "rps_20": round(((universe_size - rank_20 + 1) / universe_size) * 100.0, 2),
+                "rps_50": round(((universe_size - rank_50 + 1) / universe_size) * 100.0, 2),
+                "rps_120": round(((universe_size - rank_120 + 1) / universe_size) * 100.0, 2),
+                "rps_250": round(((universe_size - rank_250 + 1) / universe_size) * 100.0, 2),
+                "rank_20": rank_20,
+                "rank_50": rank_50,
+                "rank_120": rank_120,
+                "rank_250": rank_250,
+                "universe_size": universe_size,
+            }
+        )
+    return rows
 
 
 def freeze_intraday_state(ctx: Any) -> dict[str, Any]:
@@ -373,6 +527,7 @@ def build_final_features(ctx: Any, final_inputs: dict[str, Any], bars: list[dict
 def build_final_datasets(ctx: Any, features: list[dict[str, Any]]) -> list[dict[str, Any]]:
     del features
     reference_rows = _load_industry_concept_datasets(ctx)
+    rps_rows = build_stock_rps_rows(ctx)
     return [
         _dataset_entry(
             ctx=ctx,
@@ -395,6 +550,16 @@ def build_final_datasets(ctx: Any, features: list[dict[str, Any]]) -> list[dict[
             storage_layer="derived_store",
             relative_path=f"data/derived/datasets/final/{INDUSTRY_CURRENT_DATASET}.parquet",
             rows=reference_rows["industry_current"],
+        ),
+        _rows_to_dataset_entry(
+            ctx=ctx,
+            dataset_name=RPS_CURRENT_DATASET,
+            dataset_category="dataset",
+            dataset_scope="stock",
+            subject_type="tabular_dataset",
+            storage_layer="derived_store",
+            relative_path=f"data/derived/datasets/final/{RPS_CURRENT_DATASET}.parquet",
+            rows=rps_rows,
         ),
         _rows_to_dataset_entry(
             ctx=ctx,
@@ -422,6 +587,7 @@ def build_final_datasets(ctx: Any, features: list[dict[str, Any]]) -> list[dict[
 def build_final_snapshots(ctx: Any, datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     del datasets
     reference_rows = _load_industry_concept_datasets(ctx)
+    rps_rows = with_dataset_name(build_stock_rps_rows(ctx), RPS_SNAPSHOT_DATASET)
     return [
         _dataset_entry(
             ctx=ctx,
@@ -444,6 +610,16 @@ def build_final_snapshots(ctx: Any, datasets: list[dict[str, Any]]) -> list[dict
             storage_layer="archive",
             relative_path=f"data/archive/trading_day={ctx.trading_day}/snapshots/{INDUSTRY_SNAPSHOT_DATASET}.parquet",
             rows=reference_rows["industry_snapshot"],
+        ),
+        _rows_to_dataset_entry(
+            ctx=ctx,
+            dataset_name=RPS_SNAPSHOT_DATASET,
+            dataset_category="snapshot",
+            dataset_scope="stock",
+            subject_type="snapshot",
+            storage_layer="archive",
+            relative_path=f"data/archive/trading_day={ctx.trading_day}/snapshots/{RPS_SNAPSHOT_DATASET}.parquet",
+            rows=rps_rows,
         ),
         _rows_to_dataset_entry(
             ctx=ctx,

@@ -107,6 +107,27 @@ def _stub_final_inputs(trading_day: str) -> dict[str, object]:
     }
 
 
+def _stub_rps_rows(trading_day: str) -> list[dict[str, object]]:
+    return [
+        {
+            "trading_day": trading_day,
+            "market": "sh",
+            "symbol": "601600",
+            "rps_20": 76.41,
+            "rps_50": 81.23,
+            "return_20_pct": 4.7203,
+            "return_50_pct": 8.1188,
+            "rank_20": 72,
+            "rank_50": 55,
+            "universe_size": 301,
+            "generated_at": f"{trading_day}T15:30:00+08:00",
+            "data_cutoff_time": f"{trading_day}T15:00:00+08:00",
+            "data_status": "final",
+            "data_source": "local_tongdaxin_daily",
+        }
+    ]
+
+
 class ArchivePipelineTests(unittest.TestCase):
     def test_build_final_outputs_adds_industry_and_concept_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -119,6 +140,7 @@ class ArchivePipelineTests(unittest.TestCase):
                 mock.patch.object(jobs, "TDXHY_PATH", tdxhy_path),
                 mock.patch.object(jobs, "TDXZS3_PATH", tdxzs3_path),
                 mock.patch.object(jobs, "EXTERN_SYS_PATH", extern_path),
+                mock.patch.object(jobs, "build_stock_rps_rows", return_value=_stub_rps_rows(ctx.trading_day), create=True),
             ):
                 datasets = jobs.build_final_datasets(ctx, [])
                 snapshots = jobs.build_final_snapshots(ctx, datasets)
@@ -128,6 +150,7 @@ class ArchivePipelineTests(unittest.TestCase):
                 {
                     "dataset_stock_candidate_pool",
                     "dataset_stock_industry_current",
+                    "dataset_stock_rps_current",
                     "dataset_concept_dictionary",
                     "dataset_stock_concept_current",
                 }.issubset(dataset_names)
@@ -138,18 +161,25 @@ class ArchivePipelineTests(unittest.TestCase):
                 {
                     "snapshot_market_overview",
                     "snapshot_stock_industry_membership",
+                    "snapshot_stock_rps_current",
                     "snapshot_stock_concept_membership",
                 }.issubset(snapshot_names)
             )
 
             industry_dataset = next(item for item in datasets if item["dataset_name"] == "dataset_stock_industry_current")
+            rps_dataset = next(item for item in datasets if item["dataset_name"] == "dataset_stock_rps_current")
             concept_dataset = next(item for item in datasets if item["dataset_name"] == "dataset_stock_concept_current")
             industry_snapshot = next(item for item in snapshots if item["dataset_name"] == "snapshot_stock_industry_membership")
+            rps_snapshot = next(item for item in snapshots if item["dataset_name"] == "snapshot_stock_rps_current")
             concept_snapshot = next(item for item in snapshots if item["dataset_name"] == "snapshot_stock_concept_membership")
 
             self.assertEqual(
                 "data/derived/datasets/final/dataset_stock_industry_current.parquet",
                 industry_dataset["path"],
+            )
+            self.assertEqual(
+                "data/derived/datasets/final/dataset_stock_rps_current.parquet",
+                rps_dataset["path"],
             )
             self.assertEqual(
                 "data/derived/datasets/final/dataset_stock_concept_current.parquet",
@@ -160,13 +190,21 @@ class ArchivePipelineTests(unittest.TestCase):
                 industry_snapshot["path"],
             )
             self.assertEqual(
+                f"data/archive/trading_day={ctx.trading_day}/snapshots/snapshot_stock_rps_current.parquet",
+                rps_snapshot["path"],
+            )
+            self.assertEqual(
                 f"data/archive/trading_day={ctx.trading_day}/snapshots/snapshot_stock_concept_membership.parquet",
                 concept_snapshot["path"],
             )
 
             industry_rows = json.loads((project_root / "data/derived/datasets/final/dataset_stock_industry_current.json").read_text(encoding="utf-8"))
+            rps_rows = json.loads((project_root / "data/derived/datasets/final/dataset_stock_rps_current.json").read_text(encoding="utf-8"))
             concept_rows = json.loads((project_root / f"data/archive/trading_day={ctx.trading_day}/snapshots/snapshot_stock_concept_membership.json").read_text(encoding="utf-8"))
             self.assertEqual("dataset_stock_industry_current", industry_rows[0]["dataset_name"])
+            self.assertEqual("dataset_stock_rps_current", rps_rows[0]["dataset_name"])
+            self.assertIn("rps_20", rps_rows[0])
+            self.assertIn("rps_50", rps_rows[0])
             self.assertEqual("snapshot_stock_concept_membership", concept_rows[0]["dataset_name"])
             self.assertIn("concept_filter_version", concept_rows[0])
             self.assertIn("concept_filter_bucket", concept_rows[0])
@@ -184,14 +222,17 @@ class ArchivePipelineTests(unittest.TestCase):
                 mock.patch.object(jobs, "TDXHY_PATH", tdxhy_path),
                 mock.patch.object(jobs, "TDXZS3_PATH", tdxzs3_path),
                 mock.patch.object(jobs, "EXTERN_SYS_PATH", extern_path),
+                mock.patch.object(jobs, "build_stock_rps_rows", return_value=_stub_rps_rows(ctx.trading_day), create=True),
             ):
                 manifest = archive_daily.execute_pipeline(ctx)
 
             dataset_names = {item["dataset_name"] for item in manifest["datasets_included"]}
             self.assertIn("dataset_stock_industry_current", dataset_names)
+            self.assertIn("dataset_stock_rps_current", dataset_names)
             self.assertIn("dataset_concept_dictionary", dataset_names)
             self.assertIn("dataset_stock_concept_current", dataset_names)
             self.assertIn("snapshot_stock_industry_membership", dataset_names)
+            self.assertIn("snapshot_stock_rps_current", dataset_names)
             self.assertIn("snapshot_stock_concept_membership", dataset_names)
             self.assertEqual("available", manifest["snapshot_summary"]["stock_snapshot"])
             self.assertEqual("passed", manifest["validation_summary"]["overall_status"])

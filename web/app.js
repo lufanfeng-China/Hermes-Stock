@@ -65,7 +65,7 @@ const profileIndustryEl = document.querySelector("#profile-industry");
 const profileConceptCountEl = document.querySelector("#profile-concept-count");
 const profileConceptsEl = document.querySelector("#profile-concepts");
 const zoomControlsEl = document.querySelector("#zoom-controls");
-const zoomButtons = Array.from(document.querySelectorAll(".zoom-button"));
+const zoomButtons = Array.from(zoomControlsEl.querySelectorAll(".zoom-button"));
 const windowSliderEl = document.querySelector("#window-slider");
 const windowCaptionEl = document.querySelector("#window-caption");
 const volumeMaWindowEl = document.querySelector("#volume-ma-window");
@@ -109,6 +109,13 @@ function formatIntegerNumber(value) {
 
 function formatVolumeMillions(value) {
   return `${formatNumber(scaleVolumeMillions(value))} M`;
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  return `${value >= 0 ? "+" : ""}${formatNumber(value)}%`;
 }
 
 function formatSeriesValue(chart, value) {
@@ -333,7 +340,8 @@ function renderStockProfile(profile) {
   profileNameEl.textContent = profile.stock_name || "-";
   profileInitialsEl.textContent = (profile.name_initials || "-").toUpperCase();
   profileIndustryEl.textContent = profile.industry_display || "-";
-  profileConceptCountEl.textContent = String(profile.concept_count || 0);
+  profileConceptCountEl.textContent = formatIntegerNumber(profile.concept_count || 0);
+
   const coreConcepts = Array.isArray(profile.core_concepts)
     ? profile.core_concepts
     : Array.isArray(profile.concepts)
