@@ -231,7 +231,7 @@ print(json.dumps({"ok": True, "symbol": symbol, "market": market, "bars": rows},
 
 
 def load_stock_rps_history(symbol: str) -> dict[str, object]:
-    """Compute historical RPS-20 and RPS-50 for one stock using full local history."""
+    """Compute historical RPS-20/50/120/250 for one stock using full local history."""
     if not symbol.isdigit() or len(symbol) != 6:
         raise ValueError("symbol must be a 6-digit code")
 
@@ -264,6 +264,8 @@ def rolling_return(values, n):
 
 ret20 = rolling_return(closes, 20)
 ret50 = rolling_return(closes, 50)
+ret120 = rolling_return(closes, 120)
+ret250 = rolling_return(closes, 250)
 
 WINDOW = 120
 
@@ -284,6 +286,8 @@ def rolling_rps(values, window):
 
 rps20 = rolling_rps(ret20, WINDOW)
 rps50 = rolling_rps(ret50, WINDOW)
+rps120 = rolling_rps(ret120, WINDOW)
+rps250 = rolling_rps(ret250, WINDOW)
 
 rows = []
 for i, d in enumerate(dates):
@@ -291,8 +295,12 @@ for i, d in enumerate(dates):
         "trading_day": d,
         "rps_20": rps20[i],
         "rps_50": rps50[i],
+        "rps_120": rps120[i],
+        "rps_250": rps250[i],
         "return_20_pct": round(ret20[i], 4) if ret20[i] is not None else None,
         "return_50_pct": round(ret50[i], 4) if ret50[i] is not None else None,
+        "return_120_pct": round(ret120[i], 4) if ret120[i] is not None else None,
+        "return_250_pct": round(ret250[i], 4) if ret250[i] is not None else None,
     })
 
 print(json.dumps({"ok": True, "symbol": symbol, "market": market, "history": rows}, ensure_ascii=False))
@@ -1121,7 +1129,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         level1 = params.get("level1", [])
         level2 = params.get("level2", [])
         concepts = params.get("concepts", [])
-        limit = self.parse_limit(params.get("limit", ["100"])[0], default=100, maximum=500)
+        limit = self.parse_limit(params.get("limit", ["99999"])[0], default=99999, maximum=99999)
         try:
             self.respond_json(HTTPStatus.OK, pool_filter_response(level1, level2, concepts, limit=limit))
         except Exception as exc:

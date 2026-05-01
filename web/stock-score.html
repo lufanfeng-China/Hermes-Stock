@@ -43,10 +43,9 @@
               </label>
             </div>
           </form>
-          <div class="stock-score-search-hints" aria-label="查询提示">
-            <span class="stock-score-search-hint">支持代码</span>
-            <span class="stock-score-search-hint">支持 market:symbol</span>
-            <span class="stock-score-search-hint">附带行业内对照</span>
+          <div id="stock-score-search-concepts" class="stock-score-search-hints" aria-label="概念摘要">
+            <span id="stock-score-search-concepts-label" class="stock-score-search-hint">核心概念</span>
+            <strong id="stock-score-search-concepts-value" class="stock-score-search-hint muted">暂无核心概念</strong>
           </div>
           <section id="loading-msg" class="status stock-score-status stock-score-search-status">输入股票代码查询财务评分</section>
         </article>
@@ -55,6 +54,7 @@
             <article class="metric-card stock-score-total-card">
               <p class="metric-label">全市场总分</p>
               <p id="hdr-total-market" class="metric-value">—</p>
+              <p id="hdr-total-market-rank" class="metric-meta">全市场排名: 暂无</p>
               <p class="metric-meta">综合六大维度后的全市场评分</p>
             </article>
             <article class="metric-card stock-score-total-card stock-score-total-card-industry">
@@ -62,7 +62,8 @@
               <div class="stock-score-total-trigger">
                 <p id="hdr-total-industry" class="industry-score-peer-trigger metric-value">—</p>
               </div>
-              <p class="metric-meta">申万二级行业内相对评分</p>
+              <p id="hdr-total-industry-rank" class="metric-meta">二级行业排名: 暂无</p>
+              <p id="hdr-total-industry-meta" class="metric-meta">暂无行业信息</p>
             </article>
           </section>
         </div>
@@ -139,10 +140,6 @@
                   <div class="profile-field stock-score-profile-field">
                     <span class="profile-label">申万二级</span>
                     <strong class="profile-value muted" id="hdr-industry-l2">待加载申万二级</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">核心概念</span>
-                    <strong class="profile-value muted" id="hdr-core-concepts">待加载概念标签</strong>
                   </div>
                 </div>
               </section>

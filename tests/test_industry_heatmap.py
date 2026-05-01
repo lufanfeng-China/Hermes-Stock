@@ -154,6 +154,36 @@ class IndustryHeatmapTests(unittest.TestCase):
         self.assertEqual("X2", rows[1]["industry_level_2_code"])
         self.assertEqual([-2.0, 0.0], [cell["pct_change"] for cell in rows[1]["cells"]])
 
+    def test_build_heatmap_rows_aggregates_daily_volume(self) -> None:
+        from app.industry.heatmap import build_heatmap_rows
+
+        selected_industries = [
+            {"industry_level_2_code": "X1", "industry_level_2_name": "行业A", "member_count": 2},
+        ]
+        industry_rows = [
+            {"industry_level_2_code": "X1", "industry_level_2_name": "行业A", "market": "sh", "symbol": "600000"},
+            {"industry_level_2_code": "X1", "industry_level_2_name": "行业A", "market": "sz", "symbol": "000001"},
+        ]
+        stock_returns = {
+            "sh:600000": {"2026-03-03": 1.0, "2026-03-04": 3.0},
+            "sz:000001": {"2026-03-03": 3.0, "2026-03-04": 5.0},
+        }
+        stock_volumes = {
+            "sh:600000": {"2026-03-03": 1000.0, "2026-03-04": 1200.0},
+            "sz:000001": {"2026-03-03": 4000.0, "2026-03-04": 3500.0},
+        }
+        trading_days = ["2026-03-03", "2026-03-04"]
+
+        rows = build_heatmap_rows(
+            selected_industries=selected_industries,
+            industry_rows=industry_rows,
+            stock_returns=stock_returns,
+            stock_volumes=stock_volumes,
+            trading_days=trading_days,
+        )
+
+        self.assertEqual([5000.0, 4700.0], [cell["daily_volume"] for cell in rows[0]["cells"]])
+
 
 if __name__ == "__main__":
     unittest.main()

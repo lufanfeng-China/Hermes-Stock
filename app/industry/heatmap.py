@@ -174,9 +174,11 @@ def build_heatmap_rows(
     industry_rows: list[dict[str, Any]],
     stock_returns: dict[str, dict[str, float]],
     trading_days: list[str],
+    stock_volumes: dict[str, dict[str, float]] | None = None,
 ) -> list[dict[str, Any]]:
     member_keys = _build_industry_member_keys(selected_industries, industry_rows)
     rows: list[dict[str, Any]] = []
+    volume_lookup = stock_volumes or {}
     for industry in selected_industries:
         code = str(industry.get("industry_level_2_code", "")).strip()
         name = str(industry.get("industry_level_2_name", "")).strip()
@@ -184,17 +186,22 @@ def build_heatmap_rows(
         cells: list[dict[str, Any]] = []
         for trading_day in trading_days:
             values = []
+            volume_values = []
             for symbol_key in symbols:
                 pct_change = stock_returns.get(symbol_key, {}).get(trading_day)
-                if pct_change is None:
-                    continue
-                values.append(float(pct_change))
+                if pct_change is not None:
+                    values.append(float(pct_change))
+                daily_volume = volume_lookup.get(symbol_key, {}).get(trading_day)
+                if daily_volume is not None:
+                    volume_values.append(float(daily_volume))
             avg_pct = round(sum(values) / len(values), 4) if values else None
+            total_volume = round(sum(volume_values), 4) if volume_values else None
             cells.append(
                 {
                     "trading_day": trading_day,
                     "pct_change": avg_pct,
                     "stock_count": len(values),
+                    "daily_volume": total_volume,
                 }
             )
         rows.append(
@@ -278,6 +285,70 @@ print(json.dumps(response, ensure_ascii=False))
     }
 
 
+def _fetch_stock_volumes(
+    stock_refs: list[dict[str, str]],
+    *,
+    lookback_sessions: int = DEFAULT_LOOKBACK_SESSIONS,
+) -> dict[str, dict[str, float]]:
+    if not stock_refs:
+        return {}
+
+    request_payload = {
+        "tdxdir": TONGDAXIN_DIR,
+        "lookback_sessions": lookback_sessions,
+        "stocks": stock_refs,
+    }
+    script = r"""
+import json
+import sys
+
+from mootdx.reader import Reader
+
+payload = json.load(sys.stdin)
+reader = Reader.factory(market="std", tdxdir=payload["tdxdir"])
+stock_volumes = {}
+
+for stock in payload["stocks"]:
+    market = str(stock.get("market", "")).strip()
+    symbol = str(stock.get("symbol", "")).strip()
+    if not market or not symbol:
+        continue
+    daily = reader.daily(symbol=symbol)
+    if daily is None or daily.empty:
+        continue
+    volume_map = {}
+    for index, row in daily.sort_index().iterrows():
+        trading_day = index.strftime("%Y-%m-%d")
+        raw_volume = row.get("volume")
+        if raw_volume != raw_volume:
+            continue
+        volume_map[trading_day] = float(raw_volume)
+    if volume_map:
+        stock_volumes[f"{market}:{symbol}"] = volume_map
+
+print(json.dumps({"stock_volumes": stock_volumes}, ensure_ascii=False))
+""".strip()
+    result = subprocess.run(
+        [TONGDAXIN_PYTHON, "-c", script],
+        input=json.dumps(request_payload, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        stderr = (result.stderr or "unknown subprocess error").strip()
+        raise RuntimeError(stderr)
+    payload = json.loads(result.stdout or "{}")
+    stock_volumes = payload.get("stock_volumes", {})
+    if not isinstance(stock_volumes, dict):
+        raise RuntimeError("invalid Tongdaxin heatmap volume response")
+    _ = lookback_sessions
+    return {
+        str(symbol_key): {str(day): float(value) for day, value in values.items()}
+        for symbol_key, values in stock_volumes.items()
+        if isinstance(values, dict)
+    }
+
+
 @lru_cache(maxsize=4)
 def industry_heatmap_response(
     limit: int | None = DEFAULT_INDUSTRY_LIMIT,
@@ -316,11 +387,16 @@ def industry_heatmap_response(
         requested_symbols,
         lookback_sessions=lookback_sessions,
     )
+    stock_volumes = _fetch_stock_volumes(
+        requested_symbols,
+        lookback_sessions=lookback_sessions,
+    )
     trading_days = select_year_to_date_trading_days(trading_days)
     rows = build_heatmap_rows(
         selected_industries=selected,
         industry_rows=industry_rows,
         stock_returns=stock_returns,
+        stock_volumes=stock_volumes,
         trading_days=trading_days,
     )
     if not trading_days:

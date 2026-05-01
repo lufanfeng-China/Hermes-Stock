@@ -6,6 +6,29 @@ from scripts import serve_stock_dashboard as dashboard
 
 
 class StockScoreAiReportTests(unittest.TestCase):
+    def test_load_stock_rps_history_subprocess_script_includes_rps120_and_rps250(self) -> None:
+        with mock.patch.object(dashboard.subprocess, "run") as run_mock:
+            run_mock.return_value = mock.Mock(
+                returncode=0,
+                stdout=json.dumps({"ok": True, "symbol": "000001", "market": "sz", "history": []}, ensure_ascii=False),
+                stderr="",
+            )
+            payload = dashboard.load_stock_rps_history("000001")
+
+        self.assertTrue(payload["ok"])
+        command = run_mock.call_args.args[0]
+        self.assertEqual(dashboard.TONGDAXIN_PYTHON, command[0])
+        self.assertEqual("-c", command[1])
+        script = command[2]
+        self.assertIn("ret120 = rolling_return(closes, 120)", script)
+        self.assertIn("ret250 = rolling_return(closes, 250)", script)
+        self.assertIn('rps120 = rolling_rps(ret120, WINDOW)', script)
+        self.assertIn('rps250 = rolling_rps(ret250, WINDOW)', script)
+        self.assertIn('"rps_120": rps120[i]', script)
+        self.assertIn('"rps_250": rps250[i]', script)
+        self.assertIn('"return_120_pct": round(ret120[i], 4)', script)
+        self.assertIn('"return_250_pct": round(ret250[i], 4)', script)
+
     def test_build_ai_financial_report_prompt_mentions_required_sections(self) -> None:
         reports = [
             {

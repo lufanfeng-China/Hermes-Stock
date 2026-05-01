@@ -1439,11 +1439,54 @@ button:hover {
 .stock-score-basic-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 6px;
 }
 
 .stock-score-basic-info-card {
-  padding: 16px 18px 14px;
+  padding: 12px 14px 10px;
+}
+
+.stock-score-basic-info-card .stock-score-profile-field {
+  min-height: 56px;
+  gap: 3px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(9, 18, 27, 0.9), rgba(6, 14, 21, 0.94));
+  box-shadow: inset 0 0 0 1px rgba(82, 179, 255, 0.05);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.stock-score-basic-info-card .profile-label {
+  color: #6f8899;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.stock-score-basic-info-card .profile-value {
+  color: #8bd8ff;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: right;
+  justify-self: end;
+  text-shadow: 0 0 12px rgba(82, 179, 255, 0.12);
+}
+
+.stock-score-basic-info-card .profile-value.muted {
+  color: #8ea6b6;
+}
+
+.basic-change-positive {
+  color: #ff8f8f !important;
+}
+
+.basic-change-negative {
+  color: #7ce0c3 !important;
+}
+
+.basic-change-flat {
+  color: #8ea6b6 !important;
 }
 
 .stock-score-profile-field {

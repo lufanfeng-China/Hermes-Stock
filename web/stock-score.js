@@ -151,9 +151,14 @@ const DIM_WEIGHT = {
 const MARKET_COLOR = "#64b5f6";
 const INDUSTRY_COLOR = "#ff9f43";
 const SEARCH_DEBOUNCE_MS = 200;
+const MAX_RECENT_STOCK_SEARCHES = 6;
+const RECENT_STOCK_SEARCHES_STORAGE_KEY = "stock-score-recent-searches";
 const PROFILE_PLACEHOLDERS = {
   industryL1: "暂无申万一级",
   industryL2: "暂无申万二级",
+  industryTotalMeta: "暂无行业信息",
+  totalMarketRank: "全市场排名: 暂无",
+  totalIndustryRank: "二级行业排名: 暂无",
   concepts: "暂无核心概念",
   basicPrice: "待加载现价",
   basicChange: "待加载涨幅",
@@ -323,6 +328,38 @@ function resolveIndustryLevels(profile) {
   };
 }
 
+function renderIndustryTotalMeta(profile) {
+  const { level1, level2 } = resolveIndustryLevels(profile);
+  const text = level1 && level2
+    ? `${level1} / ${level2}`
+    : level1 || level2 || "";
+  setProfileField("hdr-total-industry-meta", text, PROFILE_PLACEHOLDERS.industryTotalMeta);
+}
+
+function renderTotalScoreRankMeta(label, rank, universe, placeholder) {
+  if (rank == null || universe == null) {
+    return "";
+  }
+  return `${label}: ${rank}/${universe}`;
+}
+
+function renderSearchConceptSummary(profile) {
+  const concepts = Array.isArray(profile?.core_concepts)
+    ? profile.core_concepts
+    : Array.isArray(profile?.concepts)
+      ? profile.concepts
+      : [];
+  const conceptText = concepts
+    .map((row) => String(row?.concept_name || row?.name || row || "").trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .join(" · ");
+  const valueEl = document.getElementById("stock-score-search-concepts-value");
+  const hasText = Boolean(conceptText);
+  valueEl.textContent = hasText ? conceptText : PROFILE_PLACEHOLDERS.concepts;
+  valueEl.classList.toggle("muted", !hasText);
+}
+
 function renderBasicInfoSummary(profile) {
   const basicInfo = profile?.basic_info || {};
   setProfileField(
@@ -335,6 +372,18 @@ function renderBasicInfoSummary(profile) {
     basicInfo.change_pct != null ? formatSignedPercent(basicInfo.change_pct) : "",
     PROFILE_PLACEHOLDERS.basicChange,
   );
+  const changeEl = document.getElementById("hdr-basic-change");
+  changeEl.classList.remove("basic-change-positive", "basic-change-negative", "basic-change-flat");
+  if (basicInfo.change_pct != null && !Number.isNaN(Number(basicInfo.change_pct))) {
+    const changeValue = Number(basicInfo.change_pct);
+    if (changeValue > 0) {
+      changeEl.classList.add("basic-change-positive");
+    } else if (changeValue < 0) {
+      changeEl.classList.add("basic-change-negative");
+    } else {
+      changeEl.classList.add("basic-change-flat");
+    }
+  }
   setProfileField(
     "hdr-basic-volume-ratio",
     basicInfo.volume_ratio != null ? formatBasicNumber(basicInfo.volume_ratio, "", 2) : "",
@@ -368,19 +417,6 @@ function renderBasicInfoSummary(profile) {
 }
 
 function renderProfileSummary(profile) {
-  const coreConcepts = Array.isArray(profile?.core_concepts)
-    ? profile.core_concepts
-    : Array.isArray(profile?.concepts)
-      ? profile.concepts
-      : [];
-  const conceptText = coreConcepts.length
-    ? coreConcepts
-      .map((row) => String(row?.concept_name || "").trim())
-      .filter(Boolean)
-      .slice(0, 4)
-      .join(" · ")
-    : "";
-
   const rps20 = formatProfileMetric(profile?.rps_20);
   const rps50 = formatProfileMetric(profile?.rps_50);
   const rps120 = formatProfileMetric(profile?.rps_120);
@@ -388,9 +424,10 @@ function renderProfileSummary(profile) {
   const industryLevels = resolveIndustryLevels(profile);
 
   renderBasicInfoSummary(profile);
+  renderIndustryTotalMeta(profile);
+  renderSearchConceptSummary(profile);
   setProfileField("hdr-industry-l1", industryLevels.level1, PROFILE_PLACEHOLDERS.industryL1);
   setProfileField("hdr-industry-l2", industryLevels.level2, PROFILE_PLACEHOLDERS.industryL2);
-  setProfileField("hdr-core-concepts", conceptText, PROFILE_PLACEHOLDERS.concepts);
   setRpsRow("hdr-rps20", rps20 ? `RPS20: ${rps20}` : "", PROFILE_PLACEHOLDERS.rps20);
   setRpsRow("hdr-rps50", rps50 ? `RPS50: ${rps50}` : "", PROFILE_PLACEHOLDERS.rps50);
   setRpsRow("hdr-rps120", rps120 ? `RPS120: ${rps120}` : "", PROFILE_PLACEHOLDERS.rps120);
@@ -427,6 +464,29 @@ function renderRankSummary(result) {
       (marketTotalRank != null && marketTotalUniverseSize != null)
       || (industryTotalRank != null && industryTotalUniverseSize != null)
     ),
+  );
+}
+
+function renderTotalScoreRankSummary(result) {
+  setProfileField(
+    "hdr-total-market-rank",
+    renderTotalScoreRankMeta(
+      "全市场排名",
+      result?.market_total_rank,
+      result?.market_total_universe_size,
+      PROFILE_PLACEHOLDERS.totalMarketRank,
+    ),
+    PROFILE_PLACEHOLDERS.totalMarketRank,
+  );
+  setProfileField(
+    "hdr-total-industry-rank",
+    renderTotalScoreRankMeta(
+      "二级行业排名",
+      result?.industry_total_rank,
+      result?.industry_total_universe_size,
+      PROFILE_PLACEHOLDERS.totalIndustryRank,
+    ),
+    PROFILE_PLACEHOLDERS.totalIndustryRank,
   );
 }
 
@@ -1110,6 +1170,12 @@ function renderScore(result) {
   document.getElementById("hdr-total-market").textContent = formatTotalScore(mTotal) || "—";
   document.getElementById("hdr-total-industry").textContent = formatTotalScore(iTotal) || "—";
   renderScoreMethodology(score_methodology);
+  renderTotalScoreRankSummary({
+    market_total_rank,
+    market_total_universe_size,
+    industry_total_rank,
+    industry_total_universe_size,
+  });
   renderRankSummary({
     market_total_rank,
     market_total_universe_size,
@@ -1232,11 +1298,76 @@ const searchState = {
   requestId: 0,
   selectedStock: null,
   suggestions: [],
+  recentSearches: [],
+  dropdownMode: "suggestions",
   currentStock: null,
   expandedSubDiagKey: null,
   industryPeerRequestId: 0,
   industryScorePeerRequestId: 0,
 };
+
+function toStockIdentity(row) {
+  if (!row?.market || !row?.symbol) return "";
+  return `${String(row.market).toLowerCase()}:${String(row.symbol).trim()}`;
+}
+
+function loadRecentStockSearches() {
+  try {
+    const raw = localStorage.getItem(RECENT_STOCK_SEARCHES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((row) => row && row.market && row.symbol)
+      .map((row) => ({
+        market: String(row.market).toLowerCase(),
+        symbol: String(row.symbol).trim(),
+        stock_name: String(row.stock_name || row.name || row.symbol).trim(),
+      }))
+      .slice(0, MAX_RECENT_STOCK_SEARCHES);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentStockSearch(stock) {
+  if (!stock?.market || !stock?.symbol) return;
+  const normalized = {
+    market: String(stock.market).toLowerCase(),
+    symbol: String(stock.symbol).trim(),
+    stock_name: String(stock.stock_name || stock.name || stock.symbol).trim(),
+  };
+  const identity = toStockIdentity(normalized);
+  const nextItems = [
+    normalized,
+    ...loadRecentStockSearches().filter((row) => toStockIdentity(row) !== identity),
+  ].slice(0, MAX_RECENT_STOCK_SEARCHES);
+  searchState.recentSearches = nextItems;
+  try {
+    localStorage.setItem(RECENT_STOCK_SEARCHES_STORAGE_KEY, JSON.stringify(nextItems));
+  } catch {
+    // Ignore quota/privacy errors and keep in-memory recent list usable.
+  }
+}
+
+function renderRecentStockSearches() {
+  const items = loadRecentStockSearches().slice(0, MAX_RECENT_STOCK_SEARCHES);
+  searchState.recentSearches = items;
+  searchState.dropdownMode = "recent-search";
+  searchState.suggestions = [];
+  if (!items.length) {
+    stockDropdownEl.innerHTML = '<div class="search-option empty recent-search">暂无最近搜索</div>';
+    stockDropdownEl.classList.add("visible");
+    return;
+  }
+
+  stockDropdownEl.innerHTML = items.map((row, index) => (
+    `<button type="button" class="search-option recent-search" data-index="${index}" data-source="recent-search">
+      <span class="search-option-main">${row.stock_name}</span>
+      <span class="search-option-meta">recent-search · ${row.market.toUpperCase()} · ${row.symbol}</span>
+    </button>`
+  )).join("");
+  stockDropdownEl.classList.add("visible");
+}
 
 function rerenderCurrentSubdiagTable() {
   if (!searchState.currentStock?.scoreResult) return;
@@ -1268,6 +1399,7 @@ function setSubdiagExplanationState(subKey, nextState) {
 }
 
 function renderSuggestions(results) {
+  searchState.dropdownMode = "suggestions";
   searchState.suggestions = results;
   if (!results.length) {
     stockDropdownEl.innerHTML = '<div class="search-option empty">未找到匹配股票</div>';
@@ -1300,8 +1432,7 @@ async function loadSuggestions(query) {
   const trimmed = query.trim();
   const requestId = ++searchState.requestId;
   if (!trimmed) {
-    hideSuggestions();
-    searchState.suggestions = [];
+    renderRecentStockSearches();
     return;
   }
   try {
@@ -1328,9 +1459,10 @@ stockInputEl.addEventListener("input", e => {
   }, SEARCH_DEBOUNCE_MS);
 });
 stockInputEl.addEventListener("focus", () => {
-  if (searchState.suggestions.length) {
-    stockDropdownEl.classList.add("visible");
-  }
+  renderRecentStockSearches();
+});
+stockInputEl.addEventListener("click", () => {
+  renderRecentStockSearches();
 });
 stockInputEl.addEventListener("keydown", e => {
   if (e.key === "Enter") {
@@ -1347,7 +1479,11 @@ stockInputEl.addEventListener("keydown", e => {
 stockDropdownEl.addEventListener("click", e => {
   const option = e.target.closest(".search-option[data-index]");
   if (!option) return;
-  applySuggestion(searchState.suggestions[Number(option.dataset.index)]);
+  const index = Number(option.dataset.index);
+  const list = option.dataset.source === "recent-search"
+    ? searchState.recentSearches
+    : searchState.suggestions;
+  applySuggestion(list[index]);
 });
 document.getElementById("sub-tbody").addEventListener("click", e => {
   const trigger = e.target.closest("[data-subdiag-action][data-subdiag-key]");
@@ -1583,6 +1719,7 @@ async function doSearch(selectedRow = null) {
       aiReportReady: false,
       subdiagExplanations: {},
     };
+    saveRecentStockSearch(searchState.currentStock);
     const reportHistory = reportHistoryPayload || {};
     renderAiFinancialReport(null);
     if (shouldLoadFinancialDetail) {

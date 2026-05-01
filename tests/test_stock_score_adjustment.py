@@ -263,6 +263,88 @@ class StockScoreAdjustmentTests(unittest.TestCase):
         self.assertEqual(["net_profit", "revenue"], [item["key"] for item in result["rows"][1]["financial_inputs"]])
         self.assertEqual("归属于母公司所有者的净利润", result["rows"][1]["financial_inputs"][0]["label"])
 
+    def test_build_stock_score_industry_peer_benchmark_returns_financial_inputs_for_direct_and_growth_metrics(self) -> None:
+        from app.search import index as idx
+
+        def build_entry(*, ind2: str, report_date: str, roe_pct: float, revenue_growth: float, profit_growth: float, ex_profit_growth: float) -> dict[str, object]:
+            return {
+                "report_date": report_date,
+                "announce_date": "20260424",
+                "latest_period": "2026Q1",
+                "industry_sw_level_2": ind2,
+                "sub_indicators": {sub_key: 50.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_sub_indicators": {sub_key: 45.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_dim_scores": {},
+                "ind_total_score": 0.0,
+                "raw_sub_indicators": {
+                    "roe_pct": roe_pct,
+                    "revenue_growth": revenue_growth,
+                    "profit_growth": profit_growth,
+                    "ex_profit_growth": ex_profit_growth,
+                },
+                "prev_raw_sub_indicators": {
+                    "roe_pct": roe_pct - 0.5,
+                    "revenue_growth": revenue_growth - 2.0,
+                    "profit_growth": profit_growth - 3.0,
+                    "ex_profit_growth": ex_profit_growth - 4.0,
+                },
+            }
+
+        snapshot = {
+            "report_date": "2026Q1",
+            "scores": {
+                "sz:000333": build_entry(ind2="白色家电", report_date="20260331", roe_pct=5.46, revenue_growth=2.45, profit_growth=38.02, ex_profit_growth=36.67),
+                "sz:000651": build_entry(ind2="白色家电", report_date="20260331", roe_pct=4.20, revenue_growth=1.20, profit_growth=21.50, ex_profit_growth=18.40),
+                "sh:600000": build_entry(ind2="银行", report_date="20260331", roe_pct=99.0, revenue_growth=99.0, profit_growth=99.0, ex_profit_growth=99.0),
+            },
+        }
+        industry_map = {
+            ("sz", "000333"): ("白色家电", "家用电器"),
+            ("sz", "000651"): ("白色家电", "家用电器"),
+            ("sh", "600000"): ("银行", "银行"),
+        }
+        name_lookup = {
+            ("sz", "000333"): "美的集团",
+            ("sz", "000651"): "格力电器",
+            ("sh", "600000"): "浦发银行",
+        }
+        component_context_map = {
+            ("sz", "000333"): {
+                "current": {"net_profit": 124.2, "equity": 2273.6, "revenue": 1284.3, "ex_net_profit": 109.8},
+                "previous": {"net_profit": 96.3, "equity": 2188.4, "revenue": 1253.6, "ex_net_profit": 80.4},
+            },
+            ("sz", "000651"): {
+                "current": {"net_profit": 67.5, "equity": 1608.2, "revenue": 521.1, "ex_net_profit": 58.4},
+                "previous": {"net_profit": 55.2, "equity": 1570.0, "revenue": 514.9, "ex_net_profit": 49.7},
+            },
+        }
+
+        def fake_component_context(market: str, symbol: str, **_kwargs):
+            return component_context_map.get((market, symbol), {"current": {}, "previous": {}})
+
+        with (
+            mock.patch.object(idx, "_load_financial_snapshot", return_value=snapshot),
+            mock.patch.object(idx, "_load_industry_map", return_value=industry_map),
+            mock.patch.object(idx, "_stock_name_lookup", return_value=name_lookup),
+            mock.patch.object(idx, "_load_sub_indicator_component_context", side_effect=fake_component_context),
+            mock.patch.object(idx, "_load_latest_close_prices", return_value={("sz", "000333"): 72.35, ("sz", "000651"): 43.21}),
+        ):
+            roe_result = idx.build_stock_score_industry_peer_benchmark("sz", "000333", "roe_pct")
+            revenue_result = idx.build_stock_score_industry_peer_benchmark("sz", "000333", "revenue_growth")
+            profit_result = idx.build_stock_score_industry_peer_benchmark("sz", "000333", "profit_growth")
+            ex_profit_result = idx.build_stock_score_industry_peer_benchmark("sz", "000333", "ex_profit_growth")
+
+        def current_row(payload: dict[str, object]) -> dict[str, object]:
+            return next(row for row in payload["rows"] if row["symbol"] == "000333")
+
+        self.assertEqual(["net_profit", "equity"], [item["key"] for item in current_row(roe_result)["financial_inputs"]])
+        self.assertEqual(["revenue"], [item["key"] for item in current_row(revenue_result)["financial_inputs"]])
+        self.assertEqual(["net_profit"], [item["key"] for item in current_row(profit_result)["financial_inputs"]])
+        self.assertEqual(["ex_net_profit"], [item["key"] for item in current_row(ex_profit_result)["financial_inputs"]])
+        self.assertEqual(1253.6, current_row(revenue_result)["financial_inputs"][0]["previous_value"])
+        self.assertEqual(96.3, current_row(profit_result)["financial_inputs"][0]["previous_value"])
+        self.assertEqual(80.4, current_row(ex_profit_result)["financial_inputs"][0]["previous_value"])
+
     def test_build_stock_score_industry_total_peer_benchmark_returns_sorted_rows_with_dimension_scores(self) -> None:
         from app.search import index as idx
 

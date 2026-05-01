@@ -315,6 +315,145 @@ class SearchIndexTests(unittest.TestCase):
 
         self.assertEqual(basic_info, profile["basic_info"])
 
+    def test_load_stock_basic_info_prefers_realtime_quote_snapshot_for_quote_fields(self) -> None:
+        from unittest import mock
+        from app.search import index as search_index
+
+        financial_row = {
+            "基本每股收益（单季度）": 1.69,
+            "总股本": 7603276288.0,
+            "已上市流通A股": 6852080640.0,
+            "已上市流通H股": 650848512.0,
+            "已上市流通B股": 0.0,
+        }
+        realtime_snapshot = {
+            "price": 81.10,
+            "last_close": 81.31,
+            "volume": 354432.0,
+        }
+
+        with mock.patch.object(search_index, "_load_realtime_quote_snapshot", return_value=realtime_snapshot), \
+             mock.patch.object(search_index, "_snapshot_latest_period", return_value="2026Q1"), \
+             mock.patch.object(search_index, "_load_financial_quarter_row", return_value=financial_row), \
+             mock.patch.object(search_index, "_ttm_eps", return_value=5.85), \
+             mock.patch.object(search_index, "_load_latest_daily_snapshot", return_value={"avg_volume_5": 282000.0}):
+            basic_info = search_index._load_stock_basic_info("sz", "000333")
+
+        self.assertAlmostEqual(81.10, basic_info["current_price"], places=6)
+        self.assertAlmostEqual((81.10 - 81.31) / 81.31 * 100.0, basic_info["change_pct"], places=6)
+        self.assertAlmostEqual(354432.0 / 282000.0, basic_info["volume_ratio"], places=6)
+        self.assertAlmostEqual(76.03276288, basic_info["total_shares"], places=6)
+        self.assertAlmostEqual(68.5208064, basic_info["float_shares"], places=6)
+        self.assertAlmostEqual(81.10 * (7603276288.0 - 650848512.0) / 1e8, basic_info["a_share_market_cap"], places=6)
+        self.assertAlmostEqual(1.69, basic_info["eps"], places=6)
+        self.assertAlmostEqual(81.10 / 5.85, basic_info["dynamic_pe"], places=6)
+
+    def test_load_stock_basic_info_uses_local_daily_close_for_non_realtime_fields(self) -> None:
+        from unittest import mock
+        from app.search import index as search_index
+
+        financial_row = {
+            "基本每股收益（单季度）": 1.69,
+            "总股本": 7603276288.0,
+            "已上市流通A股": 6852080640.0,
+            "已上市流通H股": 650848512.0,
+            "已上市流通B股": 0.0,
+        }
+        realtime_snapshot = {
+            "price": 81.10,
+            "last_close": 81.31,
+            "volume": 354432.0,
+        }
+        daily_snapshot = {
+            "latest_close": 79.88,
+            "previous_close": 79.50,
+            "latest_volume": 288000.0,
+            "avg_volume_5": 282000.0,
+        }
+
+        with mock.patch.object(search_index, "_load_realtime_quote_snapshot", return_value=realtime_snapshot), \
+             mock.patch.object(search_index, "_snapshot_latest_period", return_value="2026Q1"), \
+             mock.patch.object(search_index, "_load_financial_quarter_row", return_value=financial_row), \
+             mock.patch.object(search_index, "_ttm_eps", return_value=5.85), \
+             mock.patch.object(search_index, "_load_latest_daily_snapshot", return_value=daily_snapshot):
+            basic_info = search_index._load_stock_basic_info("sz", "000333")
+
+        self.assertAlmostEqual(81.10, basic_info["current_price"], places=6)
+        self.assertAlmostEqual((81.10 - 81.31) / 81.31 * 100.0, basic_info["change_pct"], places=6)
+        self.assertAlmostEqual(354432.0 / 282000.0, basic_info["volume_ratio"], places=6)
+        self.assertAlmostEqual(79.88 * (7603276288.0 - 650848512.0) / 1e8, basic_info["a_share_market_cap"], places=6)
+        self.assertAlmostEqual(79.88 / 5.85, basic_info["dynamic_pe"], places=6)
+        self.assertAlmostEqual(76.03276288, basic_info["total_shares"], places=6)
+        self.assertAlmostEqual(68.5208064, basic_info["float_shares"], places=6)
+        self.assertAlmostEqual(1.69, basic_info["eps"], places=6)
+
+    def test_pool_filter_response_includes_rps120_rps250_and_returns(self) -> None:
+        from unittest import mock
+        from app.search import index as search_index
+
+        security_rows = [
+            {"market": "sz", "symbol": "000333", "stock_name": "美的集团", "name_initials": "mdjt"},
+            {"market": "sz", "symbol": "000651", "stock_name": "格力电器", "name_initials": "gldq"},
+            {"market": "sh", "symbol": "600000", "stock_name": "浦发银行", "name_initials": "pfyh"},
+        ]
+        industry_rows = [
+            {"market": "sz", "symbol": "000333", "industry_level_1_name": "家电", "industry_level_2_name": "白色家电"},
+            {"market": "sz", "symbol": "000651", "industry_level_1_name": "家电", "industry_level_2_name": "白色家电"},
+            {"market": "sh", "symbol": "600000", "industry_level_1_name": "银行", "industry_level_2_name": "股份制银行"},
+        ]
+        concept_rows = []
+        rps_rows = [
+            {
+                "symbol": "000333",
+                "rps_20": 88.12,
+                "rps_50": 91.55,
+                "rps_120": 84.37,
+                "rps_250": 72.66,
+                "return_20_pct": 12.15,
+                "return_50_pct": 18.73,
+                "return_120_pct": 31.28,
+                "return_250_pct": 48.11,
+            },
+            {
+                "symbol": "000651",
+                "rps_20": 75.22,
+                "rps_50": 81.10,
+                "rps_120": 79.20,
+                "rps_250": 68.40,
+                "return_20_pct": 7.02,
+                "return_50_pct": 15.21,
+                "return_120_pct": 28.02,
+                "return_250_pct": 41.75,
+            },
+            {
+                "symbol": "600000",
+                "rps_20": 30.22,
+                "rps_50": 35.10,
+                "rps_120": 40.20,
+                "rps_250": 45.40,
+                "return_20_pct": -3.02,
+                "return_50_pct": -1.21,
+                "return_120_pct": 2.10,
+                "return_250_pct": 5.75,
+            },
+        ]
+
+        with (
+            mock.patch.object(search_index, "load_security_rows", return_value=security_rows),
+            mock.patch.object(search_index, "load_industry_rows", return_value=industry_rows),
+            mock.patch.object(search_index, "load_concept_rows", return_value=concept_rows),
+            mock.patch.object(search_index, "load_rps_rows", return_value=rps_rows),
+        ):
+            result = search_index.pool_filter_response(["家电"], [], [], limit=10)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(2, result["pool_size"])
+        self.assertEqual(["000333", "000651"], [row["symbol"] for row in result["results"]])
+        self.assertEqual(84.37, result["results"][0]["rps_120"])
+        self.assertEqual(72.66, result["results"][0]["rps_250"])
+        self.assertEqual(31.28, result["results"][0]["return_120_pct"])
+        self.assertEqual(48.11, result["results"][0]["return_250_pct"])
+
     def test_search_rps_ranking_supports_window_and_name_filters(self) -> None:
         from app.search.index import build_rps_index, search_rps_rankings
 

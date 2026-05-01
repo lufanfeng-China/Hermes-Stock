@@ -443,6 +443,67 @@ def _ttm_eps(period: str, symbol: str, current_eps: float | None) -> float | Non
     return _annualized_eps_from_period(text, current_eps)
 
 
+def _load_realtime_quote_snapshot(market: str, symbol: str) -> dict[str, object] | None:
+    try:
+        from mootdx.quotes import Quotes
+    except ModuleNotFoundError:
+        return None
+    except Exception:
+        return None
+    if market not in {"sh", "sz", "bj"} or not symbol:
+        return None
+    try:
+        client = Quotes.factory(market="std")
+        rows = client.quotes(symbol=[symbol])
+        if rows is None or getattr(rows, "empty", False):
+            return None
+        row = rows.iloc[0] if hasattr(rows, "iloc") else rows[0]
+        return {
+            "price": _pick(row.get("price")) if hasattr(row, "get") else None,
+            "last_close": _pick(row.get("last_close")) if hasattr(row, "get") else None,
+            "volume": _pick(row.get("volume")) if hasattr(row, "get") else _pick(row.get("vol")) if hasattr(row, "get") else None,
+            "amount": _pick(row.get("amount")) if hasattr(row, "get") else None,
+        }
+    except Exception:
+        return None
+
+
+@lru_cache(maxsize=256)
+def _load_latest_daily_snapshot(market: str, symbol: str) -> dict[str, float | None]:
+    snapshot = {
+        "latest_close": None,
+        "previous_close": None,
+        "latest_volume": None,
+        "avg_volume_5": None,
+    }
+    try:
+        from mootdx.reader import Reader
+    except ModuleNotFoundError:
+        return snapshot
+    except Exception:
+        return snapshot
+    if market not in {"sh", "sz", "bj"} or not symbol:
+        return snapshot
+    try:
+        reader = Reader.factory(market="std", tdxdir=_TDX_DIR)
+        daily = reader.daily(symbol=symbol)
+        if daily is None or daily.empty:
+            return snapshot
+        latest_row = daily.iloc[-1]
+        snapshot["latest_close"] = _pick(latest_row.get("close"))
+        snapshot["latest_volume"] = _pick(latest_row.get("volume"))
+        if len(daily) >= 2:
+            snapshot["previous_close"] = _pick(daily.iloc[-2].get("close"))
+            lookback = daily.iloc[max(0, len(daily) - 6):-1]
+            previous_volumes = [_pick(row.get("volume")) for _idx, row in lookback.iterrows()]
+            previous_volumes = [value for value in previous_volumes if value not in (None, 0)]
+            if previous_volumes:
+                snapshot["avg_volume_5"] = sum(previous_volumes) / len(previous_volumes)
+    except Exception:
+        return snapshot
+    return snapshot
+
+
 def _load_stock_basic_info(market: str, symbol: str) -> dict[str, object]:
     basic_info = {
         "current_price": None,
@@ -455,36 +516,30 @@ def _load_stock_basic_info(market: str, symbol: str) -> dict[str, object]:
         "dynamic_pe": None,
     }
 
-    try:
-        from mootdx.reader import Reader
-    except ModuleNotFoundError:
-        Reader = None
-    except Exception:
-        Reader = None
+    realtime_snapshot = _load_realtime_quote_snapshot(market, symbol) or {}
+    daily_snapshot = _load_latest_daily_snapshot(market, symbol)
 
-    if Reader is not None and market in {"sh", "sz", "bj"} and symbol:
-        try:
-            reader = Reader.factory(market="std", tdxdir=_TDX_DIR)
-            daily = reader.daily(symbol=symbol)
-            if daily is not None and not daily.empty:
-                latest_row = daily.iloc[-1]
-                latest_close = _pick(latest_row.get("close"))
-                latest_volume = _pick(latest_row.get("volume"))
-                basic_info["current_price"] = latest_close
-                if len(daily) >= 2:
-                    previous_close = _pick(daily.iloc[-2].get("close"))
-                    if latest_close is not None and previous_close not in (None, 0):
-                        basic_info["change_pct"] = (latest_close - previous_close) / previous_close * 100.0
-                if latest_volume is not None and len(daily) >= 2:
-                    lookback = daily.iloc[max(0, len(daily) - 6):-1]
-                    previous_volumes = [_pick(row.get("volume")) for _idx, row in lookback.iterrows()]
-                    previous_volumes = [value for value in previous_volumes if value not in (None, 0)]
-                    if previous_volumes:
-                        avg_volume = sum(previous_volumes) / len(previous_volumes)
-                        if avg_volume:
-                            basic_info["volume_ratio"] = latest_volume / avg_volume
-        except Exception:
-            pass
+    current_price = _pick(realtime_snapshot.get("price"))
+    if current_price is None:
+        current_price = daily_snapshot.get("latest_close")
+    basic_info["current_price"] = current_price
+
+    last_close = _pick(realtime_snapshot.get("last_close"))
+    if last_close is None:
+        last_close = daily_snapshot.get("previous_close")
+    if current_price is not None and last_close not in (None, 0):
+        basic_info["change_pct"] = (current_price - last_close) / last_close * 100.0
+
+    current_volume = _pick(realtime_snapshot.get("volume"))
+    if current_volume is None:
+        current_volume = daily_snapshot.get("latest_volume")
+    avg_volume_5 = daily_snapshot.get("avg_volume_5")
+    if current_volume not in (None, 0) and avg_volume_5 not in (None, 0):
+        basic_info["volume_ratio"] = current_volume / avg_volume_5
+
+    local_reference_price = daily_snapshot.get("latest_close")
+    if local_reference_price is None:
+        local_reference_price = current_price
 
     latest_period = _snapshot_latest_period(market, symbol)
     financial_row = _load_financial_quarter_row(latest_period, symbol) if latest_period else None
@@ -511,12 +566,12 @@ def _load_stock_basic_info(market: str, symbol: str) -> dict[str, object]:
     basic_info["eps"] = current_eps
     basic_info["total_shares"] = total_shares_raw / 1e8 if total_shares_raw is not None else None
     basic_info["float_shares"] = float_shares_raw / 1e8 if float_shares_raw is not None else None
-    if basic_info["current_price"] is not None and a_share_total_shares_raw is not None:
-        basic_info["a_share_market_cap"] = basic_info["current_price"] * a_share_total_shares_raw / 1e8
+    if local_reference_price is not None and a_share_total_shares_raw is not None:
+        basic_info["a_share_market_cap"] = local_reference_price * a_share_total_shares_raw / 1e8
 
     ttm_eps = _ttm_eps(latest_period, symbol, current_eps)
-    if basic_info["current_price"] is not None and ttm_eps is not None and ttm_eps > 0:
-        basic_info["dynamic_pe"] = basic_info["current_price"] / ttm_eps
+    if local_reference_price is not None and ttm_eps is not None and ttm_eps > 0:
+        basic_info["dynamic_pe"] = local_reference_price / ttm_eps
     return basic_info
 
 
@@ -893,8 +948,12 @@ def pool_filter_response(
             sym_rps[sym] = {
                 "rps_20": row.get("rps_20"),
                 "rps_50": row.get("rps_50"),
+                "rps_120": row.get("rps_120"),
+                "rps_250": row.get("rps_250"),
                 "return_20_pct": row.get("return_20_pct"),
                 "return_50_pct": row.get("return_50_pct"),
+                "return_120_pct": row.get("return_120_pct"),
+                "return_250_pct": row.get("return_250_pct"),
             }
 
     # Sort by pool-local RPS: prefer rps_20, fall back to rps_50
@@ -903,23 +962,31 @@ def pool_filter_response(
         rps_info = sym_rps.get(sym, {})
         rps_20 = rps_info.get("rps_20") if rps_info else None
         rps_50 = rps_info.get("rps_50") if rps_info else None
+        rps_120 = rps_info.get("rps_120") if rps_info else None
+        rps_250 = rps_info.get("rps_250") if rps_info else None
         ret_20 = rps_info.get("return_20_pct") if rps_info else None
         ret_50 = rps_info.get("return_50_pct") if rps_info else None
+        ret_120 = rps_info.get("return_120_pct") if rps_info else None
+        ret_250 = rps_info.get("return_250_pct") if rps_info else None
         sort_key = rps_20 if rps_20 is not None else (rps_50 if rps_50 is not None else -1.0)
-        ranked.append((sort_key, sym, symbol_map[sym], rps_20, rps_50, ret_20, ret_50))
+        ranked.append((sort_key, sym, symbol_map[sym], rps_20, rps_50, rps_120, rps_250, ret_20, ret_50, ret_120, ret_250))
 
     ranked.sort(key=lambda x: x[0], reverse=True)
 
     results = []
-    for sort_key, sym, info, rps_20, rps_50, ret_20, ret_50 in ranked[:limit]:
+    for sort_key, sym, info, rps_20, rps_50, rps_120, rps_250, ret_20, ret_50, ret_120, ret_250 in ranked[:limit]:
         results.append({
             "symbol": sym,
             "market": info["market"],
             "stock_name": info["stock_name"],
             "rps_20": rps_20,
             "rps_50": rps_50,
+            "rps_120": rps_120,
+            "rps_250": rps_250,
             "return_20_pct": ret_20,
             "return_50_pct": ret_50,
+            "return_120_pct": ret_120,
+            "return_250_pct": ret_250,
             "level1": sorted(info["level1"]),
             "level2": sorted(info["level2"]),
             "concepts": sorted(info["concepts"])[:10],  # cap for response size
@@ -1041,6 +1108,10 @@ _COMPONENT_LABELS = {
 _SUB_INDICATOR_COMPONENT_KEYS = {
     "roe_ex": ["ex_net_profit", "equity"],
     "net_margin": ["net_profit", "revenue"],
+    "roe_pct": ["net_profit", "equity"],
+    "revenue_growth": ["revenue"],
+    "profit_growth": ["net_profit"],
+    "ex_profit_growth": ["ex_net_profit"],
     "ocf_to_profit": ["op_cf", "net_profit"],
     "ocf_to_rev": ["op_cf", "revenue"],
     "free_cf": ["op_cf", "capex"],

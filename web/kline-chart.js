@@ -12,7 +12,7 @@ const DEFAULTS = {
   marginTop: 16,
   marginBottom: 48,
   marginLeft: 8,
-  marginRight: 16,
+  marginRight: 48,
   candleSpacing: 1.2,
   crosshairColor: '#3a3a4a',
   upColor: '#ef5350',
@@ -21,6 +21,8 @@ const DEFAULTS = {
   ma10Color: '#82b1ff',
   rps20Color: '#ce93d8',
   rps50Color: '#80cbc4',
+  rps120Color: '#ffcc80',
+  rps250Color: '#90caf9',
   rpsGuideColor: '#4a4a6a',
   gridColor: '#22222e',
   textColor: '#8888aa',
@@ -40,7 +42,7 @@ export class KlineChart {
     this.presets = [20, 60, 120, 250, -1];
     this.maWindows = [5, 10];
     this.maSeries = {};
-    this.rpsHistory = [];   // [{trading_day, rps_20, rps_50}, ...]
+    this.rpsHistory = [];   // [{trading_day, rps_20, rps_50, rps_120, rps_250}, ...]
     this.hoveredIndex = null;
     this.isDragging = false;
     this.dragStartClientX = 0;
@@ -164,6 +166,18 @@ export class KlineChart {
     this.rpsLine50.setAttribute('stroke', this.cfg.rps50Color);
     this.rpsLine50.setAttribute('stroke-width', '1.3');
     this.rpsGroup.appendChild(this.rpsLine50);
+
+    this.rpsLine120 = document.createElementNS(ns, 'path');
+    this.rpsLine120.setAttribute('fill', 'none');
+    this.rpsLine120.setAttribute('stroke', this.cfg.rps120Color);
+    this.rpsLine120.setAttribute('stroke-width', '1.2');
+    this.rpsGroup.appendChild(this.rpsLine120);
+
+    this.rpsLine250 = document.createElementNS(ns, 'path');
+    this.rpsLine250.setAttribute('fill', 'none');
+    this.rpsLine250.setAttribute('stroke', this.cfg.rps250Color);
+    this.rpsLine250.setAttribute('stroke-width', '1.2');
+    this.rpsGroup.appendChild(this.rpsLine250);
   }
 
   _createCrosshairGroup() {
@@ -230,7 +244,6 @@ export class KlineChart {
     this.tooltipText.setAttribute('fill', '#ccccee');
     this.tooltipText.setAttribute('font-size', '11');
     this.tooltipText.setAttribute('font-family', 'monospace');
-    this.tooltipText.style.whiteSpace = 'pre';
     this.tooltip.appendChild(this.tooltipText);
   }
 
@@ -426,6 +439,8 @@ export class KlineChart {
 
     const pts20 = buildPoints('rps_20');
     const pts50 = buildPoints('rps_50');
+    const pts120 = buildPoints('rps_120');
+    const pts250 = buildPoints('rps_250');
 
     const toPath = (pts) => {
       const valid = pts.filter(p => p !== null);
@@ -443,6 +458,8 @@ export class KlineChart {
 
     this.rpsLine20.setAttribute('d', toPath(pts20));
     this.rpsLine50.setAttribute('d', toPath(pts50));
+    this.rpsLine120.setAttribute('d', toPath(pts120));
+    this.rpsLine250.setAttribute('d', toPath(pts250));
   }
 
   _priceMin() {
@@ -597,6 +614,7 @@ export class KlineChart {
     const d = this._getPlotDims();
     const bars = this._visibleBars();
     const barW = this._barWidth();
+    const axisLabelX = d.w - 4;
 
     // Price Y axis labels
     const pG = this.priceAxisYLabels;
@@ -607,11 +625,12 @@ export class KlineChart {
       const price = pMin + (pMax - pMin) * (4 - i) / 4;
       const y = d.priceTop + (d.priceH * i) / 4;
       const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      t.setAttribute('x', d.ml + d.plotW + 4);
+      t.setAttribute('x', d.w - 4);
       t.setAttribute('y', y + 4);
       t.setAttribute('fill', this.cfg.textColor);
       t.setAttribute('font-size', '10');
       t.setAttribute('font-family', 'monospace');
+      t.setAttribute('text-anchor', 'end');
       t.textContent = price.toFixed(2);
       pG.appendChild(t);
     }
@@ -624,11 +643,12 @@ export class KlineChart {
       const vol = vMax * (2 - i) / 2;
       const y = d.volumeTop + (d.volH * i) / 2;
       const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      t.setAttribute('x', d.ml + d.plotW + 4);
+      t.setAttribute('x', axisLabelX);
       t.setAttribute('y', y + 4);
       t.setAttribute('fill', this.cfg.textColor);
       t.setAttribute('font-size', '10');
       t.setAttribute('font-family', 'monospace');
+      t.setAttribute('text-anchor', 'end');
       t.textContent = vol >= 1_000_000 ? `${(vol / 1_000_000).toFixed(1)}M` : vol >= 1_000 ? `${(vol / 1_000).toFixed(0)}K` : `${vol}`;
       vG.appendChild(t);
     }
@@ -668,13 +688,15 @@ export class KlineChart {
     const rpsVals = [0, 50, 80, 100];
     const colors = [this.cfg.textColor, this.cfg.rpsGuideColor, this.cfg.rpsGuideColor, this.cfg.textColor];
     const yTexts = [d.rpsTop + d.rpsH, this._rpsToY(50), this._rpsToY(80), d.rpsTop];
+    const axisLabelX = d.w - 4;
     for (let i = 0; i < rpsVals.length; i++) {
       const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      t.setAttribute('x', d.ml + d.plotW + 4);
+      t.setAttribute('x', axisLabelX);
       t.setAttribute('y', yTexts[i] + 4);
       t.setAttribute('fill', colors[i]);
       t.setAttribute('font-size', '10');
       t.setAttribute('font-family', 'monospace');
+      t.setAttribute('text-anchor', 'end');
       t.textContent = rpsVals[i];
       this.axesGroup.appendChild(t);
       this._rpsAxisLabels.push(t);
@@ -683,6 +705,8 @@ export class KlineChart {
     const legendItems = [
       { label: 'RPS20', color: this.cfg.rps20Color },
       { label: 'RPS50', color: this.cfg.rps50Color },
+      { label: 'RPS120', color: this.cfg.rps120Color },
+      { label: 'RPS250', color: this.cfg.rps250Color },
     ];
     legendItems.forEach((item, idx) => {
       const ly = d.rpsTop + 12 + idx * 14;
@@ -704,6 +728,7 @@ export class KlineChart {
       this.tooltip.style.display = 'none';
       return;
     }
+    const ns = 'http://www.w3.org/2000/svg';
     const d = this._getPlotDims();
     const barW = this._barWidth();
     const x = d.ml + visibleIndex * (barW + this.cfg.candleSpacing) + barW / 2;
@@ -729,15 +754,14 @@ export class KlineChart {
 
     // Tooltip
     const lines = [
-      bar.trading_day,
-      `O ${bar.open}  H ${bar.high}`,
-      `L ${bar.low}   C ${bar.close}`,
-      `V ${bar.volume >= 1_000_000 ? (bar.volume / 1_000_000).toFixed(2) + 'M' : bar.volume >= 1_000 ? (bar.volume / 1_000).toFixed(0) + 'K' : bar.volume}`,
+      `日期: ${bar.trading_day}`,
+      `最高价: ${bar.high}`,
+      `最低价: ${bar.low}`,
+      `收盘价: ${bar.close}`,
     ];
-    const textContent = lines.join('\n');
     const padding = 6;
     const lineH = 13;
-    const tw = 120;
+    const tw = 144;
     const th = lines.length * lineH + padding * 2;
 
     // Position tooltip to avoid edges
@@ -753,7 +777,18 @@ export class KlineChart {
 
     this.tooltipText.setAttribute('x', tx + padding);
     this.tooltipText.setAttribute('y', ty + padding + 10);
-    this.tooltipText.textContent = textContent;
+    this.tooltipText.textContent = '';
+    lines.forEach((line, index) => {
+      const tspan = document.createElementNS(ns, 'tspan');
+      tspan.setAttribute('x', tx + padding);
+      if (index === 0) {
+        tspan.setAttribute('dy', '0');
+      } else {
+        tspan.setAttribute('dy', String(lineH));
+      }
+      tspan.textContent = line;
+      this.tooltipText.appendChild(tspan);
+    });
     this.tooltip.style.display = 'block';
   }
 

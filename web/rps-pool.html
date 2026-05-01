@@ -189,6 +189,34 @@
       top: 0;
       z-index: 10;
     }
+    .pool-table th[data-sort-key] {
+      cursor: pointer;
+      user-select: none;
+    }
+    .pool-table th[data-sort-key]:hover {
+      color: #ccccee;
+    }
+    .pool-sort-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .pool-sort-indicator {
+      color: #5e647d;
+      font-size: 11px;
+      line-height: 1;
+    }
+    .pool-table th.pool-sort-active {
+      color: #ccccee;
+    }
+    .pool-table th.pool-sort-asc .pool-sort-indicator::before {
+      content: "↑";
+      color: #aaccee;
+    }
+    .pool-table th.pool-sort-desc .pool-sort-indicator::before {
+      content: "↓";
+      color: #aaccee;
+    }
     .pool-table td {
       padding: 7px 10px;
       border-bottom: 1px solid #1a1a2a;
@@ -200,20 +228,6 @@
     .pool-table .num {
       text-align: right;
       font-variant-numeric: tabular-nums;
-    }
-    .pool-kline-btn {
-      background: transparent;
-      border: 1px solid #3a3a5a;
-      color: #888;
-      border-radius: 3px;
-      padding: 2px 8px;
-      font-size: 10px;
-      cursor: pointer;
-      font-family: monospace;
-    }
-    .pool-kline-btn:hover {
-      border-color: #6a6a9a;
-      color: #ccccee;
     }
     .no-pool-results {
       text-align: center;
@@ -229,9 +243,53 @@
       margin-top: 8px;
       justify-content: flex-end;
     }
-
-    /* ── Full Ranking Section ───────────────────────────────── */
-    #full-ranking-section .search-card { margin-bottom: 0; }
+    .industry-rps-section { margin-bottom: 16px; }
+    .industry-rps-wrap {
+      max-height: 320px;
+      overflow-y: auto;
+      border-radius: 4px;
+      border: 1px solid #2a2a3a;
+    }
+    .industry-rps-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .industry-rps-table th {
+      background: #12121e;
+      color: #888;
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: normal;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #2a2a3a;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .industry-rps-table th[data-sort-key] {
+      cursor: pointer;
+      user-select: none;
+    }
+    .industry-rps-table th[data-sort-key]:hover {
+      color: #ccccee;
+    }
+    .industry-rps-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #1a1a2a;
+      color: #ccccee;
+    }
+    .industry-rps-table .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .industry-rps-table tbody tr {
+      cursor: pointer;
+    }
+    .industry-rps-table tbody tr:hover td { background: #1e1e2e; }
 
     /* ── Shared chart section ──────────────────────────────── */
     #pool-chart-section { margin-top: 16px; }
@@ -240,11 +298,21 @@
     /* ── Concept column in pool table ─────────────────────── */
     .pool-table .industry-cell {
       font-size: 10px;
-      color: #778;
       max-width: 120px;
+      overflow: hidden;
+    }
+    .pool-industry-primary,
+    .pool-industry-secondary {
+      display: block;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .pool-industry-primary {
+      color: #9aa3c7;
+    }
+    .pool-industry-secondary {
+      color: #778;
     }
   </style>
 </head>
@@ -302,11 +370,12 @@
                 <th>#</th>
                 <th>代码</th>
                 <th>名称</th>
-                <th class="num">RPS20</th>
-                <th class="num">RPS50</th>
+                <th class="num pool-sort-active pool-sort-desc" data-sort-key="rps_20" data-sort-direction="desc"><span class="pool-sort-label">RPS20<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
+                <th class="num" data-sort-key="rps_50"><span class="pool-sort-label">RPS50<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
+                <th class="num" data-sort-key="rps_120"><span class="pool-sort-label">RPS120<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
+                <th class="num" data-sort-key="rps_250"><span class="pool-sort-label">RPS250<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
                 <th class="num">20日涨幅</th>
-                <th>行业</th>
-                <th>操作</th>
+                <th>申万行业</th>
               </tr>
             </thead>
             <tbody id="pool-tbody"></tbody>
@@ -316,6 +385,29 @@
           <button class="page-btn" id="pool-prev" disabled>&#8592; 上一页</button>
           <span class="page-info" id="pool-page-info">1 / 1</span>
           <button class="page-btn" id="pool-next" disabled>下一页 &#8594;</button>
+        </div>
+      </section>
+
+      <section id="industry-rps-section" class="industry-rps-section hidden">
+        <div class="pool-section-header">
+          <span class="pool-section-title">二级行业RPS</span>
+          <span id="industry-rps-count-badge" class="pool-badge">0</span>
+        </div>
+        <div class="industry-rps-wrap">
+          <table class="industry-rps-table">
+            <thead>
+              <tr>
+                <th>申万一级</th>
+                <th>申万二级</th>
+                <th class="num">成分股</th>
+                <th class="num pool-sort-active pool-sort-desc" data-sort-key="industry_rps_20" data-sort-direction="desc"><span class="pool-sort-label">RPS20<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
+                <th class="num" data-sort-key="industry_rps_50"><span class="pool-sort-label">RPS50<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
+                <th class="num" data-sort-key="industry_rps_120"><span class="pool-sort-label">RPS120<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
+                <th class="num" data-sort-key="industry_rps_250"><span class="pool-sort-label">RPS250<span class="pool-sort-indicator" aria-hidden="true"></span></span></th>
+              </tr>
+            </thead>
+            <tbody id="industry-rps-tbody" data-industry-level2="" data-industry-level1=""></tbody>
+          </table>
         </div>
       </section>
 
@@ -340,51 +432,6 @@
         <div class="kline-chart-wrap">
           <svg id="pool-kline-svg" class="kline-svg"></svg>
         </div>
-      </section>
-
-      <!-- ── Full Ranking Section ── -->
-      <section id="full-ranking-section">
-        <article class="search-card terminal-panel">
-          <div class="search-card-header terminal-panel-header">
-            <div>
-              <p class="eyebrow">RANKING FEED</p>
-              <h2>全部股票 RPS 排名</h2>
-            </div>
-            <p id="rps-ranking-meta" class="search-meta">全市场 RPS 排行</p>
-          </div>
-          <div class="filter-bar">
-            <div id="rps-window-controls" class="zoom-controls" role="group" aria-label="RPS ranking windows">
-              <button type="button" class="zoom-button active" data-rps-window="20">20D</button>
-              <button type="button" class="zoom-button" data-rps-window="50">50D</button>
-              <button type="button" class="zoom-button" data-rps-window="120">120D</button>
-              <button type="button" class="zoom-button" data-rps-window="250">250D</button>
-            </div>
-            <form id="rps-ranking-form" class="search-form">
-              <input id="rps-ranking-input" name="q" type="search" autocomplete="off" placeholder="按代码/名称搜索">
-              <button type="submit">筛选</button>
-            </form>
-          </div>
-          <div id="rps-table-wrap" class="rps-table-wrap">
-            <table id="rps-ranking-table" class="rps-ranking-table">
-              <thead>
-                <tr>
-                  <th scope="col">RANK</th>
-                  <th scope="col">CODE</th>
-                  <th scope="col">NAME</th>
-                  <th scope="col">RPS</th>
-                  <th scope="col">RETURN</th>
-                  <th scope="col">WINDOW</th>
-                </tr>
-              </thead>
-              <tbody id="rps-ranking-tbody"></tbody>
-            </table>
-          </div>
-          <div id="rps-pagination" class="pagination-bar">
-            <button id="rps-page-prev" class="page-btn" disabled>&#8592; Prev</button>
-            <span id="rps-page-info" class="page-info">1 / 1</span>
-            <button id="rps-page-next" class="page-btn" disabled>Next &#8594;</button>
-          </div>
-        </article>
       </section>
 
     </section>
