@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>个股估值</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="app-shell stock-score-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">VALUATION TERMINAL</p>
+        <h1>Valuation Terminal</h1>
+      </div>
+      <div class="topbar-actions stock-score-topbar-actions">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/rps-pool.html" class="nav-link">RPS</a>
+        <a href="/stock-score.html" class="nav-link">财务评分</a>
+        <a href="/valuation.html" class="nav-link active">估值</a>
+      </div>
+    </header>
+
+    <section class="search-grid stock-score-lead-grid">
+      <div class="stock-score-search-stack">
+        <article class="search-card stock-score-search-card">
+          <div class="search-card-header">
+            <div>
+              <p class="eyebrow">VALUATION LOOKUP</p>
+              <h2>个股估值</h2>
+            </div>
+            <p class="search-meta">三视角估值与风险边界</p>
+          </div>
+          <form class="search-form stock-score-search-form" onsubmit="return false;">
+            <div class="search-input-wrap">
+              <input type="text" id="valuation-input" placeholder="000333 / sz:000333 / 美的集团" autocomplete="off">
+              <div class="search-dropdown" id="valuation-dropdown"></div>
+            </div>
+            <div class="stock-score-search-actions">
+              <button id="valuation-search-btn" type="button">查询估值</button>
+            </div>
+          </form>
+          <section id="valuation-status" class="status stock-score-status stock-score-search-status">输入股票代码查询估值</section>
+        </article>
+      </div>
+
+      <section id="valuation-summary" class="stock-score-summary">
+        <article class="profile-card stock-score-profile-card">
+          <div class="stock-score-profile-card-inner">
+            <div class="profile-header stock-score-profile-header">
+              <div>
+                <p class="eyebrow">VALUATION SNAPSHOT</p>
+                <h2><span id="valuation-stock-name">—</span> <span id="valuation-stock-symbol" class="stock-score-symbol">—</span></h2>
+              </div>
+              <div class="stock-score-dates">
+                <span class="profile-meta" id="valuation-date">—</span>
+                <span class="profile-meta" id="valuation-latest-report-date">—</span>
+              </div>
+            </div>
+            <section id="valuation-overview-metrics" class="metrics stock-score-metrics">
+              <article class="metric-card stock-score-total-card">
+                <p class="metric-label">当前价格</p>
+                <p id="valuation-current-price" class="metric-value">—</p>
+                <p class="metric-meta">市场锚定价格</p>
+              </article>
+              <article class="metric-card stock-score-total-card">
+                <p class="metric-label">估值区间</p>
+                <p id="valuation-final-mid" class="metric-value">—</p>
+                <p id="valuation-final-low" class="metric-meta">Low: —</p>
+                <p id="valuation-final-high" class="metric-meta">High: —</p>
+              </article>
+              <article class="metric-card stock-score-total-card">
+                <p class="metric-label">输出等级</p>
+                <p id="valuation-output-level" class="metric-value">—</p>
+                <p id="valuation-dominant-view" class="metric-meta">主导视角: —</p>
+              </article>
+              <article class="metric-card stock-score-total-card">
+                <p class="metric-label">模板</p>
+                <p id="valuation-template-id" class="metric-value">—</p>
+                <p id="valuation-upside-mid" class="metric-meta">中枢偏离: —</p>
+                <p id="valuation-margin-of-safety" class="metric-meta">安全边际: —</p>
+              </article>
+            </section>
+            <div id="valuation-methodology-note" class="stock-score-methodology-note muted">估值方法说明将在查询后显示</div>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="chart-grid stock-score-analysis-grid">
+      <article class="search-card stock-score-dim-card-section">
+        <div class="search-card-header">
+          <div>
+            <p class="eyebrow">VALUATION VIEWS</p>
+            <h2>三视角估值</h2>
+          </div>
+          <p class="search-meta">盈利 / 资产 / 收入</p>
+        </div>
+        <div class="stock-score-dim-panels">
+          <section class="stock-score-dim-panel" id="valuation-view-earnings"></section>
+          <section class="stock-score-dim-panel" id="valuation-view-asset"></section>
+          <section class="stock-score-dim-panel" id="valuation-view-revenue"></section>
+        </div>
+      </article>
+      <article class="search-card stock-score-radar-card">
+        <div class="search-card-header">
+          <div>
+            <p class="eyebrow">RISK & INVALIDATION</p>
+            <h2>风险标签与失效条件</h2>
+          </div>
+          <p class="search-meta">使用边界说明</p>
+        </div>
+        <div class="stock-score-analysis-card">
+          <h3>风险标签</h3>
+          <div id="valuation-risk-tags" class="stock-score-analysis-list muted">暂无风险标签</div>
+        </div>
+        <div class="stock-score-analysis-card">
+          <h3>失效条件</h3>
+          <div id="valuation-failure-conditions" class="stock-score-analysis-list muted">暂无失效条件</div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script type="module" src="/valuation.js"></script>
+</body>
+</html>

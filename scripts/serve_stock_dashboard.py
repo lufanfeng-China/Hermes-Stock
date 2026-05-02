@@ -930,6 +930,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-score":
             self.handle_stock_score(parsed.query)
             return
+        if parsed.path == "/api/valuation":
+            self.handle_valuation(parsed.query)
+            return
         if parsed.path == "/api/stock-score-report-history":
             self.handle_stock_score_report_history(parsed.query)
             return
@@ -1183,6 +1186,31 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "provide market & symbol or symbols"})
         except Exception as exc:
             self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
+
+    def handle_valuation(self, query: str) -> None:
+        from app.valuation.service import build_valuation_result
+
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if not market or not symbol:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "missing_params", "message": "market and symbol are required"}},
+            )
+            return
+        try:
+            self.respond_json(HTTPStatus.OK, build_valuation_result(market, symbol))
+        except ValueError as exc:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": str(exc)}},
+            )
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "valuation_error", "message": str(exc)}},
+            )
 
     def handle_stock_score_ai_report(self, query: str) -> None:
         params = parse_qs(query)
