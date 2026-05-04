@@ -1,170 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh">
   <head>
     <meta charset="utf-8">
+    <meta http-equiv="refresh" content="0; url=/stock-score.html">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Stock Window Volume</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>跳转到财务评分首页</title>
+    <script>
+      window.location.replace('/stock-score.html');
+    </script>
   </head>
   <body>
-    <main class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">LOCAL QUOTE TERMINAL</p>
-          <h1>Stock Window Volume</h1>
-        </div>
-        <div class="topbar-actions">
-          <a class="nav-link" href="/rps-pool.html">RPS Ranking</a>
-          <a class="nav-link" href="/industry-heatmap.html">Industry Heatmap</a>
-          <a class="nav-link" href="/stock-score.html">Six-Dim Score</a>
-          <form id="symbol-form" class="symbol-form">
-            <label for="symbol-input">Symbol</label>
-            <input id="symbol-input" name="symbol" type="text" inputmode="numeric" maxlength="6" value="601600">
-            <button type="submit">Load</button>
-          </form>
-        </div>
-      </header>
-
-      <section class="search-grid">
-        <article class="search-card">
-          <div class="search-card-header">
-            <div>
-              <p class="eyebrow">STOCK LOOKUP</p>
-              <h2>Code / Name / Initials</h2>
-            </div>
-            <p id="stock-search-meta" class="search-meta">TNF-backed local search</p>
-          </div>
-          <form id="stock-search-form" class="search-form">
-            <input id="stock-search-input" name="q" type="search" autocomplete="off" placeholder="601600 / 中国铝业 / ZGLY">
-            <button type="submit">Find</button>
-          </form>
-          <div id="stock-search-results" class="result-list" aria-live="polite"></div>
-        </article>
-
-        <article class="search-card">
-          <div class="search-card-header">
-            <div>
-              <p class="eyebrow">CONCEPT LOOKUP</p>
-              <h2>Concept / Industry Members</h2>
-            </div>
-            <p id="concept-search-meta" class="search-meta">Derived dataset search</p>
-          </div>
-          <form id="concept-search-form" class="search-form">
-            <input id="concept-search-input" name="q" type="search" autocomplete="off" placeholder="DeepSeek / 苹果 / 稀土永磁">
-            <button type="submit">Find</button>
-          </form>
-          <div id="concept-search-results" class="result-list concept-results" aria-live="polite"></div>
-        </article>
-      </section>
-
-      <section id="stock-profile" class="profile-card" aria-live="polite">
-        <div class="profile-header">
-          <div>
-            <p class="eyebrow">STOCK PROFILE</p>
-            <h2 id="profile-title">Awaiting stock load</h2>
-          </div>
-          <p id="profile-meta" class="profile-meta">Industry and concepts appear after a stock loads.</p>
-        </div>
-        <div class="profile-grid">
-          <div class="profile-field">
-            <span class="profile-label">Code</span>
-            <strong id="profile-symbol" class="profile-value">-</strong>
-          </div>
-          <div class="profile-field">
-            <span class="profile-label">Name</span>
-            <strong id="profile-name" class="profile-value">-</strong>
-          </div>
-          <div class="profile-field">
-            <span class="profile-label">Initials</span>
-            <strong id="profile-initials" class="profile-value">-</strong>
-          </div>
-          <div class="profile-field profile-field-wide">
-            <span class="profile-label">Industry</span>
-            <strong id="profile-industry" class="profile-value">-</strong>
-          </div>
-        </div>
-        <div class="profile-concepts">
-          <div class="profile-concepts-header">
-            <span class="profile-label">Concepts</span>
-            <span id="profile-concept-count" class="profile-count">0</span>
-          </div>
-          <div id="profile-concepts" class="tag-list">
-            <span class="result-empty">No concepts loaded.</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="metrics">
-        <article class="metric-card">
-          <p class="metric-label">Latest open_15m_volume (M)</p>
-          <p id="open-15m-value" class="metric-value">-</p>
-          <p id="open-15m-meta" class="metric-meta">Awaiting data</p>
-        </article>
-        <article class="metric-card">
-          <p class="metric-label">Latest window_1430_1445_volume (M)</p>
-          <p id="window-value" class="metric-value">-</p>
-          <p id="window-meta" class="metric-meta">Awaiting data</p>
-        </article>
-      </section>
-
-      <section id="status" class="status">Loading default symbol…</section>
-
-      <section class="chart-controls" aria-label="Chart history controls">
-        <div class="control-group">
-          <span class="control-label">Visible window</span>
-          <div id="zoom-controls" class="zoom-controls" role="group" aria-label="Zoom presets">
-            <button type="button" class="zoom-button" data-window="20">20D</button>
-            <button type="button" class="zoom-button" data-window="60">60D</button>
-            <button type="button" class="zoom-button" data-window="120">120D</button>
-            <button type="button" class="zoom-button" data-window="all">ALL</button>
-          </div>
-        </div>
-        <div class="control-group scrubber-group">
-          <div class="scrubber-meta">
-            <span class="control-label">Pan history</span>
-            <span id="window-caption" class="window-caption">-</span>
-          </div>
-          <input id="window-slider" class="window-slider" type="range" min="0" max="0" value="0" step="1" aria-label="Pan visible history window">
-        </div>
-        <div class="control-group ma-group">
-          <label class="ma-label" for="volume-ma-window">Volume MA window</label>
-          <div class="ma-input-row">
-            <input id="volume-ma-window" class="ma-input" type="number" min="1" step="1" value="50" inputmode="numeric" aria-describedby="volume-ma-caption">
-            <span id="volume-ma-caption" class="window-caption">Dashed line on the two volume charts only</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="chart-grid">
-        <article class="chart-card">
-          <div class="chart-header">
-            <h2>Daily Close Trend</h2>
-            <span id="close-summary" class="chart-summary">-</span>
-          </div>
-          <div class="chart-tooltip" hidden></div>
-          <svg id="close-chart" class="chart" viewBox="0 0 640 220" preserveAspectRatio="none"></svg>
-        </article>
-        <article class="chart-card">
-          <div class="chart-header">
-            <h2>Open 15m Volume (M)</h2>
-            <span id="open-summary" class="chart-summary">-</span>
-          </div>
-          <div class="chart-tooltip" hidden></div>
-          <svg id="open-chart" class="chart" viewBox="0 0 640 220" preserveAspectRatio="none"></svg>
-        </article>
-        <article class="chart-card">
-          <div class="chart-header">
-            <h2>14:30-14:45 Volume (M)</h2>
-            <span id="window-summary" class="chart-summary">-</span>
-          </div>
-          <div class="chart-tooltip" hidden></div>
-          <svg id="window-chart" class="chart" viewBox="0 0 640 220" preserveAspectRatio="none"></svg>
-        </article>
-      </section>
-    </main>
-
-    <script src="/viewport.js"></script>
-    <script src="/profile-utils.js"></script>
-    <script src="/app.js"></script>
+    <nav hidden>
+      <a href="/stock-score.html">财务评分</a>
+      <a href="/rps-pool.html">RPS</a>
+      <a href="/relative-valuation.html">相对估值</a>
+    </nav>
+    <p>正在跳转到 <a href="/stock-score.html">/stock-score.html</a> ...</p>
   </body>
 </html>

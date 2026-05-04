@@ -1275,6 +1275,20 @@ async function fetchSubdiagExplanation(market, symbol, subKey) {
   return payload;
 }
 
+async function fetchDataUpdateStatus() {
+  const r = await fetch('/api/data-update-status');
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
+async function fetchDataUpdateRun() {
+  const r = await fetch('/api/data-update-run', { method: 'POST' });
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
 function normalizeMarket(code) {
   if (!code) return null;
   const s = String(code).trim();
@@ -1369,6 +1383,29 @@ function renderRecentStockSearches() {
   stockDropdownEl.classList.add("visible");
 }
 
+function renderDataUpdateStatus(payload) {
+  const el = document.getElementById('stock-score-data-update-info');
+  if (!el) return;
+  const financial = payload?.financial_snapshot || {};
+  const industry = payload?.industry_valuation || {};
+  const latestUpdatedAt = payload?.latest_updated_at || financial.updated_at || industry.updated_at || '暂无';
+  const financialDate = financial.updated_at || '暂无';
+  const financialPeriod = financial.report_date || '未知期次';
+  const industryDate = industry.updated_at || '暂无';
+  el.textContent = [
+    `最新更新：${latestUpdatedAt}`,
+    `财务快照 ${financialPeriod} · ${financialDate}`,
+    `行业估值快照 · ${industryDate}`,
+  ].join('\n');
+  el.classList.remove('muted');
+}
+
+async function refreshDataUpdateStatus() {
+  const payload = await fetchDataUpdateStatus();
+  renderDataUpdateStatus(payload);
+  return payload;
+}
+
 function rerenderCurrentSubdiagTable() {
   if (!searchState.currentStock?.scoreResult) return;
   renderSubTable(
@@ -1447,6 +1484,20 @@ async function loadSuggestions(query) {
 }
 
 document.getElementById("search-btn").addEventListener("click", () => doSearch());
+document.getElementById('stock-score-data-update-btn').addEventListener('click', async () => {
+  const infoEl = document.getElementById('stock-score-data-update-info');
+  const buttonEl = document.getElementById('stock-score-data-update-btn');
+  if (infoEl) infoEl.textContent = '正在全量更新数据...';
+  if (buttonEl) buttonEl.disabled = true;
+  try {
+    const payload = await fetchDataUpdateRun();
+    renderDataUpdateStatus(payload.data_update_status || payload);
+  } catch (error) {
+    if (infoEl) infoEl.textContent = `全量更新失败: ${error.message}`;
+  } finally {
+    if (buttonEl) buttonEl.disabled = false;
+  }
+});
 stockInputEl.addEventListener("input", e => {
   const value = e.target.value;
   if (searchState.selectedStock) {
@@ -1757,3 +1808,7 @@ resetProfileSummary();
 resetAiFinancialReport();
 renderScoreMethodology(null);
 updateAiReportButtons();
+refreshDataUpdateStatus().catch((error) => {
+  const infoEl = document.getElementById('stock-score-data-update-info');
+  if (infoEl) infoEl.textContent = `最新更新读取失败: ${error.message}`;
+});

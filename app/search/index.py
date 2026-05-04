@@ -469,12 +469,13 @@ def _load_realtime_quote_snapshot(market: str, symbol: str) -> dict[str, object]
 
 
 @lru_cache(maxsize=256)
-def _load_latest_daily_snapshot(market: str, symbol: str) -> dict[str, float | None]:
+def _load_latest_daily_snapshot(market: str, symbol: str) -> dict[str, object]:
     snapshot = {
         "latest_close": None,
         "previous_close": None,
         "latest_volume": None,
         "avg_volume_5": None,
+        "trading_day": None,
     }
     try:
         from mootdx.reader import Reader
@@ -492,6 +493,7 @@ def _load_latest_daily_snapshot(market: str, symbol: str) -> dict[str, float | N
         latest_row = daily.iloc[-1]
         snapshot["latest_close"] = _pick(latest_row.get("close"))
         snapshot["latest_volume"] = _pick(latest_row.get("volume"))
+        snapshot["trading_day"] = _extract_trading_day_from_daily_row(latest_row)
         if len(daily) >= 2:
             snapshot["previous_close"] = _pick(daily.iloc[-2].get("close"))
             lookback = daily.iloc[max(0, len(daily) - 6):-1]
@@ -502,6 +504,26 @@ def _load_latest_daily_snapshot(market: str, symbol: str) -> dict[str, float | N
     except Exception:
         return snapshot
     return snapshot
+
+
+def _extract_trading_day_from_daily_row(row) -> str | None:
+    candidates = []
+    if hasattr(row, "name"):
+        candidates.append(row.name)
+    if hasattr(row, "get"):
+        candidates.extend([row.get("date"), row.get("datetime"), row.get("trade_date")])
+    for value in candidates:
+        if value is None:
+            continue
+        if hasattr(value, "strftime"):
+            try:
+                return value.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+        text = str(value).strip()
+        if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+            return text[:10]
+    return None
 
 
 def _load_stock_basic_info(market: str, symbol: str) -> dict[str, object]:

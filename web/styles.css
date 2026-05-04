@@ -1160,8 +1160,52 @@ button:hover {
   padding-bottom: 56px;
 }
 
+.stock-score-topbar-tools {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  align-self: start;
+}
+
 .stock-score-topbar-actions {
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(4, 5.5em);
+  gap: 8px;
+}
+
+#stock-score-topbar-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+#stock-score-topbar-actions > * {
+  flex: 0 0 5.5em;
+}
+
+.stock-score-topbar-action {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#stock-score-data-update-btn {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.stock-score-data-update-info {
+  min-height: 18px;
+  text-align: right;
+  white-space: pre-line;
 }
 
 .stock-score-lead-grid {
@@ -2452,7 +2496,6 @@ button:hover {
     justify-items: start;
   }
 
-  .stock-score-topbar-actions,
   .stock-score-lead-grid,
   .stock-score-search-stack,
   .stock-score-profile-grid,

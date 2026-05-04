@@ -10,6 +10,8 @@ import os
 import re
 import subprocess
 import sys
+import threading
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.industry.heatmap import DEFAULT_INDUSTRY_LIMIT, industry_heatmap_response
+from app.relative_valuation.service import build_relative_valuation_result
 from app.search.index import (
     concept_search_response,
     rps_ranking_response,
@@ -37,7 +40,9 @@ TONGDAXIN_DIR = "/mnt/c/new_tdx64"
 DEFAULT_SYMBOL = "601600"
 DEFAULT_HISTORY_LIMIT = 120
 WEB_ROOT = PROJECT_ROOT / "web"
+DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 DEFAULT_HERMES_MODEL = os.environ.get("HERMES_MODEL", "").strip()
+DATA_UPDATE_LOCK = threading.Lock()
 
 
 def _industry_template_tags(ind1: str, ind2: str) -> set[str]:
@@ -79,6 +84,149 @@ def infer_market(symbol: str) -> tuple[str, int]:
     if symbol.startswith(("00", "30", "20")):
         return "sz", 0
     raise ValueError(f"unsupported symbol prefix for {symbol}")
+
+
+def _format_timestamp(ts: float | None) -> str | None:
+    if ts is None:
+        return None
+    return datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def load_data_update_status() -> dict[str, object]:
+    financial_candidates = sorted(DERIVED_FINAL_DIR.glob('financial_snapshot_*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+    financial_snapshot = None
+    latest_timestamps: list[float] = []
+    if financial_candidates:
+        latest = financial_candidates[0]
+        try:
+            payload = json.loads(latest.read_text(encoding='utf-8'))
+        except Exception:
+            payload = {}
+        latest_timestamps.append(latest.stat().st_mtime)
+        financial_snapshot = {
+            'path': str(latest),
+            'report_date': payload.get('report_date'),
+            'updated_at': _format_timestamp(latest.stat().st_mtime),
+        }
+
+    industry_path = DERIVED_FINAL_DIR / 'dataset_industry_valuation_current.json'
+    industry_valuation = None
+    if industry_path.exists():
+        try:
+            rows = json.loads(industry_path.read_text(encoding='utf-8'))
+            industry_count = len(rows) if isinstance(rows, list) else None
+        except Exception:
+            industry_count = None
+        latest_timestamps.append(industry_path.stat().st_mtime)
+        industry_valuation = {
+            'path': str(industry_path),
+            'updated_at': _format_timestamp(industry_path.stat().st_mtime),
+            'industry_count': industry_count,
+        }
+
+    return {
+        'ok': True,
+        'financial_snapshot': financial_snapshot,
+        'industry_valuation': industry_valuation,
+        'latest_updated_at': _format_timestamp(max(latest_timestamps)) if latest_timestamps else None,
+    }
+
+
+def _latest_trading_day_for_refresh() -> str | None:
+    try:
+        search_index = importlib.import_module('app.search.index')
+        snapshot = search_index._load_latest_daily_snapshot('sh', DEFAULT_SYMBOL)
+        trading_day = str(snapshot.get('trading_day') or '').strip()
+        if trading_day:
+            return trading_day
+    except Exception:
+        return None
+    return None
+
+
+def _is_allowed_local_origin(origin: str | None, referer: str | None = None) -> bool:
+    candidates = [str(origin or '').strip(), str(referer or '').strip()]
+    for text in candidates:
+        if not text:
+            continue
+        try:
+            parsed = urlparse(text)
+        except Exception:
+            continue
+        hostname = (parsed.hostname or '').strip().lower()
+        if hostname in {'127.0.0.1', 'localhost'}:
+            return True
+    return False
+
+
+def clear_runtime_data_caches() -> None:
+    module_names = [
+        'app.search.index',
+        'app.relative_valuation.data_loader',
+        'app.relative_valuation.history',
+    ]
+    for module_name in module_names:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:
+            continue
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name, None)
+            cache_clear = getattr(attr, 'cache_clear', None)
+            if callable(cache_clear):
+                try:
+                    cache_clear()
+                except Exception:
+                    continue
+
+
+def run_full_data_update() -> dict[str, object]:
+    trading_day = _latest_trading_day_for_refresh()
+    steps: list[dict[str, object]] = []
+    commands: list[tuple[str, list[str]]] = []
+    if trading_day:
+        commands.append((
+            'archive_daily',
+            [
+                TONGDAXIN_PYTHON,
+                str(PROJECT_ROOT / 'scripts/archive_daily.py'),
+                '--trading-day',
+                trading_day,
+                '--force-rerun',
+                '--rerun-reason',
+                'manual-dashboard-refresh',
+            ],
+        ))
+    commands.extend([
+        ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
+        ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
+        ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
+    ])
+
+    for step_name, command in commands:
+        result = subprocess.run(
+            command,
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
+        steps.append({
+            'name': step_name,
+            'command': ' '.join(command),
+            'ok': result.returncode == 0,
+            'stdout': (result.stdout or '').strip(),
+            'stderr': (result.stderr or '').strip(),
+        })
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f'{step_name} failed')
+
+    clear_runtime_data_caches()
+    return {
+        'ok': True,
+        'steps': steps,
+        'data_update_status': load_data_update_status(),
+    }
 
 
 def load_stock_history(symbol: str, history_limit: int = DEFAULT_HISTORY_LIMIT) -> dict[str, object]:
@@ -945,14 +1093,27 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-score-subdiag-explanation":
             self.handle_stock_score_subdiag_explanation(parsed.query)
             return
+        if parsed.path == "/api/data-update-status":
+            self.handle_data_update_status(parsed.query)
+            return
+        if parsed.path == "/api/relative-valuation":
+            self.handle_relative_valuation(parsed.query)
+            return
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
             return
         if parsed.path == "/":
-            self.serve_static("index.html")
+            self.serve_static("stock-score.html")
             return
         if parsed.path.startswith("/"):
             self.serve_static(parsed.path.lstrip("/"))
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
+
+    def do_POST(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/data-update-run":
+            self.handle_data_update_run()
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -1268,6 +1429,58 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "subdiag_explanation_error", "message": str(exc)}},
+            )
+
+    def handle_data_update_status(self, query: str) -> None:
+        try:
+            self.respond_json(HTTPStatus.OK, load_data_update_status())
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "data_update_status_error", "message": str(exc)}},
+            )
+
+    def handle_data_update_run(self) -> None:
+        if not _is_allowed_local_origin(self.headers.get('Origin'), self.headers.get('Referer')):
+            self.respond_json(
+                HTTPStatus.FORBIDDEN,
+                {"ok": False, "error": {"code": "forbidden_origin", "message": "仅允许本地页面触发数据更新"}},
+            )
+            return
+        if not DATA_UPDATE_LOCK.acquire(blocking=False):
+            self.respond_json(
+                HTTPStatus.CONFLICT,
+                {"ok": False, "error": {"code": "data_update_busy", "message": "已有数据更新任务在运行中"}},
+            )
+            return
+        try:
+            self.respond_json(HTTPStatus.OK, run_full_data_update())
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "data_update_run_error", "message": str(exc)}},
+            )
+        finally:
+            DATA_UPDATE_LOCK.release()
+
+    def handle_relative_valuation(self, query: str) -> None:
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol 参数不合法"}},
+            )
+            return
+        try:
+            result = build_relative_valuation_result(market, symbol)
+            status = HTTPStatus.OK if result.get("ok") else HTTPStatus.NOT_FOUND
+            self.respond_json(status, result)
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "relative_valuation_error", "message": str(exc)}},
             )
 
     def handle_stock_score_report_history(self, query: str) -> None:
