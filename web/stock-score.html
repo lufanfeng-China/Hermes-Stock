@@ -167,7 +167,7 @@
                 <div class="stock-score-profile-cluster-body">
                   <div class="profile-field stock-score-profile-field stock-score-valuation-temperature-field">
                     <span class="profile-label">行业温度</span>
-                    <strong class="profile-value muted" id="hdr-valuation-temperature">待加载行业温度</strong>
+                    <button type="button" class="profile-value muted clickable-value stock-score-temperature-trigger" id="hdr-valuation-temperature">待加载行业温度</button>
                   </div>
                   <div class="profile-field stock-score-profile-field stock-score-valuation-classification-field">
                     <span class="profile-label">估值分类</span>
@@ -290,7 +290,11 @@
                 <th>说明</th>
               </tr>
             </thead>
-            <tbody id="sub-tbody"></tbody>
+            <tbody id="sub-tbody">
+              <tr class="stock-score-empty-row">
+                <td colspan="8">查询股票后显示细分指标</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </article>
@@ -511,6 +515,32 @@
             </tr>
           </thead>
           <tbody id="industry-valuation-percentile-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="industry-temperature-history-dialog" class="industry-score-peer-dialog" hidden aria-hidden="true">
+    <div class="industry-score-peer-dialog-card" role="dialog" aria-modal="true" aria-labelledby="industry-temperature-history-title">
+      <div class="search-card-header">
+        <div>
+          <p class="eyebrow">INDUSTRY TEMPERATURE HISTORY</p>
+          <h2 id="industry-temperature-history-title">行业历史估值温度</h2>
+        </div>
+        <button id="industry-temperature-history-close" type="button" class="sub-period-industry-average-btn">关闭</button>
+      </div>
+      <div id="industry-temperature-history-status" class="profile-meta muted">点击行业温度后查看历史加权PE-TTM变化</div>
+      <svg id="industry-temperature-history-chart" class="industry-temperature-history-chart" viewBox="0 0 720 260" role="img" aria-label="行业历史加权PE-TTM趋势图"></svg>
+      <div class="industry-temperature-history-table-wrap">
+        <table class="sub-table">
+          <thead>
+            <tr>
+              <th>交易锚日</th>
+              <th>加权PE-TTM</th>
+              <th>相对当前</th>
+            </tr>
+          </thead>
+          <tbody id="industry-temperature-history-tbody"></tbody>
         </table>
       </div>
     </div>

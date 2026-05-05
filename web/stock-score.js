@@ -275,12 +275,18 @@ const PROFILE_PLACEHOLDERS = {
   valuationBand: "待加载区间标签",
 };
 
+const STOCK_SCORE_EMPTY_STATES = {
+  dimensions: "查询股票后显示六维评分",
+  subIndicators: "查询股票后显示细分指标",
+  aiReportOverall: "点击“生成AI财报解读”后显示结构化结论",
+};
+
 const AI_REPORT_PLACEHOLDERS = {
-  overall: "",
-  highlights: "",
-  risks: "",
-  positive: "",
-  negative: "",
+  overall: STOCK_SCORE_EMPTY_STATES.aiReportOverall,
+  highlights: "生成后显示财报亮点",
+  risks: "生成后显示风险警示",
+  positive: "生成后显示加分项",
+  negative: "生成后显示减分项",
 };
 
 const SUB_DIAG_EXPLANATION_STATUS = {
@@ -712,15 +718,12 @@ function clearRadarCharts() {
 }
 
 function clearDimCards() {
-  const marketCards = document.getElementById("dim-cards-market");
-  const industryCards = document.getElementById("dim-cards-industry");
-  if (marketCards) marketCards.innerHTML = "";
-  if (industryCards) industryCards.innerHTML = "";
+  renderDimEmptyState("dim-cards-market");
+  renderDimEmptyState("dim-cards-industry");
 }
 
 function clearSubIndicatorTable() {
-  const tbody = document.getElementById("sub-tbody");
-  if (tbody) tbody.innerHTML = "";
+  renderSubIndicatorEmptyState();
 }
 
 function setAiReportStatus(text, isError = false) {
@@ -961,6 +964,16 @@ function renderDimCards(containerId, dimScores, palette) {
       </div>`;
     container.appendChild(card);
   });
+}
+
+function renderDimEmptyState(containerId, message = STOCK_SCORE_EMPTY_STATES.dimensions) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = `
+    <div class="stock-score-empty-state" role="status" aria-live="polite">
+      <span class="stock-score-empty-state-label">DIMENSIONS</span>
+      <span class="stock-score-empty-state-text">${escapeHtml(message)}</span>
+    </div>`;
 }
 
 const DIM_COLORS = {
@@ -1253,6 +1266,7 @@ function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSu
   const tbody = document.getElementById("sub-tbody");
   tbody.innerHTML = "";
   const columnCount = document.querySelectorAll("#sub-table thead th").length || 8;
+  let hasRows = false;
 
   Object.entries(scoreData).forEach(([key, val]) => {
     if (typeof val !== "number") return;
@@ -1312,7 +1326,22 @@ function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSu
         })}
       </td>`;
     tbody.appendChild(detailRow);
+    hasRows = true;
   });
+
+  if (!hasRows) {
+    renderSubIndicatorEmptyState();
+  }
+}
+
+function renderSubIndicatorEmptyState(message = STOCK_SCORE_EMPTY_STATES.subIndicators) {
+  const tbody = document.getElementById("sub-tbody");
+  if (!tbody) return;
+  const columnCount = document.querySelectorAll("#sub-table thead th").length || 8;
+  tbody.innerHTML = `
+    <tr class="stock-score-empty-row">
+      <td colspan="${columnCount}">${escapeHtml(message)}</td>
+    </tr>`;
 }
 
 // ── Main render ───────────────────────────────────────────────────────────────
@@ -1559,6 +1588,7 @@ const searchState = {
   industryScorePeerRequestId: 0,
   _industryScorePeerRows: null,
   _industryValuationPercentileRows: null,
+  _industryTemperatureHistoryRows: null,
 };
 
 function resetPeerDialogs() {
@@ -1569,6 +1599,7 @@ function resetPeerDialogs() {
   closeIndustryPeerDialog();
   closeIndustryScorePeerDialog();
   closeIndustryValuationPercentileDialog();
+  closeIndustryTemperatureHistoryDialog();
   industryPeerStatusEl.textContent = INDUSTRY_PEER_STATUS_PLACEHOLDER;
   document.getElementById("industry-peer-title").textContent = "行业同业对照";
   document.getElementById("industry-peer-tbody").innerHTML = "";
@@ -1579,6 +1610,10 @@ function resetPeerDialogs() {
   document.getElementById("industry-valuation-percentile-title").textContent = "行业估值位置对照";
   document.getElementById("industry-valuation-percentile-status").textContent = "点击行业内估值位置后加载同业样本";
   document.getElementById("industry-valuation-percentile-tbody").innerHTML = "";
+  document.getElementById("industry-temperature-history-title").textContent = "行业历史估值温度";
+  document.getElementById("industry-temperature-history-status").textContent = "点击行业温度后查看历史加权PE-TTM变化";
+  document.getElementById("industry-temperature-history-chart").innerHTML = "";
+  document.getElementById("industry-temperature-history-tbody").innerHTML = "";
 }
 
 function resetStockScoreDashboardState() {
@@ -2028,6 +2063,11 @@ document.getElementById("industry-valuation-percentile-dialog").addEventListener
   if (e.target === document.getElementById("industry-valuation-percentile-dialog")) closeIndustryValuationPercentileDialog();
 });
 document.getElementById("hdr-valuation-percentile").addEventListener("click", handleValuationPercentileClick);
+document.getElementById("hdr-valuation-temperature").addEventListener("click", handleIndustryTemperatureClick);
+document.getElementById("industry-temperature-history-close").addEventListener("click", () => closeIndustryTemperatureHistoryDialog());
+document.getElementById("industry-temperature-history-dialog").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("industry-temperature-history-dialog")) closeIndustryTemperatureHistoryDialog();
+});
 industryScorePeerDialogEl.addEventListener("keydown", (e) => {
   if (e.target.closest(".industry-score-peer-stock-trigger")) return;
   const rowTrigger = e.target.closest(".industry-score-peer-row-trigger");
@@ -2046,6 +2086,9 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape" && !industryScorePeerDialogEl.hidden) {
     closeIndustryScorePeerDialog();
+  }
+  if (e.key === "Escape" && !document.getElementById("industry-temperature-history-dialog").hidden) {
+    closeIndustryTemperatureHistoryDialog();
   }
 });
 document.addEventListener("click", e => {
@@ -2172,6 +2215,7 @@ async function doSearch(selectedRow = null) {
       symbol,
       stock_name: searchState.selectedStock?.stock_name || result?.stock_name || symbol,
       scoreResult: result,
+      valuationPayload,
       aiReportReady: false,
       subdiagExplanations: {},
     };
@@ -2354,12 +2398,136 @@ function handleValuationPercentileClick() {
     });
 }
 
+function openIndustryTemperatureHistoryDialog() {
+  const dialog = document.getElementById("industry-temperature-history-dialog");
+  dialog.hidden = false;
+  dialog.setAttribute("aria-hidden", "false");
+}
+
+function closeIndustryTemperatureHistoryDialog() {
+  const dialog = document.getElementById("industry-temperature-history-dialog");
+  if (!dialog) return;
+  dialog.hidden = true;
+  dialog.setAttribute("aria-hidden", "true");
+}
+
+function normalizeIndustryTemperatureHistory(payload) {
+  const rows = Array.isArray(payload?.industry_temperature_history) ? payload.industry_temperature_history : [];
+  return rows
+    .map((row) => ({
+      trading_day: String(row?.trading_day || "").trim(),
+      weighted_pe_ttm: row?.weighted_pe_ttm == null || Number.isNaN(Number(row.weighted_pe_ttm)) ? null : Number(row.weighted_pe_ttm),
+    }))
+    .filter((row) => row.trading_day && row.weighted_pe_ttm != null);
+}
+
+function svgNode(tag, attrs = {}) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  return node;
+}
+
+function drawIndustryTemperatureHistoryChart(rows, currentPe) {
+  const svg = document.getElementById("industry-temperature-history-chart");
+  svg.innerHTML = "";
+  const width = 720;
+  const height = 260;
+  const pad = { left: 54, right: 24, top: 20, bottom: 42 };
+  if (!rows.length) {
+    const text = svgNode("text", { x: width / 2, y: height / 2, "text-anchor": "middle", fill: "#7f99aa", "font-size": 14 });
+    text.textContent = "暂无行业历史估值数据";
+    svg.appendChild(text);
+    return;
+  }
+
+  const values = rows.map((row) => row.weighted_pe_ttm).filter((value) => Number.isFinite(value));
+  const minValue = Math.min(...values, currentPe ?? Infinity);
+  const maxValue = Math.max(...values, currentPe ?? -Infinity);
+  const span = Math.max(1, maxValue - minValue);
+  const yMin = Math.max(0, minValue - span * 0.12);
+  const yMax = maxValue + span * 0.16;
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const xFor = (index) => pad.left + (rows.length <= 1 ? plotW / 2 : (index / (rows.length - 1)) * plotW);
+  const yFor = (value) => pad.top + (1 - ((value - yMin) / Math.max(1, yMax - yMin))) * plotH;
+
+  for (let i = 0; i <= 4; i += 1) {
+    const y = pad.top + (plotH * i / 4);
+    const grid = svgNode("line", { x1: pad.left, y1: y, x2: width - pad.right, y2: y, class: "industry-temperature-history-grid" });
+    svg.appendChild(grid);
+    const labelValue = yMax - ((yMax - yMin) * i / 4);
+    const label = svgNode("text", { x: pad.left - 8, y: y + 4, "text-anchor": "end", class: "industry-temperature-history-axis" });
+    label.textContent = labelValue.toFixed(1);
+    svg.appendChild(label);
+  }
+
+  const points = rows.map((row, index) => `${xFor(index)},${yFor(row.weighted_pe_ttm)}`).join(" ");
+  svg.appendChild(svgNode("polyline", { points, class: "industry-temperature-history-line" }));
+
+  rows.forEach((row, index) => {
+    const x = xFor(index);
+    const y = yFor(row.weighted_pe_ttm);
+    svg.appendChild(svgNode("circle", { cx: x, cy: y, r: index === rows.length - 1 ? 4 : 2.6, class: "industry-temperature-history-dot" }));
+    if (index === 0 || index === rows.length - 1 || index % 4 === 0) {
+      const label = svgNode("text", { x, y: height - 16, "text-anchor": "middle", class: "industry-temperature-history-axis" });
+      label.textContent = row.trading_day.slice(2, 7);
+      svg.appendChild(label);
+    }
+  });
+
+  if (currentPe != null && Number.isFinite(currentPe)) {
+    const currentY = yFor(currentPe);
+    svg.appendChild(svgNode("line", { x1: pad.left, y1: currentY, x2: width - pad.right, y2: currentY, class: "industry-temperature-history-current-line" }));
+    const currentLabel = svgNode("text", { x: width - pad.right, y: currentY - 6, "text-anchor": "end", class: "industry-temperature-history-current-label" });
+    currentLabel.textContent = `当前 ${currentPe.toFixed(2)}`;
+    svg.appendChild(currentLabel);
+  }
+}
+
+function renderIndustryTemperatureHistoryDialog(payload) {
+  const rows = normalizeIndustryTemperatureHistory(payload);
+  const currentPe = payload?.industry_weighted_pe_ttm == null || Number.isNaN(Number(payload.industry_weighted_pe_ttm))
+    ? (rows.length ? rows[rows.length - 1].weighted_pe_ttm : null)
+    : Number(payload.industry_weighted_pe_ttm);
+  const industryName = payload?.industry_level_2_name || "当前行业";
+  const label = payload?.industry_temperature_label || "行业温度";
+  const percentile = payload?.industry_temperature_percentile_since_2022 != null
+    ? `${formatRelativeValuationNumber(payload.industry_temperature_percentile_since_2022, "%")}`
+    : "暂无分位";
+
+  document.getElementById("industry-temperature-history-title").textContent = `${industryName} · 行业历史估值温度`;
+  document.getElementById("industry-temperature-history-status").textContent = rows.length
+    ? `${label} / ${percentile}；历史序列基于自2022年以来行业加权PE-TTM。`
+    : "暂无行业历史估值数据";
+  drawIndustryTemperatureHistoryChart(rows, currentPe);
+  searchState._industryTemperatureHistoryRows = rows;
+  document.getElementById("industry-temperature-history-tbody").innerHTML = rows.map((row) => {
+    const relative = currentPe != null && Number.isFinite(currentPe) && currentPe !== 0
+      ? `${(((row.weighted_pe_ttm - currentPe) / Math.abs(currentPe)) * 100).toFixed(1)}%`
+      : "—";
+    return `<tr>
+      <td>${escapeHtml(row.trading_day)}</td>
+      <td>${escapeHtml(row.weighted_pe_ttm.toFixed(2))}</td>
+      <td>${escapeHtml(relative)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function handleIndustryTemperatureClick() {
+  const payload = searchState.currentStock?.valuationPayload;
+  if (!payload) return;
+  renderIndustryTemperatureHistoryDialog(payload);
+  openIndustryTemperatureHistoryDialog();
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.getElementById("loading-msg").style.display = "block";
 document.getElementById("loading-msg").textContent = "输入股票代码查询财务评分";
 setScoreHeaderIntroVisible(true);
 resetScoreHeaderSummary();
 resetProfileSummary();
+clearDimCards();
+clearSubIndicatorTable();
 resetIndustryScorePeerDialogSummary();
 resetAiFinancialReport();
 updateAiReportButtons();
