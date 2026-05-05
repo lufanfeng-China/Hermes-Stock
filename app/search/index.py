@@ -277,6 +277,10 @@ def build_stock_profile(
         "return_50_pct": None,
         "return_120_pct": None,
         "return_250_pct": None,
+        "industry_rps_20": None,
+        "industry_rps_50": None,
+        "industry_rps_120": None,
+        "industry_rps_250": None,
         "industry_rank_20": None,
         "industry_rank_50": None,
         "industry_universe_size": None,
@@ -306,6 +310,10 @@ def build_stock_profile(
                 "return_50_pct": row.get("return_50_pct"),
                 "return_120_pct": row.get("return_120_pct"),
                 "return_250_pct": row.get("return_250_pct"),
+                "industry_rps_20": None,
+                "industry_rps_50": None,
+                "industry_rps_120": None,
+                "industry_rps_250": None,
                 "industry_rank_20": None,
                 "industry_rank_50": None,
                 "industry_universe_size": None,
@@ -316,6 +324,8 @@ def build_stock_profile(
             rps_by_security = {_security_key(row): row for row in rps_rows}
             ranked_rows_20: list[tuple[float, str, str]] = []
             ranked_rows_50: list[tuple[float, str, str]] = []
+            ranked_rows_120: list[tuple[float, str, str]] = []
+            ranked_rows_250: list[tuple[float, str, str]] = []
             for row in industry_rows:
                 row_key = _security_key(row)
                 if str(row.get("industry_level_2_name", "")).strip() != industry_level_2_name:
@@ -326,10 +336,16 @@ def build_stock_profile(
                 members_in_industry.add(row_key)
                 rps_20 = _coerce_float(rps_row.get("rps_20"))
                 rps_50 = _coerce_float(rps_row.get("rps_50"))
+                rps_120 = _coerce_float(rps_row.get("rps_120"))
+                rps_250 = _coerce_float(rps_row.get("rps_250"))
                 if rps_20 is not None:
                     ranked_rows_20.append((rps_20, row_key[0], row_key[1]))
                 if rps_50 is not None:
                     ranked_rows_50.append((rps_50, row_key[0], row_key[1]))
+                if rps_120 is not None:
+                    ranked_rows_120.append((rps_120, row_key[0], row_key[1]))
+                if rps_250 is not None:
+                    ranked_rows_250.append((rps_250, row_key[0], row_key[1]))
 
             def _industry_rank(rows: list[tuple[float, str, str]], target_key: tuple[str, str]) -> int | None:
                 ordered = sorted(rows, key=lambda item: (-item[0], item[1], item[2]))
@@ -340,6 +356,14 @@ def build_stock_profile(
 
             if members_in_industry:
                 rps_metrics["industry_universe_size"] = len(members_in_industry)
+                if ranked_rows_20:
+                    rps_metrics["industry_rps_20"] = sum(item[0] for item in ranked_rows_20) / len(ranked_rows_20)
+                if ranked_rows_50:
+                    rps_metrics["industry_rps_50"] = sum(item[0] for item in ranked_rows_50) / len(ranked_rows_50)
+                if ranked_rows_120:
+                    rps_metrics["industry_rps_120"] = sum(item[0] for item in ranked_rows_120) / len(ranked_rows_120)
+                if ranked_rows_250:
+                    rps_metrics["industry_rps_250"] = sum(item[0] for item in ranked_rows_250) / len(ranked_rows_250)
                 rps_metrics["industry_rank_20"] = _industry_rank(ranked_rows_20, key)
                 rps_metrics["industry_rank_50"] = _industry_rank(ranked_rows_50, key)
     return {
@@ -2889,6 +2913,8 @@ def build_stock_score_industry_peer_benchmark(market, symbol, sub_key):
 
 
 def build_stock_score_industry_total_peer_benchmark(market, symbol):
+    from app.relative_valuation import data_loader as valuation_data_loader
+
     snap = _load_financial_snapshot()
     if snap is None:
         return {
@@ -2899,6 +2925,8 @@ def build_stock_score_industry_total_peer_benchmark(market, symbol):
             "ind1": None,
             "ind2": None,
             "report_date": "",
+            "industry_weighted_pe_ttm": None,
+            "industry_weighted_ps_ttm": None,
             "rows": [],
         }
 
@@ -2922,10 +2950,22 @@ def build_stock_score_industry_total_peer_benchmark(market, symbol):
 
     latest_close_prices = _load_latest_close_prices(market_symbols)
     name_lookup = _stock_name_lookup()
+    industry_valuation_snapshot = valuation_data_loader.load_industry_valuation_snapshot(ind2) if ind2 else None
+    member_valuation_lookup: dict[tuple[str, str], dict[str, object]] = {}
+    for valuation_row in (industry_valuation_snapshot or {}).get("member_valuation_rows", []):
+        if not isinstance(valuation_row, dict):
+            continue
+        row_market = str(valuation_row.get("market") or "").strip().lower()
+        row_symbol = str(valuation_row.get("symbol") or "").strip()
+        if row_market and row_symbol:
+            member_valuation_lookup[(row_market, row_symbol)] = valuation_row
     rows: list[dict[str, object]] = []
 
     for peer_market, peer_symbol, entry in peer_entries:
         ind_dim_scores = entry.get("ind_dim_scores", {})
+        valuation_inputs = member_valuation_lookup.get((peer_market, peer_symbol)) or {}
+        if not valuation_inputs:
+            valuation_inputs = valuation_data_loader.load_stock_relative_valuation_inputs(peer_market, peer_symbol) or {}
         dimension_scores: dict[str, float | None] = {}
         for dim, weight in _DIM_WEIGHTS.items():
             raw_score = _safe_float(ind_dim_scores.get(dim)) if isinstance(ind_dim_scores, dict) else None
@@ -2939,7 +2979,11 @@ def build_stock_score_industry_total_peer_benchmark(market, symbol):
                 "stock_name": name_lookup.get((peer_market, peer_symbol), peer_symbol),
                 "market": peer_market,
                 "symbol": peer_symbol,
-                "current_price": latest_close_prices.get((peer_market, peer_symbol)),
+                "current_price": _safe_float(valuation_inputs.get("current_price")) or latest_close_prices.get((peer_market, peer_symbol)),
+                "total_market_cap": _safe_float(valuation_inputs.get("total_market_cap")),
+                "free_float_market_cap": _safe_float(valuation_inputs.get("free_float_market_cap")),
+                "ps_ttm": _safe_float(valuation_inputs.get("ps_ttm")),
+                "pe_ttm": _safe_float(valuation_inputs.get("pe_ttm")),
                 "total_score": _safe_float(entry.get("ind_total_score")),
                 "report_date": str(entry.get("report_date") or ""),
                 "is_current_stock": peer_market == market and peer_symbol == symbol,
@@ -2965,6 +3009,8 @@ def build_stock_score_industry_total_peer_benchmark(market, symbol):
         "ind1": ind1,
         "ind2": ind2,
         "report_date": report_date,
+        "industry_weighted_pe_ttm": _safe_float((industry_valuation_snapshot or {}).get("weighted_pe_ttm")),
+        "industry_weighted_ps_ttm": _safe_float((industry_valuation_snapshot or {}).get("weighted_ps_ttm")),
         "rows": rows,
     }
 

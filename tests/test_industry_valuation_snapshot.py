@@ -121,6 +121,38 @@ class IndustryValuationSnapshotTests(unittest.TestCase):
         self.assertAlmostEqual(2.0, snapshot["weighted_ps_ttm"], places=6)
         self.assertAlmostEqual(50.0, snapshot["pe_invalid_threshold"], places=6)
 
+    def test_build_industry_day_snapshot_prefers_total_market_cap_for_main_weighted_valuation(self) -> None:
+        from app.relative_valuation.industry_snapshot import build_industry_day_snapshot
+
+        members = [
+            {
+                "market": "sz",
+                "symbol": f"0021{i:02d}",
+                "free_float_market_cap": 30.0,
+                "total_market_cap": 50.0,
+                "ttm_net_profit": 5.0,
+                "ttm_revenue": 25.0,
+                "book_value_per_share": 3.0,
+                "listed_days": 600,
+                "is_suspended": False,
+            }
+            for i in range(10)
+        ]
+
+        snapshot = build_industry_day_snapshot(
+            trading_day="2026-04-30",
+            industry_level_1_name="有色",
+            industry_level_2_code="X1401",
+            industry_level_2_name="工业金属",
+            members=members,
+            historical_weighted_pe_series=[8.0, 10.0, 12.0, 14.0],
+        )
+
+        self.assertAlmostEqual(10.0, snapshot["weighted_pe_ttm"], places=6)
+        self.assertAlmostEqual(2.0, snapshot["weighted_ps_ttm"], places=6)
+        self.assertAlmostEqual(6.0, snapshot["free_float_weighted_pe_ttm"], places=6)
+        self.assertAlmostEqual(1.2, snapshot["free_float_weighted_ps_ttm"], places=6)
+
     def test_build_industry_day_snapshot_marks_sample_insufficient_when_valid_count_below_threshold(self) -> None:
         from app.relative_valuation.industry_snapshot import build_industry_day_snapshot
 

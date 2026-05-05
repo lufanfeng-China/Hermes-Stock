@@ -17,13 +17,29 @@ def compute_ttm_metric_from_rows(
     period: str,
     field_name: str,
     current_row,
-    prev_annual_row,
-    prev_same_row,
+    previous_quarter_rows: list[object] | tuple[object, ...] | None = None,
+    prev_annual_row=None,
+    prev_same_row=None,
 ) -> float | None:
     current_value = _pick_from_row(current_row, field_name)
     text = str(period or "").strip()
     if not text:
         return None
+    if isinstance(previous_quarter_rows, (list, tuple)):
+        prior_values: list[float] = []
+        for row in previous_quarter_rows:
+            value = _pick_from_row(row, field_name)
+            if value is None:
+                continue
+            prior_values.append(value)
+            if len(prior_values) >= 3:
+                break
+        if text.endswith("A"):
+            if current_value is not None and len(prior_values) >= 3:
+                return current_value + sum(prior_values[:3])
+            return current_value
+        if current_value is not None and len(prior_values) >= 3:
+            return current_value + sum(prior_values[:3])
     if text.endswith("A"):
         return current_value
     if not (len(text) >= 6 and text[:4].isdigit() and text[4] == "Q" and text[5] in {"1", "2", "3"}):
@@ -40,6 +56,14 @@ def pick_free_float_shares(financial_row) -> float | None:
     value = search_index._pick(financial_row.get("自由流通股(股)")) if financial_row is not None else None
     if value is None:
         value = search_index._pick(financial_row.get("已上市流通A股")) if financial_row is not None else None
+    return value
+
+
+def pick_total_shares(financial_row) -> float | None:
+    search_index = _search_index_module()
+    value = search_index._pick(financial_row.get("总股本")) if financial_row is not None else None
+    if value is None:
+        value = search_index._pick(financial_row.get("实收资本（或股本）")) if financial_row is not None else None
     return value
 
 
@@ -63,6 +87,10 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         return None
 
     year = int(str(latest_period)[:4]) if str(latest_period)[:4].isdigit() else None
+    previous_quarter_rows = [
+        search_index._load_financial_quarter_row(previous_period, symbol)
+        for previous_period in _latest_three_previous_periods(latest_period)
+    ]
     prev_annual_row = search_index._load_financial_quarter_row(f"{year - 1}A", symbol) if year else None
     prev_same_row = search_index._load_financial_quarter_row(f"{year - 1}{str(latest_period)[4:]}", symbol) if year and str(latest_period)[4:] else None
 
@@ -73,16 +101,23 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         current_price = _to_float((daily_snapshot or {}).get("latest_close"))
 
     free_float_shares_raw = pick_free_float_shares(current_row)
+    total_shares_raw = pick_total_shares(current_row)
     free_float_market_cap = None
+    total_market_cap = None
     if current_price is not None and free_float_shares_raw is not None:
-        free_float_market_cap = current_price * free_float_shares_raw / 1e8
+        free_float_market_cap = compute_market_cap_yi(current_price, free_float_shares_raw)
     elif current_price is not None and _to_float((basic_info or {}).get("float_shares")) is not None:
         free_float_market_cap = current_price * _to_float((basic_info or {}).get("float_shares"))
+    if current_price is not None and total_shares_raw is not None:
+        total_market_cap = compute_market_cap_yi(current_price, total_shares_raw)
+    elif current_price is not None and _to_float((basic_info or {}).get("total_shares")) is not None:
+        total_market_cap = current_price * _to_float((basic_info or {}).get("total_shares"))
 
     ttm_net_profit = normalize_amount_to_yi(compute_ttm_metric_from_rows(
         period=latest_period,
         field_name="归属于母公司所有者的净利润",
         current_row=current_row,
+        previous_quarter_rows=previous_quarter_rows,
         prev_annual_row=prev_annual_row,
         prev_same_row=prev_same_row,
     ))
@@ -90,6 +125,7 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         period=latest_period,
         field_name="营业收入",
         current_row=current_row,
+        previous_quarter_rows=previous_quarter_rows,
         prev_annual_row=prev_annual_row,
         prev_same_row=prev_same_row,
     ))
@@ -101,7 +137,12 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         search_index._pick(current_row.get("每股净资产(调整后)")),
     )
     listed_days = _load_listed_days(market, symbol)
-    ps_ttm = compute_ps_ttm(free_float_market_cap, ttm_revenue)
+    pe_ttm = None
+    if total_market_cap is not None and ttm_net_profit not in (None, 0):
+        pe_ttm = total_market_cap / ttm_net_profit
+    else:
+        pe_ttm = _to_float((basic_info or {}).get("dynamic_pe"))
+    ps_ttm = compute_ps_ttm(total_market_cap, ttm_revenue)
 
     stock_name = str(industry_row.get("stock_name") or _stock_name_lookup().get((market, symbol)) or "").strip()
     return {
@@ -112,13 +153,14 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         "industry_level_2_name": str(industry_row.get("industry_level_2_name") or "").strip(),
         "listed_days": listed_days,
         "current_price": current_price,
+        "total_market_cap": total_market_cap,
         "free_float_market_cap": free_float_market_cap,
         "ttm_net_profit": ttm_net_profit,
         "ttm_revenue": ttm_revenue,
         "revenue_yoy": revenue_yoy,
         "gross_margin": gross_margin,
         "book_value_per_share": book_value_per_share,
-        "pe_ttm": _to_float((basic_info or {}).get("dynamic_pe")),
+        "pe_ttm": pe_ttm,
         "ps_ttm": ps_ttm,
         "is_suspended": False,
     }
@@ -192,9 +234,7 @@ def load_industry_percentile_sample(
             if classified.classification.value != classification:
                 continue
         elif classification == "B_THIN_PROFIT_DISTORTED":
-            if classified.classification.value not in {"A_NORMAL_EARNING", "B_THIN_PROFIT_DISTORTED", "C_LOSS"}:
-                continue
-            if classified.sub_classification and classified.sub_classification.value in {"C3_NO_REVENUE_CONCEPT", "C4_LIQUIDATION_RISK"}:
+            if classified.classification.value not in {"A_NORMAL_EARNING", "B_THIN_PROFIT_DISTORTED"}:
                 continue
         elif classification == "C_LOSS":
             if classified.classification.value != "C_LOSS":
@@ -236,6 +276,24 @@ def build_industry_snapshot_for_industry(
     )
     snapshot["temperature_history_since_2022"] = temperature_history
     snapshot["percentile_samples"] = _build_percentile_samples(stock_inputs, _to_float(snapshot.get("pe_invalid_threshold")))
+    member_rows = []
+    for stock in stock_inputs:
+        row = {
+            "market": str(stock.get("market") or "").strip().lower(),
+            "symbol": str(stock.get("symbol") or "").strip(),
+            "stock_name": stock.get("stock_name") or None,
+            "current_price": _to_float(stock.get("current_price")),
+            "pe_ttm": _to_float(stock.get("pe_ttm")),
+            "ps_ttm": _to_float(stock.get("ps_ttm")),
+        }
+        total_market_cap = _to_float(stock.get("total_market_cap"))
+        if total_market_cap is not None:
+            row["total_market_cap"] = total_market_cap
+        free_float_market_cap = _to_float(stock.get("free_float_market_cap"))
+        if free_float_market_cap is not None:
+            row["free_float_market_cap"] = free_float_market_cap
+        member_rows.append(row)
+    snapshot["member_valuation_rows"] = member_rows
     return snapshot
 
 
@@ -401,7 +459,6 @@ def _build_percentile_samples(
             samples.setdefault(_percentile_sample_key("ps_ttm", "B_THIN_PROFIT_DISTORTED"), []).append(ps_ttm)
             continue
         if classified.sub_classification and classified.sub_classification.value not in {"C3_NO_REVENUE_CONCEPT", "C4_LIQUIDATION_RISK"}:
-            samples.setdefault(_percentile_sample_key("ps_ttm", "B_THIN_PROFIT_DISTORTED"), []).append(ps_ttm)
             samples.setdefault(
                 _percentile_sample_key("ps_ttm", "C_LOSS", classified.sub_classification.value),
                 [],
@@ -446,6 +503,12 @@ def compute_ps_ttm(free_float_market_cap: float | None, ttm_revenue: float | Non
     return free_float_market_cap / ttm_revenue
 
 
+def compute_market_cap_yi(current_price: float | None, shares_raw: float | None) -> float | None:
+    if current_price is None or shares_raw is None:
+        return None
+    return current_price * shares_raw / 1e8
+
+
 def first_non_null(*values):
     for value in values:
         if value is not None:
@@ -469,3 +532,20 @@ def _to_int(value: object) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _latest_three_previous_periods(period: str) -> tuple[str, ...]:
+    text = str(period or "").strip()
+    if len(text) < 5 or not text[:4].isdigit():
+        return tuple()
+    year = int(text[:4])
+    suffix = text[4:]
+    if suffix == "Q1":
+        return (f"{year - 1}A", f"{year - 1}Q3", f"{year - 1}Q2")
+    if suffix == "Q2":
+        return (f"{year}Q1", f"{year - 1}A", f"{year - 1}Q3")
+    if suffix == "Q3":
+        return (f"{year}Q2", f"{year}Q1", f"{year - 1}A")
+    if suffix == "A":
+        return (f"{year}Q3", f"{year}Q2", f"{year}Q1")
+    return tuple()

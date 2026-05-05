@@ -6,9 +6,11 @@ from functools import lru_cache
 from pathlib import Path
 
 from .data_loader import (
+    compute_market_cap_yi,
     compute_ttm_metric_from_rows,
     normalize_amount_to_yi,
     pick_free_float_shares,
+    pick_total_shares,
 )
 from .industry_snapshot import build_industry_day_snapshot
 
@@ -157,17 +159,26 @@ def _load_stock_inputs_for_period(
     year = int(period[:4]) if period[:4].isdigit() else None
     prev_annual_row = search_index._load_financial_quarter_row(f"{year - 1}A", symbol) if year else None
     prev_same_row = search_index._load_financial_quarter_row(f"{year - 1}{period[4:]}", symbol) if year else None
+    previous_quarter_rows = [
+        search_index._load_financial_quarter_row(previous_period, symbol)
+        for previous_period in _latest_three_previous_periods(period)
+    ]
 
     current_price, listed_days = _load_close_and_listed_days_on_or_before(market, symbol, trading_day)
     free_float_shares_raw = pick_free_float_shares(current_row)
+    total_shares_raw = pick_total_shares(current_row)
     free_float_market_cap = None
+    total_market_cap = None
     if current_price is not None and free_float_shares_raw is not None:
-        free_float_market_cap = current_price * free_float_shares_raw / 1e8
+        free_float_market_cap = compute_market_cap_yi(current_price, free_float_shares_raw)
+    if current_price is not None and total_shares_raw is not None:
+        total_market_cap = compute_market_cap_yi(current_price, total_shares_raw)
 
     ttm_net_profit = normalize_amount_to_yi(compute_ttm_metric_from_rows(
         period=period,
         field_name="归属于母公司所有者的净利润",
         current_row=current_row,
+        previous_quarter_rows=previous_quarter_rows,
         prev_annual_row=prev_annual_row,
         prev_same_row=prev_same_row,
     ))
@@ -175,6 +186,7 @@ def _load_stock_inputs_for_period(
         period=period,
         field_name="营业收入",
         current_row=current_row,
+        previous_quarter_rows=previous_quarter_rows,
         prev_annual_row=prev_annual_row,
         prev_same_row=prev_same_row,
     ))
@@ -190,9 +202,27 @@ def _load_stock_inputs_for_period(
         "industry_level_2_name": str(industry_row.get("industry_level_2_name") or "").strip(),
         "listed_days": listed_days,
         "current_price": current_price,
+        "total_market_cap": total_market_cap,
         "free_float_market_cap": free_float_market_cap,
         "ttm_net_profit": ttm_net_profit,
         "ttm_revenue": ttm_revenue,
         "book_value_per_share": book_value_per_share,
         "is_suspended": False,
     }
+
+
+def _latest_three_previous_periods(period: str) -> tuple[str, ...]:
+    text = str(period or "").strip()
+    if len(text) < 5 or not text[:4].isdigit():
+        return tuple()
+    year = int(text[:4])
+    suffix = text[4:]
+    if suffix == "Q1":
+        return (f"{year - 1}A", f"{year - 1}Q3", f"{year - 1}Q2")
+    if suffix == "Q2":
+        return (f"{year}Q1", f"{year - 1}A", f"{year - 1}Q3")
+    if suffix == "Q3":
+        return (f"{year}Q2", f"{year}Q1", f"{year - 1}A")
+    if suffix == "A":
+        return (f"{year}Q3", f"{year}Q2", f"{year}Q1")
+    return tuple()

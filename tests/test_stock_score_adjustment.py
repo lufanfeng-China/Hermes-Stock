@@ -429,19 +429,94 @@ class StockScoreAdjustmentTests(unittest.TestCase):
                 ("sz", "000651"): 43.21,
                 ("sh", "600690"): 28.88,
             }),
+            mock.patch(
+                "app.relative_valuation.data_loader.load_industry_valuation_snapshot",
+                return_value={
+                    "weighted_pe_ttm": 18.5,
+                    "weighted_ps_ttm": 1.92,
+                    "member_valuation_rows": [
+                        {"market": "sz", "symbol": "000333", "stock_name": "美的集团", "pe_ttm": 14.8, "ps_ttm": 1.35, "current_price": 72.35},
+                        {"market": "sz", "symbol": "000651", "stock_name": "格力电器", "pe_ttm": 12.6, "ps_ttm": 1.10, "current_price": 43.21},
+                        {"market": "sh", "symbol": "600690", "stock_name": "海尔智家", "pe_ttm": 16.2, "ps_ttm": 0.98, "current_price": 28.88},
+                    ],
+                },
+            ),
+            mock.patch(
+                "app.relative_valuation.data_loader.load_stock_relative_valuation_inputs",
+                side_effect=AssertionError("industry total peers should read valuation rows from snapshot cache"),
+            ),
         ):
             result = idx.build_stock_score_industry_total_peer_benchmark("sz", "000333")
 
         self.assertTrue(result["ok"])
         self.assertEqual("白色家电", result["ind2"])
+        self.assertEqual(18.5, result["industry_weighted_pe_ttm"])
+        self.assertEqual(1.92, result["industry_weighted_ps_ttm"])
         self.assertEqual(["000651", "000333", "600690"], [row["symbol"] for row in result["rows"]])
         self.assertEqual(80.2, result["rows"][0]["total_score"])
         self.assertEqual(72.35, result["rows"][1]["current_price"])
+        self.assertEqual(14.8, result["rows"][1]["pe_ttm"])
+        self.assertEqual(1.35, result["rows"][1]["ps_ttm"])
         self.assertTrue(result["rows"][1]["is_current_stock"])
         self.assertEqual("20260331", result["rows"][1]["report_date"])
         self.assertEqual(83.2, result["rows"][1]["dimension_scores"]["profitability"])
         self.assertEqual(76.0, result["rows"][1]["dimension_scores"]["growth"])
         self.assertEqual(71.7, round(result["rows"][1]["total_score"], 1))
+
+    def test_build_stock_score_industry_total_peer_benchmark_falls_back_to_live_valuation_when_snapshot_rows_missing(self) -> None:
+        from app.search import index as idx
+
+        def build_entry(*, ind_total_score: float) -> dict[str, object]:
+            return {
+                "report_date": "20260331",
+                "announce_date": "20260424",
+                "latest_period": "2026Q1",
+                "industry_sw_level_2": "消费电子",
+                "sub_indicators": {sub_key: 50.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_sub_indicators": {sub_key: 45.0 for sub_key, *_ in idx._SUB_DEFS},
+                "ind_dim_scores": {"profitability": 20.0},
+                "ind_total_score": ind_total_score,
+                "raw_sub_indicators": {},
+                "prev_raw_sub_indicators": {},
+            }
+
+        snapshot = {
+            "report_date": "2026Q1",
+            "scores": {
+                "sz:002456": build_entry(ind_total_score=39.1),
+                "sz:002045": build_entry(ind_total_score=55.0),
+            },
+        }
+        industry_map = {
+            ("sz", "002456"): ("消费电子", "电子"),
+            ("sz", "002045"): ("消费电子", "电子"),
+        }
+        valuation_inputs = {
+            ("sz", "002456"): {"market": "sz", "symbol": "002456", "stock_name": "欧菲光", "current_price": 8.71, "ps_ttm": 1.39, "pe_ttm": None},
+            ("sz", "002045"): {"market": "sz", "symbol": "002045", "stock_name": "国光电器", "current_price": 16.2, "ps_ttm": 0.82, "pe_ttm": None},
+        }
+
+        with (
+            mock.patch.object(idx, "_load_financial_snapshot", return_value=snapshot),
+            mock.patch.object(idx, "_load_industry_map", return_value=industry_map),
+            mock.patch.object(idx, "_stock_name_lookup", return_value={("sz", "002456"): "欧菲光", ("sz", "002045"): "国光电器"}),
+            mock.patch.object(idx, "_load_latest_close_prices", return_value={}),
+            mock.patch(
+                "app.relative_valuation.data_loader.load_industry_valuation_snapshot",
+                return_value={"weighted_pe_ttm": 13.4, "weighted_ps_ttm": 1.65},
+            ),
+            mock.patch(
+                "app.relative_valuation.data_loader.load_stock_relative_valuation_inputs",
+                side_effect=lambda market, symbol: valuation_inputs[(market, symbol)],
+            ),
+        ):
+            result = idx.build_stock_score_industry_total_peer_benchmark("sz", "002456")
+
+        self.assertEqual(["002045", "002456"], [row["symbol"] for row in result["rows"]])
+        current_row = next(row for row in result["rows"] if row["symbol"] == "002456")
+        self.assertEqual(1.39, current_row["ps_ttm"])
+        self.assertIsNone(current_row["pe_ttm"])
+        self.assertEqual(8.71, current_row["current_price"])
 
     def test_compute_stock_score_uses_prior_year_same_period_for_free_cf_diagnostics(self) -> None:
         from app.search import index as idx

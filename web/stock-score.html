@@ -21,6 +21,7 @@
           <button id="stock-score-data-update-btn" class="nav-link" type="button">数据更新</button>
         </div>
         <div id="stock-score-data-update-info" class="profile-meta muted stock-score-data-update-info">最新更新：读取中...</div>
+        <button id="stock-score-data-update-retry-btn" class="nav-link stock-score-data-update-retry" type="button" hidden>重试失败项</button>
       </div>
     </header>
 
@@ -89,34 +90,34 @@
               <strong class="profile-value muted" id="hdr-basic-change">待加载涨幅</strong>
             </div>
             <div class="profile-field stock-score-profile-field">
-              <span class="profile-label">量比</span>
-              <strong class="profile-value muted" id="hdr-basic-volume-ratio">待加载量比</strong>
+              <span class="profile-label">PS-TTM</span>
+              <strong class="profile-value muted" id="hdr-basic-ps-ttm">待加载PS-TTM</strong>
             </div>
             <div class="profile-field stock-score-profile-field">
-              <span class="profile-label">A股市值</span>
-              <strong class="profile-value muted" id="hdr-basic-market-cap">待加载A股市值</strong>
-            </div>
-            <div class="profile-field stock-score-profile-field">
-              <span class="profile-label">总股本</span>
-              <strong class="profile-value muted" id="hdr-basic-total-shares">待加载总股本</strong>
-            </div>
-            <div class="profile-field stock-score-profile-field">
-              <span class="profile-label">流通股本</span>
-              <strong class="profile-value muted" id="hdr-basic-float-shares">待加载流通股本</strong>
+              <span class="profile-label">PE-TTM</span>
+              <strong class="profile-value muted" id="hdr-basic-dynamic-pe">待加载PE-TTM</strong>
             </div>
             <div class="profile-field stock-score-profile-field">
               <span class="profile-label">收益</span>
               <strong class="profile-value muted" id="hdr-basic-eps">待加载收益</strong>
             </div>
             <div class="profile-field stock-score-profile-field">
-              <span class="profile-label">PE(动)</span>
-              <strong class="profile-value muted" id="hdr-basic-dynamic-pe">待加载动态PE</strong>
+              <span class="profile-label">流通股本</span>
+              <strong class="profile-value muted" id="hdr-basic-float-shares">待加载流通股本</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">总股本</span>
+              <strong class="profile-value muted" id="hdr-basic-total-shares">待加载总股本</strong>
+            </div>
+            <div class="profile-field stock-score-profile-field">
+              <span class="profile-label">A股市值</span>
+              <strong class="profile-value muted" id="hdr-basic-market-cap">待加载A股市值</strong>
             </div>
           </div>
         </article>
       </div>
 
-      <section id="score-header" class="stock-score-summary">
+      <section id="score-header" class="stock-score-summary visible">
         <article class="profile-card stock-score-profile-card">
           <div class="stock-score-profile-card-inner">
             <div class="profile-header stock-score-profile-header">
@@ -133,29 +134,12 @@
             <div id="score-profile-strip" class="profile-grid stock-score-profile-grid">
               <section class="stock-score-profile-cluster">
                 <div class="stock-score-profile-cluster-head">
-                  <p class="eyebrow">PROFILE</p>
-                  <h3>基础画像</h3>
-                </div>
-                <div class="stock-score-profile-cluster-body">
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">申万一级</span>
-                    <strong class="profile-value muted" id="hdr-industry-l1">待加载申万一级</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">申万二级</span>
-                    <strong class="profile-value muted" id="hdr-industry-l2">待加载申万二级</strong>
-                  </div>
-                </div>
-              </section>
-
-              <section class="stock-score-profile-cluster">
-                <div class="stock-score-profile-cluster-head">
                   <p class="eyebrow">MOMENTUM</p>
-                  <h3>RPS 与排名</h3>
+                  <h3>RPS 动量</h3>
                 </div>
                 <div class="stock-score-profile-cluster-body">
                   <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">RPS</span>
+                    <span class="profile-label">个股RPS</span>
                     <div id="hdr-rps-summary" class="profile-value muted stock-score-rps-summary">
                       <div id="hdr-rps20" class="stock-score-rps-row">待加载RPS20</div>
                       <div id="hdr-rps50" class="stock-score-rps-row">待加载RPS50</div>
@@ -164,17 +148,74 @@
                     </div>
                   </div>
                   <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">排名</span>
-                    <div id="hdr-rank-summary" class="profile-value muted stock-score-rank-summary">
-                      <div id="hdr-rank-market" class="stock-score-rps-row">待加载全市场排名</div>
-                      <div id="hdr-rank-industry" class="stock-score-rps-row">待加载二级行业排名</div>
+                    <span class="profile-label">二级行业RPS</span>
+                    <div id="hdr-industry-rps-summary" class="profile-value muted stock-score-rps-summary">
+                      <div id="hdr-industry-rps20" class="stock-score-rps-row">待加载RPS20</div>
+                      <div id="hdr-industry-rps50" class="stock-score-rps-row">待加载RPS50</div>
+                      <div id="hdr-industry-rps120" class="stock-score-rps-row">待加载RPS120</div>
+                      <div id="hdr-industry-rps250" class="stock-score-rps-row">待加载RPS250</div>
                     </div>
+                  </div>
+                </div>
+              </section>
+
+              <section id="hdr-valuation-summary" class="stock-score-profile-cluster">
+                <div class="stock-score-profile-cluster-head">
+                  <p class="eyebrow">VALUATION</p>
+                  <h3>相对估值摘要</h3>
+                </div>
+                <div class="stock-score-profile-cluster-body">
+                  <div class="profile-field stock-score-profile-field stock-score-valuation-temperature-field">
+                    <span class="profile-label">行业温度</span>
+                    <strong class="profile-value muted" id="hdr-valuation-temperature">待加载行业温度</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field stock-score-valuation-classification-field">
+                    <span class="profile-label">估值分类</span>
+                    <strong class="profile-value muted" id="hdr-valuation-classification">待加载估值分类</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field stock-score-valuation-classification-desc-field">
+                    <span class="profile-label">分类说明</span>
+                    <strong class="profile-value muted" id="hdr-valuation-classification-desc">待加载分类说明</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">行业加权PE</span>
+                    <strong class="profile-value muted" id="hdr-valuation-industry-pe">待加载行业加权PE</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">行业加权PS</span>
+                    <strong class="profile-value muted" id="hdr-valuation-industry-ps">待加载行业加权PS</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">行业样本</span>
+                    <strong class="profile-value muted" id="hdr-valuation-sample-count">待加载行业样本</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">样本状态</span>
+                    <strong class="profile-value muted" id="hdr-valuation-sample-status">待加载样本状态</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">行业内估值位置</span>
+                    <strong class="profile-value muted clickable-value" id="hdr-valuation-percentile">待加载行业内估值位置</strong>
+                  </div>
+                  <div class="profile-field stock-score-profile-field">
+                    <span class="profile-label">区间标签</span>
+                    <strong class="profile-value muted" id="hdr-valuation-band">待加载区间标签</strong>
                   </div>
                 </div>
               </section>
             </div>
 
-            <div id="score-methodology-note" class="stock-score-methodology-note muted">评分口径说明将在查询后显示</div>
+            <section id="score-home-intro" class="stock-score-home-intro">
+              <div class="stock-score-home-intro-terminal">
+                <span class="stock-score-home-intro-chip">HOME SUMMARY</span>
+                <p>首页可先查看使用说明与当前数据口径</p>
+              </div>
+              <ul id="score-home-intro-points" class="stock-score-home-intro-points">
+                <li>先在左侧输入股票代码、名称或 `market:symbol` 开始查询。</li>
+                <li>右侧区域会在查询后切换为最新评分摘要、RPS 动量与相对估值摘要。</li>
+                <li>下方模块保留六维拆分、细分指标与 AI 财报解读入口。</li>
+              </ul>
+            </section>
           </div>
         </article>
       </section>
@@ -403,21 +444,42 @@
         <button id="industry-score-peer-close" type="button" class="sub-period-industry-average-btn">关闭</button>
       </div>
       <div id="industry-score-peer-status" class="profile-meta muted">点击行业内总分后加载同业样本</div>
+      <div id="industry-score-peer-valuation-summary" class="industry-score-peer-valuation-summary">
+        <div class="profile-field stock-score-profile-field">
+          <span class="profile-label">行业加权PE</span>
+          <strong id="industry-score-peer-valuation-pe" class="profile-value muted">—</strong>
+        </div>
+        <div class="profile-field stock-score-profile-field">
+          <span class="profile-label">行业加权PS</span>
+          <strong id="industry-score-peer-valuation-ps" class="profile-value muted">—</strong>
+        </div>
+      </div>
       <div class="industry-score-peer-table-wrap">
+        <template id="industry-score-peer-row-template">
+          <tr class="industry-score-peer-row-trigger" tabindex="0">
+            <td>
+              <button type="button" class="industry-score-peer-stock-trigger">
+                <span class="industry-score-peer-stock-main"></span>
+                <span class="industry-score-peer-stock-meta"></span>
+              </button>
+            </td>
+          </tr>
+        </template>
         <table class="sub-table">
           <thead>
             <tr>
-              <th>股票名称</th>
-              <th>股票代码</th>
-              <th>当前价格</th>
-              <th>盈利能力</th>
-              <th>成长能力</th>
-              <th>运营效率</th>
-              <th>现金流质量</th>
-              <th>偿债能力</th>
-              <th>资产质量</th>
-              <th>总分</th>
-              <th>报告日期</th>
+              <th data-col="-1">股票名称</th>
+              <th class="sortable" data-col="current_price" data-dir="0" title="点击排序">当前价格 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="ps_ttm" data-dir="0" title="点击排序">PS-TTM <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="pe_ttm" data-dir="0" title="点击排序">PE(动) <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="profitability" data-dir="0" title="点击排序">盈利能力 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="growth" data-dir="0" title="点击排序">成长能力 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="operating" data-dir="0" title="点击排序">运营效率 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="cashflow" data-dir="0" title="点击排序">现金流质量 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="solvency" data-dir="0" title="点击排序">偿债能力 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="asset_quality" data-dir="0" title="点击排序">资产质量 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="total_score" data-dir="0" title="点击排序">总分 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th data-col="-1">报告日期</th>
             </tr>
           </thead>
           <tbody id="industry-score-peer-tbody"></tbody>
@@ -426,6 +488,34 @@
     </div>
   </div>
 
-  <script type="module" src="/stock-score.js"></script>
+  <div id="industry-valuation-percentile-dialog" class="industry-score-peer-dialog" hidden aria-hidden="true">
+    <div class="industry-score-peer-dialog-card" role="dialog" aria-modal="true" aria-labelledby="industry-valuation-percentile-title">
+      <div class="search-card-header">
+        <div>
+          <p class="eyebrow">VALUATION PERCENTILE</p>
+          <h2 id="industry-valuation-percentile-title">行业估值位置对照</h2>
+        </div>
+        <button id="industry-valuation-percentile-close" type="button" class="sub-period-industry-average-btn">关闭</button>
+      </div>
+      <div id="industry-valuation-percentile-status" class="profile-meta muted">点击行业内估值位置后加载同业样本</div>
+      <div class="industry-score-peer-table-wrap">
+        <table class="sub-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-col="percentile_rank" data-dir="1" title="点击排序">估值分位 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th data-col="-1">股票名称</th>
+              <th class="sortable" data-col="current_price" data-dir="0" title="点击排序">当前价格 <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="ps_ttm" data-dir="0" title="点击排序">PS-TTM <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th class="sortable" data-col="pe_ttm" data-dir="0" title="点击排序">PE(动) <span class="sort-indicator" aria-hidden="true"></span></th>
+              <th data-col="-1">区间标签</th>
+            </tr>
+          </thead>
+          <tbody id="industry-valuation-percentile-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/stock-score.js?v=20260505-update-progress"></script>
 </body>
 </html>

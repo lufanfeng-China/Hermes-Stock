@@ -83,22 +83,72 @@ function renderIndustryPeerDialog(payload) {
     </tr>`).join("");
 }
 
-function renderIndustryScorePeerDialog(payload) {
-  const tbody = document.getElementById("industry-score-peer-tbody");
-  const title = document.getElementById("industry-score-peer-title");
-  const status = document.getElementById("industry-score-peer-status");
-  const industryName = payload?.ind2 || "当前行业";
-  title.textContent = `${industryName} · 行业内总分同业对照`;
-  status.textContent = payload?.rows?.length
-    ? `共 ${payload.rows.length} 只股票，按行业总分从高到低排序`
-    : "当前行业暂无可展示样本";
+// ── Industry-score-peer table sorting ────────────────────────────────────────
 
-  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+function sortIndustryScorePeerTable(col, dir) {
+  const rows = searchState._industryScorePeerRows;
+  if (!rows) return;
+
+  const sorted = [...rows].sort((a, b) => {
+    let va, vb;
+    if (col === "current_price") {
+      va = Number(a.current_price ?? "");
+      vb = Number(b.current_price ?? "");
+    } else if (col === "ps_ttm" || col === "pe_ttm" || col === "total_score") {
+      va = Number(a[col] ?? "");
+      vb = Number(b[col] ?? "");
+    } else if (col === "profitability" || col === "growth" || col === "operating" ||
+               col === "cashflow" || col === "solvency" || col === "asset_quality") {
+      va = Number(a.dimension_scores?.[col] ?? "");
+      vb = Number(b.dimension_scores?.[col] ?? "");
+    } else {
+      return 0;
+    }
+    if (Number.isNaN(va) && Number.isNaN(vb)) return 0;
+    if (Number.isNaN(va)) return 1;
+    if (Number.isNaN(vb)) return -1;
+    return dir === 1 ? va - vb : vb - va;
+  });
+
+  _renderIndustryScorePeerBody(sorted);
+
+  // Update header sort indicators
+  document.querySelectorAll("#industry-score-peer-dialog .sub-table th.sortable").forEach((th) => {
+    const c = th.dataset.col;
+    const d = parseInt(th.dataset.dir, 10);
+    const indicator = th.querySelector(".sort-indicator");
+    if (c === col) {
+      th.dataset.dir = String(d === 1 ? 0 : 1);
+      if (indicator) indicator.textContent = d === 1 ? " ▲" : " ▼";
+    } else {
+      th.dataset.dir = "0";
+      if (indicator) indicator.textContent = "";
+    }
+  });
+}
+
+function _renderIndustryScorePeerBody(rows) {
+  const tbody = document.getElementById("industry-score-peer-tbody");
   tbody.innerHTML = rows.map((row) => `
-    <tr class="${row?.is_current_stock ? "industry-score-peer-row-current" : ""}">
-      <td>${escapeHtml(row?.stock_name || "—")}</td>
-      <td>${escapeHtml(`${String(row?.market || "").toUpperCase()}:${row?.symbol || "—"}`)}</td>
+    <tr
+      class="industry-score-peer-row-trigger ${row?.is_current_stock ? "industry-score-peer-row-current" : ""}"
+      tabindex="0"
+      data-peer-market="${escapeHtml(String(row?.market || "").toLowerCase())}"
+      data-peer-symbol="${escapeHtml(row?.symbol || "")}"
+      data-peer-stock-name="${escapeHtml(row?.stock_name || row?.symbol || "—")}"
+    >
+      <td>
+        <button
+          type="button"
+          class="industry-score-peer-stock-trigger"
+          data-peer-market="${escapeHtml(String(row?.market || "").toLowerCase())}"
+          data-peer-symbol="${escapeHtml(row?.symbol || "")}"
+          data-peer-stock-name="${escapeHtml(row?.stock_name || row?.symbol || "—")}"
+        ><span class="industry-score-peer-stock-main">${escapeHtml(row?.stock_name || "—")}</span><span class="industry-score-peer-stock-meta">${escapeHtml(`${String(row?.market || "").toUpperCase()}:${row?.symbol || "—" }`)}</span></button>
+      </td>
       <td>${escapeHtml(formatPrice(row?.current_price))}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.ps_ttm) || "—")}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.pe_ttm) || "—")}</td>
       <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.profitability) || "—")}</td>
       <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.growth) || "—")}</td>
       <td>${escapeHtml(formatProfileMetric(row?.dimension_scores?.operating) || "—")}</td>
@@ -108,6 +158,37 @@ function renderIndustryScorePeerDialog(payload) {
       <td>${escapeHtml(formatTotalScore(row?.total_score) || "—")}</td>
       <td>${escapeHtml(row?.report_date || "—")}</td>
     </tr>`).join("");
+}
+
+function renderIndustryScorePeerDialog(payload) {
+  const title = document.getElementById("industry-score-peer-title");
+  const status = document.getElementById("industry-score-peer-status");
+  const valuationPe = document.getElementById("industry-score-peer-valuation-pe");
+  const valuationPs = document.getElementById("industry-score-peer-valuation-ps");
+  const industryName = payload?.ind2 || "当前行业";
+  title.textContent = `${industryName} · 行业内总分同业对照`;
+  status.textContent = payload?.rows?.length
+    ? `共 ${payload.rows.length} 只股票，点击列头可排序`
+    : "当前行业暂无可展示样本";
+  const weightedPeText = formatProfileMetric(payload?.industry_weighted_pe_ttm);
+  const weightedPsText = formatProfileMetric(payload?.industry_weighted_ps_ttm);
+  valuationPe.textContent = weightedPeText || "—";
+  valuationPs.textContent = weightedPsText || "—";
+  valuationPe.classList.toggle("muted", !weightedPeText);
+  valuationPs.classList.toggle("muted", !weightedPsText);
+
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  searchState._industryScorePeerRows = rows;
+
+  // Reset all column sort indicators to neutral before default sort
+  document.querySelectorAll("#industry-score-peer-dialog .sub-table th.sortable").forEach((th) => {
+    th.dataset.dir = "0";
+    const indicator = th.querySelector(".sort-indicator");
+    if (indicator) indicator.textContent = "";
+  });
+
+  // Default sort: total_score desc (dir=0)
+  sortIndustryScorePeerTable("total_score", 0);
 }
 
 function openIndustryPeerDialog() {
@@ -134,6 +215,15 @@ function closeIndustryScorePeerDialog() {
   dialog.setAttribute("aria-hidden", "true");
 }
 
+function resetIndustryScorePeerDialogSummary() {
+  const valuationPe = document.getElementById("industry-score-peer-valuation-pe");
+  const valuationPs = document.getElementById("industry-score-peer-valuation-ps");
+  valuationPe.textContent = "—";
+  valuationPs.textContent = "—";
+  valuationPe.classList.add("muted");
+  valuationPs.classList.add("muted");
+}
+
 const DIM_NAMES = {
   profitability:  "盈利能力",
   growth:         "成长能力",
@@ -154,26 +244,35 @@ const SEARCH_DEBOUNCE_MS = 200;
 const MAX_RECENT_STOCK_SEARCHES = 6;
 const RECENT_STOCK_SEARCHES_STORAGE_KEY = "stock-score-recent-searches";
 const PROFILE_PLACEHOLDERS = {
-  industryL1: "暂无申万一级",
-  industryL2: "暂无申万二级",
   industryTotalMeta: "暂无行业信息",
   totalMarketRank: "全市场排名: 暂无",
   totalIndustryRank: "二级行业排名: 暂无",
   concepts: "暂无核心概念",
   basicPrice: "待加载现价",
   basicChange: "待加载涨幅",
-  basicVolumeRatio: "待加载量比",
+  basicPsTtm: "待加载PS-TTM",
   basicMarketCap: "待加载A股市值",
   basicTotalShares: "待加载总股本",
   basicFloatShares: "待加载流通股本",
   basicEps: "待加载收益",
-  basicDynamicPe: "待加载动态PE",
+  basicDynamicPe: "待加载PE-TTM",
+  industryRps20: "RPS20: 暂无",
+  industryRps50: "RPS50: 暂无",
+  industryRps120: "RPS120: 暂无",
+  industryRps250: "RPS250: 暂无",
   rps20: "RPS20: 暂无",
   rps50: "RPS50: 暂无",
   rps120: "RPS120: 暂无",
   rps250: "RPS250: 暂无",
-  rankMarket: "全市场排名: 暂无",
-  rankIndustry: "二级行业排名: 暂无",
+  valuationIndustryPe: "待加载行业加权PE",
+  valuationIndustryPs: "待加载行业加权PS",
+  valuationTemperature: "待加载行业温度",
+  valuationClassification: "待加载估值分类",
+  valuationClassificationDesc: "待加载分类说明",
+  valuationSampleCount: "待加载行业样本",
+  valuationSampleStatus: "待加载样本状态",
+  valuationPercentile: "待加载行业内估值位置",
+  valuationBand: "待加载区间标签",
 };
 
 const AI_REPORT_PLACEHOLDERS = {
@@ -317,19 +416,13 @@ function renderAnalysisList(elementId, items, placeholder) {
   el.classList.remove("muted");
 }
 
-function resolveIndustryLevels(profile) {
+function renderIndustryTotalMeta(profile) {
   const parts = String(profile?.industry_display || "")
     .split("/")
     .map((item) => item.trim())
     .filter(Boolean);
-  return {
-    level1: parts[0] || "",
-    level2: parts[1] || "",
-  };
-}
-
-function renderIndustryTotalMeta(profile) {
-  const { level1, level2 } = resolveIndustryLevels(profile);
+  const level1 = parts[0] || "";
+  const level2 = parts[1] || "";
   const text = level1 && level2
     ? `${level1} / ${level2}`
     : level1 || level2 || "";
@@ -385,9 +478,9 @@ function renderBasicInfoSummary(profile) {
     }
   }
   setProfileField(
-    "hdr-basic-volume-ratio",
-    basicInfo.volume_ratio != null ? formatBasicNumber(basicInfo.volume_ratio, "", 2) : "",
-    PROFILE_PLACEHOLDERS.basicVolumeRatio,
+    "hdr-basic-ps-ttm",
+    "",
+    PROFILE_PLACEHOLDERS.basicPsTtm,
   );
   setProfileField(
     "hdr-basic-market-cap",
@@ -421,49 +514,140 @@ function renderProfileSummary(profile) {
   const rps50 = formatProfileMetric(profile?.rps_50);
   const rps120 = formatProfileMetric(profile?.rps_120);
   const rps250 = formatProfileMetric(profile?.rps_250);
-  const industryLevels = resolveIndustryLevels(profile);
+  const industryRps20 = formatProfileMetric(profile?.industry_rps_20);
+  const industryRps50 = formatProfileMetric(profile?.industry_rps_50);
+  const industryRps120 = formatProfileMetric(profile?.industry_rps_120);
+  const industryRps250 = formatProfileMetric(profile?.industry_rps_250);
 
   renderBasicInfoSummary(profile);
   renderIndustryTotalMeta(profile);
   renderSearchConceptSummary(profile);
-  setProfileField("hdr-industry-l1", industryLevels.level1, PROFILE_PLACEHOLDERS.industryL1);
-  setProfileField("hdr-industry-l2", industryLevels.level2, PROFILE_PLACEHOLDERS.industryL2);
   setRpsRow("hdr-rps20", rps20 ? `RPS20: ${rps20}` : "", PROFILE_PLACEHOLDERS.rps20);
   setRpsRow("hdr-rps50", rps50 ? `RPS50: ${rps50}` : "", PROFILE_PLACEHOLDERS.rps50);
   setRpsRow("hdr-rps120", rps120 ? `RPS120: ${rps120}` : "", PROFILE_PLACEHOLDERS.rps120);
   setRpsRow("hdr-rps250", rps250 ? `RPS250: ${rps250}` : "", PROFILE_PLACEHOLDERS.rps250);
+  setRpsRow("hdr-industry-rps20", industryRps20 ? `RPS20: ${industryRps20}` : "", PROFILE_PLACEHOLDERS.industryRps20);
+  setRpsRow("hdr-industry-rps50", industryRps50 ? `RPS50: ${industryRps50}` : "", PROFILE_PLACEHOLDERS.industryRps50);
+  setRpsRow("hdr-industry-rps120", industryRps120 ? `RPS120: ${industryRps120}` : "", PROFILE_PLACEHOLDERS.industryRps120);
+  setRpsRow("hdr-industry-rps250", industryRps250 ? `RPS250: ${industryRps250}` : "", PROFILE_PLACEHOLDERS.industryRps250);
   document.getElementById("hdr-rps-summary").classList.toggle(
     "muted",
     !(rps20 || rps50 || rps120 || rps250),
   );
+  document.getElementById("hdr-industry-rps-summary").classList.toggle(
+    "muted",
+    !(industryRps20 || industryRps50 || industryRps120 || industryRps250),
+  );
 }
 
-function renderRankSummary(result) {
-  const marketTotalRank = result?.market_total_rank;
-  const marketTotalUniverseSize = result?.market_total_universe_size;
-  const industryTotalRank = result?.industry_total_rank;
-  const industryTotalUniverseSize = result?.industry_total_universe_size;
+function formatRelativeValuationNumber(value, suffix = "") {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "";
+  return `${Number(value).toFixed(2)}${suffix}`;
+}
 
-  setRpsRow(
-    "hdr-rank-market",
-    marketTotalRank != null && marketTotalUniverseSize != null
-      ? `全市场排名: ${marketTotalRank}/${marketTotalUniverseSize}`
-      : "",
-    PROFILE_PLACEHOLDERS.rankMarket,
+function formatRelativeValuationTemperature(payload) {
+  const label = String(payload?.industry_temperature_label || "").trim();
+  const percentile = payload?.industry_temperature_percentile_since_2022 != null
+    ? `${formatRelativeValuationNumber(payload.industry_temperature_percentile_since_2022, "%")}`
+    : "";
+  return [label, percentile].filter(Boolean).join(" / ");
+}
+
+function formatRelativeValuationClassification(payload) {
+  const classification = String(payload?.classification || '').trim();
+  const subClassification = String(payload?.sub_classification || '').trim();
+  if (classification === 'A_NORMAL_EARNING') {
+    return {
+      label: 'A类 正常盈利',
+      description: '按 PE-TTM 排位',
+    };
+  }
+  if (classification === 'B_THIN_PROFIT_DISTORTED') {
+    return {
+      label: 'B类 微盈利畸高',
+      description: '按 PS-TTM 排位',
+    };
+  }
+  if (classification === 'C_LOSS') {
+    if (subClassification === 'C3_NO_REVENUE_CONCEPT' || subClassification === 'C4_LIQUIDATION_RISK') {
+      return {
+        label: 'D类 高风险例外',
+        description: '不输出常规估值分位',
+      };
+    }
+    return {
+      label: 'C类 亏损经营',
+      description: '仅在亏损同类中按 PS-TTM 辅助比较',
+    };
+  }
+  return { label: '', description: '' };
+}
+
+function formatRelativeValuationPercentile(payload) {
+  if (payload?.primary_percentile != null && !Number.isNaN(Number(payload.primary_percentile))) {
+    return `${formatRelativeValuationNumber(payload.primary_percentile, "%")}`;
+  }
+  if (payload?.sample_status === "insufficient") return "样本不足，暂不输出行业内估值位置";
+  if (payload?.sample_status === "new_listing" || payload?.is_new_listing) return "次新股，暂不输出行业内估值位置";
+  return "";
+}
+
+function renderRelativeValuationSummary(payload) {
+  const valuationClassification = formatRelativeValuationClassification(payload);
+  setProfileField(
+    "hdr-basic-ps-ttm",
+    formatRelativeValuationNumber(payload?.ps_ttm),
+    PROFILE_PLACEHOLDERS.basicPsTtm,
   );
-  setRpsRow(
-    "hdr-rank-industry",
-    industryTotalRank != null && industryTotalUniverseSize != null
-      ? `二级行业排名: ${industryTotalRank}/${industryTotalUniverseSize}`
-      : "",
-    PROFILE_PLACEHOLDERS.rankIndustry,
+  setProfileField(
+    "hdr-basic-dynamic-pe",
+    formatRelativeValuationNumber(payload?.pe_ttm),
+    PROFILE_PLACEHOLDERS.basicDynamicPe,
   );
-  document.getElementById("hdr-rank-summary").classList.toggle(
-    "muted",
-    !(
-      (marketTotalRank != null && marketTotalUniverseSize != null)
-      || (industryTotalRank != null && industryTotalUniverseSize != null)
-    ),
+  setProfileField(
+    "hdr-valuation-industry-pe",
+    formatRelativeValuationNumber(payload?.industry_weighted_pe_ttm),
+    PROFILE_PLACEHOLDERS.valuationIndustryPe,
+  );
+  setProfileField(
+    "hdr-valuation-industry-ps",
+    formatRelativeValuationNumber(payload?.industry_weighted_ps_ttm),
+    PROFILE_PLACEHOLDERS.valuationIndustryPs,
+  );
+  setProfileField(
+    "hdr-valuation-temperature",
+    formatRelativeValuationTemperature(payload),
+    PROFILE_PLACEHOLDERS.valuationTemperature,
+  );
+  setProfileField(
+    "hdr-valuation-classification",
+    valuationClassification.label,
+    PROFILE_PLACEHOLDERS.valuationClassification,
+  );
+  setProfileField(
+    "hdr-valuation-classification-desc",
+    valuationClassification.description,
+    PROFILE_PLACEHOLDERS.valuationClassificationDesc,
+  );
+  setProfileField(
+    "hdr-valuation-sample-count",
+    payload?.industry_valid_member_count != null ? String(payload.industry_valid_member_count) : "",
+    PROFILE_PLACEHOLDERS.valuationSampleCount,
+  );
+  setProfileField(
+    "hdr-valuation-sample-status",
+    payload?.sample_status || "",
+    PROFILE_PLACEHOLDERS.valuationSampleStatus,
+  );
+  setProfileField(
+    "hdr-valuation-percentile",
+    formatRelativeValuationPercentile(payload),
+    PROFILE_PLACEHOLDERS.valuationPercentile,
+  );
+  setProfileField(
+    "hdr-valuation-band",
+    payload?.valuation_band_label || "",
+    PROFILE_PLACEHOLDERS.valuationBand,
   );
 }
 
@@ -490,10 +674,53 @@ function renderTotalScoreRankSummary(result) {
   );
 }
 
+function setScoreHeaderIntroVisible(visible) {
+  const introEl = document.getElementById("score-home-intro");
+  if (!introEl) return;
+  introEl.hidden = !visible;
+}
+
+function resetScoreHeaderSummary() {
+  const nameEl = document.getElementById("hdr-name");
+  const symbolEl = document.getElementById("hdr-symbol");
+  const reportDateEl = document.getElementById("hdr-report-date");
+  const announceDateEl = document.getElementById("hdr-announce-date");
+  if (nameEl) nameEl.textContent = "—";
+  if (symbolEl) symbolEl.textContent = "—";
+  if (reportDateEl) reportDateEl.textContent = "";
+  if (announceDateEl) announceDateEl.textContent = "";
+  const totalMarketEl = document.getElementById("hdr-total-market");
+  const totalIndustryEl = document.getElementById("hdr-total-industry");
+  if (totalMarketEl) totalMarketEl.textContent = "—";
+  if (totalIndustryEl) totalIndustryEl.textContent = "—";
+  setProfileField("hdr-total-market-rank", "", PROFILE_PLACEHOLDERS.totalMarketRank);
+  setProfileField("hdr-total-industry-rank", "", PROFILE_PLACEHOLDERS.totalIndustryRank);
+  setProfileField("hdr-total-industry-meta", "", PROFILE_PLACEHOLDERS.industryTotalMeta);
+}
+
 function resetProfileSummary() {
   renderBasicInfoSummary(null);
   renderProfileSummary(null);
-  renderRankSummary(null);
+  renderRelativeValuationSummary(null);
+}
+
+function clearRadarCharts() {
+  const marketRadar = document.getElementById("radar-market");
+  const industryRadar = document.getElementById("radar-industry");
+  if (marketRadar) marketRadar.innerHTML = "";
+  if (industryRadar) industryRadar.innerHTML = "";
+}
+
+function clearDimCards() {
+  const marketCards = document.getElementById("dim-cards-market");
+  const industryCards = document.getElementById("dim-cards-industry");
+  if (marketCards) marketCards.innerHTML = "";
+  if (industryCards) industryCards.innerHTML = "";
+}
+
+function clearSubIndicatorTable() {
+  const tbody = document.getElementById("sub-tbody");
+  if (tbody) tbody.innerHTML = "";
 }
 
 function setAiReportStatus(text, isError = false) {
@@ -625,29 +852,6 @@ function updateAiReportButtons() {
   const copyButton = document.getElementById("ai-report-copy-btn");
   button.textContent = searchState.currentStock?.aiReportReady ? "重新生成AI财报解读" : "生成AI财报解读";
   copyButton.disabled = !searchState.currentStock?.aiReportReady;
-}
-
-function renderScoreMethodology(methodology) {
-  const el = document.getElementById("score-methodology-note");
-  if (!methodology) {
-    el.textContent = "评分口径：当前结果未返回额外方法说明，默认展示接口提供的全市场评分。";
-    el.classList.add("muted");
-    return;
-  }
-
-  const mode = methodology.market_score_mode || "";
-  if (mode === "industry_adjusted_market_view") {
-    const blendedDims = Array.isArray(methodology.blended_dimensions)
-      ? methodology.blended_dimensions
-      : ["operating", "solvency", "asset_quality"];
-    const blendedNames = blendedDims.map((dim) => DIM_NAMES[dim] || dim).join("、");
-    el.textContent = `评分口径：全市场总分已做行业校准，其中${blendedNames}按行业分数70% + 市场分数30%混合；盈利能力、成长能力、现金流质量保持纯全市场分数。`;
-    el.classList.remove("muted");
-    return;
-  }
-
-  el.textContent = "评分口径：当前结果使用全市场原始评分口径，未进行行业校准混合。";
-  el.classList.remove("muted");
 }
 
 // ── SVG helpers ───────────────────────────────────────────────────────────────
@@ -1122,7 +1326,6 @@ function renderScore(result) {
     raw_sub_indicators,
     prev_raw_sub_indicators,
     industry_raw_sub_indicator_avgs,
-    score_methodology,
     sub_indicator_diagnostics,
     market_total_rank,
     market_total_universe_size,
@@ -1132,10 +1335,13 @@ function renderScore(result) {
 
   if (!ok || !total_score) {
     document.getElementById("loading-msg").textContent = "未找到评分数据";
+    setScoreHeaderIntroVisible(true);
+    resetStockScoreDashboardState();
     return;
   }
 
   document.getElementById("score-header").classList.add("visible");
+  setScoreHeaderIntroVisible(false);
   document.getElementById("loading-msg").style.display = "none";
 
   // Header
@@ -1169,14 +1375,7 @@ function renderScore(result) {
   const iTotal = ind_total_score || 0;
   document.getElementById("hdr-total-market").textContent = formatTotalScore(mTotal) || "—";
   document.getElementById("hdr-total-industry").textContent = formatTotalScore(iTotal) || "—";
-  renderScoreMethodology(score_methodology);
   renderTotalScoreRankSummary({
-    market_total_rank,
-    market_total_universe_size,
-    industry_total_rank,
-    industry_total_universe_size,
-  });
-  renderRankSummary({
     market_total_rank,
     market_total_universe_size,
     industry_total_rank,
@@ -1235,6 +1434,14 @@ async function fetchStockProfile(symbol) {
   return payload.profile || null;
 }
 
+async function fetchRelativeValuation(market, symbol) {
+  const url = `/api/relative-valuation?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`;
+  const r = await fetch(url);
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
 async function fetchReportHistory(market, symbol) {
   const url = `/api/stock-score-report-history?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`;
   const r = await fetch(url);
@@ -1285,8 +1492,37 @@ async function fetchDataUpdateStatus() {
 async function fetchDataUpdateRun() {
   const r = await fetch('/api/data-update-run', { method: 'POST' });
   const payload = await r.json();
-  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  if (!r.ok || !payload.ok) {
+    const error = new Error(payload.error?.message || `HTTP ${r.status}`);
+    error.payload = payload;
+    throw error;
+  }
   return payload;
+}
+
+async function fetchDataUpdateRetry() {
+  const r = await fetch('/api/data-update-retry', { method: 'POST' });
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) {
+    const error = new Error(payload.error?.message || `HTTP ${r.status}`);
+    error.payload = payload;
+    throw error;
+  }
+  return payload;
+}
+
+function formatDataUpdateErrorMessage(error) {
+  const message = String(error?.message || '未知错误').split('\n').filter(Boolean)[0];
+  const details = error?.payload?.error || {};
+  const step = details.step_name ? `失败步骤：${details.step_name}` : '失败步骤：数据更新';
+  const returnCode = details.returncode != null ? `退出码：${details.returncode}` : '';
+  return [
+    '数据更新已停止或失败',
+    step,
+    returnCode,
+    message,
+    '详细行业构建进度已写入后台日志，不在首页展开，避免撑乱页面。',
+  ].filter(Boolean).join('\n');
 }
 
 function normalizeMarket(code) {
@@ -1307,6 +1543,9 @@ const industryPeerDialogEl = document.getElementById("industry-peer-dialog");
 const industryPeerStatusEl = document.getElementById("industry-peer-status");
 const industryScorePeerDialogEl = document.getElementById("industry-score-peer-dialog");
 const industryScorePeerStatusEl = document.getElementById("industry-score-peer-status");
+const dataUpdateButtonEl = document.getElementById('stock-score-data-update-btn');
+const dataUpdateRetryButtonEl = document.getElementById('stock-score-data-update-retry-btn');
+let dataUpdatePollTimer = null;
 const searchState = {
   timer: null,
   requestId: 0,
@@ -1318,7 +1557,39 @@ const searchState = {
   expandedSubDiagKey: null,
   industryPeerRequestId: 0,
   industryScorePeerRequestId: 0,
+  _industryScorePeerRows: null,
+  _industryValuationPercentileRows: null,
 };
+
+function resetPeerDialogs() {
+  searchState.industryPeerRequestId += 1;
+  searchState.industryScorePeerRequestId += 1;
+  searchState._industryScorePeerRows = null;
+  searchState._industryValuationPercentileRows = null;
+  closeIndustryPeerDialog();
+  closeIndustryScorePeerDialog();
+  closeIndustryValuationPercentileDialog();
+  industryPeerStatusEl.textContent = INDUSTRY_PEER_STATUS_PLACEHOLDER;
+  document.getElementById("industry-peer-title").textContent = "行业同业对照";
+  document.getElementById("industry-peer-tbody").innerHTML = "";
+  industryScorePeerStatusEl.textContent = INDUSTRY_SCORE_PEER_STATUS_PLACEHOLDER;
+  document.getElementById("industry-score-peer-title").textContent = "行业总分同业对照";
+  document.getElementById("industry-score-peer-tbody").innerHTML = "";
+  resetIndustryScorePeerDialogSummary();
+  document.getElementById("industry-valuation-percentile-title").textContent = "行业估值位置对照";
+  document.getElementById("industry-valuation-percentile-status").textContent = "点击行业内估值位置后加载同业样本";
+  document.getElementById("industry-valuation-percentile-tbody").innerHTML = "";
+}
+
+function resetStockScoreDashboardState() {
+  resetScoreHeaderSummary();
+  resetProfileSummary();
+  clearRadarCharts();
+  clearDimCards();
+  clearSubIndicatorTable();
+  resetPeerDialogs();
+  resetAiFinancialReport("查询股票后可生成分析");
+}
 
 function toStockIdentity(row) {
   if (!row?.market || !row?.symbol) return "";
@@ -1383,6 +1654,53 @@ function renderRecentStockSearches() {
   stockDropdownEl.classList.add("visible");
 }
 
+function renderDataUpdateJobProgress(job) {
+  if (!job || job.status === 'idle') return '';
+  if (job.running || job.status === 'running') {
+    const progress = job.current_progress_text || '当前进度：正在更新数据...';
+    const step = job.current_step ? `当前步骤：${job.current_step}` : '';
+    return [progress, step].filter(Boolean).join('\n');
+  }
+  if (job.status === 'failed') {
+    return [
+      job.current_progress_text || '数据更新已停止或失败',
+      job.failed_step ? `失败步骤：${job.failed_step}` : '',
+      job.error || '',
+      '可点击“重试失败项”继续未完成的行业快照构建。',
+    ].filter(Boolean).join('\n');
+  }
+  if (job.status === 'succeeded') {
+    return job.current_progress_text || '数据更新完成';
+  }
+  return '';
+}
+
+function setDataUpdateButtonsForJob(job) {
+  const running = Boolean(job?.running || job?.status === 'running');
+  if (dataUpdateButtonEl) dataUpdateButtonEl.disabled = running;
+  if (dataUpdateRetryButtonEl) {
+    dataUpdateRetryButtonEl.hidden = !(job?.status === 'failed' && job?.can_retry_failed);
+    dataUpdateRetryButtonEl.disabled = running;
+  }
+}
+
+function stopDataUpdatePolling() {
+  if (dataUpdatePollTimer) {
+    window.clearInterval(dataUpdatePollTimer);
+    dataUpdatePollTimer = null;
+  }
+}
+
+function startDataUpdatePolling() {
+  stopDataUpdatePolling();
+  dataUpdatePollTimer = window.setInterval(() => {
+    refreshDataUpdateStatus().catch((error) => {
+      const infoEl = document.getElementById('stock-score-data-update-info');
+      if (infoEl) infoEl.textContent = `更新进度读取失败: ${error.message}`;
+    });
+  }, 2000);
+}
+
 function renderDataUpdateStatus(payload) {
   const el = document.getElementById('stock-score-data-update-info');
   if (!el) return;
@@ -1392,11 +1710,28 @@ function renderDataUpdateStatus(payload) {
   const financialDate = financial.updated_at || '暂无';
   const financialPeriod = financial.report_date || '未知期次';
   const industryDate = industry.updated_at || '暂无';
+  const memberRowCount = industry.member_valuation_row_count;
+  const completeIndustryCount = industry.complete_member_valuation_industry_count;
+  const industryCount = industry.industry_count;
+  const memberCoverageText = memberRowCount != null
+    ? `member_valuation_rows：${memberRowCount} 行 · 覆盖 ${completeIndustryCount ?? 0}/${industryCount ?? '未知'} 个二级行业`
+    : 'member_valuation_rows：等待全量预计算';
+  const job = payload?.data_update_job || {};
+  const jobText = renderDataUpdateJobProgress(job);
+  setDataUpdateButtonsForJob(job);
+  if (job?.running || job?.status === 'running') {
+    startDataUpdatePolling();
+  } else {
+    stopDataUpdatePolling();
+  }
   el.textContent = [
+    jobText,
     `最新更新：${latestUpdatedAt}`,
     `财务快照 ${financialPeriod} · ${financialDate}`,
-    `行业估值快照 · ${industryDate}`,
-  ].join('\n');
+    `行业相对估值快照（含同业估值表） · ${industryDate}`,
+    memberCoverageText,
+    `member_valuation_rows 已预计算进 current 快照后，行业内估值位置弹窗可直接读取`,
+  ].filter(Boolean).join('\n');
   el.classList.remove('muted');
 }
 
@@ -1465,6 +1800,18 @@ function applySuggestion(row) {
   doSearch(row);
 }
 
+function switchToPeerStock(row) {
+  if (!row?.market || !row?.symbol) return;
+  searchState.selectedStock = {
+    market: String(row.market).toLowerCase(),
+    symbol: String(row.symbol).trim(),
+    stock_name: String(row.stock_name || row.name || row.symbol).trim(),
+  };
+  stockInputEl.value = `${searchState.selectedStock.stock_name} (${searchState.selectedStock.symbol})`;
+  closeIndustryScorePeerDialog();
+  doSearch(searchState.selectedStock);
+}
+
 async function loadSuggestions(query) {
   const trimmed = query.trim();
   const requestId = ++searchState.requestId;
@@ -1476,7 +1823,7 @@ async function loadSuggestions(query) {
     const results = await fetchStockSuggestions(trimmed);
     if (requestId !== searchState.requestId) return;
     renderSuggestions(results.slice(0, 10));
-  } catch (err) {
+  } catch (err){
     if (requestId !== searchState.requestId) return;
     stockDropdownEl.innerHTML = '<div class="search-option empty">搜索失败</div>';
     stockDropdownEl.classList.add("visible");
@@ -1484,20 +1831,38 @@ async function loadSuggestions(query) {
 }
 
 document.getElementById("search-btn").addEventListener("click", () => doSearch());
-document.getElementById('stock-score-data-update-btn').addEventListener('click', async () => {
+async function startDataUpdateRequest(fetcher, startingText) {
   const infoEl = document.getElementById('stock-score-data-update-info');
-  const buttonEl = document.getElementById('stock-score-data-update-btn');
-  if (infoEl) infoEl.textContent = '正在全量更新数据...';
-  if (buttonEl) buttonEl.disabled = true;
+  if (infoEl) infoEl.textContent = startingText;
+  if (dataUpdateButtonEl) dataUpdateButtonEl.disabled = true;
+  if (dataUpdateRetryButtonEl) dataUpdateRetryButtonEl.disabled = true;
   try {
-    const payload = await fetchDataUpdateRun();
+    const payload = await fetcher();
     renderDataUpdateStatus(payload.data_update_status || payload);
+    startDataUpdatePolling();
   } catch (error) {
-    if (infoEl) infoEl.textContent = `全量更新失败: ${error.message}`;
-  } finally {
-    if (buttonEl) buttonEl.disabled = false;
+    if (infoEl) infoEl.textContent = formatDataUpdateErrorMessage(error);
+    if (dataUpdateButtonEl) dataUpdateButtonEl.disabled = false;
+    if (dataUpdateRetryButtonEl) dataUpdateRetryButtonEl.disabled = false;
   }
+}
+
+document.getElementById('stock-score-data-update-btn').addEventListener('click', async () => {
+  await startDataUpdateRequest(fetchDataUpdateRun, [
+    '正在启动全量数据更新...',
+    '任务：更新财务时序 → 财务快照 → 行业相对估值快照（含同业估值表）',
+    '启动后将显示当前进度，例如：[24/127] 农用化工 正在构建...',
+  ].join('\n'));
 });
+
+if (dataUpdateRetryButtonEl) {
+  dataUpdateRetryButtonEl.addEventListener('click', async () => {
+    await startDataUpdateRequest(fetchDataUpdateRetry, [
+      '正在重试失败项...',
+      '将复用已完成行业，只补跑未完整写入 member_valuation_rows 的行业快照。',
+    ].join('\n'));
+  });
+}
 stockInputEl.addEventListener("input", e => {
   const value = e.target.value;
   if (searchState.selectedStock) {
@@ -1611,6 +1976,7 @@ industryScorePeerTriggerEl.addEventListener("click", () => {
   document.getElementById("industry-score-peer-title").textContent = "行业总分同业对照";
   industryScorePeerStatusEl.textContent = "正在加载行业总分同业样本...";
   document.getElementById("industry-score-peer-tbody").innerHTML = "";
+  resetIndustryScorePeerDialogSummary();
   openIndustryScorePeerDialog();
   fetchIndustryTotalPeerBenchmark(market, symbol)
     .then((payload) => {
@@ -1622,12 +1988,57 @@ industryScorePeerTriggerEl.addEventListener("click", () => {
       if (requestId !== searchState.industryScorePeerRequestId || !isCurrentStockIdentity(stockIdentity)) return;
       industryScorePeerStatusEl.textContent = `加载失败: ${err.message}`;
       document.getElementById("industry-score-peer-tbody").innerHTML = "";
+      resetIndustryScorePeerDialogSummary();
       openIndustryScorePeerDialog();
     });
 });
 document.getElementById("industry-score-peer-close").addEventListener("click", () => closeIndustryScorePeerDialog());
+document.querySelectorAll("#industry-score-peer-dialog .sub-table th.sortable").forEach((th) => {
+  th.addEventListener("click", () => {
+    const col = th.dataset.col;
+    const dir = parseInt(th.dataset.dir || "0", 10);
+    sortIndustryScorePeerTable(col, dir === 1 ? 0 : 1);
+  });
+  th.style.cursor = "pointer";
+});
 industryScorePeerDialogEl.addEventListener("click", (e) => {
+  const stockTrigger = e.target.closest(".industry-score-peer-stock-trigger");
+  const rowTrigger = e.target.closest(".industry-score-peer-row-trigger");
+  const peerTarget = stockTrigger || rowTrigger;
+  if (peerTarget) {
+    switchToPeerStock({
+      market: peerTarget.dataset.peerMarket,
+      symbol: peerTarget.dataset.peerSymbol,
+      stock_name: peerTarget.dataset.peerStockName,
+    });
+    return;
+  }
   if (e.target === industryScorePeerDialogEl) closeIndustryScorePeerDialog();
+});
+document.getElementById("industry-valuation-percentile-close").addEventListener("click", () => closeIndustryValuationPercentileDialog());
+document.querySelectorAll("#industry-valuation-percentile-dialog .sub-table th.sortable").forEach((th) => {
+  th.addEventListener("click", () => {
+    const col = th.dataset.col;
+    const dir = parseInt(th.dataset.dir || "0", 10);
+    sortIndustryValuationPercentileTable(col, dir === 1 ? 0 : 1);
+  });
+  th.style.cursor = "pointer";
+});
+document.getElementById("industry-valuation-percentile-dialog").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("industry-valuation-percentile-dialog")) closeIndustryValuationPercentileDialog();
+});
+document.getElementById("hdr-valuation-percentile").addEventListener("click", handleValuationPercentileClick);
+industryScorePeerDialogEl.addEventListener("keydown", (e) => {
+  if (e.target.closest(".industry-score-peer-stock-trigger")) return;
+  const rowTrigger = e.target.closest(".industry-score-peer-row-trigger");
+  if (!rowTrigger) return;
+  if (e.key !== "Enter" && e.key !== " ") return;
+  e.preventDefault();
+  switchToPeerStock({
+    market: rowTrigger.dataset.peerMarket,
+    symbol: rowTrigger.dataset.peerSymbol,
+    stock_name: rowTrigger.dataset.peerStockName,
+  });
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !industryPeerDialogEl.hidden) {
@@ -1660,7 +2071,7 @@ document.getElementById("ai-report-btn").addEventListener("click", async () => {
     const latestReport = payload.latest_report?.report_date || "";
     const latestLabel = [latestPeriod, latestReport].filter(Boolean).join(" · ");
     setAiReportStatus(`已完成 ${payload.stock_name || searchState.currentStock.symbol} 的AI财报解读${latestLabel ? `（${latestLabel}）` : ""}`);
-  } catch (err) {
+  } catch (err){
     console.error(err);
     searchState.currentStock.aiReportReady = false;
     resetAiFinancialReport("AI财报解读生成失败");
@@ -1686,7 +2097,7 @@ document.getElementById("ai-report-copy-btn").addEventListener("click", async ()
   try {
     await copyTextWithFallback(text);
     setAiReportStatus("已复制AI财报摘要");
-  } catch (err) {
+  } catch (err){
     setAiReportStatus(`复制失败: ${err.message}`, true);
   }
 });
@@ -1724,44 +2135,38 @@ async function doSearch(selectedRow = null) {
   if (!market || !symbol) {
     document.getElementById("loading-msg").textContent = "无法识别股票代码，请输入如 600519 或 sh:600519";
     document.getElementById("loading-msg").style.display = "block";
-    document.getElementById("score-header").classList.remove("visible");
+    setScoreHeaderIntroVisible(true);
+    resetStockScoreDashboardState();
     searchState.currentStock = null;
-    resetAiFinancialReport("查询股票后可生成分析");
-    renderScoreMethodology(null);
     updateAiReportButtons();
     return;
   }
 
   document.getElementById("loading-msg").textContent = "加载中...";
   document.getElementById("loading-msg").style.display = "block";
-  document.getElementById("score-header").classList.remove("visible");
-  resetProfileSummary();
+  setScoreHeaderIntroVisible(true);
+  resetStockScoreDashboardState();
   searchState.currentStock = null;
   searchState.expandedSubDiagKey = null;
-  searchState.industryPeerRequestId += 1;
-  searchState.industryScorePeerRequestId += 1;
-  closeIndustryPeerDialog();
-  closeIndustryScorePeerDialog();
-  industryPeerStatusEl.textContent = INDUSTRY_PEER_STATUS_PLACEHOLDER;
-  document.getElementById("industry-peer-title").textContent = "行业同业对照";
-  document.getElementById("industry-peer-tbody").innerHTML = "";
-  industryScorePeerStatusEl.textContent = INDUSTRY_SCORE_PEER_STATUS_PLACEHOLDER;
-  document.getElementById("industry-score-peer-title").textContent = "行业总分同业对照";
-  document.getElementById("industry-score-peer-tbody").innerHTML = "";
-  resetAiFinancialReport("查询完成后可生成分析");
-  renderScoreMethodology(null);
   hideSuggestions();
   updateAiReportButtons();
 
   try {
     const shouldLoadFinancialDetail = Boolean(financialDetailToggleEl?.checked);
-    const [result, profile, reportHistoryPayload] = await Promise.all([
+    const [result, profile, valuationPayload, reportHistoryPayload] = await Promise.all([
       fetchScore(market, symbol),
       fetchStockProfile(symbol).catch(() => null),
+      fetchRelativeValuation(market, symbol).catch(() => null),
       shouldLoadFinancialDetail ? fetchReportHistory(market, symbol).catch(() => null) : Promise.resolve(null),
     ]);
     renderScore(result);
+    if (!result?.ok || !result?.total_score) {
+      searchState.currentStock = null;
+      updateAiReportButtons();
+      return;
+    }
     renderProfileSummary(profile);
+    renderRelativeValuationSummary(valuationPayload);
     searchState.currentStock = {
       market,
       symbol,
@@ -1793,20 +2198,170 @@ async function doSearch(selectedRow = null) {
   } catch (err) {
     console.error(err);
     document.getElementById("loading-msg").textContent = "加载失败: " + err.message;
-    resetProfileSummary();
+    setScoreHeaderIntroVisible(true);
+    resetStockScoreDashboardState();
     searchState.currentStock = null;
-    resetAiFinancialReport("查询股票后可生成分析");
     updateAiReportButtons();
   }
+}
+
+// ── Industry valuation percentile dialog ──────────────────────────────────────
+
+function sortIndustryValuationPercentileTable(col, dir) {
+  const rows = searchState._industryValuationPercentileRows;
+  if (!rows) return;
+
+  const sorted = [...rows].sort((a, b) => {
+    let va, vb;
+    if (col === "percentile_rank") {
+      va = nullableNumberForSort(a._percentile_rank);
+      vb = nullableNumberForSort(b._percentile_rank);
+    } else if (col === "current_price") {
+      va = nullableNumberForSort(a.current_price);
+      vb = nullableNumberForSort(b.current_price);
+    } else if (col === "ps_ttm") {
+      va = nullableNumberForSort(a.ps_ttm);
+      vb = nullableNumberForSort(b.ps_ttm);
+    } else if (col === "pe_ttm") {
+      va = nullableNumberForSort(a.pe_ttm);
+      vb = nullableNumberForSort(b.pe_ttm);
+    } else {
+      return 0;
+    }
+    return sortNullableNumericLast(va, vb, dir);
+  });
+
+  _renderIndustryValuationPercentileBody(sorted);
+
+  document.querySelectorAll("#industry-valuation-percentile-dialog .sub-table th.sortable").forEach((th) => {
+    const c = th.dataset.col;
+    const d = parseInt(th.dataset.dir, 10);
+    const indicator = th.querySelector(".sort-indicator");
+    if (c === col) {
+      th.dataset.dir = String(d === 1 ? 0 : 1);
+      if (indicator) indicator.textContent = d === 1 ? " ▲" : " ▼";
+    } else {
+      th.dataset.dir = "0";
+      if (indicator) indicator.textContent = "";
+    }
+  });
+}
+
+function nullableNumberForSort(value) {
+  if (value == null || value === "") return NaN;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function sortNullableNumericLast(va, vb, dir) {
+  const aValid = Number.isFinite(va);
+  const bValid = Number.isFinite(vb);
+  if (aValid && bValid) return dir === 1 ? va - vb : vb - va;
+  if (!aValid && !bValid) return 0;
+  return aValid ? -1 : 1;
+}
+
+function _renderIndustryValuationPercentileBody(rows) {
+  const tbody = document.getElementById("industry-valuation-percentile-tbody");
+  tbody.innerHTML = rows.map((row) => `
+    <tr
+      class="industry-score-peer-row-trigger ${row?.is_current_stock ? "industry-score-peer-row-current" : ""}"
+      tabindex="0"
+      data-peer-market="${escapeHtml(String(row?.market || "").toLowerCase())}"
+      data-peer-symbol="${escapeHtml(row?.symbol || "")}"
+      data-peer-stock-name="${escapeHtml(row?.stock_name || row?.symbol || "—")}"
+    >
+      <td>${row?.valuation_percentile != null ? row.valuation_percentile.toFixed(1) + "%" : "—"}</td>
+      <td>
+        <button type="button" class="industry-score-peer-stock-trigger"
+          data-peer-market="${escapeHtml(String(row?.market || "").toLowerCase())}"
+          data-peer-symbol="${escapeHtml(row?.symbol || "")}"
+          data-peer-stock-name="${escapeHtml(row?.stock_name || row?.symbol || "—")}"
+        >
+          <span class="industry-score-peer-stock-main">${escapeHtml(row?.stock_name || "—")}</span>
+          <span class="industry-score-peer-stock-meta">${escapeHtml(`${String(row?.market || "").toUpperCase()}:${row?.symbol || "—"}`)}</span>
+        </button>
+      </td>
+      <td>${escapeHtml(formatPrice(row?.current_price))}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.ps_ttm) || "—")}</td>
+      <td>${escapeHtml(formatProfileMetric(row?.pe_ttm) || "—")}</td>
+      <td>${escapeHtml(row?.valuation_band || row?._band_label || "估值不可比")}</td>
+    </tr>`).join("");
+}
+
+function renderIndustryValuationPercentileDialog(payload) {
+  const title = document.getElementById("industry-valuation-percentile-title");
+  const status = document.getElementById("industry-valuation-percentile-status");
+  const industryName = payload?.industry_level_2_name || "当前行业";
+  const primaryMetric = payload?.primary_metric || payload?.primary_percentile_metric || "PE";
+  const primaryPercentile = payload?.primary_percentile != null ? Number(payload.primary_percentile).toFixed(1) : "—";
+  title.textContent = `${industryName} · ${primaryMetric}估值分位对照（当前股票: ${primaryPercentile}%）`;
+  status.textContent = payload?.rows?.length
+    ? `共 ${payload.rows.length} 只股票，点击列头可排序`
+    : "当前行业暂无可展示样本";
+
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  searchState._industryValuationPercentileRows = rows;
+
+  document.querySelectorAll("#industry-valuation-percentile-dialog .sub-table th.sortable").forEach((th) => {
+    th.dataset.dir = "0";
+    const indicator = th.querySelector(".sort-indicator");
+    if (indicator) indicator.textContent = "";
+  });
+
+  sortIndustryValuationPercentileTable("percentile_rank", 1);
+}
+
+function openIndustryValuationPercentileDialog() {
+  const dialog = document.getElementById("industry-valuation-percentile-dialog");
+  dialog.hidden = false;
+  dialog.setAttribute("aria-hidden", "false");
+}
+
+function closeIndustryValuationPercentileDialog() {
+  const dialog = document.getElementById("industry-valuation-percentile-dialog");
+  dialog.hidden = true;
+  dialog.setAttribute("aria-hidden", "true");
+}
+
+async function fetchIndustryValuationPercentile(market, symbol) {
+  const url = `/api/industry-valuation-percentile?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`;
+  const r = await fetch(url);
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
+function handleValuationPercentileClick() {
+  const current = searchState.currentStock;
+  if (!current?.market || !current?.symbol) return;
+  const stockIdentity = `${current.market}:${current.symbol}`;
+  const requestId = ++searchState.requestId;
+  searchState.currentStockRequestId = requestId;
+
+  document.getElementById("industry-valuation-percentile-title").textContent = "行业估值位置对照";
+  document.getElementById("industry-valuation-percentile-status").textContent = "正在加载行业估值同业样本...";
+  document.getElementById("industry-valuation-percentile-tbody").innerHTML = "";
+  openIndustryValuationPercentileDialog();
+  fetchIndustryValuationPercentile(current.market, current.symbol)
+    .then((payload) => {
+      if (requestId !== searchState.currentStockRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      renderIndustryValuationPercentileDialog(payload);
+    })
+    .catch((err) => {
+      if (requestId !== searchState.currentStockRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      document.getElementById("industry-valuation-percentile-status").textContent = `加载失败: ${err.message}`;
+    });
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.getElementById("loading-msg").style.display = "block";
 document.getElementById("loading-msg").textContent = "输入股票代码查询财务评分";
-document.getElementById("score-header").classList.remove("visible");
+setScoreHeaderIntroVisible(true);
+resetScoreHeaderSummary();
 resetProfileSummary();
+resetIndustryScorePeerDialogSummary();
 resetAiFinancialReport();
-renderScoreMethodology(null);
 updateAiReportButtons();
 refreshDataUpdateStatus().catch((error) => {
   const infoEl = document.getElementById('stock-score-data-update-info');

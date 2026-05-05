@@ -1192,7 +1192,8 @@ button:hover {
   cursor: pointer;
 }
 
-#stock-score-data-update-btn {
+#stock-score-data-update-btn,
+.stock-score-data-update-retry {
   width: 100%;
   min-width: 0;
   padding: 0;
@@ -1202,10 +1203,25 @@ button:hover {
   cursor: pointer;
 }
 
+.stock-score-data-update-retry {
+  width: auto;
+  min-height: 24px;
+  padding: 0 10px;
+  justify-self: end;
+}
+
+.stock-score-data-update-retry[hidden] {
+  display: none !important;
+}
+
 .stock-score-data-update-info {
   min-height: 18px;
+  max-width: min(520px, 72vw);
+  max-height: 92px;
+  overflow: auto;
   text-align: right;
   white-space: pre-line;
+  scrollbar-width: thin;
 }
 
 .stock-score-lead-grid {
@@ -1403,6 +1419,50 @@ button:hover {
   display: contents;
 }
 
+.stock-score-home-intro {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(124, 224, 195, 0.16);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(7, 16, 24, 0.92), rgba(10, 20, 29, 0.9)),
+    repeating-linear-gradient(180deg, rgba(124, 224, 195, 0.03), rgba(124, 224, 195, 0.03) 1px, transparent 1px, transparent 20px);
+}
+
+.stock-score-home-intro[hidden] {
+  display: none;
+}
+
+.stock-score-home-intro-terminal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.stock-score-home-intro-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(124, 224, 195, 0.28);
+  border-radius: 999px;
+  background: rgba(124, 224, 195, 0.08);
+  color: var(--accent);
+}
+
+.stock-score-home-intro-points {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+}
+
 .stock-score-profile-header {
   align-items: start;
   margin-bottom: 8px;
@@ -1477,6 +1537,7 @@ button:hover {
 
 .stock-score-profile-cluster-body {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1538,8 +1599,29 @@ button:hover {
   align-content: start;
 }
 
-.stock-score-rps-summary,
-.stock-score-rank-summary {
+.stock-score-valuation-temperature-field {
+  grid-column: 1 / -1;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-color: rgba(255, 159, 67, 0.32);
+  background: rgba(255, 159, 67, 0.06);
+}
+
+.stock-score-valuation-temperature-field .profile-value {
+  color: #ffcc80;
+}
+
+.stock-score-valuation-classification-desc-field {
+  grid-column: 1 / -1;
+}
+
+.stock-score-valuation-classification-desc-field .profile-value {
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.stock-score-rps-summary {
   display: grid;
   gap: 8px;
 }
@@ -2212,6 +2294,7 @@ button:hover {
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow: auto;
   background: rgba(3, 10, 16, 0.74);
   backdrop-filter: blur(8px);
 }
@@ -2220,10 +2303,20 @@ button:hover {
   display: none !important;
 }
 
+.clickable-value {
+  cursor: pointer;
+  border-bottom: 1px dashed #4a6b80;
+}
+
+.clickable-value:hover {
+  color: #8bd8ff;
+}
+
 .industry-score-peer-dialog-card {
   width: min(1280px, 100%);
   max-height: min(85vh, 920px);
   display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 14px;
   padding: 18px;
   border: 1px solid rgba(255, 159, 67, 0.28);
@@ -2234,10 +2327,71 @@ button:hover {
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.36);
 }
 
+.industry-score-peer-valuation-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .industry-score-peer-table-wrap {
+  min-height: 0;
   overflow: auto;
   border: 1px solid rgba(127, 153, 170, 0.12);
   border-radius: 14px;
+}
+
+.sub-table th.sortable:hover {
+  color: #ffcf9a;
+}
+
+.sub-table th .sort-indicator {
+  font-size: 10px;
+  opacity: 0.5;
+  margin-left: 2px;
+}
+
+.industry-score-peer-stock-trigger {
+  display: grid;
+  gap: 2px;
+  border: 0;
+  padding: 0;
+  color: #ffcf9a;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.industry-score-peer-stock-main {
+  color: #ffcf9a;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.industry-score-peer-stock-meta {
+  color: #8ea6b6;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.industry-score-peer-row-trigger {
+  cursor: pointer;
+}
+
+.industry-score-peer-row-trigger:hover td {
+  background: rgba(255, 159, 67, 0.08);
+}
+
+.industry-score-peer-stock-trigger:hover {
+  color: #ffdcb8;
+  text-decoration: underline;
+}
+
+.industry-score-peer-stock-trigger:focus-visible {
+  outline: 2px solid rgba(255, 179, 107, 0.45);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .industry-score-peer-row-current {
@@ -2514,6 +2668,10 @@ button:hover {
   .stock-score-profile-card,
   .stock-score-metrics {
     grid-column: auto;
+  }
+
+  .stock-score-profile-cluster-body {
+    grid-template-columns: 1fr;
   }
 
   .stock-score-subdiag-grid {

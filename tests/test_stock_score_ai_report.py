@@ -768,6 +768,25 @@ class StockScoreAiReportTests(unittest.TestCase):
         handler.send_header.assert_any_call("Content-Type", "application/javascript; charset=utf-8")
         handler.send_header.assert_any_call("Content-Length", str(len(target.read_bytes())))
 
+    def test_serve_static_can_skip_body_for_head_request(self) -> None:
+        handler = mock.Mock()
+        target = dashboard.WEB_ROOT / "stock-score.html"
+
+        dashboard.StockDashboardHandler.serve_static(handler, "stock-score.html", include_body=False)
+
+        handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
+        handler.send_header.assert_any_call("Content-Type", "text/html; charset=utf-8")
+        handler.send_header.assert_any_call("Content-Length", str(len(target.read_bytes())))
+        handler.wfile.write.assert_not_called()
+
+    def test_do_head_routes_root_to_stock_score_without_body(self) -> None:
+        handler = mock.Mock()
+        handler.path = "/"
+
+        dashboard.StockDashboardHandler.do_HEAD(handler)
+
+        handler.serve_static.assert_called_once_with("stock-score.html", include_body=False)
+
     def test_load_recent_three_year_financial_reports_returns_recent_three_year_quarter_timeline(self) -> None:
         class FakeRow(dict):
             def get(self, key, default=None):

@@ -41,8 +41,14 @@ def build_industry_day_snapshot(
             continue
         valid_members.append(member)
 
-    weighted_pe_ttm = _compute_weighted_ratio(valid_members, numerator_key="free_float_market_cap", denominator_key="ttm_net_profit")
-    weighted_ps_ttm = _compute_weighted_ratio(valid_members, numerator_key="free_float_market_cap", denominator_key="ttm_revenue")
+    weighted_pe_ttm = _compute_weighted_ratio(valid_members, numerator_key="total_market_cap", denominator_key="ttm_net_profit")
+    weighted_ps_ttm = _compute_weighted_ratio(valid_members, numerator_key="total_market_cap", denominator_key="ttm_revenue")
+    free_float_weighted_pe_ttm = _compute_weighted_ratio(valid_members, numerator_key="free_float_market_cap", denominator_key="ttm_net_profit")
+    free_float_weighted_ps_ttm = _compute_weighted_ratio(valid_members, numerator_key="free_float_market_cap", denominator_key="ttm_revenue")
+    if weighted_pe_ttm is None:
+        weighted_pe_ttm = free_float_weighted_pe_ttm
+    if weighted_ps_ttm is None:
+        weighted_ps_ttm = free_float_weighted_ps_ttm
     pe_invalid_threshold = None
     if weighted_pe_ttm is not None:
         pe_invalid_threshold = weighted_pe_ttm * dynamic_threshold_multiplier
@@ -71,6 +77,8 @@ def build_industry_day_snapshot(
         "suspended_filtered_count": suspended_filtered_count,
         "weighted_pe_ttm": weighted_pe_ttm,
         "weighted_ps_ttm": weighted_ps_ttm,
+        "free_float_weighted_pe_ttm": free_float_weighted_pe_ttm,
+        "free_float_weighted_ps_ttm": free_float_weighted_ps_ttm,
         "pe_invalid_threshold": pe_invalid_threshold,
         "temperature_percentile_since_2022": temperature_percentile_since_2022,
         "temperature_label": temperature_label,

@@ -11,10 +11,12 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 
@@ -43,6 +45,97 @@ WEB_ROOT = PROJECT_ROOT / "web"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 DEFAULT_HERMES_MODEL = os.environ.get("HERMES_MODEL", "").strip()
 DATA_UPDATE_LOCK = threading.Lock()
+DATA_UPDATE_JOB_STATE_LOCK = threading.Lock()
+DATA_UPDATE_JOB_STATE: dict[str, object] = {
+    'status': 'idle',
+    'running': False,
+    'can_retry_failed': False,
+    'current_progress_text': '暂无数据更新任务',
+}
+DATA_UPDATE_OUTPUT_TAIL_LINES = 8
+
+
+class DataUpdateStepError(RuntimeError):
+    def __init__(
+        self,
+        step_name: str,
+        message: str,
+        *,
+        returncode: int | None = None,
+        stdout_tail: str = "",
+        stderr_tail: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.step_name = step_name
+        self.returncode = returncode
+        self.stdout_tail = stdout_tail
+        self.stderr_tail = stderr_tail
+
+
+def _tail_lines(text: str | None, limit: int = DATA_UPDATE_OUTPUT_TAIL_LINES) -> str:
+    lines = [line for line in str(text or "").splitlines() if line.strip()]
+    return "\n".join(lines[-limit:])
+
+
+def parse_data_update_progress_line(line: str) -> dict[str, object]:
+    text = str(line or "").strip()
+    match = re.match(r"^\[(\d+)/(\d+)\]\s+(.+?)\s+(开始构建|完成|失败|跳过)", text)
+    if not match:
+        return {"last_line": text}
+    index = int(match.group(1))
+    total = int(match.group(2))
+    industry = match.group(3).strip()
+    action = match.group(4)
+    if action == "开始构建":
+        progress_text = f"当前进度：[{index}/{total}] {industry} 正在构建..."
+    elif action == "完成":
+        progress_text = f"当前进度：[{index}/{total}] {industry} 完成"
+    elif action == "跳过":
+        progress_text = f"当前进度：[{index}/{total}] {industry} 已跳过"
+    else:
+        progress_text = f"当前进度：[{index}/{total}] {industry} 失败"
+    return {
+        "last_line": text,
+        "progress_index": index,
+        "progress_total": total,
+        "current_industry": industry,
+        "current_progress_text": progress_text,
+    }
+
+
+def _data_update_job_snapshot() -> dict[str, object]:
+    with DATA_UPDATE_JOB_STATE_LOCK:
+        return dict(DATA_UPDATE_JOB_STATE)
+
+
+def _update_data_update_job_state(**updates: object) -> dict[str, object]:
+    with DATA_UPDATE_JOB_STATE_LOCK:
+        DATA_UPDATE_JOB_STATE.update(updates)
+        return dict(DATA_UPDATE_JOB_STATE)
+
+
+def _append_data_update_job_output(line: str) -> None:
+    with DATA_UPDATE_JOB_STATE_LOCK:
+        lines = list(DATA_UPDATE_JOB_STATE.get('stdout_tail_lines') or [])
+        if line.strip():
+            lines.append(line.strip())
+        DATA_UPDATE_JOB_STATE['stdout_tail_lines'] = lines[-DATA_UPDATE_OUTPUT_TAIL_LINES:]
+        DATA_UPDATE_JOB_STATE['stdout_tail'] = "\n".join(DATA_UPDATE_JOB_STATE['stdout_tail_lines'])
+
+
+def _record_data_update_progress(step_name: str, line: str) -> None:
+    _append_data_update_job_output(line)
+    parsed = parse_data_update_progress_line(line)
+    updates: dict[str, object] = {
+        'current_step': step_name,
+        'last_line': parsed.get('last_line') or str(line or '').strip(),
+    }
+    for key in ('progress_index', 'progress_total', 'current_industry', 'current_progress_text'):
+        if key in parsed:
+            updates[key] = parsed[key]
+    if 'current_progress_text' not in updates and updates['last_line']:
+        updates['current_progress_text'] = f"当前步骤：{step_name} · {updates['last_line']}"
+    _update_data_update_job_state(**updates)
 
 
 def _industry_template_tags(ind1: str, ind2: str) -> set[str]:
@@ -76,6 +169,144 @@ def _industry_template_tags(ind1: str, ind2: str) -> set[str]:
     if any(token in text for token in ("综合", "综合类")):
         tags.add("composite")
     return tags
+
+
+def _build_industry_valuation_percentile_payload(market: str, symbol: str) -> dict[str, object]:
+    from app.search.index import _load_financial_snapshot, _stock_name_lookup
+    from app.relative_valuation import data_loader as valuation_data_loader
+    from app.relative_valuation.labels import classify_percentile_band
+    from app.relative_valuation.percentiles import compute_empirical_percentile
+
+    snap = _load_financial_snapshot()
+    score_entry = snap.get("scores", {}).get(f"{market}:{symbol}") if snap else {}
+    industry_level_2_name = str(score_entry.get("industry_sw_level_2") or "")
+    industry_level_1_name = str(score_entry.get("industry_sw_level_1") or "")
+    if not industry_level_2_name:
+        return {"ok": False, "error": "industry_not_found"}
+
+    stock_name = _stock_name_lookup().get((market, symbol), symbol)
+    industry_snapshot = valuation_data_loader.load_industry_valuation_snapshot(industry_level_2_name) or {}
+    sample_status = str(industry_snapshot.get("sample_status") or "insufficient")
+    members = industry_snapshot.get("member_valuation_rows") or []
+    if not members:
+        live_members = []
+        for member in valuation_data_loader._industry_members(industry_level_2_name):
+            row_market = str(member.get("market") or "").strip().lower()
+            row_symbol = str(member.get("symbol") or "").strip()
+            if not row_market or not row_symbol:
+                continue
+            stock_inputs = valuation_data_loader.load_stock_relative_valuation_inputs(row_market, row_symbol)
+            if not stock_inputs:
+                continue
+            live_members.append({
+                "market": row_market,
+                "symbol": row_symbol,
+                "stock_name": stock_inputs.get("stock_name") or member.get("stock_name") or row_symbol,
+                "current_price": stock_inputs.get("current_price"),
+                "total_market_cap": stock_inputs.get("total_market_cap"),
+                "free_float_market_cap": stock_inputs.get("free_float_market_cap"),
+                "pe_ttm": stock_inputs.get("pe_ttm"),
+                "ps_ttm": stock_inputs.get("ps_ttm"),
+            })
+        members = live_members
+    current_stock_member = next(
+        (m for m in members if isinstance(m, dict) and m.get("market", "").strip().lower() == market and m.get("symbol", "").strip() == symbol),
+        None,
+    )
+
+    def positive_float(raw_value):
+        value = valuation_data_loader._to_float(raw_value)
+        if value is None or value <= 0:
+            return None
+        return value
+
+    pe_ttm = positive_float(current_stock_member.get("pe_ttm")) if current_stock_member else None
+    ps_ttm = positive_float(current_stock_member.get("ps_ttm")) if current_stock_member else None
+
+    relative_payload = build_relative_valuation_result(market, symbol)
+    if relative_payload.get("ok"):
+        stock_name = str(relative_payload.get("stock_name") or stock_name)
+        classification = str(relative_payload.get("classification") or "A_NORMAL_EARNING")
+        sub_classification = relative_payload.get("sub_classification")
+        primary_metric = str(
+            relative_payload.get("primary_percentile_metric")
+            or relative_payload.get("primary_metric")
+            or "pe_ttm"
+        )
+        if primary_metric not in {"pe_ttm", "ps_ttm"}:
+            primary_metric = "pe_ttm"
+        primary_value = valuation_data_loader._to_float(relative_payload.get("primary_percentile_value"))
+        if primary_value is not None and primary_value <= 0:
+            primary_value = None
+        primary_percentile = valuation_data_loader._to_float(relative_payload.get("primary_percentile"))
+        valuation_band_label = relative_payload.get("valuation_band_label")
+    else:
+        classification = "A_NORMAL_EARNING" if pe_ttm is not None else "B_THIN_PROFIT_DISTORTED"
+        sub_classification = None
+        primary_metric = "pe_ttm" if pe_ttm is not None else "ps_ttm"
+        primary_value = pe_ttm if primary_metric == "pe_ttm" else ps_ttm
+        primary_percentile = None
+        valuation_band_label = None
+
+    if sample_status == "ok" and primary_value is not None:
+        sample = valuation_data_loader.load_industry_percentile_sample(
+            industry_level_2_name,
+            primary_metric,
+            classification,
+            str(sub_classification) if sub_classification else None,
+        ) or []
+    else:
+        sample = []
+    if primary_percentile is None and primary_value is not None and sample:
+        primary_percentile = compute_empirical_percentile(primary_value, sample)
+    if valuation_band_label is None:
+        valuation_band_label = classify_percentile_band(primary_percentile) if primary_percentile is not None else None
+
+    member_rows: list[dict[str, object]] = []
+    for vr in members:
+        if not isinstance(vr, dict):
+            continue
+        row_market = str(vr.get("market") or "").strip().lower()
+        row_symbol = str(vr.get("symbol") or "").strip()
+        if not row_market or not row_symbol:
+            continue
+        row_pe_ttm = positive_float(vr.get("pe_ttm"))
+        row_ps_ttm = positive_float(vr.get("ps_ttm"))
+        row_value = row_pe_ttm if primary_metric == "pe_ttm" else row_ps_ttm
+        row_percentile = compute_empirical_percentile(row_value, sample) if row_value is not None and sample else None
+        row_band = classify_percentile_band(row_percentile) if row_percentile is not None else "估值不可比"
+        member_rows.append({
+            "stock_name": vr.get("stock_name") or vr.get("symbol") or row_symbol,
+            "market": row_market,
+            "symbol": row_symbol,
+            "current_price": valuation_data_loader._to_float(vr.get("current_price")),
+            "ps_ttm": row_ps_ttm,
+            "pe_ttm": row_pe_ttm,
+            "valuation_metric": primary_metric,
+            "valuation_percentile": row_percentile,
+            "_percentile_rank": row_percentile,
+            "valuation_band": row_band,
+            "_band_label": row_band,
+            "is_current_stock": row_market == market and row_symbol == symbol,
+        })
+
+    member_rows.sort(key=lambda r: (r["valuation_percentile"] is None, r["valuation_percentile"] or 0))
+    return {
+        "ok": True,
+        "market": market,
+        "symbol": symbol,
+        "stock_name": stock_name,
+        "industry_level_2_name": industry_level_2_name,
+        "industry_level_1_name": industry_level_1_name,
+        "classification": classification,
+        "sample_status": sample_status,
+        "primary_metric": primary_metric,
+        "primary_percentile_metric": primary_metric,
+        "primary_percentile_value": primary_value,
+        "primary_percentile": primary_percentile,
+        "valuation_band_label": valuation_band_label,
+        "rows": member_rows,
+    }
 
 
 def infer_market(symbol: str) -> tuple[str, int]:
@@ -115,19 +346,39 @@ def load_data_update_status() -> dict[str, object]:
         try:
             rows = json.loads(industry_path.read_text(encoding='utf-8'))
             industry_count = len(rows) if isinstance(rows, list) else None
+            member_valuation_row_count = 0
+            member_valuation_industry_count = 0
+            complete_member_valuation_industry_count = 0
+            if isinstance(rows, list):
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    member_rows = row.get('member_valuation_rows')
+                    if isinstance(member_rows, list):
+                        member_valuation_industry_count += 1
+                        member_valuation_row_count += len(member_rows)
+                        if member_rows:
+                            complete_member_valuation_industry_count += 1
         except Exception:
             industry_count = None
+            member_valuation_row_count = None
+            member_valuation_industry_count = None
+            complete_member_valuation_industry_count = None
         latest_timestamps.append(industry_path.stat().st_mtime)
         industry_valuation = {
             'path': str(industry_path),
             'updated_at': _format_timestamp(industry_path.stat().st_mtime),
             'industry_count': industry_count,
+            'member_valuation_row_count': member_valuation_row_count,
+            'member_valuation_industry_count': member_valuation_industry_count,
+            'complete_member_valuation_industry_count': complete_member_valuation_industry_count,
         }
 
     return {
         'ok': True,
         'financial_snapshot': financial_snapshot,
         'industry_valuation': industry_valuation,
+        'data_update_job': _data_update_job_snapshot(),
         'latest_updated_at': _format_timestamp(max(latest_timestamps)) if latest_timestamps else None,
     }
 
@@ -180,9 +431,16 @@ def clear_runtime_data_caches() -> None:
                     continue
 
 
-def run_full_data_update() -> dict[str, object]:
-    trading_day = _latest_trading_day_for_refresh()
-    steps: list[dict[str, object]] = []
+def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -> list[tuple[str, list[str]]]:
+    if retry_failed:
+        return [(
+            'build_industry_relative_valuation_snapshot',
+            [
+                TONGDAXIN_PYTHON,
+                str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py'),
+                '--reuse-existing-complete',
+            ],
+        )]
     commands: list[tuple[str, list[str]]] = []
     if trading_day:
         commands.append((
@@ -202,24 +460,89 @@ def run_full_data_update() -> dict[str, object]:
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
     ])
+    return commands
 
-    for step_name, command in commands:
-        result = subprocess.run(
+
+def _run_data_update_command(
+    step_name: str,
+    command: list[str],
+    progress_callback=None,
+) -> SimpleNamespace:
+    if progress_callback is None:
+        return subprocess.run(
             command,
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
             timeout=1800,
         )
+    process = subprocess.Popen(
+        command,
+        cwd=str(PROJECT_ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    stdout_lines: list[str] = []
+    stderr_text = ""
+    try:
+        assert process.stdout is not None
+        for line in process.stdout:
+            stdout_lines.append(line)
+            progress_callback(step_name, line.rstrip('\n'))
+        stderr_text = process.stderr.read() if process.stderr is not None else ""
+        returncode = process.wait(timeout=1800)
+    except Exception:
+        process.kill()
+        raise
+    return SimpleNamespace(returncode=returncode, stdout="".join(stdout_lines), stderr=stderr_text)
+
+
+def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> dict[str, object]:
+    trading_day = _latest_trading_day_for_refresh()
+    steps: list[dict[str, object]] = []
+    commands = _data_update_commands(trading_day, retry_failed=retry_failed)
+
+    for step_name, command in commands:
+        try:
+            result = _run_data_update_command(step_name, command, progress_callback=progress_callback)
+        except subprocess.TimeoutExpired as exc:
+            stdout_tail = _tail_lines(exc.stdout.decode('utf-8', errors='replace') if isinstance(exc.stdout, bytes) else exc.stdout)
+            stderr_tail = _tail_lines(exc.stderr.decode('utf-8', errors='replace') if isinstance(exc.stderr, bytes) else exc.stderr)
+            steps.append({
+                'name': step_name,
+                'command': ' '.join(command),
+                'ok': False,
+                'returncode': None,
+                'stdout_tail': stdout_tail,
+                'stderr_tail': stderr_tail,
+                'timed_out': True,
+            })
+            raise DataUpdateStepError(
+                step_name,
+                f'{step_name} 超时（超过 1800 秒），数据更新已停止或失败',
+                stdout_tail=stdout_tail,
+                stderr_tail=stderr_tail,
+            ) from exc
+        stdout_tail = _tail_lines(result.stdout)
+        stderr_tail = _tail_lines(result.stderr)
         steps.append({
             'name': step_name,
             'command': ' '.join(command),
             'ok': result.returncode == 0,
-            'stdout': (result.stdout or '').strip(),
-            'stderr': (result.stderr or '').strip(),
+            'returncode': result.returncode,
+            'stdout_tail': stdout_tail,
+            'stderr_tail': stderr_tail,
         })
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f'{step_name} failed')
+            raise DataUpdateStepError(
+                step_name,
+                f'{step_name} 数据更新已停止或失败（exit code {result.returncode}）',
+                returncode=result.returncode,
+                stdout_tail=stdout_tail,
+                stderr_tail=stderr_tail,
+            )
 
     clear_runtime_data_caches()
     return {
@@ -227,6 +550,70 @@ def run_full_data_update() -> dict[str, object]:
         'steps': steps,
         'data_update_status': load_data_update_status(),
     }
+
+
+def _run_data_update_worker(retry_failed: bool = False) -> None:
+    try:
+        result = run_full_data_update(progress_callback=_record_data_update_progress, retry_failed=retry_failed)
+        status_payload = result.get('data_update_status') if isinstance(result, dict) else {}
+        _update_data_update_job_state(
+            status='succeeded',
+            running=False,
+            can_retry_failed=False,
+            finished_at=_format_timestamp(time.time()),
+            current_progress_text='数据更新完成',
+            data_update_status=status_payload,
+        )
+    except Exception as exc:
+        updates: dict[str, object] = {
+            'status': 'failed',
+            'running': False,
+            'can_retry_failed': True,
+            'finished_at': _format_timestamp(time.time()),
+            'current_progress_text': '数据更新已停止或失败，可点击“重试失败项”继续',
+            'error': str(exc),
+        }
+        if isinstance(exc, DataUpdateStepError):
+            updates.update({
+                'failed_step': exc.step_name,
+                'returncode': exc.returncode,
+                'stdout_tail': exc.stdout_tail,
+                'stderr_tail': exc.stderr_tail,
+            })
+        _update_data_update_job_state(**updates)
+    finally:
+        try:
+            DATA_UPDATE_LOCK.release()
+        except RuntimeError:
+            pass
+
+
+def start_data_update_job(retry_failed: bool = False) -> dict[str, object]:
+    if not DATA_UPDATE_LOCK.acquire(blocking=False):
+        return {'ok': False, 'error': {'code': 'data_update_busy', 'message': '已有数据更新任务在运行中'}}
+    now = _format_timestamp(time.time())
+    _update_data_update_job_state(
+        status='running',
+        running=True,
+        mode='retry_failed' if retry_failed else 'full',
+        can_retry_failed=False,
+        started_at=now,
+        finished_at=None,
+        current_step='init',
+        current_industry=None,
+        progress_index=None,
+        progress_total=None,
+        current_progress_text='当前进度：正在准备数据更新...',
+        error=None,
+        stdout_tail='',
+        stderr_tail='',
+        stdout_tail_lines=[],
+    )
+    thread = threading.Thread(target=_run_data_update_worker, kwargs={'retry_failed': retry_failed}, daemon=True)
+    thread.start()
+    payload = load_data_update_status()
+    payload['started'] = True
+    return payload
 
 
 def load_stock_history(symbol: str, history_limit: int = DEFAULT_HISTORY_LIMIT) -> dict[str, object]:
@@ -1096,6 +1483,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/data-update-status":
             self.handle_data_update_status(parsed.query)
             return
+        if parsed.path == "/api/industry-valuation-percentile":
+            self.handle_industry_valuation_percentile(parsed.query)
+            return
         if parsed.path == "/api/relative-valuation":
             self.handle_relative_valuation(parsed.query)
             return
@@ -1115,9 +1505,22 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/data-update-run":
             self.handle_data_update_run()
             return
+        if parsed.path == "/api/data-update-retry":
+            self.handle_data_update_retry()
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
-    def serve_static(self, relative_path: str) -> None:
+    def do_HEAD(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path == "/":
+            self.serve_static("stock-score.html", include_body=False)
+            return
+        if parsed.path.startswith("/"):
+            self.serve_static(parsed.path.lstrip("/"), include_body=False)
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
+
+    def serve_static(self, relative_path: str, include_body: bool = True) -> None:
         target = (WEB_ROOT / relative_path).resolve()
         if not str(target).startswith(str(WEB_ROOT.resolve())) or not target.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -1135,7 +1538,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            if include_body:
+                self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
             return
 
@@ -1441,27 +1845,23 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             )
 
     def handle_data_update_run(self) -> None:
+        self._handle_data_update_start(retry_failed=False)
+
+    def handle_data_update_retry(self) -> None:
+        self._handle_data_update_start(retry_failed=True)
+
+    def _handle_data_update_start(self, retry_failed: bool = False) -> None:
         if not _is_allowed_local_origin(self.headers.get('Origin'), self.headers.get('Referer')):
             self.respond_json(
                 HTTPStatus.FORBIDDEN,
                 {"ok": False, "error": {"code": "forbidden_origin", "message": "仅允许本地页面触发数据更新"}},
             )
             return
-        if not DATA_UPDATE_LOCK.acquire(blocking=False):
-            self.respond_json(
-                HTTPStatus.CONFLICT,
-                {"ok": False, "error": {"code": "data_update_busy", "message": "已有数据更新任务在运行中"}},
-            )
+        payload = start_data_update_job(retry_failed=retry_failed)
+        if not payload.get('ok'):
+            self.respond_json(HTTPStatus.CONFLICT, payload)
             return
-        try:
-            self.respond_json(HTTPStatus.OK, run_full_data_update())
-        except Exception as exc:
-            self.respond_json(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"ok": False, "error": {"code": "data_update_run_error", "message": str(exc)}},
-            )
-        finally:
-            DATA_UPDATE_LOCK.release()
+        self.respond_json(HTTPStatus.OK, payload)
 
     def handle_relative_valuation(self, query: str) -> None:
         params = parse_qs(query)
@@ -1481,6 +1881,28 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "relative_valuation_error", "message": str(exc)}},
+            )
+
+    def handle_industry_valuation_percentile(self, query: str) -> None:
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol 参数不合法"}},
+            )
+            return
+        try:
+            payload = _build_industry_valuation_percentile_payload(market, symbol)
+            if not payload.get("ok") and payload.get("error") == "industry_not_found":
+                self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "industry_not_found"})
+                return
+            self.respond_json(HTTPStatus.OK, payload)
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "industry_valuation_percentile_error", "message": str(exc)}},
             )
 
     def handle_stock_score_report_history(self, query: str) -> None:
