@@ -7,6 +7,8 @@ from pathlib import Path
 
 from .classifier import classify_relative_valuation_stock
 from .industry_snapshot import build_industry_day_snapshot
+from .labels import classify_percentile_band
+from .percentiles import compute_empirical_percentile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INDUSTRY_VALUATION_CURRENT_PATH = PROJECT_ROOT / "data" / "derived" / "datasets" / "final" / "dataset_industry_valuation_current.json"
@@ -275,23 +277,12 @@ def build_industry_snapshot_for_industry(
         historical_weighted_pe_series=[row["weighted_pe_ttm"] for row in temperature_history],
     )
     snapshot["temperature_history_since_2022"] = temperature_history
-    snapshot["percentile_samples"] = _build_percentile_samples(stock_inputs, _to_float(snapshot.get("pe_invalid_threshold")))
+    dynamic_threshold = _to_float(snapshot.get("pe_invalid_threshold"))
+    percentile_samples = _build_percentile_samples(stock_inputs, dynamic_threshold)
+    snapshot["percentile_samples"] = percentile_samples
     member_rows = []
     for stock in stock_inputs:
-        row = {
-            "market": str(stock.get("market") or "").strip().lower(),
-            "symbol": str(stock.get("symbol") or "").strip(),
-            "stock_name": stock.get("stock_name") or None,
-            "current_price": _to_float(stock.get("current_price")),
-            "pe_ttm": _to_float(stock.get("pe_ttm")),
-            "ps_ttm": _to_float(stock.get("ps_ttm")),
-        }
-        total_market_cap = _to_float(stock.get("total_market_cap"))
-        if total_market_cap is not None:
-            row["total_market_cap"] = total_market_cap
-        free_float_market_cap = _to_float(stock.get("free_float_market_cap"))
-        if free_float_market_cap is not None:
-            row["free_float_market_cap"] = free_float_market_cap
+        row = _build_member_valuation_row(stock, dynamic_threshold, percentile_samples)
         member_rows.append(row)
     snapshot["member_valuation_rows"] = member_rows
     return snapshot
@@ -427,6 +418,80 @@ def _latest_trading_day_for_industry(stock_inputs: list[dict[str, object]]) -> s
             continue
         fallback = fallback or "latest"
     return latest or fallback
+
+
+def _build_member_valuation_row(
+    stock: dict[str, object],
+    dynamic_threshold: float | None,
+    percentile_samples: dict[str, list[float]],
+) -> dict[str, object]:
+    row = {
+        "market": str(stock.get("market") or "").strip().lower(),
+        "symbol": str(stock.get("symbol") or "").strip(),
+        "stock_name": stock.get("stock_name") or None,
+        "current_price": _to_float(stock.get("current_price")),
+        "pe_ttm": _to_float(stock.get("pe_ttm")),
+        "ps_ttm": _to_float(stock.get("ps_ttm")),
+    }
+    total_market_cap = _to_float(stock.get("total_market_cap"))
+    if total_market_cap is not None:
+        row["total_market_cap"] = total_market_cap
+    free_float_market_cap = _to_float(stock.get("free_float_market_cap"))
+    if free_float_market_cap is not None:
+        row["free_float_market_cap"] = free_float_market_cap
+
+    classified = classify_relative_valuation_stock(
+        ttm_net_profit=_to_float(stock.get("ttm_net_profit")),
+        pe_ttm=_to_float(stock.get("pe_ttm")),
+        dynamic_pe_invalid_threshold=dynamic_threshold,
+        ttm_revenue=_to_float(stock.get("ttm_revenue")),
+        revenue_yoy=_to_float(stock.get("revenue_yoy")),
+        gross_margin=_to_float(stock.get("gross_margin")),
+        book_value_per_share=_to_float(stock.get("book_value_per_share")),
+        listed_days=_to_int(stock.get("listed_days")),
+    )
+    classification = classified.classification.value
+    sub_classification = classified.sub_classification.value if classified.sub_classification else None
+    primary_metric = _resolve_primary_metric(classification, sub_classification)
+    primary_value = _to_float(stock.get(primary_metric)) if primary_metric else None
+    sample_key = _percentile_sample_key(primary_metric, classification, sub_classification) if primary_metric else ""
+    sample = percentile_samples.get(sample_key, []) if sample_key else []
+    primary_percentile = compute_empirical_percentile(primary_value, sample) if primary_metric and primary_value is not None else None
+    valuation_band_label = "次新股" if classified.is_new_listing else classify_percentile_band(primary_percentile)
+
+    row.update(
+        {
+            "classification": classification,
+            "sub_classification": sub_classification,
+            "classification_label": _member_classification_label(classification, sub_classification),
+            "primary_metric": primary_metric,
+            "primary_percentile": primary_percentile,
+            "valuation_band_label": valuation_band_label,
+        }
+    )
+    return row
+
+
+def _member_classification_label(classification: str, sub_classification: str | None = None) -> str:
+    if classification == "A_NORMAL_EARNING":
+        return "A类 正常盈利"
+    if classification == "B_THIN_PROFIT_DISTORTED":
+        return "B类 微盈利畸高"
+    if classification == "C_LOSS":
+        if sub_classification in {"C3_NO_REVENUE_CONCEPT", "C4_LIQUIDATION_RISK"}:
+            return "D类 高风险例外"
+        return "C类 亏损经营"
+    return classification
+
+
+def _resolve_primary_metric(classification: str, sub_classification: str | None = None) -> str | None:
+    if classification == "A_NORMAL_EARNING":
+        return "pe_ttm"
+    if classification == "B_THIN_PROFIT_DISTORTED":
+        return "ps_ttm"
+    if classification == "C_LOSS" and sub_classification in {"C1_REVENUE_LOSS", "C2_GROWTH_LOSS"}:
+        return "ps_ttm"
+    return None
 
 
 def _build_percentile_samples(

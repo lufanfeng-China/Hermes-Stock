@@ -178,7 +178,12 @@ def _is_complete_industry_snapshot(row: object) -> bool:
     if not isinstance(row.get("percentile_samples"), dict):
         return False
     member_rows = row.get("member_valuation_rows")
-    return isinstance(member_rows, list) and len(member_rows) > 0
+    if not isinstance(member_rows, list) or len(member_rows) == 0:
+        return False
+    first_member = next((member for member in member_rows if isinstance(member, dict)), None)
+    if first_member is None:
+        return False
+    return "classification" in first_member and "classification_label" in first_member
 
 
 def _member_valuation_row_count(row: object) -> int:

@@ -88,7 +88,14 @@ class RelativeValuationSnapshotBuilderTests(unittest.TestCase):
                 "trading_day": "2026-04-30",
                 "temperature_history_since_2022": [{"trading_day": "2026-03-31", "weighted_pe_ttm": 12.0}],
                 "percentile_samples": {"pe_ttm|A_NORMAL_EARNING": [10.0]},
-                "member_valuation_rows": [{"market": "sz", "symbol": "000001", "pe_ttm": 8.0, "ps_ttm": 1.2}],
+                "member_valuation_rows": [{
+                    "market": "sz",
+                    "symbol": "000001",
+                    "pe_ttm": 8.0,
+                    "ps_ttm": 1.2,
+                    "classification": "A_NORMAL_EARNING",
+                    "classification_label": "A类 正常盈利",
+                }],
             }
         ]
         events: list[dict[str, object]] = []

@@ -787,6 +787,11 @@ def load_rps_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[st
 
 
 @lru_cache(maxsize=1)
+def load_industry_valuation_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
+    return _load_json_rows(Path(dataset_dir) / "dataset_industry_valuation_current.json")
+
+
+@lru_cache(maxsize=1)
 def load_concept_index(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
     return build_concept_index(
         load_concept_rows(dataset_dir),
@@ -1047,6 +1052,413 @@ def pool_filter_response(
             "concepts": sorted(concept_set),
         },
         "results": results,
+    }
+
+
+def _normalize_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _classification_label(classification: str, sub_classification: str = "") -> str:
+    classification_text = _normalize_text(classification)
+    sub_text = _normalize_text(sub_classification).upper()
+    if classification_text == "A_NORMAL_EARNING":
+        return "A类 正常盈利"
+    if classification_text == "B_THIN_PROFIT_DISTORTED":
+        return "B类 微盈利畸高"
+    if classification_text == "C_LOSS":
+        if sub_text in {"C3", "C4", "C3_NO_REVENUE_CONCEPT", "C4_LIQUIDATION_RISK"}:
+            return "D类 高风险例外"
+        return "C类 亏损经营"
+    return classification_text
+
+
+def _score_rank_lookups(
+    score_rows: dict[str, object],
+    industry_lookup: dict[tuple[str, str], dict[str, object]],
+) -> tuple[dict[str, int], int, dict[str, int], dict[str, int], dict[str, float]]:
+    """Compute market and Shenwan level-2 score ranks for screener rows."""
+
+    market_scored: list[tuple[str, float]] = []
+    market_score_lookup: dict[str, float] = {}
+    industry_scored: dict[str, list[tuple[str, float]]] = {}
+    for score_key, score_entry in score_rows.items():
+        if not isinstance(score_entry, dict):
+            continue
+        market, _, symbol = str(score_key).partition(":")
+        market = market.strip().lower()
+        symbol = symbol.strip()
+        if not market or not symbol:
+            continue
+        total_score = _screener_market_total_score(score_entry)
+        if total_score is not None:
+            market_scored.append((str(score_key), total_score))
+            market_score_lookup[str(score_key)] = total_score
+
+        industry_score = _coerce_float(score_entry.get("ind_total_score"))
+        if industry_score is None:
+            continue
+        industry = industry_lookup.get((market, symbol)) or {}
+        industry_level_2 = (
+            _normalize_text(score_entry.get("industry_sw_level_2"))
+            or _normalize_text(industry.get("industry_level_2_name"))
+        )
+        if industry_level_2:
+            industry_scored.setdefault(industry_level_2, []).append((str(score_key), industry_score))
+
+    market_rank = _rank_descending(market_scored)
+    industry_rank: dict[str, int] = {}
+    industry_universe_size: dict[str, int] = {}
+    for industry_level_2, items in industry_scored.items():
+        industry_rank.update(_rank_descending(items))
+        industry_universe_size[industry_level_2] = len(items)
+    return market_rank, len(market_scored), industry_rank, industry_universe_size, market_score_lookup
+
+
+def _screener_market_total_score(score_entry: dict[str, object]) -> float | None:
+    sub_indicators = score_entry.get("sub_indicators")
+    ind_sub_indicators = score_entry.get("ind_sub_indicators")
+    if isinstance(sub_indicators, dict) and len(sub_indicators) >= len(_SUB_DEFS):
+        adjusted_sub = blend_market_scores_with_industry(
+            sub_indicators,
+            ind_sub_indicators if isinstance(ind_sub_indicators, dict) else {},
+        )
+        dim_scores_raw: dict[str, list[float]] = {}
+        for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+            dim_scores_raw.setdefault(dim, []).append(float(adjusted_sub.get(sub_key, 0.0) or 0.0))
+        total = 0.0
+        has_value = False
+        for dim, values in dim_scores_raw.items():
+            if not values:
+                continue
+            total += (sum(values) / len(values)) * _DIM_WEIGHTS.get(dim, 0.0)
+            has_value = True
+        if has_value:
+            return round(total, 4)
+    return _coerce_float(score_entry.get("total_score"))
+
+
+def _rank_descending(items: list[tuple[str, float]]) -> dict[str, int]:
+    ranked: dict[str, int] = {}
+    for index, (key, _score) in enumerate(sorted(items, key=lambda item: (-item[1], item[0])), start=1):
+        ranked[key] = index
+    return ranked
+
+
+def _matches_keyword_filter(actual: object, expected: str) -> bool:
+    expected_text = _normalize_text(expected)
+    if not expected_text:
+        return True
+    actual_text = _normalize_text(actual)
+    if not actual_text:
+        return False
+    return actual_text == expected_text
+
+
+def _passes_min_max(value: object, *, min_value: float | None = None, max_value: float | None = None) -> bool:
+    numeric = _coerce_float(value)
+    if numeric is None:
+        return False
+    if min_value is not None and numeric < min_value:
+        return False
+    if max_value is not None and numeric > max_value:
+        return False
+    return True
+
+
+def _extract_member_metric(member_row: dict[str, object], *keys: str) -> object:
+    for key in keys:
+        if key in member_row and member_row.get(key) not in (None, ""):
+            return member_row.get(key)
+    return None
+
+
+def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
+    snapshot = _load_financial_snapshot() or {}
+    score_rows = snapshot.get("scores") or {}
+    securities = load_security_rows()
+    industry_rows = load_industry_rows()
+    rps_rows = load_rps_rows()
+    valuation_rows = load_industry_valuation_rows()
+
+    security_lookup = {_security_key(row): row for row in securities}
+    industry_lookup = {_security_key(row): row for row in industry_rows}
+    rps_lookup = {_security_key(row): row for row in rps_rows}
+    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup = _score_rank_lookups(
+        score_rows if isinstance(score_rows, dict) else {},
+        industry_lookup,
+    )
+
+    industry_rps_aggregate: dict[str, dict[str, float | int | None]] = {}
+    for row in rps_rows:
+        key = _security_key(row)
+        industry = industry_lookup.get(key) or {}
+        level2 = _normalize_text(industry.get("industry_level_2_name"))
+        if not level2:
+            score_entry = score_rows.get(f"{key[0]}:{key[1]}") or {}
+            level2 = _normalize_text(score_entry.get("industry_sw_level_2"))
+        if not level2:
+            continue
+        bucket = industry_rps_aggregate.setdefault(
+            level2,
+            {
+                "count": 0,
+                "sum_rps_20": 0.0,
+                "sum_rps_50": 0.0,
+                "sum_rps_120": 0.0,
+                "sum_rps_250": 0.0,
+                "count_rps_20": 0,
+                "count_rps_50": 0,
+                "count_rps_120": 0,
+                "count_rps_250": 0,
+            },
+        )
+        bucket["count"] = int(bucket["count"] or 0) + 1
+        for window in (20, 50, 120, 250):
+            value = _coerce_float(row.get(f"rps_{window}"))
+            if value is None:
+                continue
+            bucket[f"sum_rps_{window}"] = float(bucket[f"sum_rps_{window}"] or 0.0) + value
+            bucket[f"count_rps_{window}"] = int(bucket[f"count_rps_{window}"] or 0) + 1
+
+    valuation_lookup: dict[tuple[str, str], dict[str, object]] = {}
+    for row in valuation_rows:
+        top_level_temperature_label = row.get("industry_temperature_label")
+        if top_level_temperature_label in (None, ""):
+            top_level_temperature_label = row.get("temperature_label")
+        top_level_temperature_pct = row.get("industry_temperature_percentile_since_2022")
+        if top_level_temperature_pct in (None, ""):
+            top_level_temperature_pct = row.get("temperature_percentile_since_2022")
+        top_level_level1 = row.get("industry_level_1_name") or row.get("industry_level_1")
+        top_level_level2 = row.get("industry_level_2_name") or row.get("industry_level_2")
+        for member in row.get("member_valuation_rows") or []:
+            if not isinstance(member, dict):
+                continue
+            market = _normalize_text(member.get("market")).lower()
+            symbol = _normalize_text(member.get("symbol"))
+            if not market or not symbol:
+                continue
+            valuation_lookup[(market, symbol)] = {
+                "current_price": _extract_member_metric(member, "current_price", "price", "close"),
+                "pe_ttm": _extract_member_metric(member, "pe_ttm"),
+                "ps_ttm": _extract_member_metric(member, "ps_ttm"),
+                "total_market_cap": _extract_member_metric(member, "total_market_cap"),
+                "free_float_market_cap": _extract_member_metric(member, "free_float_market_cap"),
+                "classification": _extract_member_metric(member, "classification", "valuation_classification"),
+                "sub_classification": _extract_member_metric(member, "sub_classification", "classification_subtype", "classification_code"),
+                "classification_label": _extract_member_metric(member, "classification_label"),
+                "valuation_band": _extract_member_metric(member, "valuation_band"),
+                "valuation_band_label": _extract_member_metric(member, "valuation_band_label", "band_label"),
+                "primary_metric": _extract_member_metric(member, "primary_metric", "primary_percentile_metric"),
+                "primary_percentile": _extract_member_metric(member, "primary_percentile", "percentile", "industry_percentile"),
+                "industry_temperature_label": top_level_temperature_label,
+                "industry_temperature_percentile_since_2022": top_level_temperature_pct,
+                "industry_level_1": top_level_level1,
+                "industry_level_2": top_level_level2,
+            }
+
+    rows: list[dict[str, object]] = []
+    for score_key, score_entry in score_rows.items():
+        if not isinstance(score_entry, dict):
+            continue
+        market, _, symbol = str(score_key).partition(":")
+        market = market.strip().lower()
+        symbol = symbol.strip()
+        if not market or not symbol:
+            continue
+        key = (market, symbol)
+        security = security_lookup.get(key) or {}
+        industry = industry_lookup.get(key) or {}
+        valuation = valuation_lookup.get(key) or {}
+        rps = rps_lookup.get(key) or {}
+        dim_scores = score_entry.get("dim_scores") if isinstance(score_entry.get("dim_scores"), dict) else {}
+        ind_dim_scores = score_entry.get("ind_dim_scores") if isinstance(score_entry.get("ind_dim_scores"), dict) else {}
+        sub_indicators = score_entry.get("sub_indicators") if isinstance(score_entry.get("sub_indicators"), dict) else {}
+        ind_sub_indicators = score_entry.get("ind_sub_indicators") if isinstance(score_entry.get("ind_sub_indicators"), dict) else {}
+        industry_level_1 = (
+            _normalize_text(score_entry.get("industry_sw_level_1"))
+            or _normalize_text(industry.get("industry_level_1_name"))
+            or _normalize_text(valuation.get("industry_level_1"))
+        )
+        industry_level_2 = (
+            _normalize_text(score_entry.get("industry_sw_level_2"))
+            or _normalize_text(industry.get("industry_level_2_name"))
+            or _normalize_text(valuation.get("industry_level_2"))
+        )
+        industry_rps = industry_rps_aggregate.get(industry_level_2) or {}
+        classification = _normalize_text(valuation.get("classification"))
+        sub_classification = _normalize_text(valuation.get("sub_classification"))
+        valuation_band_label = _normalize_text(valuation.get("valuation_band_label")) or _normalize_text(valuation.get("valuation_band"))
+        current_price = _coerce_float(valuation.get("current_price"))
+        primary_percentile = _coerce_float(valuation.get("primary_percentile"))
+        market_total_rank = _coerce_int(score_entry.get("market_total_rank")) or market_rank_lookup.get(score_key)
+        industry_total_rank = _coerce_int(score_entry.get("industry_total_rank")) or industry_rank_lookup.get(score_key)
+        market_total_universe_size = _coerce_int(score_entry.get("market_total_universe_size")) or market_universe_size or None
+        industry_total_universe_size = (
+            _coerce_int(score_entry.get("industry_total_universe_size"))
+            or industry_universe_sizes.get(industry_level_2)
+        )
+        row = {
+            "market": market,
+            "symbol": symbol,
+            "stock_name": _normalize_text(security.get("stock_name")) or _normalize_text(score_entry.get("stock_name")) or symbol,
+            "current_price": current_price,
+            "pe_ttm": _coerce_float(valuation.get("pe_ttm")),
+            "ps_ttm": _coerce_float(valuation.get("ps_ttm")),
+            "total_market_cap": _coerce_float(valuation.get("total_market_cap")),
+            "free_float_market_cap": _coerce_float(valuation.get("free_float_market_cap")),
+            "industry_level_1": industry_level_1,
+            "industry_level_2": industry_level_2,
+            "market_total_score": market_score_lookup.get(score_key, _coerce_float(score_entry.get("total_score"))),
+            "industry_total_score": _coerce_float(score_entry.get("ind_total_score")),
+            "market_total_rank": market_total_rank,
+            "market_total_universe_size": market_total_universe_size,
+            "industry_total_rank": industry_total_rank,
+            "industry_total_universe_size": industry_total_universe_size,
+            "classification": classification,
+            "classification_label": _normalize_text(valuation.get("classification_label")) or _classification_label(classification, sub_classification),
+            "valuation_band": _normalize_text(valuation.get("valuation_band")),
+            "valuation_band_label": valuation_band_label,
+            "primary_metric": _normalize_text(valuation.get("primary_metric")),
+            "primary_percentile": primary_percentile,
+            "industry_temperature_label": _normalize_text(valuation.get("industry_temperature_label")),
+            "industry_temperature_percentile_since_2022": _coerce_float(
+                valuation.get("industry_temperature_percentile_since_2022")
+            ),
+            "dim_scores": dim_scores,
+            "ind_dim_scores": ind_dim_scores,
+            "sub_indicators": sub_indicators,
+            "ind_sub_indicators": ind_sub_indicators,
+            "rps_20": _coerce_float(rps.get("rps_20")),
+            "rps_50": _coerce_float(rps.get("rps_50")),
+            "rps_120": _coerce_float(rps.get("rps_120")),
+            "rps_250": _coerce_float(rps.get("rps_250")),
+            "industry_rps_20": None,
+            "industry_rps_50": None,
+            "industry_rps_120": None,
+            "industry_rps_250": None,
+        }
+        for window in (20, 50, 120, 250):
+            count_key = f"count_rps_{window}"
+            count = int(industry_rps.get(count_key) or 0)
+            if count > 0:
+                row[f"industry_rps_{window}"] = round(float(industry_rps.get(f"sum_rps_{window}") or 0.0) / count, 2)
+        rows.append(row)
+
+    text_filters = {
+        "industry_level_1": "industry_level_1",
+        "industry_level_2": "industry_level_2",
+        "industry_temperature_label": "industry_temperature_label",
+        "classification": "classification",
+        "valuation_band": "valuation_band_label",
+    }
+    numeric_field_filters = {
+        "min_total_score": ("market_total_score", "min"),
+        "min_ind_total_score": ("industry_total_score", "min"),
+        "max_market_rank": ("market_total_rank", "max"),
+        "max_industry_rank": ("industry_total_rank", "max"),
+        "min_primary_percentile": ("primary_percentile", "min"),
+        "max_primary_percentile": ("primary_percentile", "max"),
+        "min_current_price": ("current_price", "min"),
+        "max_current_price": ("current_price", "max"),
+    }
+
+    filtered = rows
+    for param_key, field_name in text_filters.items():
+        expected = _normalize_text(params.get(param_key))
+        if not expected:
+            continue
+        filtered = [row for row in filtered if _matches_keyword_filter(row.get(field_name), expected)]
+
+    for param_key, (field_name, bound) in numeric_field_filters.items():
+        threshold = _coerce_float(params.get(param_key))
+        if threshold is None:
+            continue
+        if bound == "min":
+            filtered = [row for row in filtered if _passes_min_max(row.get(field_name), min_value=threshold)]
+        else:
+            filtered = [row for row in filtered if _passes_min_max(row.get(field_name), max_value=threshold)]
+
+    for param_key, raw_value in params.items():
+        threshold = _coerce_float(raw_value)
+        if threshold is None:
+            continue
+        if param_key.startswith("min_dim_"):
+            dim_key = param_key[8:]
+            filtered = [
+                row for row in filtered
+                if _passes_min_max((row.get("dim_scores") or {}).get(dim_key), min_value=threshold)
+            ]
+            continue
+        if param_key.startswith("max_dim_"):
+            dim_key = param_key[8:]
+            filtered = [
+                row for row in filtered
+                if _passes_min_max((row.get("dim_scores") or {}).get(dim_key), max_value=threshold)
+            ]
+            continue
+        if param_key.startswith("min_sub_"):
+            sub_key = param_key[8:]
+            filtered = [
+                row for row in filtered
+                if _passes_min_max((row.get("sub_indicators") or {}).get(sub_key), min_value=threshold)
+            ]
+            continue
+        if param_key.startswith("max_sub_"):
+            sub_key = param_key[8:]
+            filtered = [
+                row for row in filtered
+                if _passes_min_max((row.get("sub_indicators") or {}).get(sub_key), max_value=threshold)
+            ]
+            continue
+        for prefix, field_base in (
+            ("min_rps_", "rps_"),
+            ("max_rps_", "rps_"),
+            ("min_industry_rps_", "industry_rps_"),
+            ("max_industry_rps_", "industry_rps_"),
+        ):
+            if not param_key.startswith(prefix):
+                continue
+            suffix = param_key[len(prefix):]
+            if suffix not in {"20", "50", "120", "250"}:
+                continue
+            field_name = f"{field_base}{suffix}"
+            if prefix.startswith("min_"):
+                filtered = [row for row in filtered if _passes_min_max(row.get(field_name), min_value=threshold)]
+            else:
+                filtered = [row for row in filtered if _passes_min_max(row.get(field_name), max_value=threshold)]
+            break
+
+    filtered.sort(
+        key=lambda row: (
+            -(row.get("market_total_score") if row.get("market_total_score") is not None else -1.0),
+            int(row.get("market_total_rank") if row.get("market_total_rank") is not None else 10**9),
+            str(row.get("market", "")),
+            str(row.get("symbol", "")),
+        )
+    )
+
+    page = _coerce_int(params.get("page")) or 1
+    if page < 1:
+        page = 1
+    page_size = _coerce_int(params.get("page_size")) or 50
+    if page_size < 1:
+        page_size = 50
+    page_size = min(page_size, 200)
+    total = len(filtered)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    return {
+        "ok": True,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "rows": filtered[start:end],
     }
 
 

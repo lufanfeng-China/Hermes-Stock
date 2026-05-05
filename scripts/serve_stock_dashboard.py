@@ -27,6 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.industry.heatmap import DEFAULT_INDUSTRY_LIMIT, industry_heatmap_response
 from app.relative_valuation.service import build_relative_valuation_result
 from app.search.index import (
+    build_stock_screener_response,
     concept_search_response,
     rps_ranking_response,
     stock_profile_response,
@@ -1489,6 +1490,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/relative-valuation":
             self.handle_relative_valuation(parsed.query)
             return
+        if parsed.path == "/api/stock-screener":
+            self.handle_stock_screener(parsed.query)
+            return
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
             return
@@ -1722,6 +1726,20 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "concept_list_error", "message": str(exc)}},
+            )
+
+    def handle_stock_screener(self, query: str) -> None:
+        params = {
+            key: values[0].strip()
+            for key, values in parse_qs(query, keep_blank_values=True).items()
+            if values
+        }
+        try:
+            self.respond_json(HTTPStatus.OK, build_stock_screener_response(params))
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "stock_screener_error", "message": str(exc)}},
             )
 
     def handle_stock_score(self, query: str) -> None:

@@ -219,6 +219,10 @@ export class KlineChart {
     this.volumeAxisYLabels.setAttribute('class', 'kc-axis-y-vol');
     this.axesGroup.appendChild(this.volumeAxisYLabels);
 
+    this.sectionLabels = document.createElementNS(ns, 'g');
+    this.sectionLabels.setAttribute('class', 'kc-section-labels');
+    this.axesGroup.appendChild(this.sectionLabels);
+
     this.xAxisGroup = document.createElementNS(ns, 'g');
     this.xAxisGroup.setAttribute('class', 'kc-axis-x');
     this.axesGroup.appendChild(this.xAxisGroup);
@@ -368,10 +372,12 @@ export class KlineChart {
     }
 
     // RPS area horizontal guides at 50 and 80
+    this.rpsGroup.querySelectorAll('.kc-rps-guide').forEach((node) => node.remove());
     if (this.rpsHistory && this.rpsHistory.length) {
       for (const rpsVal of [50, 80]) {
         const y = this._rpsToY(rpsVal);
         const gl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        gl.setAttribute('class', 'kc-rps-guide');
         gl.setAttribute('x1', d.ml);
         gl.setAttribute('x2', d.ml + d.plotW);
         gl.setAttribute('y1', y);
@@ -616,6 +622,8 @@ export class KlineChart {
     const barW = this._barWidth();
     const axisLabelX = d.w - 4;
 
+    this._renderSectionLabels(d);
+
     // Price Y axis labels
     const pG = this.priceAxisYLabels;
     pG.innerHTML = '';
@@ -709,7 +717,7 @@ export class KlineChart {
       { label: 'RPS250', color: this.cfg.rps250Color },
     ];
     legendItems.forEach((item, idx) => {
-      const ly = d.rpsTop + 12 + idx * 14;
+      const ly = d.rpsTop + 28 + idx * 14;
       const lt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       lt.setAttribute('x', d.ml + 4);
       lt.setAttribute('y', ly);
@@ -720,6 +728,39 @@ export class KlineChart {
       this.axesGroup.appendChild(lt);
       this._rpsAxisLabels.push(lt);
     });
+  }
+
+  _renderSectionLabels(d) {
+    const ns = 'http://www.w3.org/2000/svg';
+    this.sectionLabels.innerHTML = '';
+    const labels = [
+      { text: '价格', x: d.ml + 4, y: d.priceTop + 12, fill: this.cfg.labelColor },
+      { text: '成交量', x: d.ml + 4, y: d.volumeTop + 12, fill: this.cfg.labelColor },
+      { text: '个股RPS', x: d.ml + 4, y: d.rpsTop + 12, fill: this.cfg.labelColor },
+    ];
+    labels.forEach((label) => {
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', label.x);
+      t.setAttribute('y', label.y);
+      t.setAttribute('fill', label.fill);
+      t.setAttribute('font-size', '10');
+      t.setAttribute('font-family', 'monospace');
+      t.textContent = label.text;
+      this.sectionLabels.appendChild(t);
+    });
+  }
+
+  _formatTooltipNumber(value, digits = 2) {
+    if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
+    return Number(value).toFixed(digits);
+  }
+
+  _formatTooltipVolume(value) {
+    if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
+    const volume = Number(value);
+    if (Math.abs(volume) >= 1_000_000) return `${(volume / 1_000_000).toFixed(2)}M`;
+    if (Math.abs(volume) >= 1_000) return `${(volume / 1_000).toFixed(1)}K`;
+    return `${Math.round(volume)}`;
   }
 
   _setCrosshair(visibleIndex, clientX, clientY) {
@@ -736,12 +777,13 @@ export class KlineChart {
     const bar = bars[visibleIndex];
     if (!bar) return;
     const y = this._priceToY(bar.close);
+    const rpsRow = (this.rpsHistory || []).find((item) => item.trading_day === bar.trading_day) || null;
 
     this.crosshairGroup.style.display = 'block';
     this.crosshairVLine.setAttribute('x1', x);
     this.crosshairVLine.setAttribute('x2', x);
     this.crosshairVLine.setAttribute('y1', d.priceTop);
-    this.crosshairVLine.setAttribute('y2', d.volumeTop + d.volH);
+    this.crosshairVLine.setAttribute('y2', d.rpsTop + d.rpsH);
 
     this.crosshairHLine.setAttribute('x1', d.ml);
     this.crosshairHLine.setAttribute('x2', d.ml + d.plotW);
@@ -755,13 +797,19 @@ export class KlineChart {
     // Tooltip
     const lines = [
       `日期: ${bar.trading_day}`,
-      `最高价: ${bar.high}`,
-      `最低价: ${bar.low}`,
-      `收盘价: ${bar.close}`,
+      `开盘价: ${this._formatTooltipNumber(bar.open)}`,
+      `最高价: ${this._formatTooltipNumber(bar.high)}`,
+      `最低价: ${this._formatTooltipNumber(bar.low)}`,
+      `收盘价: ${this._formatTooltipNumber(bar.close)}`,
+      `成交量: ${this._formatTooltipVolume(bar.volume)}`,
+      `RPS20: ${this._formatTooltipNumber(rpsRow?.rps_20, 1)}`,
+      `RPS50: ${this._formatTooltipNumber(rpsRow?.rps_50, 1)}`,
+      `RPS120: ${this._formatTooltipNumber(rpsRow?.rps_120, 1)}`,
+      `RPS250: ${this._formatTooltipNumber(rpsRow?.rps_250, 1)}`,
     ];
     const padding = 6;
     const lineH = 13;
-    const tw = 144;
+    const tw = 154;
     const th = lines.length * lineH + padding * 2;
 
     // Position tooltip to avoid edges
