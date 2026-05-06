@@ -15,8 +15,9 @@
       </div>
       <div class="topbar-actions">
         <a href="/stock-score.html" class="nav-link">财务评分</a>
+        <a href="/stock-screener.html" class="nav-link active">股票筛选</a>
+        <a href="/realtime-screener.html" class="nav-link">实时选股</a>
         <a href="/rps-pool.html" class="nav-link">RPS</a>
-        <a href="/relative-valuation.html" class="nav-link">相对估值</a>
       </div>
     </header>
 
@@ -26,10 +27,19 @@
           <p class="eyebrow">FILTER WORKBENCH</p>
           <h2>筛选条件</h2>
         </div>
-        <p id="stock-screener-status" class="search-meta">支持多条件叠加筛选，每页 50 条</p>
+        <div class="stock-screener-filter-head-actions">
+          <button id="stock-screener-filter-toggle" class="nav-link stock-screener-filter-toggle" type="button" aria-controls="stock-screener-filter-form" aria-expanded="false">展开筛选</button>
+          <p id="stock-screener-status" class="search-meta">支持多条件叠加筛选，每页 50 条</p>
+        </div>
       </div>
 
-      <form id="stock-screener-filter-form" class="stock-screener-filter-grid" onsubmit="return false;">
+      <div id="stock-screener-strategy-buttons" class="stock-screener-filter-actions" role="group" aria-label="策略预设">
+        <button type="button" class="nav-link" data-strategy="rps_standard_launch">RPS标准</button>
+        <button type="button" class="nav-link" data-strategy="rps_attack">RPS进攻</button>
+      </div>
+
+      <form id="stock-screener-filter-form" class="stock-screener-filter-grid" onsubmit="return false;" hidden>
+        <input name="strategy" type="hidden" value="">
         <label><span>全市场总分</span><input name="min_total_score" type="number" step="0.1" placeholder="≥"></label>
         <label><span>行业内总分</span><input name="min_ind_total_score" type="number" step="0.1" placeholder="≥"></label>
         <label><span>全市场排名</span><input name="max_market_rank" type="number" step="1" placeholder="≤"></label>
@@ -109,27 +119,26 @@
       </div>
     </section>
 
-    <section id="stock-screener-kline-section" class="profile-card stock-screener-kline-section" hidden>
-      <div class="search-card-header">
+    <section id="stock-screener-kline-section" class="kline-section terminal-panel hidden">
+      <div class="kline-header terminal-panel-header">
         <div>
-          <p class="eyebrow">K-LINE DETAIL</p>
-          <h2 id="stock-screener-kline-title">点击股票查看K线</h2>
+          <p class="eyebrow">KLINE CHART</p>
+          <h2 id="stock-screener-kline-title">—</h2>
         </div>
-        <p class="search-meta">复用 RPS 页面 K线 / RPS20/50/120/250 趋势</p>
-      </div>
-      <div id="stock-screener-kline-controls" class="stock-screener-kline-controls" role="group" aria-label="K线区间快捷切换">
-        <div class="stock-screener-kline-presets">
-          <button type="button" class="nav-link active" data-kline-preset="30">30天</button>
-          <button type="button" class="nav-link" data-kline-preset="60">60天</button>
-          <button type="button" class="nav-link" data-kline-preset="250">250天</button>
-          <button type="button" class="nav-link" data-kline-preset="-1">ALL</button>
-        </div>
-        <div class="stock-screener-kline-meta">
-          <span id="stock-screener-kline-range" class="stock-screener-kline-slot">区间：待加载</span>
-          <span id="stock-screener-kline-latest" class="stock-screener-kline-slot">最新：待加载</span>
+        <div class="kline-controls">
+          <div id="stock-screener-preset-controls" class="zoom-controls" role="group" aria-label="Kline preset windows">
+            <button type="button" class="zoom-button" data-preset="20">20D</button>
+            <button type="button" class="zoom-button active" data-preset="60">60D</button>
+            <button type="button" class="zoom-button" data-preset="120">120D</button>
+            <button type="button" class="zoom-button" data-preset="250">250D</button>
+            <button type="button" class="zoom-button" data-preset="-1">ALL</button>
+          </div>
+          <span id="stock-screener-kline-range-label" class="kline-range-label"></span>
         </div>
       </div>
-      <svg id="stock-screener-kline-svg" class="stock-screener-kline-svg" viewBox="0 0 1000 620"></svg>
+      <div class="kline-chart-wrap">
+        <svg id="stock-screener-kline-svg" class="kline-svg"></svg>
+      </div>
     </section>
   </main>
 

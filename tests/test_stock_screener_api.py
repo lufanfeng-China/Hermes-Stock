@@ -225,12 +225,117 @@ class StockScreenerApiTests(unittest.TestCase):
         self.assertEqual("行业偏热", first["industry_temperature_label"])
         self.assertEqual(72.5, first["industry_temperature_percentile_since_2022"])
 
+    def test_stock_screener_strategy_filters_by_named_signal_rows(self) -> None:
+        from app.search import index
+
+        snapshot = {
+            "report_date": "2026Q1",
+            "scores": {
+                "sh:600001": {"total_score": 80.0, "ind_total_score": 80.0, "dim_scores": {}, "sub_indicators": {}},
+                "sz:000001": {"total_score": 90.0, "ind_total_score": 90.0, "dim_scores": {}, "sub_indicators": {}},
+            },
+        }
+        securities = [
+            {"market": "sh", "symbol": "600001", "stock_name": "策略命中"},
+            {"market": "sz", "symbol": "000001", "stock_name": "策略未命中"},
+        ]
+        strategy_rows = [
+            {
+                "market": "sh",
+                "symbol": "600001",
+                "strategy": "rps_standard_launch",
+                "strategy_label": "RPS标准启动",
+                "passed": True,
+            },
+            {
+                "market": "sz",
+                "symbol": "000001",
+                "strategy": "rps_standard_launch",
+                "strategy_label": "RPS标准启动",
+                "passed": False,
+            },
+        ]
+
+        with mock.patch.object(index, "_load_financial_snapshot", return_value=snapshot), \
+             mock.patch.object(index, "load_security_rows", return_value=securities), \
+             mock.patch.object(index, "load_rps_rows", return_value=[]), \
+             mock.patch.object(index, "load_industry_rows", return_value=[]), \
+             mock.patch.object(index, "_load_json_rows", return_value=[]), \
+             mock.patch.object(index, "load_stock_screener_strategy_rows", return_value=strategy_rows):
+            payload = index.build_stock_screener_response({"strategy": "rps_standard_launch", "page": "1", "page_size": "50"})
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual("rps_standard_launch", payload["active_strategy"])
+        self.assertEqual(1, payload["total"])
+        self.assertEqual("600001", payload["rows"][0]["symbol"])
+        self.assertEqual("RPS标准", payload["rows"][0]["strategy_label"])
+
+    def test_rps_standard_launch_formula_matches_tdx_rules(self) -> None:
+        from app.search import index
+
+        bars = []
+        for i in range(130):
+            close = 80 + i * 0.18
+            bars.append({"close": close, "high": close * 1.01, "volume": 1000})
+        bars[-10]["high"] = 200.0
+        bars[-1]["volume"] = 2000
+        latest_rps = {"rps_20": 93.0, "rps_50": 89.0, "rps_120": 86.0, "rps_250": 81.0}
+        ref3_rps = {"rps_20": 90.0, "rps_50": 88.0, "rps_120": 85.0, "rps_250": 80.0}
+        ref5_rps = {"rps_20": 89.0, "rps_50": 87.0, "rps_120": 84.0, "rps_250": 79.0}
+
+        signal = index.evaluate_rps_standard_launch_signal(latest_rps, ref3_rps, ref5_rps, bars)
+
+        self.assertTrue(signal["passed"])
+        self.assertTrue(signal["conditions"]["rps_base"])
+        self.assertTrue(signal["conditions"]["rps_turning_point"])
+        self.assertTrue(signal["conditions"]["volume_start"])
+        self.assertNotIn("not_overheated", signal["conditions"])
+        self.assertNotIn("near_breakout_zone", signal["conditions"])
+
+    def test_rps_attack_formula_matches_tdx_rules(self) -> None:
+        from app.search import index
+
+        bars = []
+        for i in range(130):
+            close = 80 + i * 0.18
+            bars.append({"close": close, "high": close * 1.01, "volume": 1000})
+        bars[-10]["high"] = 200.0
+        bars[-1]["volume"] = 2000
+        latest_rps = {"rps_20": 89.0, "rps_50": 83.0, "rps_120": 81.0, "rps_250": 76.0}
+        ref1_rps = {"rps_20": 88.5, "rps_50": 82.8}
+        ref2_rps = {"rps_20": 87.5, "rps_50": 82.6}
+        ref3_rps = {"rps_20": 87.0, "rps_50": 82.5}
+
+        signal = index.evaluate_rps_attack_signal(latest_rps, ref1_rps, ref2_rps, ref3_rps, bars)
+
+        self.assertTrue(signal["passed"])
+        self.assertTrue(signal["conditions"]["rps_base"])
+        self.assertTrue(signal["conditions"]["rps_acceleration"])
+        self.assertTrue(signal["conditions"]["volume_mild_expand"])
+        self.assertNotIn("setup_position", signal["conditions"])
+
     def test_dashboard_registers_stock_screener_route(self) -> None:
         from pathlib import Path
 
         content = Path("scripts/serve_stock_dashboard.py").read_text(encoding="utf-8")
         self.assertIn('/api/stock-screener', content)
         self.assertIn('handle_stock_screener', content)
+        self.assertIn('ensure_stock_screener_strategy_dataset', content)
+        self.assertIn('build_stock_screener_strategies.py', content)
+
+    def test_stock_screener_strategy_builder_script_uses_formula_helper(self) -> None:
+        from pathlib import Path
+
+        content = Path("scripts/build_stock_screener_strategies.py").read_text(encoding="utf-8")
+        self.assertIn('dataset_stock_screener_strategies_current.json', content)
+        self.assertIn('evaluate_rps_standard_launch_signal', content)
+        self.assertIn('evaluate_rps_attack_signal', content)
+        self.assertIn('rps_standard_launch', content)
+        self.assertIn('rps_attack', content)
+        self.assertIn('merge_strategy_rows_for_output', content)
+        self.assertIn('RPS标准', content)
+        self.assertNotIn('RPS标准启动', content)
+        self.assertIn('RPS进攻', content)
 
 
 if __name__ == "__main__":

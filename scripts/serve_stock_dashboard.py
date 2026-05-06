@@ -35,6 +35,8 @@ from app.search.index import (
     pool_filter_response,
     industry_hierarchy_response,
     concept_list_response,
+    load_stock_screener_strategy_rows,
+    realtime_screener_response,
 )
 
 
@@ -44,6 +46,8 @@ DEFAULT_SYMBOL = "601600"
 DEFAULT_HISTORY_LIMIT = 120
 WEB_ROOT = PROJECT_ROOT / "web"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
+STOCK_SCREENER_STRATEGY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_screener_strategies_current.json"
+STOCK_RPS_CURRENT_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_current.json"
 DEFAULT_HERMES_MODEL = os.environ.get("HERMES_MODEL", "").strip()
 DATA_UPDATE_LOCK = threading.Lock()
 DATA_UPDATE_JOB_STATE_LOCK = threading.Lock()
@@ -76,6 +80,49 @@ class DataUpdateStepError(RuntimeError):
 def _tail_lines(text: str | None, limit: int = DATA_UPDATE_OUTPUT_TAIL_LINES) -> str:
     lines = [line for line in str(text or "").splitlines() if line.strip()]
     return "\n".join(lines[-limit:])
+
+
+def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
+    """Build the stock-screener strategy dataset on demand when a preset needs it."""
+    strategy = str(strategy or "").strip()
+    if strategy not in {"rps_standard_launch", "rps_attack"}:
+        return
+    dataset_is_current = (
+        STOCK_SCREENER_STRATEGY_DATASET.exists()
+        and (
+            not STOCK_RPS_CURRENT_DATASET.exists()
+            or STOCK_SCREENER_STRATEGY_DATASET.stat().st_mtime >= STOCK_RPS_CURRENT_DATASET.stat().st_mtime
+        )
+    )
+    dataset_has_strategy = False
+    if STOCK_SCREENER_STRATEGY_DATASET.exists():
+        try:
+            payload = json.loads(STOCK_SCREENER_STRATEGY_DATASET.read_text(encoding="utf-8"))
+            rows = payload if isinstance(payload, list) else payload.get("rows", [])
+            dataset_has_strategy = any(str(row.get("strategy", "")).strip() == strategy for row in rows if isinstance(row, dict))
+        except Exception:
+            dataset_has_strategy = False
+    if dataset_is_current and dataset_has_strategy:
+        return
+    result = subprocess.run(
+        [
+            TONGDAXIN_PYTHON,
+            str(PROJECT_ROOT / "scripts" / "build_stock_screener_strategies.py"),
+            "--strategy",
+            strategy,
+            "--tdxdir",
+            TONGDAXIN_DIR,
+            "--output",
+            str(STOCK_SCREENER_STRATEGY_DATASET),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(_tail_lines(result.stderr or result.stdout or "strategy build failed"))
+    load_stock_screener_strategy_rows.cache_clear()
 
 
 def parse_data_update_progress_line(line: str) -> dict[str, object]:
@@ -1493,6 +1540,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-screener":
             self.handle_stock_screener(parsed.query)
             return
+        if parsed.path == "/api/realtime-screener":
+            self.handle_realtime_screener(parsed.query)
+            return
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
             return
@@ -1735,11 +1785,26 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             if values
         }
         try:
+            ensure_stock_screener_strategy_dataset(params.get("strategy", ""))
             self.respond_json(HTTPStatus.OK, build_stock_screener_response(params))
         except Exception as exc:
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "stock_screener_error", "message": str(exc)}},
+            )
+
+    def handle_realtime_screener(self, query: str) -> None:
+        params = {
+            key: values[0].strip()
+            for key, values in parse_qs(query, keep_blank_values=True).items()
+            if values
+        }
+        try:
+            self.respond_json(HTTPStatus.OK, realtime_screener_response(params))
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "realtime_screener_error", "message": str(exc)}},
             )
 
     def handle_stock_score(self, query: str) -> None:

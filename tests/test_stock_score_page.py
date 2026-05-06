@@ -17,10 +17,13 @@ class StockScorePageTemplateTests(unittest.TestCase):
         self.assertNotIn('>Home</a>', html)
         self.assertIn('id="stock-score-topbar-tools"', html)
         self.assertIn('id="stock-score-topbar-actions"', html)
-        self.assertEqual(4, html.count('stock-score-topbar-action'))
+        self.assertEqual(5, html.count('stock-score-topbar-action'))
         self.assertIn('>RPS</a>', html)
         self.assertIn('>财务评分</a>', html)
-        self.assertIn('>相对估值</a>', html)
+        self.assertIn('href="/realtime-screener.html" class="nav-link stock-score-topbar-action">实时选股</a>', html)
+        self.assertNotIn('>相对估值</a>', html)
+        self.assertNotIn('/relative-valuation.html', html)
+        self.assertIn('href="/stock-screener.html" class="nav-link stock-score-topbar-action">股票筛选</a>', html)
         self.assertIn('id="stock-score-data-update-btn"', html)
         self.assertLess(html.index('id="stock-score-data-update-btn"'), html.index('class="search-grid stock-score-lead-grid"'))
         self.assertLess(html.index('id="stock-score-data-update-info"'), html.index('class="search-grid stock-score-lead-grid"'))
@@ -28,6 +31,7 @@ class StockScorePageTemplateTests(unittest.TestCase):
     def test_index_page_redirects_to_stock_score_homepage(self) -> None:
         html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         self.assertIn('/stock-score.html', html)
+        self.assertIn('/stock-screener.html', html)
         self.assertNotIn('Stock Window Volume', html)
 
     def test_stock_score_page_has_profile_summary_slots(self) -> None:

@@ -792,6 +792,14 @@ def load_industry_valuation_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) 
 
 
 @lru_cache(maxsize=1)
+def load_stock_screener_strategy_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
+    path = Path(dataset_dir) / "dataset_stock_screener_strategies_current.json"
+    if not path.exists():
+        return []
+    return _load_json_rows(path)
+
+
+@lru_cache(maxsize=1)
 def load_concept_index(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
     return build_concept_index(
         load_concept_rows(dataset_dir),
@@ -1155,6 +1163,14 @@ def _matches_keyword_filter(actual: object, expected: str) -> bool:
     return actual_text == expected_text
 
 
+def _coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return _normalize_text(value).lower() in {"1", "true", "yes", "y", "passed", "命中"}
+
+
 def _passes_min_max(value: object, *, min_value: float | None = None, max_value: float | None = None) -> bool:
     numeric = _coerce_float(value)
     if numeric is None:
@@ -1173,6 +1189,115 @@ def _extract_member_metric(member_row: dict[str, object], *keys: str) -> object:
     return None
 
 
+def evaluate_rps_standard_launch_signal(
+    latest_rps: dict[str, object],
+    ref3_rps: dict[str, object],
+    ref5_rps: dict[str, object],
+    bars: list[dict[str, object]],
+) -> dict[str, object]:
+    def moving_average(values: list[float | None], period: int, end_index: int) -> float | None:
+        start_index = end_index - period + 1
+        if start_index < 0:
+            return None
+        window = values[start_index : end_index + 1]
+        if any(value is None for value in window):
+            return None
+        return sum(float(value) for value in window) / period
+
+    closes = [_coerce_float(bar.get("close")) for bar in bars]
+    highs = [_coerce_float(bar.get("high")) for bar in bars]
+    volumes = [_coerce_float(bar.get("volume")) for bar in bars]
+    latest_index = len(bars) - 1
+    latest_close = closes[latest_index] if latest_index >= 0 else None
+    latest_volume = volumes[latest_index] if latest_index >= 0 else None
+
+    ma20 = moving_average(closes, 20, latest_index) if latest_index >= 0 else None
+    ma50 = moving_average(closes, 50, latest_index) if latest_index >= 0 else None
+    ma120 = moving_average(closes, 120, latest_index) if latest_index >= 0 else None
+    ma50_ref5 = moving_average(closes, 50, latest_index - 5) if latest_index >= 5 else None
+    vol5 = moving_average(volumes, 5, latest_index) if latest_index >= 0 else None
+    hhv60_window = highs[max(0, latest_index - 59) : latest_index + 1]
+    hhv60 = max((float(value) for value in hhv60_window if value is not None), default=None)
+
+    rps20 = _coerce_float(latest_rps.get("rps_20"))
+    rps50 = _coerce_float(latest_rps.get("rps_50"))
+    rps120 = _coerce_float(latest_rps.get("rps_120"))
+    rps250 = _coerce_float(latest_rps.get("rps_250"))
+    ref3_rps20 = _coerce_float(ref3_rps.get("rps_20"))
+    ref5_rps50 = _coerce_float(ref5_rps.get("rps_50"))
+
+    conditions = {
+        "rps_base": all(value is not None for value in (rps20, rps50, rps120, rps250))
+        and bool(rps250 >= 80 and rps120 >= 85 and rps50 >= 88 and rps20 >= 92),
+        "rps_structure": all(value is not None for value in (rps20, rps50, rps120, rps250))
+        and bool(rps20 > rps50 and rps50 >= rps120 - 3 and rps120 >= rps250 - 5),
+        "rps_turning_point": all(value is not None for value in (rps20, rps50, ref3_rps20, ref5_rps50))
+        and bool(rps20 > ref3_rps20 and rps50 > ref5_rps50),
+        "trend_confirmed": all(value is not None for value in (latest_close, ma20, ma50, ma120, ma50_ref5))
+        and bool(latest_close > ma20 and ma20 > ma50 and ma50 >= ma50_ref5),
+        "volume_start": latest_volume is not None and vol5 is not None and bool(latest_volume > 1.3 * vol5),
+    }
+    return {
+        "passed": all(conditions.values()),
+        "conditions": conditions,
+    }
+
+
+def evaluate_rps_attack_signal(
+    latest_rps: dict[str, object],
+    ref1_rps: dict[str, object],
+    ref2_rps: dict[str, object],
+    ref3_rps: dict[str, object],
+    bars: list[dict[str, object]],
+) -> dict[str, object]:
+    def moving_average(values: list[float | None], period: int, end_index: int) -> float | None:
+        start_index = end_index - period + 1
+        if start_index < 0:
+            return None
+        window = values[start_index : end_index + 1]
+        if any(value is None for value in window):
+            return None
+        return sum(float(value) for value in window) / period
+
+    closes = [_coerce_float(bar.get("close")) for bar in bars]
+    highs = [_coerce_float(bar.get("high")) for bar in bars]
+    volumes = [_coerce_float(bar.get("volume")) for bar in bars]
+    latest_index = len(bars) - 1
+    latest_close = closes[latest_index] if latest_index >= 0 else None
+    latest_volume = volumes[latest_index] if latest_index >= 0 else None
+
+    ma20 = moving_average(closes, 20, latest_index) if latest_index >= 0 else None
+    ma50 = moving_average(closes, 50, latest_index) if latest_index >= 0 else None
+    ma50_ref3 = moving_average(closes, 50, latest_index - 3) if latest_index >= 3 else None
+    vol5 = moving_average(volumes, 5, latest_index) if latest_index >= 0 else None
+    hhv40_window = highs[max(0, latest_index - 39) : latest_index + 1]
+    hhv40 = max((float(value) for value in hhv40_window if value is not None), default=None)
+
+    rps20 = _coerce_float(latest_rps.get("rps_20"))
+    rps50 = _coerce_float(latest_rps.get("rps_50"))
+    rps120 = _coerce_float(latest_rps.get("rps_120"))
+    rps250 = _coerce_float(latest_rps.get("rps_250"))
+    ref1_rps20 = _coerce_float(ref1_rps.get("rps_20"))
+    ref2_rps20 = _coerce_float(ref2_rps.get("rps_20"))
+    ref3_rps50 = _coerce_float(ref3_rps.get("rps_50"))
+
+    conditions = {
+        "rps_base": all(value is not None for value in (rps20, rps50, rps120, rps250))
+        and bool(rps250 >= 75 and rps120 >= 80 and rps50 >= 82 and rps20 >= 88),
+        "rps_acceleration": all(value is not None for value in (rps20, rps50, ref1_rps20, ref2_rps20, ref3_rps50))
+        and bool(rps20 > ref1_rps20 and ref1_rps20 > ref2_rps20 and rps50 > ref3_rps50),
+        "rps_structure": all(value is not None for value in (rps20, rps50, rps120, rps250))
+        and bool(rps20 > rps50 and rps120 >= rps250 - 8),
+        "trend_confirmed": all(value is not None for value in (latest_close, ma20, ma50, ma50_ref3))
+        and bool(latest_close > ma20 and latest_close > ma50 and ma50 > ma50_ref3),
+        "volume_mild_expand": latest_volume is not None and vol5 is not None and bool(latest_volume > 1.2 * vol5),
+    }
+    return {
+        "passed": all(conditions.values()),
+        "conditions": conditions,
+    }
+
+
 def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     snapshot = _load_financial_snapshot() or {}
     score_rows = snapshot.get("scores") or {}
@@ -1180,6 +1305,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     industry_rows = load_industry_rows()
     rps_rows = load_rps_rows()
     valuation_rows = load_industry_valuation_rows()
+    active_strategy = _normalize_text(params.get("strategy"))
+    strategy_rows = load_stock_screener_strategy_rows() if active_strategy else []
 
     security_lookup = {_security_key(row): row for row in securities}
     industry_lookup = {_security_key(row): row for row in industry_rows}
@@ -1257,6 +1384,15 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
                 "industry_level_2": top_level_level2,
             }
 
+    strategy_lookup: dict[tuple[str, str, str], dict[str, object]] = {}
+    for row in strategy_rows:
+        market = _normalize_text(row.get("market")).lower()
+        symbol = _normalize_text(row.get("symbol"))
+        strategy = _normalize_text(row.get("strategy"))
+        if not market or not symbol or not strategy:
+            continue
+        strategy_lookup[(market, symbol, strategy)] = row
+
     rows: list[dict[str, object]] = []
     for score_key, score_entry in score_rows.items():
         if not isinstance(score_entry, dict):
@@ -1333,6 +1469,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             "rps_50": _coerce_float(rps.get("rps_50")),
             "rps_120": _coerce_float(rps.get("rps_120")),
             "rps_250": _coerce_float(rps.get("rps_250")),
+            "strategy": None,
+            "strategy_label": None,
             "industry_rps_20": None,
             "industry_rps_50": None,
             "industry_rps_120": None,
@@ -1343,6 +1481,14 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             count = int(industry_rps.get(count_key) or 0)
             if count > 0:
                 row[f"industry_rps_{window}"] = round(float(industry_rps.get(f"sum_rps_{window}") or 0.0) / count, 2)
+        if active_strategy:
+            strategy_entry = strategy_lookup.get((market, symbol, active_strategy)) or {}
+            if _coerce_bool(strategy_entry.get("passed")):
+                row["strategy"] = _normalize_text(strategy_entry.get("strategy")) or None
+                row["strategy_label"] = (
+                    "RPS标准" if active_strategy == "rps_standard_launch"
+                    else (_normalize_text(strategy_entry.get("strategy_label")) or None)
+                )
         rows.append(row)
 
     text_filters = {
@@ -1364,6 +1510,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     }
 
     filtered = rows
+    if active_strategy:
+        filtered = [row for row in filtered if row.get("strategy") == active_strategy]
     for param_key, field_name in text_filters.items():
         expected = _normalize_text(params.get(param_key))
         if not expected:
@@ -1454,11 +1602,367 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
 
     return {
         "ok": True,
+        "active_strategy": active_strategy or None,
         "total": total,
         "page": page,
         "page_size": page_size,
         "total_pages": total_pages,
         "rows": filtered[start:end],
+    }
+
+
+_REALTIME_SCENARIO_DEFAULTS: dict[str, dict[str, object]] = {
+    "tail_session": {
+        "label": "尾盘选股",
+        "conditions": {
+            "gain_min_pct": 3.0,
+            "gain_max_pct": 5.0,
+            "limit_up_lookback_days": 20,
+            "min_volume_ratio": 1.4,
+            "max_market_cap_yi": 200.0,
+            "turnover_min_pct": 5.0,
+            "turnover_max_pct": 10.0,
+            "intraday_above_vwap": True,
+            "intraday_above_vwap_min_ratio_pct": 80.0,
+            "intraday_vwap_max_breach_pct": 0.3,
+            "current_above_open": True,
+        },
+    },
+}
+
+
+def load_realtime_quote_rows(batch_size: int = 80) -> list[dict[str, object]]:
+    """Load current沪深A股 quote snapshots from mootdx; 北交所 is skipped for this path."""
+    from mootdx.quotes import Quotes
+
+    securities = [
+        row for row in load_security_rows()
+        if str(row.get("market", "")).lower() in {"sh", "sz"}
+    ]
+    symbols = [str(row.get("symbol", "")).strip() for row in securities if str(row.get("symbol", "")).strip()]
+    client = Quotes.factory(market="std")
+    rows: list[dict[str, object]] = []
+    for start in range(0, len(symbols), batch_size):
+        batch = symbols[start:start + batch_size]
+        if not batch:
+            continue
+        try:
+            frame = client.quotes(symbol=batch)
+        except Exception:
+            continue
+        if frame is None or getattr(frame, "empty", True):
+            continue
+        for item in frame.to_dict("records"):
+            market_id = _coerce_int(item.get("market"))
+            market = "sh" if market_id == 1 else "sz"
+            rows.append({
+                "market": market,
+                "symbol": _normalize_text(item.get("code")),
+                "price": _coerce_float(item.get("price")),
+                "last_close": _coerce_float(item.get("last_close")),
+                "open": _coerce_float(item.get("open")),
+                "high": _coerce_float(item.get("high")),
+                "low": _coerce_float(item.get("low")),
+                "volume": _coerce_float(item.get("volume") if item.get("volume") not in (None, "") else item.get("vol")),
+                "amount": _coerce_float(item.get("amount")),
+                "servertime": item.get("servertime"),
+            })
+    return [row for row in rows if row.get("symbol")]
+
+
+@lru_cache(maxsize=4096)
+def load_realtime_intraday_points(market: str, symbol: str) -> list[dict[str, object]]:
+    """Load current-day realtime minute points from mootdx for VWAP strength checks."""
+    del market
+    try:
+        from mootdx.quotes import Quotes
+        client = Quotes.factory(market="std")
+        frame = client.minute(symbol=symbol)
+    except Exception:
+        return []
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    points: list[dict[str, object]] = []
+    for item in frame.to_dict("records"):
+        price = _coerce_float(item.get("price"))
+        volume = _coerce_float(item.get("volume") if item.get("volume") not in (None, "") else item.get("vol"))
+        amount = _coerce_float(item.get("amount"))
+        if price is None or volume in (None, 0.0):
+            continue
+        point: dict[str, object] = {"price": price, "volume": volume}
+        if amount is not None:
+            point["amount"] = amount
+        points.append(point)
+    return points
+
+
+@lru_cache(maxsize=10000)
+def _recent_avg_daily_volume(market: str, symbol: str, days: int = 5) -> float | None:
+    try:
+        from mootdx.reader import Reader
+        reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
+        daily = reader.daily(symbol=symbol)
+    except Exception:
+        return None
+    if daily is None or daily.empty or "volume" not in daily:
+        return None
+    values = [float(v) for v in daily.sort_index()["volume"].tail(days).tolist() if v == v]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+@lru_cache(maxsize=10000)
+def _has_recent_limit_up(market: str, symbol: str, days: int) -> bool:
+    try:
+        from mootdx.reader import Reader
+        reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
+        daily = reader.daily(symbol=symbol)
+    except Exception:
+        return False
+    if daily is None or daily.empty or "close" not in daily:
+        return False
+    closes = [float(v) for v in daily.sort_index()["close"].tail(days + 1).tolist() if v == v]
+    for previous, current in zip(closes, closes[1:]):
+        if previous > 0 and (current / previous - 1) * 100 >= 9.8:
+            return True
+    return False
+
+
+def _realtime_valuation_lookup() -> dict[tuple[str, str], dict[str, object]]:
+    lookup: dict[tuple[str, str], dict[str, object]] = {}
+    for group in load_industry_valuation_rows():
+        for member in group.get("member_valuation_rows") or []:
+            if not isinstance(member, dict):
+                continue
+            key = (_normalize_text(member.get("market")).lower(), _normalize_text(member.get("symbol")))
+            if key[0] and key[1]:
+                lookup[key] = member
+    return lookup
+
+
+def _parse_realtime_conditions(params: dict[str, str], defaults: dict[str, object]) -> dict[str, object]:
+    conditions = {
+        "gain_min_pct": _coerce_float(params.get("gain_min_pct")),
+        "gain_max_pct": _coerce_float(params.get("gain_max_pct")),
+        "limit_up_lookback_days": _coerce_int(params.get("limit_up_lookback_days")),
+        "min_volume_ratio": _coerce_float(params.get("min_volume_ratio")),
+        "max_market_cap_yi": _coerce_float(params.get("max_market_cap_yi")),
+        "turnover_min_pct": _coerce_float(params.get("turnover_min_pct")),
+        "turnover_max_pct": _coerce_float(params.get("turnover_max_pct")),
+        "intraday_above_vwap": _coerce_bool(params.get("intraday_above_vwap", defaults.get("intraday_above_vwap"))),
+        "intraday_above_vwap_min_ratio_pct": _coerce_float(params.get("intraday_above_vwap_min_ratio_pct")),
+        "intraday_vwap_max_breach_pct": _coerce_float(params.get("intraday_vwap_max_breach_pct")),
+        "current_above_open": _coerce_bool(params.get("current_above_open", defaults.get("current_above_open"))),
+    }
+    for key, default_value in defaults.items():
+        if conditions.get(key) is None:
+            conditions[key] = default_value
+    return conditions
+
+
+def _parse_realtime_condition_enabled(params: dict[str, str]) -> dict[str, bool]:
+    return {
+        "gain_pct": _coerce_bool(params.get("enable_gain_pct", True)),
+        "limit_up_lookback_days": _coerce_bool(params.get("enable_limit_up_lookback_days", True)),
+        "min_volume_ratio": _coerce_bool(params.get("enable_min_volume_ratio", True)),
+        "max_market_cap_yi": _coerce_bool(params.get("enable_max_market_cap_yi", True)),
+        "turnover_pct": _coerce_bool(params.get("enable_turnover_pct", True)),
+        "intraday_above_vwap": _coerce_bool(params.get("enable_intraday_above_vwap", True)),
+        "current_above_open": _coerce_bool(params.get("enable_current_above_open", True)),
+    }
+
+
+def _extract_intraday_points(quote: dict[str, object]) -> list[dict[str, object]]:
+    for key in ("intraday_points", "minute_points", "points"):
+        points = quote.get(key)
+        if isinstance(points, list):
+            return [point for point in points if isinstance(point, dict)]
+    for value in quote.values():
+        if isinstance(value, list) and value and all(isinstance(item, dict) for item in value):
+            if any("price" in item for item in value):
+                return list(value)
+    return []
+
+
+def _point_amount_volume(point: dict[str, object]) -> tuple[float | None, float | None]:
+    volume = _coerce_float(point.get("volume") if point.get("volume") not in (None, "") else point.get("vol"))
+    amount = _coerce_float(point.get("amount"))
+    price = _coerce_float(point.get("price"))
+    if amount is None and price is not None and volume not in (None, 0.0):
+        amount = price * float(volume) * 100.0
+    return amount, volume
+
+
+def _passes_intraday_vwap_condition(quote: dict[str, object], conditions: dict[str, object]) -> bool:
+    min_ratio_pct = _coerce_float(conditions.get("intraday_above_vwap_min_ratio_pct"))
+    max_breach_pct = _coerce_float(conditions.get("intraday_vwap_max_breach_pct"))
+    min_ratio_pct = 80.0 if min_ratio_pct is None else min_ratio_pct
+    max_breach_pct = 0.3 if max_breach_pct is None else max_breach_pct
+    breach_factor = 1.0 - max_breach_pct / 100.0
+
+    points = _extract_intraday_points(quote)
+    if points:
+        cumulative_amount = 0.0
+        cumulative_volume = 0.0
+        above_count = 0
+        valid_points = 0
+        for point in points:
+            price = _coerce_float(point.get("price"))
+            amount, volume = _point_amount_volume(point)
+            if price is None or amount is None or volume in (None, 0.0):
+                continue
+            cumulative_amount += float(amount)
+            cumulative_volume += float(volume)
+            if cumulative_volume <= 0:
+                continue
+            cumulative_vwap = cumulative_amount / (cumulative_volume * 100.0)
+            valid_points += 1
+            if price >= cumulative_vwap:
+                above_count += 1
+                continue
+            if price < cumulative_vwap * breach_factor:
+                return False
+        if valid_points <= 0:
+            return False
+        return (above_count / valid_points) * 100.0 >= min_ratio_pct
+
+    amount = _coerce_float(quote.get("amount"))
+    volume = _coerce_float(quote.get("volume"))
+    low = _coerce_float(quote.get("low"))
+    if amount is None or volume in (None, 0.0) or low is None:
+        return False
+    current_vwap = amount / (volume * 100.0)
+    return low >= current_vwap * breach_factor
+
+
+def _build_tail_session_matches(conditions: dict[str, object], condition_enabled: dict[str, bool]) -> list[dict[str, object]]:
+    security_lookup = {_security_key(row): row for row in load_security_rows()}
+    industry_lookup = {_security_key(row): row for row in load_industry_rows()}
+    valuation_lookup = _realtime_valuation_lookup()
+    snapshot = _load_financial_snapshot() or {}
+    score_rows = snapshot.get("scores") if isinstance(snapshot, dict) else {}
+    if not isinstance(score_rows, dict):
+        score_rows = {}
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup = _score_rank_lookups(
+        score_rows,
+        industry_lookup,
+    )
+    rows: list[dict[str, object]] = []
+    for quote in load_realtime_quote_rows():
+        market = _normalize_text(quote.get("market")).lower()
+        symbol = _normalize_text(quote.get("symbol"))
+        price = _coerce_float(quote.get("price"))
+        last_close = _coerce_float(quote.get("last_close"))
+        if not market or not symbol or price is None or last_close in (None, 0.0):
+            continue
+        gain_pct = round((price / float(last_close) - 1.0) * 100.0, 4)
+        if condition_enabled.get("gain_pct", True) and not _passes_min_max(gain_pct, min_value=_coerce_float(conditions.get("gain_min_pct")), max_value=_coerce_float(conditions.get("gain_max_pct"))):
+            continue
+
+        valuation = valuation_lookup.get((market, symbol)) or {}
+        market_cap_yi = _coerce_float(valuation.get("total_market_cap"))
+        if condition_enabled.get("max_market_cap_yi", True) and not _passes_min_max(market_cap_yi, max_value=_coerce_float(conditions.get("max_market_cap_yi"))):
+            continue
+
+        lookback_days = _coerce_int(conditions.get("limit_up_lookback_days")) or 20
+        if condition_enabled.get("limit_up_lookback_days", True) and not _has_recent_limit_up(market, symbol, lookback_days):
+            continue
+
+        volume = _coerce_float(quote.get("volume"))
+        volume_ratio = _coerce_float(quote.get("volume_ratio"))
+        if volume_ratio is None and volume is not None:
+            avg_volume = _recent_avg_daily_volume(market, symbol, 5)
+            if avg_volume and avg_volume > 0:
+                volume_ratio = volume / avg_volume
+        if condition_enabled.get("min_volume_ratio", True) and not _passes_min_max(volume_ratio, min_value=_coerce_float(conditions.get("min_volume_ratio"))):
+            continue
+
+        free_float_market_cap_yi = _coerce_float(valuation.get("free_float_market_cap")) or market_cap_yi
+        turnover_pct = None
+        if volume is not None and free_float_market_cap_yi and free_float_market_cap_yi > 0 and price > 0:
+            turnover_pct = (volume * 100.0 * price / (free_float_market_cap_yi * 100000000.0)) * 100.0
+        if condition_enabled.get("turnover_pct", True) and not _passes_min_max(turnover_pct, min_value=_coerce_float(conditions.get("turnover_min_pct")), max_value=_coerce_float(conditions.get("turnover_max_pct"))):
+            continue
+
+        if condition_enabled.get("intraday_above_vwap", True) and _coerce_bool(conditions.get("intraday_above_vwap")):
+            vwap_quote = quote
+            if not _extract_intraday_points(quote):
+                intraday_points = load_realtime_intraday_points(market, symbol)
+                if intraday_points:
+                    vwap_quote = {**quote, "intraday_points": intraday_points}
+            if not _passes_intraday_vwap_condition(vwap_quote, conditions):
+                continue
+
+        open_price = _coerce_float(quote.get("open"))
+        if condition_enabled.get("current_above_open", True) and _coerce_bool(conditions.get("current_above_open")):
+            if open_price is None or price <= open_price:
+                continue
+
+        matched_conditions = ["涨幅", "涨停基因", "量比", "市值", "换手率"]
+        if condition_enabled.get("intraday_above_vwap", True) and _coerce_bool(conditions.get("intraday_above_vwap")):
+            matched_conditions.extend(["全天在均价线上方", "大部分时间在均价线上方"])
+        if condition_enabled.get("current_above_open", True) and _coerce_bool(conditions.get("current_above_open")):
+            matched_conditions.append("当前价高于开盘价")
+
+        score_key = f"{market}:{symbol}"
+        score_entry = score_rows.get(score_key) if isinstance(score_rows.get(score_key), dict) else {}
+        security = security_lookup.get((market, symbol)) or {}
+        industry = industry_lookup.get((market, symbol)) or {}
+        industry_level_1 = (
+            _normalize_text(score_entry.get("industry_sw_level_1"))
+            or _normalize_text(industry.get("industry_level_1_name"))
+        )
+        industry_level_2 = (
+            _normalize_text(score_entry.get("industry_sw_level_2"))
+            or _normalize_text(industry.get("industry_level_2_name"))
+        )
+        rows.append({
+            "market": market,
+            "symbol": symbol,
+            "stock_name": _normalize_text(security.get("stock_name")) or symbol,
+            "current_price": round(price, 2),
+            "gain_pct": round(gain_pct, 2),
+            "volume_ratio": round(float(volume_ratio), 2) if volume_ratio is not None else None,
+            "market_cap_yi": round(float(market_cap_yi), 2) if market_cap_yi is not None else None,
+            "turnover_pct": round(float(turnover_pct), 2) if turnover_pct is not None else None,
+            "industry_level_1": industry_level_1,
+            "industry_level_2": industry_level_2,
+            "industry_total_score": _coerce_float(score_entry.get("ind_total_score")),
+            "industry_total_rank": _coerce_int(score_entry.get("industry_total_rank")) or industry_rank_lookup.get(score_key),
+            "industry_total_universe_size": (
+                _coerce_int(score_entry.get("industry_total_universe_size"))
+                or industry_universe_sizes.get(industry_level_2)
+            ),
+            "matched_conditions": matched_conditions,
+        })
+    rows.sort(key=lambda row: (-float(row.get("gain_pct") or 0.0), str(row.get("market", "")), str(row.get("symbol", ""))))
+    return rows
+
+
+def realtime_screener_response(params: dict[str, str]) -> dict[str, object]:
+    scenario = _normalize_text(params.get("scenario")) or "tail_session"
+    scenario_spec = _REALTIME_SCENARIO_DEFAULTS.get(scenario) or _REALTIME_SCENARIO_DEFAULTS["tail_session"]
+    defaults = dict(scenario_spec.get("conditions") or {})
+
+    refresh_seconds = _coerce_int(params.get("refresh_seconds"))
+    if refresh_seconds is None or refresh_seconds <= 0:
+        refresh_seconds = 30
+
+    conditions = _parse_realtime_conditions(params, defaults)
+    condition_enabled = _parse_realtime_condition_enabled(params)
+    monitor = _coerce_bool(params.get("monitor"))
+    rows = _build_tail_session_matches(conditions, condition_enabled) if monitor and scenario == "tail_session" else []
+
+    return {
+        "ok": True,
+        "scenario": scenario,
+        "scenario_label": str(scenario_spec.get("label") or scenario),
+        "refresh_seconds": refresh_seconds,
+        "conditions": conditions,
+        "condition_enabled": condition_enabled,
+        "rows": rows,
+        "data_note": "实时行情已接入通达信接口。" if monitor else "实时行情监控未启动，当前返回空结果占位。",
     }
 
 

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>实时选股</title>
+  <link rel="stylesheet" href="/styles.css?v=20260506-condition-toggle">
+</head>
+<body>
+  <main class="app-shell realtime-screener-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">REALTIME SCREENER TERMINAL</p>
+        <h1>实时选股</h1>
+      </div>
+      <div class="topbar-actions">
+        <a href="/stock-score.html" class="nav-link">财务评分</a>
+        <a href="/stock-screener.html" class="nav-link">股票筛选</a>
+        <a href="/rps-pool.html" class="nav-link">RPS</a>
+      </div>
+    </header>
+
+    <section class="search-card realtime-control-card">
+      <div class="search-card-header">
+        <div>
+          <p class="eyebrow">SCENARIO WORKBENCH</p>
+          <h2>方案与监控条件</h2>
+        </div>
+        <p id="realtime-status" class="search-meta">选择方案后加载条件，默认 30 秒刷新</p>
+      </div>
+
+      <div class="realtime-condition-grid realtime-scenario-row">
+        <label><span>方案</span><select id="realtime-scenario-select"><option value="tail_session">尾盘选股</option></select></label>
+        <label><span>刷新频率（秒）</span><input id="realtime-refresh-seconds" name="refresh_seconds" type="number" min="5" step="1" value="30"></label>
+        <button id="realtime-load-scenario" type="button" class="nav-link">加载方案</button>
+        <button id="realtime-start-monitor" type="button">启动监控</button>
+        <button id="realtime-stop-monitor" type="button" class="nav-link">停止监控</button>
+      </div>
+
+      <form id="realtime-condition-form" class="realtime-condition-grid" onsubmit="return false;" hidden>
+        <!-- 默认条件说明：涨幅 3% - 5%; 20天内有过涨停; 量比 > 1.4; 市值 < 200亿; 换手率 5% - 10%; 大部分时间在均价线上方; 允许短暂跌破不超过 0.3%; 当前价高于开盘价 -->
+        <label><span>涨幅 3% - 5%</span><select name="enable_gain_pct"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="gain_min_pct" type="number" step="0.1" value="3"><input name="gain_max_pct" type="number" step="0.1" value="5"></label>
+        <label><span>20天内有过涨停</span><select name="enable_limit_up_lookback_days"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="limit_up_lookback_days" type="number" min="1" step="1" value="20"></label>
+        <label><span>量比 &gt; 1.4</span><select name="enable_min_volume_ratio"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="min_volume_ratio" type="number" step="0.1" value="1.4"></label>
+        <label><span>市值 &lt; 200亿</span><select name="enable_max_market_cap_yi"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="max_market_cap_yi" type="number" step="1" value="200"></label>
+        <label><span>换手率 5% - 10%</span><select name="enable_turnover_pct"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="turnover_min_pct" type="number" step="0.1" value="5"><input name="turnover_max_pct" type="number" step="0.1" value="10"></label>
+        <label class="realtime-checkbox"><span>大部分时间在均价线上方</span><select name="enable_intraday_above_vwap"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="intraday_above_vwap" type="checkbox" checked><input name="intraday_above_vwap_min_ratio_pct" type="number" min="0" max="100" step="1" value="80"></label>
+        <label><span>允许短暂跌破不超过 0.3%</span><input name="intraday_vwap_max_breach_pct" type="number" min="0" step="0.1" value="0.3"></label>
+        <label class="realtime-checkbox"><span>当前价高于开盘价</span><select name="enable_current_above_open"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="current_above_open" type="checkbox" checked></label>
+      </form>
+    </section>
+
+    <section class="profile-card realtime-results-card">
+      <div class="search-card-header">
+        <div>
+          <p class="eyebrow">REALTIME MATCHES</p>
+          <h2>满足条件的股票 <span id="realtime-match-count" class="pool-badge">0</span></h2>
+        </div>
+        <p id="realtime-page-info" class="search-meta">监控未启动</p>
+      </div>
+      <div class="realtime-results-wrap">
+        <table class="sub-table realtime-table">
+          <thead>
+            <tr>
+              <th>股票名称</th>
+              <th>现价</th>
+              <th>涨幅</th>
+              <th>量比</th>
+              <th>市值</th>
+              <th>换手率</th>
+              <th>行业信息</th>
+              <th>行业内总分</th>
+              <th>行业排名</th>
+            </tr>
+          </thead>
+          <tbody id="realtime-results-tbody">
+            <tr><td colspan="9" class="stock-score-empty-row">启动监控后显示实时命中股票</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="realtime-kline-section" class="kline-section terminal-panel hidden">
+      <div class="kline-header terminal-panel-header">
+        <div>
+          <p class="eyebrow">KLINE CHART</p>
+          <h2 id="realtime-kline-title">—</h2>
+        </div>
+        <div class="kline-controls">
+          <div id="realtime-preset-controls" class="zoom-controls" role="group" aria-label="Kline preset windows">
+            <button type="button" class="zoom-button" data-preset="20">20D</button>
+            <button type="button" class="zoom-button active" data-preset="60">60D</button>
+            <button type="button" class="zoom-button" data-preset="120">120D</button>
+            <button type="button" class="zoom-button" data-preset="250">250D</button>
+            <button type="button" class="zoom-button" data-preset="-1">ALL</button>
+          </div>
+          <span id="realtime-kline-range-label" class="kline-range-label"></span>
+        </div>
+      </div>
+      <div class="kline-chart-wrap">
+        <svg id="realtime-kline-svg" class="kline-svg"></svg>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/realtime-screener.js?v=20260506-industry-columns"></script>
+</body>
+</html>

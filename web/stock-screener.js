@@ -1,14 +1,18 @@
 import { KlineChart } from './kline-chart.js';
 
 const PAGE_SIZE = 50;
+const STRATEGY_PRESETS = {
+  rps_standard_launch: {
+    strategy: 'rps_standard_launch',
+  },
+  rps_attack: {
+    strategy: 'rps_attack',
+  },
+};
 let currentPage = 1;
 let currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
 let klineChart = null;
-let currentKlinePreset = 30;
-let currentKlineSymbol = '';
-let currentKlineName = '';
-let currentKlineBars = [];
-let currentKlineRpsHistory = [];
+let currentKlinePreset = 60;
 let industryHierarchy = [];
 
 const form = document.getElementById('stock-screener-filter-form');
@@ -20,12 +24,9 @@ const prevBtn = document.getElementById('stock-screener-prev');
 const nextBtn = document.getElementById('stock-screener-next');
 const level1El = document.getElementById('stock-screener-level1');
 const level2El = document.getElementById('stock-screener-level2');
-const klineControlsEl = document.getElementById('stock-screener-kline-controls');
-const klineRangeEl = document.getElementById('stock-screener-kline-range');
-const klineLatestEl = document.getElementById('stock-screener-kline-latest');
-const klineTitleEl = document.getElementById('stock-screener-kline-title');
-const klineSectionEl = document.getElementById('stock-screener-kline-section');
-const klineSvgEl = document.getElementById('stock-screener-kline-svg');
+const filterToggleEl = document.getElementById('stock-screener-filter-toggle');
+const strategyButtonsEl = document.getElementById('stock-screener-strategy-buttons');
+const strategyInputEl = form?.elements?.namedItem('strategy');
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -54,19 +55,6 @@ function formatPercentile(value) {
 function formatMarketCapYi(value) {
   if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
   return `${Number(value).toFixed(1)}亿`;
-}
-
-function formatVolume(value) {
-  if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
-  const volume = Number(value);
-  if (Math.abs(volume) >= 1_0000_0000) return `${(volume / 1_0000_0000).toFixed(2)}亿`;
-  if (Math.abs(volume) >= 1_0000) return `${(volume / 1_0000).toFixed(2)}万`;
-  return String(Math.round(volume));
-}
-
-function formatRpsValue(value) {
-  if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
-  return Number(value).toFixed(1);
 }
 
 function buildParams(page = currentPage) {
@@ -115,9 +103,54 @@ function populateLevel2(level1Name) {
   });
 }
 
+function toggleScreenerFilters() {
+  const willExpand = form.hidden;
+  form.hidden = !willExpand;
+  filterToggleEl.setAttribute('aria-expanded', String(willExpand));
+  filterToggleEl.textContent = willExpand ? '收起筛选' : '展开筛选';
+}
+
+function setActiveStrategyButton(strategy) {
+  strategyButtonsEl?.querySelectorAll('[data-strategy]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.strategy === strategy);
+  });
+}
+
+function clearManualFilters() {
+  form.reset();
+  populateLevel2('');
+}
+
+function collapseScreenerFiltersAfterStrategy() {
+  form.hidden = true;
+  filterToggleEl.setAttribute('aria-expanded', 'false');
+  filterToggleEl.textContent = '展开筛选';
+}
+
+function applyStrategyPreset(strategy) {
+  const preset = STRATEGY_PRESETS[strategy];
+  if (!preset) return;
+  clearManualFilters();
+  if (strategyInputEl) {
+    strategyInputEl.value = preset.strategy;
+  }
+  setActiveStrategyButton(preset.strategy);
+  collapseScreenerFiltersAfterStrategy();
+  currentPage = 1;
+  runScreener(1);
+}
+
+function renderScreenerLoadingState() {
+  currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
+  countEl.textContent = '…';
+  pageInfoEl.textContent = '正在筛选...';
+  tbody.innerHTML = '<tr><td colspan="14" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
+}
+
 async function runScreener(page = 1) {
   currentPage = page;
   statusEl.textContent = '正在筛选...';
+  renderScreenerLoadingState();
   const params = buildParams(page);
   try {
     const response = await fetch(`/api/stock-screener?${params.toString()}`);
@@ -172,101 +205,88 @@ function renderPagination(payload) {
   nextBtn.disabled = page >= totalPages;
 }
 
-function renderKlineRange(range) {
-  if (!range?.start || !range?.end) {
-    klineRangeEl.textContent = '区间：待加载';
-    return;
-  }
-  klineRangeEl.textContent = `区间：${range.start} 至 ${range.end}`;
-}
-
-function renderKlineLatestInfo(bar, rpsRow) {
-  if (!bar) {
-    klineLatestEl.textContent = '最新：待加载';
-    return;
-  }
-  const price = formatNumber(bar.close ?? bar.price, 2);
-  const volume = formatVolume(bar.volume);
-  const suffix = [
-    `RPS20 ${formatRpsValue(rpsRow?.rps_20)}`,
-    `RPS50 ${formatRpsValue(rpsRow?.rps_50)}`,
-    `RPS120 ${formatRpsValue(rpsRow?.rps_120)}`,
-    `RPS250 ${formatRpsValue(rpsRow?.rps_250)}`,
-  ].join(' · ');
-  klineLatestEl.textContent = `最新：${bar.trading_day || '—'} · 收盘 ${price} · 成交量 ${volume} · ${suffix}`;
-}
-
-function updateKlinePresetButtons() {
-  klineControlsEl.querySelectorAll('[data-kline-preset]').forEach((button) => {
-    const preset = Number(button.dataset.klinePreset);
-    button.classList.toggle('active', preset === currentKlinePreset);
-  });
-}
-
-function refreshKlineStatus() {
-  if (!klineChart || !currentKlineBars.length) {
-    renderKlineRange(null);
-    renderKlineLatestInfo(null, null);
-    return;
-  }
-  renderKlineRange(klineChart.getVisibleRange());
-  const latestBar = currentKlineBars[currentKlineBars.length - 1] || null;
-  const rpsByDate = new Map(currentKlineRpsHistory.map((item) => [item.trading_day, item]));
-  const latestRps = latestBar ? rpsByDate.get(latestBar.trading_day) : null;
-  renderKlineLatestInfo(latestBar, latestRps);
-}
-
 async function loadScreenerKline(row) {
   const symbol = row?.dataset?.symbol;
   const name = row?.dataset?.name || symbol;
   if (!symbol) return;
   document.querySelectorAll('.stock-screener-row').forEach((tr) => tr.classList.toggle('row-selected', tr === row));
-  currentKlineSymbol = symbol;
-  currentKlineName = name;
-  klineSectionEl.hidden = false;
-  klineTitleEl.textContent = `${name} (${symbol}) · K线加载中...`;
-  renderKlineRange(null);
-  renderKlineLatestInfo(null, null);
-  updateKlinePresetButtons();
+
+  document.getElementById('stock-screener-kline-section').classList.remove('hidden');
+  document.getElementById('stock-screener-kline-title').textContent = `${symbol} — 加载中…`;
+
   try {
-    const [klineResponse, rpsResponse] = await Promise.all([
-      fetch(`/api/stock-kline?symbol=${encodeURIComponent(symbol)}&limit=5000`),
+    const [klineRes, rpsRes] = await Promise.all([
+      fetch(`/api/stock-kline?symbol=${encodeURIComponent(symbol)}&limit=300`),
       fetch(`/api/stock-rps-history?symbol=${encodeURIComponent(symbol)}`),
     ]);
-    const kline = await klineResponse.json();
-    const rps = await rpsResponse.json();
-    if (!kline.ok) throw new Error(kline?.error?.message || 'K线数据不可用');
-    if (!klineChart) {
-      klineChart = new KlineChart(klineSvgEl);
-      klineChart.onViewportChange = () => {
-        renderKlineRange(klineChart.getVisibleRange());
-        updateKlinePresetButtons();
-      };
+    const klineJson = await klineRes.json();
+    const rpsJson = await rpsRes.json();
+
+    if (!klineJson.ok) {
+      document.getElementById('stock-screener-kline-title').textContent = `${symbol} — 数据不可用`;
+      return;
     }
-    currentKlineBars = kline.bars || [];
-    currentKlineRpsHistory = (rps.history || []).map((item) => ({
-      trading_day: item.trading_day,
-      rps_20: item.rps_20,
-      rps_50: item.rps_50,
-      rps_120: item.rps_120,
-      rps_250: item.rps_250,
+
+    const bars = klineJson.bars || [];
+    const rpsHistory = (rpsJson.history || []).map(h => ({
+      trading_day: h.trading_day,
+      rps_20: h.rps_20,
+      rps_50: h.rps_50,
+      rps_120: h.rps_120,
+      rps_250: h.rps_250,
     }));
-    klineChart.load(currentKlineBars, currentKlineRpsHistory, currentKlinePreset);
-    refreshKlineStatus();
-    updateKlinePresetButtons();
-    klineTitleEl.textContent = `${name} (${symbol}) · K线趋势`;
-  } catch (error) {
-    currentKlineBars = [];
-    currentKlineRpsHistory = [];
-    klineTitleEl.textContent = `${name} (${symbol}) · K线加载失败：${error.message}`;
-    renderKlineRange(null);
-    renderKlineLatestInfo(null, null);
+
+    const svg = document.getElementById('stock-screener-kline-svg');
+    if (!klineChart) {
+      klineChart = createScreenerKlineChart(svg);
+    }
+
+    klineChart.load(bars, rpsHistory, currentKlinePreset);
+    const stockName = bars[0]?.name || name || symbol;
+    document.getElementById('stock-screener-kline-title').textContent = `${symbol} ${stockName}`;
+    const range = klineChart.getVisibleRange();
+    document.getElementById('stock-screener-kline-range-label').textContent =
+      `${range.start} ~ ${range.end}`;
+  } catch (e) {
+    console.error('loadScreenerKline error:', e);
+    document.getElementById('stock-screener-kline-title').textContent = `${symbol} — 加载失败`;
   }
 }
 
+function createScreenerKlineChart(svg) {
+  const chart = new KlineChart(svg);
+  chart.onViewportChange = () => {
+    const range = chart.getVisibleRange();
+    document.getElementById('stock-screener-kline-range-label').textContent =
+      `${range.start} ~ ${range.end}`;
+  };
+  return chart;
+}
+
+function bindScreenerChartPresetEvents() {
+  const container = document.getElementById('stock-screener-preset-controls');
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-preset]');
+    if (!btn) return;
+    const preset = parseInt(btn.dataset.preset, 10);
+    container.querySelectorAll('.zoom-button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentKlinePreset = preset;
+    if (klineChart && klineChart.bars.length) {
+      klineChart.setPreset(preset);
+      const range = klineChart.getVisibleRange();
+      document.getElementById('stock-screener-kline-range-label').textContent =
+        `${range.start} ~ ${range.end}`;
+    }
+  });
+}
+
 function resetFilters() {
-  form.reset();
-  populateLevel2('');
+  clearManualFilters();
+  if (strategyInputEl) {
+    strategyInputEl.value = '';
+  }
+  setActiveStrategyButton('');
   currentPage = 1;
   runScreener(1);
 }
@@ -276,24 +296,18 @@ level1El.addEventListener('change', (event) => {
 });
 document.getElementById('stock-screener-apply-btn').addEventListener('click', () => runScreener(1));
 document.getElementById('stock-screener-reset-btn').addEventListener('click', resetFilters);
+filterToggleEl.addEventListener('click', toggleScreenerFilters);
+strategyButtonsEl?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-strategy]');
+  if (!button) return;
+  applyStrategyPreset(button.dataset.strategy);
+});
 prevBtn.addEventListener('click', () => {
   if (currentPage > 1) runScreener(currentPage - 1);
 });
 nextBtn.addEventListener('click', () => {
   const totalPages = currentPayload.total_pages || 1;
   if (currentPage < totalPages) runScreener(currentPage + 1);
-});
-klineControlsEl.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-kline-preset]');
-  if (!button) return;
-  currentKlinePreset = Number(button.dataset.klinePreset);
-  updateKlinePresetButtons();
-  if (!klineChart || !currentKlineBars.length) return;
-  klineChart.setPreset(currentKlinePreset);
-  refreshKlineStatus();
-  if (currentKlineSymbol) {
-    klineTitleEl.textContent = `${currentKlineName} (${currentKlineSymbol}) · K线趋势`;
-  }
 });
 tbody.addEventListener('click', (event) => {
   const row = event.target.closest('.stock-screener-row');
@@ -307,7 +321,5 @@ tbody.addEventListener('keydown', (event) => {
   loadScreenerKline(row);
 });
 
-updateKlinePresetButtons();
-renderKlineRange(null);
-renderKlineLatestInfo(null, null);
+bindScreenerChartPresetEvents();
 loadIndustryHierarchy().then(() => runScreener(1));
