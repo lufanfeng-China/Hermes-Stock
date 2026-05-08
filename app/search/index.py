@@ -1298,6 +1298,75 @@ def evaluate_rps_attack_signal(
     }
 
 
+def evaluate_rps_pullback_signal(
+    latest_rps: dict[str, object],
+    ref3_rps: dict[str, object],
+    ref5_rps: dict[str, object],
+    bars: list[dict[str, object]],
+) -> dict[str, object]:
+    def moving_average(values: list[float | None], period: int, end_index: int) -> float | None:
+        start_index = end_index - period + 1
+        if start_index < 0:
+            return None
+        window = values[start_index : end_index + 1]
+        if any(value is None for value in window):
+            return None
+        return sum(float(value) for value in window) / period
+
+    opens = [_coerce_float(bar.get("open")) for bar in bars]
+    highs = [_coerce_float(bar.get("high")) for bar in bars]
+    lows = [_coerce_float(bar.get("low")) for bar in bars]
+    closes = [_coerce_float(bar.get("close")) for bar in bars]
+    volumes = [_coerce_float(bar.get("volume")) for bar in bars]
+    latest_index = len(bars) - 1
+
+    latest_open = opens[latest_index] if latest_index >= 0 else None
+    latest_high_ref1 = highs[latest_index - 1] if latest_index >= 1 else None
+    latest_low5_window = lows[max(0, latest_index - 4) : latest_index + 1]
+    latest_close = closes[latest_index] if latest_index >= 0 else None
+    latest_volume = volumes[latest_index] if latest_index >= 0 else None
+
+    ma20 = moving_average(closes, 20, latest_index) if latest_index >= 0 else None
+    ma50 = moving_average(closes, 50, latest_index) if latest_index >= 0 else None
+    ma120 = moving_average(closes, 120, latest_index) if latest_index >= 0 else None
+    ma250 = moving_average(closes, 250, latest_index) if latest_index >= 0 else None
+    ma50_ref5 = moving_average(closes, 50, latest_index - 5) if latest_index >= 5 else None
+    ma120_ref10 = moving_average(closes, 120, latest_index - 10) if latest_index >= 10 else None
+    vol5 = moving_average(volumes, 5, latest_index) if latest_index >= 0 else None
+    llv_low5 = min((float(value) for value in latest_low5_window if value is not None), default=None)
+
+    rps20 = _coerce_float(latest_rps.get("rps_20"))
+    rps50 = _coerce_float(latest_rps.get("rps_50"))
+    rps120 = _coerce_float(latest_rps.get("rps_120"))
+    rps250 = _coerce_float(latest_rps.get("rps_250"))
+    ref3_rps20 = _coerce_float(ref3_rps.get("rps_20"))
+    ref5_rps50 = _coerce_float(ref5_rps.get("rps_50"))
+
+    conditions = {
+        "rps_base": all(value is not None for value in (rps20, rps50, rps120, rps250))
+        and bool(rps250 >= 80 and rps120 >= 85 and rps50 >= 88 and rps20 >= 92),
+        "rps_structure": all(value is not None for value in (rps20, rps50, rps120, rps250))
+        and bool(rps20 > rps50 and rps50 >= rps120 - 3 and rps120 >= rps250 - 5),
+        "rps_turning_point": all(value is not None for value in (rps20, rps50, ref3_rps20, ref5_rps50))
+        and bool(rps20 > ref3_rps20 and rps50 > ref5_rps50),
+        "trend_quality": all(value is not None for value in (latest_close, ma20, ma50, ma120, ma250))
+        and bool(latest_close > ma20 and ma20 > ma50 and ma50 > ma120 and ma120 >= ma250 * 0.98),
+        "midterm_up": all(value is not None for value in (ma50, ma50_ref5, ma120, ma120_ref10))
+        and bool(ma50 > ma50_ref5 and ma120 >= ma120_ref10),
+        "pullback_touched": llv_low5 is not None and ma20 is not None and bool(llv_low5 <= ma20 * 1.02),
+        "trend_intact": llv_low5 is not None and ma50 is not None and bool(llv_low5 >= ma50 * 0.98),
+        "renewed_strength": all(value is not None for value in (latest_close, ma20, latest_high_ref1))
+        and bool(latest_close > ma20 and latest_close > latest_high_ref1),
+        "volume_confirmed": latest_volume is not None and vol5 is not None and bool(latest_volume > 1.2 * vol5),
+        "bullish_candle": latest_close is not None and latest_open is not None and bool(latest_close > latest_open),
+        "not_overheated": latest_close is not None and ma20 not in (None, 0.0) and bool(latest_close / ma20 < 1.08),
+    }
+    return {
+        "passed": all(conditions.values()),
+        "conditions": conditions,
+    }
+
+
 def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     snapshot = _load_financial_snapshot() or {}
     score_rows = snapshot.get("scores") or {}
@@ -1516,6 +1585,19 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         expected = _normalize_text(params.get(param_key))
         if not expected:
             continue
+        if param_key == "industry_temperature_label":
+            expected_values = {
+                value.strip()
+                for value in expected.split(",")
+                if value.strip()
+            }
+            if not expected_values:
+                continue
+            filtered = [
+                row for row in filtered
+                if _normalize_text(row.get(field_name)) in expected_values
+            ]
+            continue
         filtered = [row for row in filtered if _matches_keyword_filter(row.get(field_name), expected)]
 
     for param_key, (field_name, bound) in numeric_field_filters.items():
@@ -1530,6 +1612,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     for param_key, raw_value in params.items():
         threshold = _coerce_float(raw_value)
         if threshold is None:
+            continue
+        if param_key in {"min_dim_operating", "max_dim_operating"}:
             continue
         if param_key.startswith("min_dim_"):
             dim_key = param_key[8:]
@@ -1627,6 +1711,10 @@ _REALTIME_SCENARIO_DEFAULTS: dict[str, dict[str, object]] = {
             "intraday_vwap_max_breach_pct": 0.3,
             "current_above_open": True,
         },
+    },
+    "rps_pullback": {
+        "label": "RPS回踩",
+        "conditions": {},
     },
 }
 
@@ -1940,19 +2028,57 @@ def _build_tail_session_matches(conditions: dict[str, object], condition_enabled
     return rows
 
 
+def _build_rps_pullback_matches() -> list[dict[str, object]]:
+    payload = build_stock_screener_response({"strategy": "rps_pullback", "page": "1", "page_size": "200"})
+    rows: list[dict[str, object]] = []
+    for row in payload.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        rows.append({
+            "market": row.get("market"),
+            "symbol": row.get("symbol"),
+            "stock_name": row.get("stock_name"),
+            "current_price": row.get("current_price"),
+            "gain_pct": row.get("gain_pct"),
+            "volume_ratio": row.get("volume_ratio"),
+            "market_cap_yi": row.get("total_market_cap"),
+            "turnover_pct": row.get("turnover_pct"),
+            "industry_level_1": row.get("industry_level_1"),
+            "industry_level_2": row.get("industry_level_2"),
+            "industry_total_score": row.get("industry_total_score"),
+            "industry_total_rank": row.get("industry_total_rank"),
+            "industry_total_universe_size": row.get("industry_total_universe_size"),
+            "rps_20": row.get("rps_20"),
+            "rps_50": row.get("rps_50"),
+            "rps_120": row.get("rps_120"),
+            "rps_250": row.get("rps_250"),
+            "strategy": "rps_pullback",
+            "strategy_label": row.get("strategy_label") or "RPS回踩",
+            "matched_conditions": ["RPS回踩"],
+        })
+    return rows
+
+
 def realtime_screener_response(params: dict[str, str]) -> dict[str, object]:
     scenario = _normalize_text(params.get("scenario")) or "tail_session"
     scenario_spec = _REALTIME_SCENARIO_DEFAULTS.get(scenario) or _REALTIME_SCENARIO_DEFAULTS["tail_session"]
+    if scenario not in _REALTIME_SCENARIO_DEFAULTS:
+        scenario = "tail_session"
     defaults = dict(scenario_spec.get("conditions") or {})
 
     refresh_seconds = _coerce_int(params.get("refresh_seconds"))
     if refresh_seconds is None or refresh_seconds <= 0:
         refresh_seconds = 30
 
-    conditions = _parse_realtime_conditions(params, defaults)
-    condition_enabled = _parse_realtime_condition_enabled(params)
     monitor = _coerce_bool(params.get("monitor"))
-    rows = _build_tail_session_matches(conditions, condition_enabled) if monitor and scenario == "tail_session" else []
+    if scenario == "rps_pullback":
+        conditions: dict[str, object] = {}
+        condition_enabled: dict[str, bool] = {}
+        rows = _build_rps_pullback_matches() if monitor else []
+    else:
+        conditions = _parse_realtime_conditions(params, defaults)
+        condition_enabled = _parse_realtime_condition_enabled(params)
+        rows = _build_tail_session_matches(conditions, condition_enabled) if monitor else []
 
     return {
         "ok": True,

@@ -27,6 +27,7 @@ const level2El = document.getElementById('stock-screener-level2');
 const filterToggleEl = document.getElementById('stock-screener-filter-toggle');
 const strategyButtonsEl = document.getElementById('stock-screener-strategy-buttons');
 const strategyInputEl = form?.elements?.namedItem('strategy');
+const temperatureSelectEl = document.getElementById('stock-screener-temperature');
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -57,12 +58,26 @@ function formatMarketCapYi(value) {
   return `${Number(value).toFixed(1)}亿`;
 }
 
+function collectMultiSelectValues(selectEl) {
+  if (!selectEl?.multiple) return [];
+  return [...selectEl.selectedOptions]
+    .map((option) => String(option.value || '').trim())
+    .filter(Boolean);
+}
+
 function buildParams(page = currentPage) {
   const params = new URLSearchParams();
   const data = new FormData(form);
   for (const [key, value] of data.entries()) {
+    if (key === 'industry_temperature_label' && temperatureSelectEl?.multiple) {
+      continue;
+    }
     const text = String(value || '').trim();
     if (text) params.set(key, text);
+  }
+  const temperatureLabels = collectMultiSelectValues(temperatureSelectEl);
+  if (temperatureLabels.length) {
+    params.set('industry_temperature_label', temperatureLabels.join(','));
   }
   params.set('page', String(page));
   params.set('page_size', String(PAGE_SIZE));
@@ -118,6 +133,11 @@ function setActiveStrategyButton(strategy) {
 
 function clearManualFilters() {
   form.reset();
+  if (temperatureSelectEl?.multiple) {
+    [...temperatureSelectEl.options].forEach((option, index) => {
+      option.selected = index === 0;
+    });
+  }
   populateLevel2('');
 }
 

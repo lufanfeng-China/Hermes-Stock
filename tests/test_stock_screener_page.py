@@ -17,7 +17,10 @@ class StockScreenerPageTests(unittest.TestCase):
         self.assertIn('id="stock-screener-pagination"', html)
         self.assertIn('id="stock-screener-kline-section"', html)
         self.assertIn('id="stock-screener-kline-svg"', html)
-        self.assertIn('src="/stock-screener.js"', html)
+        self.assertIn('src="/stock-screener.js', html)
+        self.assertNotIn("运营效率", html)
+        self.assertNotIn('name="min_dim_operating"', html)
+        self.assertIn('select id="stock-screener-temperature" name="industry_temperature_label" multiple', html)
 
         for label in (
             "全市场总分",
@@ -139,6 +142,9 @@ class StockScreenerPageTests(unittest.TestCase):
         self.assertIn("total_market_cap", script)
         self.assertIn("market_total_rank", script)
         self.assertIn("industry_temperature_label", script)
+        self.assertIn("collectMultiSelectValues", script)
+        self.assertIn("industry_temperature_label", script)
+        self.assertIn("params.set(key, text)", script)
         self.assertIn("primary_percentile", script)
         self.assertIn('createScreenerKlineChart', script)
         self.assertIn('bindScreenerChartPresetEvents', script)

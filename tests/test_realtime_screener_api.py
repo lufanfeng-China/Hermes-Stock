@@ -48,6 +48,78 @@ class RealtimeScreenerApiTests(unittest.TestCase):
         self.assertEqual([], payload["rows"])
         self.assertIn("实时行情", payload["data_note"])
 
+    def test_realtime_screener_response_returns_rps_pullback_defaults(self) -> None:
+        from app.search import index
+
+        payload = index.realtime_screener_response(
+            {
+                "scenario": "rps_pullback",
+                "refresh_seconds": "30",
+            }
+        )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual("rps_pullback", payload["scenario"])
+        self.assertEqual("RPS回踩", payload["scenario_label"])
+        self.assertEqual(30, payload["refresh_seconds"])
+        self.assertEqual({}, payload["conditions"])
+        self.assertEqual({}, payload["condition_enabled"])
+        self.assertEqual([], payload["rows"])
+
+    def test_realtime_screener_response_maps_rps_pullback_rows_from_stock_screener_strategy(self) -> None:
+        from app.search import index
+
+        strategy_payload = {
+            "rows": [
+                {
+                    "market": "sh",
+                    "symbol": "600001",
+                    "stock_name": "回踩命中",
+                    "current_price": 18.88,
+                    "industry_level_1": "电子",
+                    "industry_level_2": "半导体",
+                    "industry_total_score": 91.2,
+                    "industry_total_rank": 3,
+                    "industry_total_universe_size": 41,
+                    "rps_20": 96.0,
+                    "rps_50": 91.0,
+                    "rps_120": 87.0,
+                    "rps_250": 82.0,
+                    "strategy": "rps_pullback",
+                    "strategy_label": "RPS回踩",
+                }
+            ]
+        }
+
+        with mock.patch.object(index, "build_stock_screener_response", return_value=strategy_payload) as build_response:
+            payload = index.realtime_screener_response(
+                {
+                    "scenario": "rps_pullback",
+                    "monitor": "true",
+                    "refresh_seconds": "15",
+                }
+            )
+
+        build_response.assert_called_once_with({"strategy": "rps_pullback", "page": "1", "page_size": "200"})
+        self.assertTrue(payload["ok"])
+        self.assertEqual("rps_pullback", payload["scenario"])
+        self.assertEqual("RPS回踩", payload["scenario_label"])
+        self.assertEqual(1, len(payload["rows"]))
+        row = payload["rows"][0]
+        self.assertEqual("sh", row["market"])
+        self.assertEqual("600001", row["symbol"])
+        self.assertEqual("回踩命中", row["stock_name"])
+        self.assertEqual(18.88, row["current_price"])
+        self.assertEqual("电子", row["industry_level_1"])
+        self.assertEqual("半导体", row["industry_level_2"])
+        self.assertEqual(91.2, row["industry_total_score"])
+        self.assertEqual(3, row["industry_total_rank"])
+        self.assertEqual(41, row["industry_total_universe_size"])
+        self.assertEqual(96.0, row["rps_20"])
+        self.assertEqual(91.0, row["rps_50"])
+        self.assertEqual(87.0, row["rps_120"])
+        self.assertEqual(82.0, row["rps_250"])
+
     def test_realtime_screener_response_filters_live_tail_session_quotes(self) -> None:
         from app.search import index
 

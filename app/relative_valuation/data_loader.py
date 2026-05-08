@@ -27,6 +27,14 @@ def compute_ttm_metric_from_rows(
     text = str(period or "").strip()
     if not text:
         return None
+    if text.endswith("A"):
+        return current_value
+    is_quarterly_cumulative = len(text) >= 6 and text[:4].isdigit() and text[4] == "Q" and text[5] in {"1", "2", "3"}
+    if is_quarterly_cumulative:
+        prev_annual_value = _pick_from_row(prev_annual_row, field_name)
+        prev_same_value = _pick_from_row(prev_same_row, field_name)
+        if current_value is not None and prev_annual_value is not None and prev_same_value is not None:
+            return current_value + prev_annual_value - prev_same_value
     if isinstance(previous_quarter_rows, (list, tuple)):
         prior_values: list[float] = []
         for row in previous_quarter_rows:
@@ -36,21 +44,32 @@ def compute_ttm_metric_from_rows(
             prior_values.append(value)
             if len(prior_values) >= 3:
                 break
-        if text.endswith("A"):
-            if current_value is not None and len(prior_values) >= 3:
-                return current_value + sum(prior_values[:3])
-            return current_value
         if current_value is not None and len(prior_values) >= 3:
             return current_value + sum(prior_values[:3])
-    if text.endswith("A"):
-        return current_value
-    if not (len(text) >= 6 and text[:4].isdigit() and text[4] == "Q" and text[5] in {"1", "2", "3"}):
-        return current_value
-    prev_annual_value = _pick_from_row(prev_annual_row, field_name)
-    prev_same_value = _pick_from_row(prev_same_row, field_name)
-    if current_value is not None and prev_annual_value is not None and prev_same_value is not None:
-        return current_value + prev_annual_value - prev_same_value
     return current_value
+
+
+def compute_ttm_metric_from_rows_by_fields(
+    *,
+    period: str,
+    field_names: list[str] | tuple[str, ...],
+    current_row,
+    previous_quarter_rows: list[object] | tuple[object, ...] | None = None,
+    prev_annual_row=None,
+    prev_same_row=None,
+) -> float | None:
+    for field_name in field_names:
+        value = compute_ttm_metric_from_rows(
+            period=period,
+            field_name=field_name,
+            current_row=current_row,
+            previous_quarter_rows=previous_quarter_rows,
+            prev_annual_row=prev_annual_row,
+            prev_same_row=prev_same_row,
+        )
+        if value is not None:
+            return value
+    return None
 
 
 def pick_free_float_shares(financial_row) -> float | None:
@@ -123,9 +142,9 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         prev_annual_row=prev_annual_row,
         prev_same_row=prev_same_row,
     ))
-    ttm_revenue = normalize_amount_to_yi(compute_ttm_metric_from_rows(
+    ttm_revenue = normalize_amount_to_yi(compute_ttm_metric_from_rows_by_fields(
         period=latest_period,
-        field_name="营业收入",
+        field_names=("其中：营业收入", "营业收入"),
         current_row=current_row,
         previous_quarter_rows=previous_quarter_rows,
         prev_annual_row=prev_annual_row,

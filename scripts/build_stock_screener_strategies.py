@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.search.index import (
     DEFAULT_DATASET_DIR,
     evaluate_rps_attack_signal,
+    evaluate_rps_pullback_signal,
     evaluate_rps_standard_launch_signal,
     load_rps_rows,
 )
@@ -27,12 +28,16 @@ DEFAULT_TDX_DIR = "/mnt/c/new_tdx64"
 DEFAULT_OUTPUT = DEFAULT_DATASET_DIR / "dataset_stock_screener_strategies_current.json"
 STRATEGY_STANDARD = "rps_standard_launch"
 STRATEGY_ATTACK = "rps_attack"
+STRATEGY_PULLBACK = "rps_pullback"
 STRATEGY_METADATA = {
     STRATEGY_STANDARD: {
         "label": "RPS标准",
     },
     STRATEGY_ATTACK: {
         "label": "RPS进攻",
+    },
+    STRATEGY_PULLBACK: {
+        "label": "RPS回踩",
     },
 }
 
@@ -136,13 +141,15 @@ def _build_signal_context(
         context["ref3_return50"][symbol] = _return_pct(closes, latest_index - 3, 50)
 
         if symbol in candidate_symbols:
-            tail = daily.tail(130)
+            tail = daily.tail(270)
             bars: list[dict[str, float]] = []
             for _index, bar in tail.iterrows():
                 bars.append(
                     {
+                        "open": float(bar["open"]),
                         "close": float(bar["close"]),
                         "high": float(bar["high"]),
+                        "low": float(bar["low"]),
                         "volume": float(bar["volume"]),
                     }
                 )
@@ -228,6 +235,43 @@ def build_rps_attack_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, An
     return results
 
 
+def build_rps_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    rps_rows = load_rps_rows()
+    candidates = _latest_rps_candidates(rps_rows)
+    candidate_symbols = {str(row.get("symbol", "")).strip() for row in candidates}
+    rps_by_symbol = {str(row.get("symbol", "")).strip(): row for row in rps_rows if str(row.get("symbol", "")).strip()}
+    signal_context = _build_signal_context(rps_rows, tdxdir=tdxdir, candidate_symbols=candidate_symbols)
+    ref3_rps20 = _rps_by_symbol(signal_context["ref3_return20"])
+    ref5_rps50 = _rps_by_symbol(signal_context["ref5_return50"])
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    results: list[dict[str, Any]] = []
+    for row in candidates:
+        symbol = str(row.get("symbol", "")).strip()
+        latest_rps = rps_by_symbol.get(symbol) or {}
+        signal = evaluate_rps_pullback_signal(
+            latest_rps,
+            {"rps_20": ref3_rps20.get(symbol)},
+            {"rps_50": ref5_rps50.get(symbol)},
+            signal_context["candidate_bars"].get(symbol, []),
+        )
+        results.append(
+            {
+                "trading_day": row.get("trading_day"),
+                "market": str(row.get("market", "")).strip().lower(),
+                "symbol": symbol,
+                "strategy": STRATEGY_PULLBACK,
+                "strategy_label": STRATEGY_METADATA[STRATEGY_PULLBACK]["label"],
+                "passed": bool(signal.get("passed")),
+                "conditions": signal.get("conditions") or {},
+                "generated_at": generated_at,
+                "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
+            }
+        )
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
 def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Replace one strategy's rows while preserving other strategies in the shared output file."""
     existing_rows: list[dict[str, Any]] = []
@@ -255,8 +299,10 @@ def main() -> None:
 
     if args.strategy == STRATEGY_STANDARD:
         rows = build_rps_standard_launch_rows(tdxdir=args.tdxdir)
-    else:
+    elif args.strategy == STRATEGY_ATTACK:
         rows = build_rps_attack_rows(tdxdir=args.tdxdir)
+    else:
+        rows = build_rps_pullback_rows(tdxdir=args.tdxdir)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output_rows = merge_strategy_rows_for_output(output, args.strategy, rows)

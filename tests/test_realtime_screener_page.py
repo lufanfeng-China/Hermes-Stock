@@ -14,10 +14,14 @@ class RealtimeScreenerPageTests(unittest.TestCase):
         self.assertIn("实时选股", html)
         self.assertIn('id="realtime-scenario-select"', html)
         self.assertIn('value="tail_session"', html)
+        self.assertIn('value="rps_pullback"', html)
         self.assertIn("尾盘选股", html)
+        self.assertIn("RPS回踩", html)
         self.assertIn('id="realtime-load-scenario"', html)
+        self.assertIn('id="realtime-rps-pullback-scenario"', html)
         self.assertIn('id="realtime-condition-form"', html)
         self.assertIn('hidden', html.split('id="realtime-condition-form"', 1)[1].split('>', 1)[0])
+        self.assertIn('id="realtime-condition-summary"', html)
         self.assertIn('id="realtime-refresh-seconds"', html)
         self.assertIn('value="30"', html)
         self.assertIn('id="realtime-start-monitor"', html)
@@ -63,6 +67,8 @@ class RealtimeScreenerPageTests(unittest.TestCase):
             "当前价高于开盘价",
         ):
             self.assertIn(label, html)
+        for summary in ("RPS250>=80", "MA20>MA50>MA120", "5日内回踩MA20", "放量阳线且不过热"):
+            self.assertIn(summary, html)
 
     def test_realtime_screener_kline_copies_stock_screener_chart_shell(self) -> None:
         html = (WEB_ROOT / "realtime-screener.html").read_text(encoding="utf-8")
@@ -78,16 +84,34 @@ class RealtimeScreenerPageTests(unittest.TestCase):
             self.assertIn(f'data-preset="{preset}"', html)
             self.assertIn(label, html)
 
+    def test_realtime_screener_page_uses_rps_pullback_cache_busting_version(self) -> None:
+        html = (WEB_ROOT / "realtime-screener.html").read_text(encoding="utf-8")
+
+        self.assertIn('src="/realtime-screener.js?v=20260507-rps-pullback"', html)
+
     def test_realtime_screener_script_uses_scenarios_monitor_api_and_kline_chart(self) -> None:
         script = (WEB_ROOT / "realtime-screener.js").read_text(encoding="utf-8")
 
         self.assertIn("REALTIME_SCENARIOS", script)
         self.assertIn("tail_session", script)
+        self.assertIn("rps_pullback", script)
+        self.assertIn("realtime-rps-pullback-scenario", script)
         self.assertIn("loadScenario", script)
         self.assertIn("collectConditionPayload", script)
+        self.assertIn("params.set('scenario', scenarioSelectEl.value || 'tail_session')", script)
+        self.assertIn("renderScenarioConditionSummary", script)
+        self.assertIn("conditionSummaryEl", script)
         self.assertIn("startRealtimeMonitor", script)
         self.assertIn("stopRealtimeMonitor", script)
+        self.assertIn("isWithinChinaAShareTradingPeriod", script)
+        self.assertIn("getTradingSessionMinutes", script)
+        self.assertIn("now.getDay()", script)
+        self.assertIn("hours * 60 + minutes", script)
         self.assertIn("setInterval", script)
+        self.assertIn("if (isWithinChinaAShareTradingPeriod())", script)
+        self.assertIn("monitorTimer = setInterval(refreshRealtimeMatches, seconds * 1000)", script)
+        self.assertIn("monitorTimer = null", script)
+        self.assertIn("非交易时段 · 已抓取一次，暂停定时刷新", script)
         self.assertIn("/api/realtime-screener", script)
         self.assertIn("/api/stock-kline", script)
         self.assertIn("/api/stock-rps-history", script)
@@ -105,6 +129,8 @@ class RealtimeScreenerPageTests(unittest.TestCase):
         self.assertIn("industry_total_score", script)
         self.assertIn("industry_total_rank", script)
         self.assertNotIn("row.matched_conditions", script)
+        self.assertIn("scenarioSelectEl.value = 'rps_pullback'", script)
+        self.assertIn("conditionForm.hidden = scenario.key === 'rps_pullback'", script)
 
     def test_navigation_links_to_realtime_screener(self) -> None:
         for filename in ("stock-score.html", "stock-screener.html", "rps-pool.html"):

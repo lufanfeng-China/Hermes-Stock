@@ -85,7 +85,7 @@ def _tail_lines(text: str | None, limit: int = DATA_UPDATE_OUTPUT_TAIL_LINES) ->
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_standard_launch", "rps_attack"}:
+    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
@@ -1800,6 +1800,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             if values
         }
         try:
+            if params.get("scenario", "").strip() == "rps_pullback":
+                ensure_stock_screener_strategy_dataset("rps_pullback")
             self.respond_json(HTTPStatus.OK, realtime_screener_response(params))
         except Exception as exc:
             self.respond_json(

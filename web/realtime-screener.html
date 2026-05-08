@@ -30,11 +30,18 @@
       </div>
 
       <div class="realtime-condition-grid realtime-scenario-row">
-        <label><span>方案</span><select id="realtime-scenario-select"><option value="tail_session">尾盘选股</option></select></label>
+        <label><span>方案</span><select id="realtime-scenario-select"><option value="tail_session">尾盘选股</option><option value="rps_pullback">RPS回踩</option></select></label>
         <label><span>刷新频率（秒）</span><input id="realtime-refresh-seconds" name="refresh_seconds" type="number" min="5" step="1" value="30"></label>
         <button id="realtime-load-scenario" type="button" class="nav-link">加载方案</button>
+        <button id="realtime-rps-pullback-scenario" type="button" class="nav-link">RPS回踩</button>
         <button id="realtime-start-monitor" type="button">启动监控</button>
         <button id="realtime-stop-monitor" type="button" class="nav-link">停止监控</button>
+      </div>
+
+      <div id="realtime-condition-summary" class="search-meta" hidden>
+        <strong>RPS回踩：</strong>
+        RPS250>=80，RPS120>=85，RPS50>=88，RPS20>=92；RPS20>RPS50 且 MA20>MA50>MA120；
+        5日内回踩MA20但不破MA50，收盘重新转强；放量阳线且不过热。
       </div>
 
       <form id="realtime-condition-form" class="realtime-condition-grid" onsubmit="return false;" hidden>
@@ -103,6 +110,6 @@
     </section>
   </main>
 
-  <script type="module" src="/realtime-screener.js?v=20260506-industry-columns"></script>
+  <script type="module" src="/realtime-screener.js?v=20260507-rps-pullback"></script>
 </body>
 </html>

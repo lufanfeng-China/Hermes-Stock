@@ -2,6 +2,7 @@ import { KlineChart } from './kline-chart.js';
 
 const REALTIME_SCENARIOS = {
   tail_session: {
+    key: 'tail_session',
     label: '尾盘选股',
     conditions: {
       gain_min_pct: 3,
@@ -24,15 +25,25 @@ const REALTIME_SCENARIOS = {
       enable_current_above_open: true,
     },
   },
+  rps_pullback: {
+    key: 'rps_pullback',
+    label: 'RPS回踩',
+    conditions: {},
+    summary: 'RPS250>=80, RPS120>=85, RPS50>=88, RPS20>=92; MA20>MA50>MA120; 5日内回踩MA20; 放量阳线且不过热。',
+  },
 };
 
 let monitorTimer = null;
 let klineChart = null;
 let currentKlinePreset = 60;
+let monitorMode = 'stopped';
+let scenarioLoaded = false;
 
 const scenarioSelectEl = document.getElementById('realtime-scenario-select');
 const loadScenarioBtn = document.getElementById('realtime-load-scenario');
+const rpsPullbackScenarioBtn = document.getElementById('realtime-rps-pullback-scenario');
 const conditionForm = document.getElementById('realtime-condition-form');
+const conditionSummaryEl = document.getElementById('realtime-condition-summary');
 const refreshSecondsEl = document.getElementById('realtime-refresh-seconds');
 const startMonitorBtn = document.getElementById('realtime-start-monitor');
 const stopMonitorBtn = document.getElementById('realtime-stop-monitor');
@@ -83,11 +94,42 @@ function setFieldValue(name, value) {
   field.value = String(value ?? '');
 }
 
+function getTradingSessionMinutes(now = new Date()) {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return -1;
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  return hours * 60 + minutes;
+}
+
+function isWithinChinaAShareTradingPeriod(now = new Date()) {
+  const totalMinutes = getTradingSessionMinutes(now);
+  if (totalMinutes < 0) return false;
+  const morningStart = 9 * 60 + 30;
+  const morningEnd = 11 * 60 + 30;
+  const afternoonStart = 13 * 60;
+  const afternoonEnd = 15 * 60;
+  return (totalMinutes >= morningStart && totalMinutes < morningEnd)
+    || (totalMinutes >= afternoonStart && totalMinutes < afternoonEnd);
+}
+
 function loadScenario() {
   const scenario = REALTIME_SCENARIOS[scenarioSelectEl.value] || REALTIME_SCENARIOS.tail_session;
   Object.entries(scenario.conditions).forEach(([name, value]) => setFieldValue(name, value));
-  conditionForm.hidden = false;
+  renderScenarioConditionSummary(scenario);
+  if (scenario.key === 'rps_pullback') {
+    conditionForm.hidden = scenario.key === 'rps_pullback';
+  } else {
+    conditionForm.hidden = false;
+  }
+  scenarioLoaded = true;
   statusEl.textContent = `已加载方案：${scenario.label}`;
+}
+
+function renderScenarioConditionSummary(scenario) {
+  if (!conditionSummaryEl) return;
+  conditionSummaryEl.textContent = scenario.summary || '';
+  conditionSummaryEl.hidden = !scenario.summary;
 }
 
 function fieldValue(name) {
@@ -103,6 +145,7 @@ function setConditionFormLocked(locked) {
   });
   scenarioSelectEl.disabled = locked;
   loadScenarioBtn.disabled = locked;
+  if (rpsPullbackScenarioBtn) rpsPullbackScenarioBtn.disabled = locked;
   refreshSecondsEl.disabled = locked;
 }
 
@@ -143,7 +186,11 @@ async function refreshRealtimeMatches() {
     renderRealtimeRows(payload.rows || []);
     matchCountEl.textContent = String((payload.rows || []).length);
     pageInfoEl.textContent = `${payload.scenario_label || '实时方案'} · ${payload.data_note || '实时行情'}`;
-    statusEl.textContent = `监控中 · 每 ${payload.refresh_seconds || refreshSecondsEl.value || 30} 秒刷新`;
+    if (monitorMode === 'one-shot') {
+      statusEl.textContent = '非交易时段 · 已抓取一次，暂停定时刷新';
+    } else {
+      statusEl.textContent = `监控中 · 每 ${payload.refresh_seconds || refreshSecondsEl.value || 30} 秒刷新`;
+    }
   } catch (error) {
     statusEl.textContent = `实时选股失败：${error.message}`;
     pageInfoEl.textContent = '刷新失败';
@@ -153,7 +200,7 @@ async function refreshRealtimeMatches() {
 }
 
 function startRealtimeMonitor() {
-  if (conditionForm.hidden) {
+  if (!scenarioLoaded) {
     statusEl.textContent = '请先加载方案，再启动监控';
     return;
   }
@@ -161,9 +208,19 @@ function startRealtimeMonitor() {
   const seconds = Math.max(5, Number(refreshSecondsEl.value || 30));
   refreshSecondsEl.value = String(seconds);
   setConditionFormLocked(true);
-  statusEl.textContent = `监控中 · 每 ${seconds} 秒刷新`;
+  if (isWithinChinaAShareTradingPeriod()) {
+    monitorMode = 'interval';
+    statusEl.textContent = `监控中 · 每 ${seconds} 秒刷新`;
+  } else {
+    monitorMode = 'one-shot';
+    statusEl.textContent = '非交易时段 · 正在抓取一次';
+  }
   refreshRealtimeMatches();
-  monitorTimer = setInterval(refreshRealtimeMatches, seconds * 1000);
+  if (isWithinChinaAShareTradingPeriod()) {
+    monitorTimer = setInterval(refreshRealtimeMatches, seconds * 1000);
+  } else {
+    monitorTimer = null;
+  }
 }
 
 function stopRealtimeMonitor(options = {}) {
@@ -171,6 +228,7 @@ function stopRealtimeMonitor(options = {}) {
     clearInterval(monitorTimer);
     monitorTimer = null;
   }
+  monitorMode = 'stopped';
   setConditionFormLocked(false);
   if (!options.silent) {
     statusEl.textContent = '监控已停止，可修改参数后重新启动';
@@ -267,6 +325,10 @@ function bindRealtimeChartPresetEvents() {
 }
 
 loadScenarioBtn.addEventListener('click', loadScenario);
+rpsPullbackScenarioBtn.addEventListener('click', () => {
+  scenarioSelectEl.value = 'rps_pullback';
+  loadScenario();
+});
 startMonitorBtn.addEventListener('click', startRealtimeMonitor);
 stopMonitorBtn.addEventListener('click', stopRealtimeMonitor);
 tbody.addEventListener('click', (event) => {

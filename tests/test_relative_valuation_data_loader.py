@@ -3,12 +3,35 @@ from unittest import mock
 
 
 class RelativeValuationDataLoaderTests(unittest.TestCase):
-    def test_compute_ttm_metric_sums_recent_four_single_quarter_rows(self) -> None:
+    def test_compute_ttm_metric_uses_cumulative_report_formula_for_quarterly_period(self) -> None:
+        from app.relative_valuation.data_loader import compute_ttm_metric_from_rows
+
+        current_row = {"归属于母公司所有者的净利润": 535_458_528.0}
+        prev_annual_row = {"归属于母公司所有者的净利润": 2_319_437_056.0}
+        prev_same_row = {"归属于母公司所有者的净利润": 452_344_192.0}
+        previous_quarter_rows = [
+            prev_annual_row,
+            {"归属于母公司所有者的净利润": 2_158_900_736.0},
+            {"归属于母公司所有者的净利润": 1_635_142_016.0},
+        ]
+
+        value = compute_ttm_metric_from_rows(
+            period="2026Q1",
+            field_name="归属于母公司所有者的净利润",
+            current_row=current_row,
+            previous_quarter_rows=previous_quarter_rows,
+            prev_annual_row=prev_annual_row,
+            prev_same_row=prev_same_row,
+        )
+
+        self.assertAlmostEqual(2_402_551_392.0, value, places=6)
+
+    def test_compute_ttm_metric_falls_back_to_recent_four_sum_when_cumulative_rows_unavailable(self) -> None:
         from app.relative_valuation.data_loader import compute_ttm_metric_from_rows
 
         current_row = {"营业收入": 1_823_661_696.0}
         previous_quarter_rows = [
-            {"营业收入": 2_297_186_560.0},  # prior annual row is Q4 single-quarter in the warehouse
+            {"营业收入": 2_297_186_560.0},
             {"营业收入": 2_015_916_800.0},
             {"营业收入": 2_328_163_328.0},
         ]
@@ -21,6 +44,29 @@ class RelativeValuationDataLoaderTests(unittest.TestCase):
         )
 
         self.assertAlmostEqual(8_464_928_384.0, value, places=6)
+
+    def test_compute_ttm_revenue_prefers_cumulative_operating_revenue_field(self) -> None:
+        from app.relative_valuation.data_loader import compute_ttm_metric_from_rows_by_fields
+
+        current_row = {"营业收入": 468_464_416.0, "其中：营业收入": 468_464_416.0}
+        prev_annual_row = {"营业收入": 1_116_285_312.0, "其中：营业收入": 3_285_423_104.0}
+        prev_same_row = {"营业收入": 401_357_760.0, "其中：营业收入": 401_357_760.0}
+        previous_quarter_rows = [
+            prev_annual_row,
+            {"营业收入": 1_285_849_088.0, "其中：营业收入": 2_169_137_024.0},
+            {"营业收入": 481_930_880.0, "其中：营业收入": 883_287_040.0},
+        ]
+
+        value = compute_ttm_metric_from_rows_by_fields(
+            period="2026Q1",
+            field_names=("其中：营业收入", "营业收入"),
+            current_row=current_row,
+            previous_quarter_rows=previous_quarter_rows,
+            prev_annual_row=prev_annual_row,
+            prev_same_row=prev_same_row,
+        )
+
+        self.assertAlmostEqual(3_352_529_760.0, value, places=6)
 
     def test_compute_ttm_metric_returns_annual_value_directly_for_annual_period(self) -> None:
         from app.relative_valuation.data_loader import compute_ttm_metric_from_rows

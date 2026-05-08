@@ -47,14 +47,13 @@
 
         <label><span>申万一级</span><select id="stock-screener-level1" name="industry_level_1"><option value="">全部</option></select></label>
         <label><span>申万二级</span><select id="stock-screener-level2" name="industry_level_2"><option value="">全部</option></select></label>
-        <label><span>行业温度</span><select name="industry_temperature_label"><option value="">全部</option><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></label>
+        <label><span>行业温度</span><select id="stock-screener-temperature" name="industry_temperature_label" multiple><option value="">全部</option><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></label>
         <label><span>估值分类</span><select name="classification"><option value="">全部</option><option value="A_NORMAL_EARNING">A类 正常盈利</option><option value="B_THIN_PROFIT_DISTORTED">B类 微盈利畸高</option><option value="C_LOSS">C/D 亏损或高风险</option></select></label>
         <label><span>行业内估值位置</span><input name="max_primary_percentile" type="number" step="0.1" placeholder="≤ 百分位"></label>
         <label><span>区间标签</span><select name="valuation_band"><option value="">全部</option><option value="低估区间">低估区间</option><option value="合理偏低">合理偏低</option><option value="合理">合理</option><option value="合理偏高">合理偏高</option><option value="高估区间">高估区间</option><option value="样本不足">样本不足</option><option value="次新股">次新股</option></select></label>
 
         <label><span>盈利能力</span><input name="min_dim_profitability" type="number" step="0.1" placeholder="≥"></label>
         <label><span>成长能力</span><input name="min_dim_growth" type="number" step="0.1" placeholder="≥"></label>
-        <label><span>运营效率</span><input name="min_dim_operating" type="number" step="0.1" placeholder="≥"></label>
         <label><span>现金流质量</span><input name="min_dim_cashflow" type="number" step="0.1" placeholder="≥"></label>
         <label><span>偿债能力</span><input name="min_dim_solvency" type="number" step="0.1" placeholder="≥"></label>
         <label><span>资产质量</span><input name="min_dim_asset_quality" type="number" step="0.1" placeholder="≥"></label>
@@ -142,6 +141,6 @@
     </section>
   </main>
 
-  <script type="module" src="/stock-screener.js"></script>
+  <script type="module" src="/stock-screener.js?v=20260506-temperature-multi"></script>
 </body>
 </html>

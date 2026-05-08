@@ -8,6 +8,7 @@ from pathlib import Path
 from .data_loader import (
     compute_market_cap_yi,
     compute_ttm_metric_from_rows,
+    compute_ttm_metric_from_rows_by_fields,
     normalize_amount_to_yi,
     pick_free_float_shares,
     pick_total_shares,
@@ -182,9 +183,9 @@ def _load_stock_inputs_for_period(
         prev_annual_row=prev_annual_row,
         prev_same_row=prev_same_row,
     ))
-    ttm_revenue = normalize_amount_to_yi(compute_ttm_metric_from_rows(
+    ttm_revenue = normalize_amount_to_yi(compute_ttm_metric_from_rows_by_fields(
         period=period,
-        field_name="营业收入",
+        field_names=("其中：营业收入", "营业收入"),
         current_row=current_row,
         previous_quarter_rows=previous_quarter_rows,
         prev_annual_row=prev_annual_row,
