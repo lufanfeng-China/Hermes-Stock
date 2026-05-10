@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>实时选股</title>
-  <link rel="stylesheet" href="/styles.css?v=20260506-condition-toggle">
+  <link rel="stylesheet" href="/styles.css?v=20260509-module">
 </head>
 <body>
   <main class="app-shell realtime-screener-shell">
@@ -29,32 +29,24 @@
         <p id="realtime-status" class="search-meta">选择方案后加载条件，默认 30 秒刷新</p>
       </div>
 
-      <div class="realtime-condition-grid realtime-scenario-row">
-        <label><span>方案</span><select id="realtime-scenario-select"><option value="tail_session">尾盘选股</option><option value="rps_pullback">RPS回踩</option></select></label>
+      <div class="realtime-scenario-row">
+        <label><span>方案</span>
+          <select id="realtime-scenario-select">
+            <option value="tail_session">尾盘选股</option>
+            <option value="rps_pullback">RPS回踩</option>
+            <option value="scheme_2560">2560</option>
+          </select>
+        </label>
         <label><span>刷新频率（秒）</span><input id="realtime-refresh-seconds" name="refresh_seconds" type="number" min="5" step="1" value="30"></label>
         <button id="realtime-load-scenario" type="button" class="nav-link">加载方案</button>
-        <button id="realtime-rps-pullback-scenario" type="button" class="nav-link">RPS回踩</button>
         <button id="realtime-start-monitor" type="button">启动监控</button>
         <button id="realtime-stop-monitor" type="button" class="nav-link">停止监控</button>
       </div>
 
-      <div id="realtime-condition-summary" class="search-meta" hidden>
-        <strong>RPS回踩：</strong>
-        RPS250>=80，RPS120>=85，RPS50>=88，RPS20>=92；RPS20>RPS50 且 MA20>MA50>MA120；
-        5日内回踩MA20但不破MA50，收盘重新转强；放量阳线且不过热。
-      </div>
+      <!-- 动态模块容器 — JS 根据方案配置动态生成模块 UI -->
+      <div id="modules-container"></div>
 
-      <form id="realtime-condition-form" class="realtime-condition-grid" onsubmit="return false;" hidden>
-        <!-- 默认条件说明：涨幅 3% - 5%; 20天内有过涨停; 量比 > 1.4; 市值 < 200亿; 换手率 5% - 10%; 大部分时间在均价线上方; 允许短暂跌破不超过 0.3%; 当前价高于开盘价 -->
-        <label><span>涨幅 3% - 5%</span><select name="enable_gain_pct"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="gain_min_pct" type="number" step="0.1" value="3"><input name="gain_max_pct" type="number" step="0.1" value="5"></label>
-        <label><span>20天内有过涨停</span><select name="enable_limit_up_lookback_days"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="limit_up_lookback_days" type="number" min="1" step="1" value="20"></label>
-        <label><span>量比 &gt; 1.4</span><select name="enable_min_volume_ratio"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="min_volume_ratio" type="number" step="0.1" value="1.4"></label>
-        <label><span>市值 &lt; 200亿</span><select name="enable_max_market_cap_yi"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="max_market_cap_yi" type="number" step="1" value="200"></label>
-        <label><span>换手率 5% - 10%</span><select name="enable_turnover_pct"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="turnover_min_pct" type="number" step="0.1" value="5"><input name="turnover_max_pct" type="number" step="0.1" value="10"></label>
-        <label class="realtime-checkbox"><span>大部分时间在均价线上方</span><select name="enable_intraday_above_vwap"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="intraday_above_vwap" type="checkbox" checked><input name="intraday_above_vwap_min_ratio_pct" type="number" min="0" max="100" step="1" value="80"></label>
-        <label><span>允许短暂跌破不超过 0.3%</span><input name="intraday_vwap_max_breach_pct" type="number" min="0" step="0.1" value="0.3"></label>
-        <label class="realtime-checkbox"><span>当前价高于开盘价</span><select name="enable_current_above_open"><option value="true" selected>启用</option><option value="false">未启用</option></select><input name="current_above_open" type="checkbox" checked></label>
-      </form>
+      <div id="realtime-condition-summary" class="search-meta" hidden></div>
     </section>
 
     <section class="profile-card realtime-results-card">
@@ -78,10 +70,11 @@
               <th>行业信息</th>
               <th>行业内总分</th>
               <th>行业排名</th>
+              <th>匹配模块</th>
             </tr>
           </thead>
           <tbody id="realtime-results-tbody">
-            <tr><td colspan="9" class="stock-score-empty-row">启动监控后显示实时命中股票</td></tr>
+            <tr><td colspan="10" class="stock-score-empty-row">启动监控后显示实时命中股票</td></tr>
           </tbody>
         </table>
       </div>
@@ -95,11 +88,11 @@
         </div>
         <div class="kline-controls">
           <div id="realtime-preset-controls" class="zoom-controls" role="group" aria-label="Kline preset windows">
-            <button type="button" class="zoom-button" data-preset="20">20D</button>
-            <button type="button" class="zoom-button active" data-preset="60">60D</button>
-            <button type="button" class="zoom-button" data-preset="120">120D</button>
-            <button type="button" class="zoom-button" data-preset="250">250D</button>
-            <button type="button" class="zoom-button" data-preset="-1">ALL</button>
+            <button type="button" class="zoom-button" data-preset="20" data-kline-preset="20">20D</button>
+            <button type="button" class="zoom-button active" data-preset="60" data-kline-preset="60">60D</button>
+            <button type="button" class="zoom-button" data-preset="120" data-kline-preset="120">120D</button>
+            <button type="button" class="zoom-button" data-preset="250" data-kline-preset="250">250D</button>
+            <button type="button" class="zoom-button" data-preset="-1" data-kline-preset="-1">ALL</button>
           </div>
           <span id="realtime-kline-range-label" class="kline-range-label"></span>
         </div>
@@ -110,6 +103,6 @@
     </section>
   </main>
 
-  <script type="module" src="/realtime-screener.js?v=20260507-rps-pullback"></script>
+<script type="module" src="/realtime-screener.js?v=20260510-kline-load-fix"></script>
 </body>
 </html>

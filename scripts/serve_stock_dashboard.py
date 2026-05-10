@@ -813,6 +813,96 @@ print(json.dumps({"ok": True, "symbol": symbol, "market": market, "bars": rows},
     return json.loads(result.stdout)
 
 
+def compute_stock_price_percentile(
+    market: str, symbol: str, *, years: int = 5
+) -> dict[str, object]:
+    """
+    Compute where the latest close sits in the stock's own N-year price history.
+
+    Uses all available local .day records from TDX up to `years`, then computes
+    empirical percentile = % of historical closes <= latest close.
+    Returns bands: 极低(<20%) / 低(20-40%) / 中(40-60%) / 高(60-80%) / 极高(>80%).
+    """
+    if not symbol.isdigit() or len(symbol) != 6:
+        raise ValueError("symbol must be a 6-digit code")
+    if market not in {"sh", "sz", "bj"}:
+        raise ValueError(f"unsupported market: {market}")
+
+    import subprocess as _subprocess
+
+    script = r"""
+import json, sys, statistics, pandas as pd
+
+from mootdx.reader import Reader
+
+symbol = sys.argv[1]
+market = sys.argv[2]
+tdxdir = sys.argv[3]
+years  = int(sys.argv[4])
+
+reader = Reader.factory(market="std", tdxdir=tdxdir)
+daily  = reader.daily(symbol=symbol)
+
+if daily is None or daily.empty:
+    raise RuntimeError("daily data not found for " + symbol)
+
+daily.index = daily.index.astype("datetime64[ns]")
+daily = daily.sort_index()
+
+# Keep only the last N years
+cutoff = daily.index[-1] - pd.DateOffset(years=years)
+recent = daily[daily.index >= cutoff].copy()
+
+if len(recent) < 30:
+    raise RuntimeError(f"only {len(recent)} trading days in {years}-year window for {symbol}")
+
+prices = recent["close"].dropna().tolist()
+latest  = prices[-1]
+
+# Empirical percentile
+below  = sum(1 for p in prices if p <= latest)
+pct    = below / len(prices) * 100
+
+if   pct < 20: band = "极低"
+elif pct < 40: band = "低"
+elif pct < 60: band = "中"
+elif pct < 80: band = "高"
+else:          band = "极高"
+
+# Also compute min/max/mean/std
+mean_price = statistics.mean(prices)
+std_price  = statistics.stdev(prices) if len(prices) > 1 else 0
+
+print(json.dumps({
+    "ok": True,
+    "symbol": symbol,
+    "market": market,
+    "years": years,
+    "bar_count": len(prices),
+    "window_start": str(recent.index[0].date()),
+    "window_end":   str(recent.index[-1].date()),
+    "latest_close": round(float(latest), 2),
+    "price_percentile": round(pct, 2),
+    "price_band": band,
+    "price_min":  round(float(min(prices)), 2),
+    "price_max":  round(float(max(prices)), 2),
+    "price_mean": round(float(mean_price), 2),
+    "price_std":  round(float(std_price), 2),
+}, ensure_ascii=False))
+""".strip()
+
+    result = _subprocess.run(
+        ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python", "-c", script,
+         symbol, market, "/mnt/c/new_tdx64", str(years)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "mootdx error")
+    return json.loads(result.stdout)
+
+
 def load_stock_rps_history(symbol: str) -> dict[str, object]:
     """Compute historical RPS-20/50/120/250 for one stock using full local history."""
     if not symbol.isdigit() or len(symbol) != 6:
@@ -1537,6 +1627,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/relative-valuation":
             self.handle_relative_valuation(parsed.query)
             return
+        if parsed.path == "/api/stock-price-percentile":
+            self.handle_stock_price_percentile(parsed.query)
+            return
         if parsed.path == "/api/stock-screener":
             self.handle_stock_screener(parsed.query)
             return
@@ -1561,6 +1654,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/data-update-retry":
             self.handle_data_update_retry()
+            return
+        if parsed.path == "/api/save-capital-flow":
+            self.handle_save_capital_flow()
+            return
+        if parsed.path.startswith("/api/proxy-capital-flow"):
+            self.handle_proxy_capital_flow(parsed.query)
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -1631,7 +1730,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
     def handle_stock_kline(self, query: str) -> None:
         params = parse_qs(query)
         symbol = params.get("symbol", [DEFAULT_SYMBOL])[0].strip() or DEFAULT_SYMBOL
-        limit = self.parse_limit(params.get("limit", ["250"])[0], default=250, maximum=500)
+        limit = self.parse_limit(params.get("limit", ["250"])[0], default=250, maximum=2000)
         try:
             payload = load_stock_kline(symbol, limit=limit)
             self.respond_json(HTTPStatus.OK, payload)
@@ -1935,6 +2034,41 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
     def handle_data_update_retry(self) -> None:
         self._handle_data_update_start(retry_failed=True)
 
+    def handle_save_capital_flow(self) -> None:
+        """接收浏览器端资金流向数据，追加写入 Parquet"""
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b""
+        try:
+            rows = json.loads(body)
+        except json.JSONDecodeError:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid json"})
+            return
+        if not isinstance(rows, list) or len(rows) == 0:
+            self.respond_json(HTTPStatus.OK, {"ok": True, "saved": 0})
+            return
+        
+        df = pd.DataFrame(rows)
+        df["trading_day"] = df["trading_day"].astype(str)
+        df["symbol"] = df["symbol"].astype(str)
+        
+        cf_file = DERIVED_FINAL_DIR / "dataset_stock_capital_flow.parquet"
+        if cf_file.exists():
+            old = pd.read_parquet(cf_file)
+            df = pd.concat([old, df], ignore_index=True)
+        df = df.drop_duplicates(subset=["symbol", "trading_day"], keep="last")
+        # Keep max 30 days per stock
+        df["_rank"] = df.groupby("symbol")["trading_day"].rank(ascending=False, method="dense")
+        df = df[df["_rank"] <= 30].drop(columns=["_rank"])
+        
+        cf_file.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(cf_file, index=False)
+        self.respond_json(HTTPStatus.OK, {
+            "ok": True,
+            "saved": len(rows),
+            "total_rows": len(df),
+            "total_stocks": df["symbol"].nunique(),
+        })
+
     def _handle_data_update_start(self, retry_failed: bool = False) -> None:
         if not _is_allowed_local_origin(self.headers.get('Origin'), self.headers.get('Referer')):
             self.respond_json(
@@ -1988,6 +2122,36 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "industry_valuation_percentile_error", "message": str(exc)}},
+            )
+
+    def handle_stock_price_percentile(self, query: str) -> None:
+        """Compute historical price percentile against the stock's own N-year trading history."""
+        params = parse_qs(query)
+        symbol = params.get("symbol", [""])[0].strip()
+        try:
+            market, _ = infer_market(symbol)
+        except ValueError as exc:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_stock", "message": str(exc)}})
+            return
+        years_param = params.get("years", ["5"])[0].strip()
+        try:
+            years = int(years_param)
+        except (TypeError, ValueError):
+            years = 5
+        years = max(1, min(10, years))
+
+        try:
+            payload = compute_stock_price_percentile(market, symbol, years=years)
+            self.respond_json(HTTPStatus.OK, payload)
+        except ValueError as exc:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_stock", "message": str(exc)}},
+            )
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "price_percentile_error", "message": str(exc)}},
             )
 
     def handle_stock_score_report_history(self, query: str) -> None:

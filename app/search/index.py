@@ -1303,7 +1303,11 @@ def evaluate_rps_pullback_signal(
     ref3_rps: dict[str, object],
     ref5_rps: dict[str, object],
     bars: list[dict[str, object]],
+    thresholds: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    if thresholds is None:
+        thresholds = {}
+
     def moving_average(values: list[float | None], period: int, end_index: int) -> float | None:
         start_index = end_index - period + 1
         if start_index < 0:
@@ -1342,9 +1346,16 @@ def evaluate_rps_pullback_signal(
     ref3_rps20 = _coerce_float(ref3_rps.get("rps_20"))
     ref5_rps50 = _coerce_float(ref5_rps.get("rps_50"))
 
+    rps250_min = _coerce_float(thresholds.get("rps250_min")) or 80.0
+    rps120_min = _coerce_float(thresholds.get("rps120_min")) or 85.0
+    rps50_min = _coerce_float(thresholds.get("rps50_min")) or 88.0
+    rps20_min = _coerce_float(thresholds.get("rps20_min")) or 92.0
+    volume_ratio_min = _coerce_float(thresholds.get("volume_ratio_min")) or 1.2
+    overheat_ratio_max = _coerce_float(thresholds.get("overheat_ratio_max")) or 1.08
+
     conditions = {
         "rps_base": all(value is not None for value in (rps20, rps50, rps120, rps250))
-        and bool(rps250 >= 80 and rps120 >= 85 and rps50 >= 88 and rps20 >= 92),
+        and bool(rps250 >= rps250_min and rps120 >= rps120_min and rps50 >= rps50_min and rps20 >= rps20_min),
         "rps_structure": all(value is not None for value in (rps20, rps50, rps120, rps250))
         and bool(rps20 > rps50 and rps50 >= rps120 - 3 and rps120 >= rps250 - 5),
         "rps_turning_point": all(value is not None for value in (rps20, rps50, ref3_rps20, ref5_rps50))
@@ -1357,9 +1368,9 @@ def evaluate_rps_pullback_signal(
         "trend_intact": llv_low5 is not None and ma50 is not None and bool(llv_low5 >= ma50 * 0.98),
         "renewed_strength": all(value is not None for value in (latest_close, ma20, latest_high_ref1))
         and bool(latest_close > ma20 and latest_close > latest_high_ref1),
-        "volume_confirmed": latest_volume is not None and vol5 is not None and bool(latest_volume > 1.2 * vol5),
+        "volume_confirmed": latest_volume is not None and vol5 is not None and bool(latest_volume > vol5 * volume_ratio_min),
         "bullish_candle": latest_close is not None and latest_open is not None and bool(latest_close > latest_open),
-        "not_overheated": latest_close is not None and ma20 not in (None, 0.0) and bool(latest_close / ma20 < 1.08),
+        "not_overheated": latest_close is not None and ma20 not in (None, 0.0) and bool(latest_close / ma20 < overheat_ratio_max),
     }
     return {
         "passed": all(conditions.values()),
@@ -1714,7 +1725,62 @@ _REALTIME_SCENARIO_DEFAULTS: dict[str, dict[str, object]] = {
     },
     "rps_pullback": {
         "label": "RPS回踩",
-        "conditions": {},
+        "conditions": {
+            "rps250_min": 80.0,
+            "rps120_min": 85.0,
+            "rps50_min": 88.0,
+            "rps20_min": 92.0,
+            "volume_ratio_min": 1.2,
+            "overheat_ratio_max": 1.08,
+        },
+    },
+    "scheme_2560": {
+        "label": "2560",
+        "conditions": {
+            # ── 基础条件 ──
+            "min_listed_days": 120,
+            "min_amount_20d_yi": 1.0,
+            "min_price": 5.0,
+            "price_above_ma60": True,
+            "gain_20d_max_pct": 35.0,
+            "ma25_trend_up_5d": True,
+            "ma25_trend_up_5d_pct": 0.5,
+            "ma25_above_ma10": True,
+            "price_above_ma25": True,
+            "price_ma25_range_pct": 8.0,
+            "vol_ratio_5d_60d_min": 1.15,
+            "vol_ratio_5d_60d_max": 2.5,
+            # ── 回踩买点* ──
+            "pb_trend_ma25_5d": True,
+            "pb_trend_ma25_5d_pct": 0.5,
+            "pb_vol_ratio_min": 1.15,
+            "pb_vol_ratio_max": 2.5,
+            "pb_low_max_ma25_pct": 1.03,
+            "pb_close_above_ma25": True,
+            "pb_low_min_ma25_pct": 0.97,
+            "pb_kline_mid_strong": True,
+            "pb_price_ma25_max_pct": 5.0,
+            # ── 突破买点 ──
+            "bo_range_10d_max_pct": 12.0,
+            "bo_vol_drop_min_pct": 15.0,
+            "bo_close_break_ratio": 1.01,
+            "bo_vol_burst_min": 1.3,
+            "bo_vol_burst_max": 3.0,
+            "bo_price_ma25_max_pct": 10.0,
+            "bo_ma25_trend_up": True,
+            "bo_ma25_trend_up_pct": 0.5,
+            # ── 强势回踩 ──
+            "sp_gain_30d_min_pct": 20.0,
+            "sp_gain_30d_max_pct": 60.0,
+            "sp_above_ma25_days": 20,
+            "sp_recent_revert_max_pct": 1.03,
+            "sp_close_above_ma25": True,
+            "sp_low_min_ma25_pct": 0.97,
+            "sp_vol_shrink_max_ratio": 0.7,
+            "sp_vol_below_vma5": True,
+            "sp_kline_mid_strong": True,
+            "sp_vol_ratio_min": 1.15,
+        },
     },
 }
 
@@ -1817,6 +1883,29 @@ def _has_recent_limit_up(market: str, symbol: str, days: int) -> bool:
     return False
 
 
+@lru_cache(maxsize=10000)
+def _recent_daily_bars(market: str, symbol: str, count: int = 300) -> list[dict[str, object]]:
+    """Return recent daily bars for a stock from local Tongdaxin data."""
+    try:
+        from mootdx.reader import Reader
+        reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
+        daily = reader.daily(symbol=symbol)
+    except Exception:
+        return []
+    if daily is None or daily.empty:
+        return []
+    bars: list[dict[str, object]] = []
+    for _, row in daily.sort_index().tail(count).iterrows():
+        bars.append({
+            "open": _coerce_float(row.get("open")),
+            "high": _coerce_float(row.get("high")),
+            "low": _coerce_float(row.get("low")),
+            "close": _coerce_float(row.get("close")),
+            "volume": _coerce_float(row.get("volume")),
+        })
+    return bars
+
+
 def _realtime_valuation_lookup() -> dict[tuple[str, str], dict[str, object]]:
     lookup: dict[tuple[str, str], dict[str, object]] = {}
     for group in load_industry_valuation_rows():
@@ -1842,6 +1931,54 @@ def _parse_realtime_conditions(params: dict[str, str], defaults: dict[str, objec
         "intraday_above_vwap_min_ratio_pct": _coerce_float(params.get("intraday_above_vwap_min_ratio_pct")),
         "intraday_vwap_max_breach_pct": _coerce_float(params.get("intraday_vwap_max_breach_pct")),
         "current_above_open": _coerce_bool(params.get("current_above_open", defaults.get("current_above_open"))),
+        "rps250_min": _coerce_float(params.get("rps250_min")),
+        "rps120_min": _coerce_float(params.get("rps120_min")),
+        "rps50_min": _coerce_float(params.get("rps50_min")),
+        "rps20_min": _coerce_float(params.get("rps20_min")),
+        "volume_ratio_min": _coerce_float(params.get("volume_ratio_min")),
+        "overheat_ratio_max": _coerce_float(params.get("overheat_ratio_max")),
+        # ── scheme_2560: 基础条件 ──
+        "min_listed_days": _coerce_int(params.get("min_listed_days")),
+        "min_amount_20d_yi": _coerce_float(params.get("min_amount_20d_yi")),
+        "min_price": _coerce_float(params.get("min_price")),
+        "price_above_ma60": _coerce_bool(params.get("price_above_ma60", defaults.get("price_above_ma60"))),
+        "gain_20d_max_pct": _coerce_float(params.get("gain_20d_max_pct")),
+        "ma25_trend_up_5d": _coerce_bool(params.get("ma25_trend_up_5d", defaults.get("ma25_trend_up_5d"))),
+        "ma25_trend_up_5d_pct": _coerce_float(params.get("ma25_trend_up_5d_pct")),
+        "ma25_above_ma10": _coerce_bool(params.get("ma25_above_ma10", defaults.get("ma25_above_ma10"))),
+        "price_above_ma25": _coerce_bool(params.get("price_above_ma25", defaults.get("price_above_ma25"))),
+        "price_ma25_range_pct": _coerce_float(params.get("price_ma25_range_pct")),
+        "vol_ratio_5d_60d_min": _coerce_float(params.get("vol_ratio_5d_60d_min")),
+        "vol_ratio_5d_60d_max": _coerce_float(params.get("vol_ratio_5d_60d_max")),
+        # ── scheme_2560: 回踩买点* ──
+        "pb_trend_ma25_5d": _coerce_bool(params.get("pb_trend_ma25_5d", defaults.get("pb_trend_ma25_5d"))),
+        "pb_trend_ma25_5d_pct": _coerce_float(params.get("pb_trend_ma25_5d_pct")),
+        "pb_vol_ratio_min": _coerce_float(params.get("pb_vol_ratio_min")),
+        "pb_vol_ratio_max": _coerce_float(params.get("pb_vol_ratio_max")),
+        "pb_low_max_ma25_pct": _coerce_float(params.get("pb_low_max_ma25_pct")),
+        "pb_close_above_ma25": _coerce_bool(params.get("pb_close_above_ma25", defaults.get("pb_close_above_ma25"))),
+        "pb_low_min_ma25_pct": _coerce_float(params.get("pb_low_min_ma25_pct")),
+        "pb_kline_mid_strong": _coerce_bool(params.get("pb_kline_mid_strong", defaults.get("pb_kline_mid_strong"))),
+        "pb_price_ma25_max_pct": _coerce_float(params.get("pb_price_ma25_max_pct")),
+        # ── scheme_2560: 突破买点 ──
+        "bo_range_10d_max_pct": _coerce_float(params.get("bo_range_10d_max_pct")),
+        "bo_vol_drop_min_pct": _coerce_float(params.get("bo_vol_drop_min_pct")),
+        "bo_close_break_ratio": _coerce_float(params.get("bo_close_break_ratio")),
+        "bo_vol_burst_min": _coerce_float(params.get("bo_vol_burst_min")),
+        "bo_vol_burst_max": _coerce_float(params.get("bo_vol_burst_max")),
+        "bo_price_ma25_max_pct": _coerce_float(params.get("bo_price_ma25_max_pct")),
+        "bo_ma25_trend_up_pct": _coerce_float(params.get("bo_ma25_trend_up_pct")),
+        # ── scheme_2560: 强势回踩 ──
+        "sp_gain_30d_min_pct": _coerce_float(params.get("sp_gain_30d_min_pct")),
+        "sp_gain_30d_max_pct": _coerce_float(params.get("sp_gain_30d_max_pct")),
+        "sp_above_ma25_days": _coerce_int(params.get("sp_above_ma25_days")),
+        "sp_recent_revert_max_pct": _coerce_float(params.get("sp_recent_revert_max_pct")),
+        "sp_close_above_ma25": _coerce_bool(params.get("sp_close_above_ma25", defaults.get("sp_close_above_ma25"))),
+        "sp_low_min_ma25_pct": _coerce_float(params.get("sp_low_min_ma25_pct")),
+        "sp_vol_shrink_max_ratio": _coerce_float(params.get("sp_vol_shrink_max_ratio")),
+        "sp_vol_below_vma5": _coerce_bool(params.get("sp_vol_below_vma5", defaults.get("sp_vol_below_vma5"))),
+        "sp_kline_mid_strong": _coerce_bool(params.get("sp_kline_mid_strong", defaults.get("sp_kline_mid_strong"))),
+        "sp_vol_ratio_min": _coerce_float(params.get("sp_vol_ratio_min")),
     }
     for key, default_value in defaults.items():
         if conditions.get(key) is None:
@@ -1858,6 +1995,11 @@ def _parse_realtime_condition_enabled(params: dict[str, str]) -> dict[str, bool]
         "turnover_pct": _coerce_bool(params.get("enable_turnover_pct", True)),
         "intraday_above_vwap": _coerce_bool(params.get("enable_intraday_above_vwap", True)),
         "current_above_open": _coerce_bool(params.get("enable_current_above_open", True)),
+        # scheme_2560 module enables
+        "module_basic": _coerce_bool(params.get("enable_module_basic", True)),
+        "module_pullback_buy": _coerce_bool(params.get("enable_module_pullback_buy", True)),
+        "module_breakout_buy": _coerce_bool(params.get("enable_module_breakout_buy", False)),
+        "module_strong_pullback": _coerce_bool(params.get("enable_module_strong_pullback", False)),
     }
 
 
@@ -2028,34 +2170,562 @@ def _build_tail_session_matches(conditions: dict[str, object], condition_enabled
     return rows
 
 
-def _build_rps_pullback_matches() -> list[dict[str, object]]:
-    payload = build_stock_screener_response({"strategy": "rps_pullback", "page": "1", "page_size": "200"})
+def _build_rps_pullback_matches(
+    conditions: dict[str, object],
+    condition_enabled: dict[str, bool],
+) -> list[dict[str, object]]:
+    """Build RPS pullback matches using precomputed strategy signals + user-adjustable thresholds."""
+    defaults = _REALTIME_SCENARIO_DEFAULTS.get("rps_pullback", {}).get("conditions", {})
+    conditions = {**defaults, **{k: v for k, v in conditions.items() if v is not None}}
+
+    strategy_rows = load_stock_screener_strategy_rows()
+    rps_rows = load_rps_rows()
+    security_rows = load_security_rows()
+    industry_rows = load_industry_rows()
+    snapshot = _load_financial_snapshot() or {}
+    score_rows: dict[str, object] = snapshot.get("scores") if isinstance(snapshot, dict) else {}
+    if not isinstance(score_rows, dict):
+        score_rows = {}
+
+    security_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in security_rows}
+    industry_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in industry_rows}
+    valuation_lookup: dict[tuple[str, str], dict[str, object]] = _realtime_valuation_lookup()
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup = _score_rank_lookups(
+        score_rows,
+        industry_lookup,
+    )
+
+    rps_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in rps_rows}
+    score_lookup: dict[str, dict[str, object]] = score_rows
+
     rows: list[dict[str, object]] = []
-    for row in payload.get("rows") or []:
-        if not isinstance(row, dict):
+
+    rps250_min = _coerce_float(conditions.get("rps250_min")) or 80.0
+    rps120_min = _coerce_float(conditions.get("rps120_min")) or 85.0
+    rps50_min = _coerce_float(conditions.get("rps50_min")) or 88.0
+    rps20_min = _coerce_float(conditions.get("rps20_min")) or 92.0
+    volume_ratio_min = _coerce_float(conditions.get("volume_ratio_min")) or 1.2
+    overheat_ratio_max = _coerce_float(conditions.get("overheat_ratio_max")) or 1.08
+
+    for row in strategy_rows:
+        if row.get("strategy") != "rps_pullback":
             continue
+
+        market = _normalize_text(row.get("market")).lower()
+        symbol = _normalize_text(row.get("symbol"))
+        rps_row = rps_lookup.get((market, symbol)) or {}
+        score_entry = score_lookup.get(f"{market}:{symbol}") or {}
+        security = security_lookup.get((market, symbol)) or {}
+        industry = industry_lookup.get((market, symbol)) or {}
+
+        rps250 = _coerce_float(rps_row.get("rps_250"))
+        rps120 = _coerce_float(rps_row.get("rps_120"))
+        rps50 = _coerce_float(rps_row.get("rps_50"))
+        rps20 = _coerce_float(rps_row.get("rps_20"))
+
+        if not all(v is not None for v in (rps250, rps120, rps50, rps20)):
+            continue
+        if not (rps250 >= rps250_min and rps120 >= rps120_min and rps50 >= rps50_min and rps20 >= rps20_min):
+            continue
+
+        # Get current_price from valuation lookup first
+        valuation = valuation_lookup.get((market, symbol)) or {}
+        market_cap_yi = _coerce_float(valuation.get("total_market_cap"))
+        current_price = _coerce_float(valuation.get("current_price"))
+
+        # Calculate gain_pct, volume_ratio, turnover_pct from local Tongdaxin day bars
+        gain_pct: float | None = None
+        volume_ratio: float | None = None
+        turnover_pct: float | None = None
+        bars = _recent_daily_bars(market, symbol, count=250)
+        if bars and len(bars) >= 2:
+            latest = bars[-1]
+            prev = bars[-2]
+            close_cur = latest.get("close")
+            close_prev = prev.get("close")
+            vol_cur = latest.get("volume")
+            if close_cur and close_prev and close_prev > 0:
+                gain_pct = round((close_cur - close_prev) / close_prev * 100, 2)
+            if vol_cur:
+                avg_vol = sum(b.get("volume") or 0 for b in bars[-20:-1]) / min(len(bars) - 1, 19)
+                if avg_vol > 0:
+                    volume_ratio = round(vol_cur / avg_vol, 2)
+            if vol_cur and market_cap_yi and market_cap_yi > 0:
+                # turnover_pct = volume * price / market_cap (price in 元, market_cap in 亿)
+                # volume * close / (market_cap_yi * 1e8) * 100
+                turnover_pct = round(vol_cur * (close_cur or 0) / (market_cap_yi * 1e8) * 100, 2)
+
+        if volume_ratio is not None and volume_ratio_min is not None and volume_ratio < volume_ratio_min:
+            continue
+        if overheat_ratio_max is not None and rps20 is not None and rps20 > (overheat_ratio_max * 100):
+            continue
+
+        industry_level_1 = (
+            _normalize_text(score_entry.get("industry_sw_level_1"))
+            or _normalize_text(industry.get("industry_level_1_name"))
+        )
+        industry_level_2 = (
+            _normalize_text(score_entry.get("industry_sw_level_2"))
+            or _normalize_text(industry.get("industry_level_2_name"))
+        )
+        score_key = f"{market}:{symbol}"
+        industry_total_score = _coerce_float(score_entry.get("ind_total_score"))
+        industry_total_rank = industry_rank_lookup.get(score_key)
+        industry_total_universe_size = industry_universe_sizes.get(industry_level_2)
+        stock_name = _normalize_text(security.get("stock_name")) or symbol
+
         rows.append({
-            "market": row.get("market"),
-            "symbol": row.get("symbol"),
-            "stock_name": row.get("stock_name"),
-            "current_price": row.get("current_price"),
-            "gain_pct": row.get("gain_pct"),
-            "volume_ratio": row.get("volume_ratio"),
-            "market_cap_yi": row.get("total_market_cap"),
-            "turnover_pct": row.get("turnover_pct"),
-            "industry_level_1": row.get("industry_level_1"),
-            "industry_level_2": row.get("industry_level_2"),
-            "industry_total_score": row.get("industry_total_score"),
-            "industry_total_rank": row.get("industry_total_rank"),
-            "industry_total_universe_size": row.get("industry_total_universe_size"),
-            "rps_20": row.get("rps_20"),
-            "rps_50": row.get("rps_50"),
-            "rps_120": row.get("rps_120"),
-            "rps_250": row.get("rps_250"),
-            "strategy": "rps_pullback",
-            "strategy_label": row.get("strategy_label") or "RPS回踩",
-            "matched_conditions": ["RPS回踩"],
+            "market": market,
+            "symbol": symbol,
+            "stock_name": stock_name,
+            "current_price": round(current_price, 2) if current_price else None,
+            "gain_pct": round(gain_pct, 2) if gain_pct else None,
+            "volume_ratio": round(volume_ratio, 2) if volume_ratio else None,
+            "market_cap_yi": round(market_cap_yi, 1) if market_cap_yi else None,
+            "turnover_pct": round(turnover_pct, 2) if turnover_pct else None,
+            "industry_level_1": industry_level_1,
+            "industry_level_2": industry_level_2,
+            "industry_total_score": round(industry_total_score, 1) if industry_total_score else None,
+            "industry_total_rank": int(industry_total_rank) if industry_total_rank else None,
+            "industry_total_universe_size": int(industry_total_universe_size) if industry_total_universe_size else None,
         })
+
+    rows.sort(key=lambda r: (-float(r.get("gain_pct") or 0.0), str(r.get("market", "")), str(r.get("symbol", ""))))
+    return rows
+
+
+# ─── scheme_2560 ─────────────────────────────────────────────────────────────────
+
+def _ma(values: list[float], period: int) -> float | None:
+    """Simple moving average of the most recent `period` values (newest last)."""
+    if len(values) < period:
+        return None
+    return sum(values[-period:]) / period
+
+
+def _sma(values: list[float], period: int, idx: int) -> float | None:
+    """SMA ending at index idx (inclusive), using `period` values."""
+    start = idx + 1 - period
+    if start < 0:
+        return None
+    window = values[start:idx + 1]
+    if len(window) < period:
+        return None
+    return sum(window) / period
+
+
+def _vol_ma(bars: list[dict[str, object]], period: int) -> float | None:
+    """Volume SMA over `period` bars (newest last)."""
+    if len(bars) < period:
+        return None
+    vols = [float(bar["volume"]) for bar in bars[-period:]]
+    return sum(vols) / period
+
+
+def _recent_amount_ma(bars: list[dict[str, object]], period: int) -> float | None:
+    """成交额 SMA (单位：元)."""
+    if len(bars) < period:
+        return None
+    amts = [float(bar.get("amount") or (float(bar["close"]) * float(bar["volume"]) * 100.0)) for bar in bars[-period:]]
+    return sum(amts) / period
+
+
+def _build_scheme_2560_matches(
+    conditions: dict[str, object],
+    condition_enabled: dict[str, bool],
+) -> list[dict[str, object]]:
+    """
+    2560 方案选股逻辑
+    四个模块: basic / pullback_buy / breakout_buy / strong_pullback
+    模块之间为 AND 关系（所有开启的模块全部满足才入选）
+    模块内部为 AND 关系（所有条件满足才算模块通过）
+    """
+    defaults = _REALTIME_SCENARIO_DEFAULTS.get("scheme_2560", {}).get("conditions", {})
+    conditions = {**defaults, **{k: v for k, v in conditions.items() if v is not None}}
+
+    module_enabled = {
+        "basic": _coerce_bool(condition_enabled.get("module_basic", True)),
+        "pullback_buy": _coerce_bool(condition_enabled.get("module_pullback_buy", True)),
+        "breakout_buy": _coerce_bool(condition_enabled.get("module_breakout_buy", False)),
+        "strong_pullback": _coerce_bool(condition_enabled.get("module_strong_pullback", False)),
+    }
+
+    security_rows = load_security_rows()
+    industry_rows = load_industry_rows()
+    security_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in security_rows}
+    industry_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in industry_rows}
+    snapshot = _load_financial_snapshot() or {}
+    score_rows: dict[str, object] = snapshot.get("scores") if isinstance(snapshot, dict) else {}
+    if not isinstance(score_rows, dict):
+        score_rows = {}
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup = _score_rank_lookups(
+        score_rows,
+        industry_lookup,
+    )
+    valuation_lookup: dict[tuple[str, str], dict[str, object]] = _realtime_valuation_lookup()
+
+    rows: list[dict[str, object]] = []
+
+    for quote in load_realtime_quote_rows():
+        market = _normalize_text(quote.get("market")).lower()
+        symbol = _normalize_text(quote.get("symbol"))
+        price = _coerce_float(quote.get("price"))
+        last_close = _coerce_float(quote.get("last_close"))
+        if not market or not symbol or price is None or last_close in (None, 0.0):
+            continue
+
+        # ── ST 过滤 ──────────────────────────────────────────────────
+        security = security_lookup.get((market, symbol)) or {}
+        stock_name = _normalize_text(security.get("stock_name")) or symbol
+        if "ST" in stock_name or "*ST" in stock_name or stock_name.startswith("S ") or stock_name == "S":
+            continue
+
+        # ── Listed days ─────────────────────────────────────────────
+        listed_date = security.get("listed_date")
+        if listed_date:
+            try:
+                import datetime
+                ld = datetime.datetime.strptime(str(listed_date)[:10], "%Y-%m-%d")
+                today = datetime.date.today()
+                listed_days = (today - ld.date()).days
+                if listed_days < int(conditions.get("min_listed_days") or 120):
+                    continue
+            except Exception:
+                pass
+
+        # ── Daily bars (need 120+ for MA calculations) ───────────────
+        bars = _recent_daily_bars(market, symbol, count=130)
+        if len(bars) < 60:
+            continue
+
+        closes = [float(bar["close"]) for bar in bars]
+        highs = [float(bar["high"]) for bar in bars]
+        lows = [float(bar["low"]) for bar in bars]
+        volumes = [float(bar["volume"]) for bar in bars]
+        # amount in 元
+        amounts = [
+            float(bar.get("amount") or (closes[i] * volumes[i] * 100.0))
+            for i, bar in enumerate(bars)
+        ]
+
+        current_bar = bars[-1]
+        current_high = _coerce_float(current_bar.get("high"))
+        current_low = _coerce_float(current_bar.get("low"))
+        current_vol = _coerce_float(current_bar.get("volume"))
+        current_amount = float(current_bar.get("amount") or (price * current_vol * 100.0))
+
+        # MAs
+        ma25_today = _ma(closes, 25)
+        ma25_5d_ago = _sma(closes, 25, len(closes) - 1 - 5)
+        ma25_10d_ago = _sma(closes, 25, len(closes) - 1 - 10)
+        ma60_today = _ma(closes, 60)
+
+        if ma25_today is None or ma25_5d_ago is None:
+            continue
+
+        # VMA5 / VMA60
+        vma5_today = _vol_ma(bars, 5)
+        vma60_today = _vol_ma(bars, 60)
+        vma5_5d_ago = _vol_ma(bars[:len(bars) - 1], 5)  # 前5日VMA5
+        vma5_max_5d = max(volumes[-5:]) if len(volumes) >= 5 else max(volumes)
+
+        # Amount MA
+        amount_ma20_today = _recent_amount_ma(bars, 20)
+
+        gain_pct = round((price / float(last_close) - 1.0) * 100.0, 4)
+        # 20日涨幅
+        close_20d_ago = closes[-20] if len(closes) >= 20 else closes[0]
+        gain_20d_pct = ((price / close_20d_ago) - 1.0) * 100.0 if close_20d_ago else None
+        # 30日涨幅
+        close_30d_ago = closes[-30] if len(closes) >= 30 else closes[0]
+        gain_30d_pct = ((price / close_30d_ago) - 1.0) * 100.0 if close_30d_ago else None
+
+        price_above_ma25_pct = ((price / ma25_today) - 1.0) * 100.0 if ma25_today else None
+        ma25_trend_5d_pct = ((ma25_today / ma25_5d_ago) - 1.0) * 100.0 if ma25_5d_ago else None
+
+        vol_ratio_5d_60d = (vma5_today / vma60_today) if (vma5_today and vma60_today and vma60_today > 0) else None
+
+        module_passed: dict[str, bool] = {}
+
+        # ══════════════════════════════════════════════════════════════
+        # 模块1: 基础条件 (AND)
+        # ══════════════════════════════════════════════════════════════
+        if module_enabled["basic"]:
+            ok = True
+
+            if _coerce_bool(conditions.get("min_price")) and price < float(conditions.get("min_price", 5.0)):
+                ok = False
+            if ok and _coerce_bool(conditions.get("price_above_ma60")) and ma60_today is not None and price < ma60_today:
+                ok = False
+            if ok and gain_20d_pct is not None and gain_20d_pct > float(conditions.get("gain_20d_max_pct", 35.0)):
+                ok = False
+            if ok and _coerce_bool(conditions.get("ma25_trend_up_5d")):
+                threshold = float(conditions.get("ma25_trend_up_5d_pct", 0.5))
+                if ma25_trend_5d_pct is None or ma25_trend_5d_pct < threshold:
+                    ok = False
+            if ok and _coerce_bool(conditions.get("ma25_above_ma10")):
+                if ma25_10d_ago is None or ma25_today <= ma25_10d_ago:
+                    ok = False
+            if ok and _coerce_bool(conditions.get("price_above_ma25")) and price < ma25_today:
+                ok = False
+            if ok and price_above_ma25_pct is not None:
+                range_max = float(conditions.get("price_ma25_range_pct", 8.0))
+                if price_above_ma25_pct < 0.0 or price_above_ma25_pct > range_max:
+                    ok = False
+            if ok and vol_ratio_5d_60d is not None:
+                vr_min = float(conditions.get("vol_ratio_5d_60d_min", 1.15))
+                vr_max = float(conditions.get("vol_ratio_5d_60d_max", 2.5))
+                if vol_ratio_5d_60d < vr_min or vol_ratio_5d_60d > vr_max:
+                    ok = False
+            if ok and amount_ma20_today is not None:
+                min_amount = float(conditions.get("min_amount_20d_yi", 1.0)) * 100000000.0
+                if amount_ma20_today < min_amount:
+                    ok = False
+
+            module_passed["基础条件"] = ok
+
+        # ══════════════════════════════════════════════════════════════
+        # 模块2: 回踩买点* (AND)
+        # ══════════════════════════════════════════════════════════════
+        if module_enabled["pullback_buy"]:
+            ok = True
+
+            # 趋势: MA25 / 5日前MA25 - 1 ≥ threshold%
+            if _coerce_bool(conditions.get("pb_trend_ma25_5d")):
+                threshold = float(conditions.get("pb_trend_ma25_5d_pct", 0.5))
+                if ma25_trend_5d_pct is None or ma25_trend_5d_pct < threshold:
+                    ok = False
+
+            # 量能: 1.15 ≤ VMA5/VMA60 ≤ 2.5
+            if ok and vol_ratio_5d_60d is not None:
+                vr_min = float(conditions.get("pb_vol_ratio_min", 1.15))
+                vr_max = float(conditions.get("pb_vol_ratio_max", 2.5))
+                if vol_ratio_5d_60d < vr_min or vol_ratio_5d_60d > vr_max:
+                    ok = False
+
+            # 回踩位置: 当日最低价 ≤ MA25 × pct
+            if ok and current_low is not None:
+                max_low_ratio = float(conditions.get("pb_low_max_ma25_pct", 1.03))
+                if current_low > ma25_today * max_low_ratio:
+                    ok = False
+
+            # 收盘站回: C ≥ MA25
+            if ok and _coerce_bool(conditions.get("pb_close_above_ma25")):
+                if price < ma25_today:
+                    ok = False
+
+            # 跌破幅度限制: 当日最低价 ≥ MA25 × pct
+            if ok and current_low is not None:
+                min_low_ratio = float(conditions.get("pb_low_min_ma25_pct", 0.97))
+                if current_low < ma25_today * min_low_ratio:
+                    ok = False
+
+            # 当日K线不能太弱: C ≥ (H+L)/2
+            if ok and _coerce_bool(conditions.get("pb_kline_mid_strong")):
+                if current_high is not None and current_low is not None:
+                    mid = (current_high + current_low) / 2.0
+                    if price < mid:
+                        ok = False
+
+            # 距离25日线: C/MA25 - 1 ≤ pct
+            if ok and price_above_ma25_pct is not None:
+                max_pct = float(conditions.get("pb_price_ma25_max_pct", 5.0))
+                if price_above_ma25_pct > max_pct:
+                    ok = False
+
+            module_passed["回踩买点*"] = ok
+
+        # ══════════════════════════════════════════════════════════════
+        # 模块3: 突破买点 (AND)
+        # ══════════════════════════════════════════════════════════════
+        if module_enabled["breakout_buy"]:
+            ok = True
+
+            # 最近10天最高价和最低价的振幅不超过 X%
+            if ok:
+                highs_10d = highs[-10:]
+                lows_10d = lows[-10:]
+                if highs_10d and lows_10d:
+                    h10 = max(highs_10d)
+                    l10 = min(lows_10d)
+                    if l10 > 0:
+                        range_pct = ((h10 / l10) - 1.0) * 100.0
+                        max_range = float(conditions.get("bo_range_10d_max_pct", 12.0))
+                        if range_pct > max_range:
+                            ok = False
+
+            # 最近5日成交量均值比前5日低至少 X%
+            if ok:
+                vma5_now = vma5_today
+                vma5_prev = vma5_5d_ago
+                if vma5_now is not None and vma5_prev is not None and vma5_prev > 0:
+                    vol_drop_pct = ((vma5_prev - vma5_now) / vma5_prev) * 100.0
+                    min_drop = float(conditions.get("bo_vol_drop_min_pct", 15.0))
+                    if vol_drop_pct < min_drop:
+                        ok = False
+
+            # 收盘突破: C ≥ 近10日最高 × ratio
+            if ok:
+                h10 = max(highs[-10:]) if len(highs) >= 10 else max(highs)
+                break_ratio = float(conditions.get("bo_close_break_ratio", 1.01))
+                if price < h10 * break_ratio:
+                    ok = False
+
+            # 放量: 当日成交量 ≥ VMA5 × ratio
+            if ok and current_vol is not None and vma5_today:
+                burst_min = float(conditions.get("bo_vol_burst_min", 1.3))
+                if current_vol < vma5_today * burst_min:
+                    ok = False
+
+            # 不能爆量: 当日成交量 ≤ VMA60 × ratio
+            if ok and current_vol is not None and vma60_today:
+                burst_max = float(conditions.get("bo_vol_burst_max", 3.0))
+                if current_vol > vma60_today * burst_max:
+                    ok = False
+
+            # 距离25日线: C/MA25 - 1 ≤ pct
+            if ok and price_above_ma25_pct is not None:
+                max_pct = float(conditions.get("bo_price_ma25_max_pct", 10.0))
+                if price_above_ma25_pct > max_pct:
+                    ok = False
+
+            # 25日线向上: MA25 / 5日前MA25 - 1 ≥ threshold%
+            if ok and _coerce_bool(conditions.get("bo_ma25_trend_up", True)):
+                threshold = float(conditions.get("bo_ma25_trend_up_pct", 0.5))
+                if ma25_trend_5d_pct is None or ma25_trend_5d_pct < threshold:
+                    ok = False
+
+            module_passed["突破买点"] = ok
+
+        # ══════════════════════════════════════════════════════════════
+        # 模块4: 强势回踩 (AND)
+        # ══════════════════════════════════════════════════════════════
+        if module_enabled["strong_pullback"]:
+            ok = True
+
+            # 近30日涨幅在 X% - Y% 之间
+            if ok and gain_30d_pct is not None:
+                g_min = float(conditions.get("sp_gain_30d_min_pct", 20.0))
+                g_max = float(conditions.get("sp_gain_30d_max_pct", 60.0))
+                if gain_30d_pct < g_min or gain_30d_pct > g_max:
+                    ok = False
+
+            # 过去20个交易日中，收盘价连续在MA25上方
+            if ok:
+                above_ma25_days = int(conditions.get("sp_above_ma25_days", 20))
+                above_count = 0
+                for i in range(-1, -21, -1):
+                    if abs(i) > len(closes) - 1:
+                        break
+                    c = closes[i]
+                    ma = _sma(closes, 25, len(closes) - 1 + i)
+                    if ma is not None and c >= ma:
+                        above_count += 1
+                if above_count < above_ma25_days:
+                    ok = False
+
+            # 最近3日内第一次回到25日线附近3%以内
+            if ok:
+                revert_max = float(conditions.get("sp_recent_revert_max_pct", 1.03))
+                found_revert = False
+                for i in range(-1, -4, -1):
+                    if abs(i) > len(closes) - 1:
+                        break
+                    c = closes[i]
+                    ma = _sma(closes, 25, len(closes) - 1 + i)
+                    if ma is not None and c <= ma * revert_max:
+                        found_revert = True
+                        break
+                if not found_revert:
+                    ok = False
+
+            # 回踩不破: C ≥ MA25
+            if ok and _coerce_bool(conditions.get("sp_close_above_ma25")):
+                if price < ma25_today:
+                    ok = False
+
+            # 回踩幅度: 最低价 ≥ MA25 × pct
+            if ok and current_low is not None:
+                min_low_ratio = float(conditions.get("sp_low_min_ma25_pct", 0.97))
+                if current_low < ma25_today * min_low_ratio:
+                    ok = False
+
+            # 缩量: 当日成交量 ≤ 近5日最大成交量 × ratio
+            if ok and current_vol is not None and vma5_max_5d:
+                shrink_max = float(conditions.get("sp_vol_shrink_max_ratio", 0.7))
+                if current_vol > vma5_max_5d * shrink_max:
+                    ok = False
+
+            # 不放量下跌: 当日成交量 ≤ VMA5
+            if ok and _coerce_bool(conditions.get("sp_vol_below_vma5")):
+                if current_vol is not None and vma5_today and current_vol > vma5_today:
+                    ok = False
+
+            # K线位置: C ≥ (H+L)/2
+            if ok and _coerce_bool(conditions.get("sp_kline_mid_strong")):
+                if current_high is not None and current_low is not None:
+                    mid = (current_high + current_low) / 2.0
+                    if price < mid:
+                        ok = False
+
+            # 量能基础: VMA5/VMA60 ≥ ratio
+            if ok and vol_ratio_5d_60d is not None:
+                min_ratio = float(conditions.get("sp_vol_ratio_min", 1.15))
+                if vol_ratio_5d_60d < min_ratio:
+                    ok = False
+
+            module_passed["强势回踩"] = ok
+
+        # ══════════════════════════════════════════════════════════════
+        # 所有开启的模块必须全部通过
+        # ══════════════════════════════════════════════════════════════
+        enabled_modules = list(module_passed.keys())
+        if not enabled_modules:
+            continue
+        if not all(module_passed.values()):
+            continue
+
+        # ── Build result row ────────────────────────────────────────────
+        score_key = f"{market}:{symbol}"
+        score_entry = score_rows.get(score_key) if isinstance(score_rows.get(score_key), dict) else {}
+        industry = industry_lookup.get((market, symbol)) or {}
+        industry_level_1 = (
+            _normalize_text(score_entry.get("industry_sw_level_1"))
+            or _normalize_text(industry.get("industry_level_1_name"))
+        )
+        industry_level_2 = (
+            _normalize_text(score_entry.get("industry_sw_level_2"))
+            or _normalize_text(industry.get("industry_level_2_name"))
+        )
+        valuation = valuation_lookup.get((market, symbol)) or {}
+        market_cap_yi = _coerce_float(valuation.get("total_market_cap"))
+        turnover_pct = None
+        if current_vol is not None and market_cap_yi and market_cap_yi > 0 and price > 0:
+            turnover_pct = (current_vol * 100.0 * price / (market_cap_yi * 100000000.0)) * 100.0
+
+        rows.append({
+            "market": market,
+            "symbol": symbol,
+            "stock_name": stock_name,
+            "current_price": round(price, 2),
+            "gain_pct": round(gain_pct, 2),
+            "gain_20d_pct": round(gain_20d_pct, 2) if gain_20d_pct is not None else None,
+            "gain_30d_pct": round(gain_30d_pct, 2) if gain_30d_pct is not None else None,
+            "volume_ratio": round(float(vol_ratio_5d_60d), 2) if vol_ratio_5d_60d is not None else None,
+            "market_cap_yi": round(float(market_cap_yi), 1) if market_cap_yi is not None else None,
+            "turnover_pct": round(float(turnover_pct), 2) if turnover_pct is not None else None,
+            "industry_level_1": industry_level_1,
+            "industry_level_2": industry_level_2,
+            "industry_total_score": round(_coerce_float(score_entry.get("ind_total_score")), 1) if score_entry.get("ind_total_score") is not None else None,
+            "industry_total_rank": _coerce_int(score_entry.get("industry_total_rank")) or industry_rank_lookup.get(score_key),
+            "industry_total_universe_size": (
+                _coerce_int(score_entry.get("industry_total_universe_size"))
+                or industry_universe_sizes.get(industry_level_2)
+            ),
+            "matched_conditions": enabled_modules,
+        })
+
+    rows.sort(key=lambda r: (-float(r.get("gain_pct") or 0.0), str(r.get("market", "")), str(r.get("symbol", ""))))
     return rows
 
 
@@ -2072,9 +2742,13 @@ def realtime_screener_response(params: dict[str, str]) -> dict[str, object]:
 
     monitor = _coerce_bool(params.get("monitor"))
     if scenario == "rps_pullback":
-        conditions: dict[str, object] = {}
-        condition_enabled: dict[str, bool] = {}
-        rows = _build_rps_pullback_matches() if monitor else []
+        conditions = _parse_realtime_conditions(params, defaults)
+        condition_enabled = _parse_realtime_condition_enabled(params)
+        rows = _build_rps_pullback_matches(conditions, condition_enabled) if monitor else []
+    elif scenario == "scheme_2560":
+        conditions = _parse_realtime_conditions(params, defaults)
+        condition_enabled = _parse_realtime_condition_enabled(params)
+        rows = _build_scheme_2560_matches(conditions, condition_enabled) if monitor else []
     else:
         conditions = _parse_realtime_conditions(params, defaults)
         condition_enabled = _parse_realtime_condition_enabled(params)

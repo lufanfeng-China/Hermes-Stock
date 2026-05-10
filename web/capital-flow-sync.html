@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Capital Flow Sync</title>
+<style>
+body { background:#0d1117; color:#aaa; font:14px monospace; padding:20px; }
+#log { max-height:80vh; overflow-y:auto; white-space:pre-wrap; }
+.done { color:#26a69a; }
+.fail { color:#ef5350; }
+</style>
+</head>
+<body>
+<h2>Capital Flow Sync (Browser-based)</h2>
+<div id="status">Loading stock list...</div>
+<div id="log"></div>
+<progress id="progress" value="0" max="100" style="width:100%"></progress>
+
+<script>
+const SERVER = 'http://127.0.0.1:8765';
+const BATCH = 50; // Save every N stocks
+const DELAY = 1500; // ms between stocks
+const MAX_DAYS = 30;
+
+let stocks = [];
+let results = [];
+let batchBuffer = [];
+
+function log(msg, cls) {
+  const div = document.createElement('div');
+  div.className = cls || '';
+  div.textContent = msg;
+  document.getElementById('log').appendChild(div);
+  div.scrollIntoView(false);
+}
+
+async function init() {
+  // Load stock list from local server
+  const resp = await fetch(SERVER + '/api/stock-search?q=&limit=6000');
+  const data = await resp.json();
+  stocks = (data.results || []).filter(s => /^\d{6}$/.test(s.symbol));
+  document.getElementById('progress').max = stocks.length;
+  document.getElementById('status').textContent = `Ready: ${stocks.length} stocks. Starting...`;
+  log(`Loaded ${stocks.length} stocks. Delay: ${DELAY}ms, batch: ${BATCH}`, 'done');
+  start();
+}
+
+function fetchViaIframe(symbol, mkt) {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    const emMkt = mkt === 'sh' || symbol.startsWith('6') ? 1 : 0;
+    iframe.src = `https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt=0&klt=1&secid=${emMkt}.${symbol}&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65`;
+
+    const timeout = setTimeout(() => {
+      iframe.remove();
+      resolve(null);
+    }, 8000);
+
+    iframe.onload = () => {
+      clearTimeout(timeout);
+      try {
+        const text = iframe.contentDocument?.body?.textContent || '';
+        const data = JSON.parse(text);
+        const klines = data?.data?.klines || [];
+        iframe.remove();
+        resolve({symbol, name: data?.data?.name, klines});
+      } catch(e) {
+        iframe.remove();
+        resolve(null);
+      }
+    };
+    iframe.onerror = () => {
+      clearTimeout(timeout);
+      iframe.remove();
+      resolve(null);
+    };
+    document.body.appendChild(iframe);
+  });
+}
+
+async function saveBatch() {
+  if (batchBuffer.length === 0) return;
+  const payload = JSON.stringify(batchBuffer);
+  batchBuffer = [];
+  try {
+    await fetch(SERVER + '/api/save-capital-flow', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: payload
+    });
+  } catch(e) {
+    log('Save failed: ' + e.message, 'fail');
+  }
+}
+
+async function start() {
+  for (let i = 0; i < stocks.length; i++) {
+    const s = stocks[i];
+    const result = await fetchViaIframe(s.symbol, s.market);
+    
+    if (result && result.klines.length > 0) {
+      const rows = result.klines.slice(0, MAX_DAYS).map(line => {
+        const p = line.split(',');
+        return {
+          symbol: s.symbol,
+          stock_name: result.name || s.stock_name || s.symbol,
+          market: s.market,
+          trading_day: p[0],
+          net_main_force: parseFloat(p[1]) || 0,
+          net_small: parseFloat(p[2]) || 0,
+          net_medium: parseFloat(p[3]) || 0,
+          net_large: parseFloat(p[4]) || 0,
+          net_super_large: parseFloat(p[5]) || 0,
+          pct_main_force: parseFloat(p[6]) || 0,
+          pct_small: parseFloat(p[7]) || 0,
+          pct_medium: parseFloat(p[8]) || 0,
+          pct_large: parseFloat(p[9]) || 0,
+          pct_super_large: parseFloat(p[10]) || 0,
+          close: parseFloat(p[11]) || 0,
+          gain_pct: parseFloat(p[12]) || 0,
+          data_source: 'eastmoney',
+        };
+      });
+      batchBuffer.push(...rows);
+      results.push(...rows);
+    }
+
+    document.getElementById('progress').value = i + 1;
+    const pct = ((i + 1) / stocks.length * 100).toFixed(1);
+    document.getElementById('status').textContent = 
+      `${i+1}/${stocks.length} (${pct}%) — ${result ? result.klines.length : 0} days for ${s.symbol}`;
+
+    if ((i + 1) % BATCH === 0) {
+      await saveBatch();
+      log(`Saved batch ${i+1}/${stocks.length}`, 'done');
+    }
+
+    await new Promise(r => setTimeout(r, DELAY));
+  }
+
+  await saveBatch();
+  log(`DONE: ${results.length} rows for ${stocks.length} stocks`, 'done');
+  document.getElementById('status').textContent = 'Complete!';
+}
+init();
+</script>
+</body>
+</html>
