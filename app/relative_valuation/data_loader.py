@@ -31,8 +31,18 @@ def compute_ttm_metric_from_rows(
         return current_value
     is_quarterly_cumulative = len(text) >= 6 and text[:4].isdigit() and text[4] == "Q" and text[5] in {"1", "2", "3"}
     if is_quarterly_cumulative:
-        prev_annual_value = _pick_from_row(prev_annual_row, field_name)
+        prev_annual_raw = _pick_from_row(prev_annual_row, field_name)
         prev_same_value = _pick_from_row(prev_same_row, field_name)
+        # prev_annual_raw is Q4 standalone, not full-year accumulated.
+        # Full year = Q3 cumulative + Q4 standalone.
+        q3_cumulative = None
+        if isinstance(previous_quarter_rows, (list, tuple)) and len(previous_quarter_rows) >= 2:
+            q3_cumulative = _pick_from_row(previous_quarter_rows[1], field_name)
+        prev_annual_value = (
+            (q3_cumulative + prev_annual_raw)
+            if (q3_cumulative is not None and prev_annual_raw is not None)
+            else prev_annual_raw
+        )
         if current_value is not None and prev_annual_value is not None and prev_same_value is not None:
             return current_value + prev_annual_value - prev_same_value
     if isinstance(previous_quarter_rows, (list, tuple)):
@@ -198,7 +208,9 @@ def load_industry_valuation_snapshot(industry_level_2_name: str) -> dict[str, ob
         return dict(cached)
     rebuilt = _rebuild_industry_snapshot(
         industry_level_2_name,
-        tuple(_freeze_temperature_history(cached.get("temperature_history_since_2022")) if isinstance(cached, dict) else []),
+        tuple(_freeze_temperature_history(cached.get("temperature_history_since_2022"))) if (
+            isinstance(cached, dict) and isinstance(cached.get("temperature_history_since_2022"), list)
+        ) else None,
     )
     if rebuilt:
         return dict(rebuilt)
@@ -372,14 +384,15 @@ def _load_listed_days(market: str, symbol: str) -> int | None:
 @lru_cache(maxsize=256)
 def _rebuild_industry_snapshot(
     industry_level_2_name: str,
-    frozen_temperature_history: tuple[tuple[str, float], ...],
+    frozen_temperature_history: tuple[tuple[str, float], ...] | None,
 ) -> dict[str, object] | None:
     return build_industry_snapshot_for_industry(
         industry_level_2_name,
-        temperature_history=[
-            {"trading_day": trading_day, "weighted_pe_ttm": weighted_pe_ttm}
-            for trading_day, weighted_pe_ttm in frozen_temperature_history
-        ],
+        temperature_history=(
+            [{"trading_day": t, "weighted_pe_ttm": p} for t, p in frozen_temperature_history]
+            if frozen_temperature_history is not None
+            else None
+        ),
     )
 
 

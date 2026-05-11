@@ -32,9 +32,9 @@
           <div class="search-card-header">
             <div>
               <p class="eyebrow">SCORE LOOKUP</p>
-              <h2>代码 / 名称 / 市场前缀</h2>
+              <h2><span id="hdr-name">—</span> <span id="hdr-symbol" class="stock-score-symbol">—</span></h2>
             </div>
-            <p class="search-meta">财报评分与画像摘要联动</p>
+            <p class="search-meta"><span id="hdr-report-date"></span><span id="hdr-announce-date"></span></p>
           </div>
           <form class="search-form stock-score-search-form" onsubmit="return false;">
             <div class="search-input-wrap">
@@ -74,7 +74,7 @@
             <article class="metric-card stock-score-total-card">
               <p class="metric-label">行业温度</p>
               <p id="hdr-total-temperature" class="metric-value clickable-value">—</p>
-              <p id="hdr-total-temperature-meta" class="metric-meta">基于自2022年以来行业加权PE-TTM</p>
+              <p id="hdr-total-temperature-meta" class="metric-meta">行业样本: —</p>
             </article>
             <article class="metric-card stock-score-total-card">
               <p class="metric-label">估值分类</p>
@@ -133,37 +133,6 @@
         </article>
       </div>
 
-      <section id="score-header" class="stock-score-summary visible">
-        <article class="profile-card stock-score-profile-card">
-          <div class="stock-score-profile-card-inner">
-            <div class="profile-header stock-score-profile-header">
-              <div>
-                <p class="eyebrow">SCORE SNAPSHOT</p>
-                <h2><span id="hdr-name">—</span> <span id="hdr-symbol" class="stock-score-symbol">—</span></h2>
-              </div>
-              <div class="stock-score-dates">
-                <span class="profile-meta" id="hdr-report-date"></span>
-                <span class="profile-meta" id="hdr-announce-date"></span>
-              </div>
-            </div>
-
-            <div id="score-profile-strip" class="profile-grid stock-score-profile-grid">
-            </div>
-
-            <section id="score-home-intro" class="stock-score-home-intro">
-              <div class="stock-score-home-intro-terminal">
-                <span class="stock-score-home-intro-chip">HOME SUMMARY</span>
-                <p>首页可先查看使用说明与当前数据口径</p>
-              </div>
-              <ul id="score-home-intro-points" class="stock-score-home-intro-points">
-                <li>先在左侧输入股票代码、名称或 `market:symbol` 开始查询。</li>
-                <li>右侧区域会在查询后切换为最新评分摘要，左侧总分卡片同步显示估值温度与行业位置。</li>
-                <li>下方模块保留六维拆分、细分指标与 AI 财报解读入口。</li>
-              </ul>
-            </section>
-          </div>
-        </article>
-      </section>
     </section>
 
     <section class="chart-grid stock-score-analysis-grid">

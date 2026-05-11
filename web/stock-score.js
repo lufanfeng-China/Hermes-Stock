@@ -582,7 +582,9 @@ function renderRelativeValuationSummary(payload) {
   );
   setProfileField(
     "hdr-total-temperature-meta",
-    payload ? "基于自2022年以来行业加权PE-TTM" : "",
+    payload
+      ? `有效样本 ${payload.industry_valid_member_count ?? '—'} · ${payload.sample_status === 'ok' ? '样本充足' : payload.sample_status === 'insufficient' ? '样本不足' : payload.sample_status === 'new_listing' ? '次新股' : payload.sample_status || '—'}`
+      : "",
     PROFILE_PLACEHOLDERS.totalTemperatureMeta,
   );
   setProfileField(
@@ -633,6 +635,7 @@ function renderTotalScoreRankSummary(result) {
 function setScoreHeaderIntroVisible(visible) {
   const introEl = document.getElementById("score-home-intro");
   if (!introEl) return;
+  const stripEl = document.getElementById("score-profile-strip");
   introEl.hidden = !visible;
 }
 
@@ -1319,7 +1322,8 @@ function renderScore(result) {
     return;
   }
 
-  document.getElementById("score-header").classList.add("visible");
+  const headerEl = document.getElementById("score-header");
+  if (headerEl) headerEl.classList.add("visible");
   setScoreHeaderIntroVisible(false);
   document.getElementById("loading-msg").style.display = "none";
 

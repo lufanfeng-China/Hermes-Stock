@@ -63,7 +63,7 @@ def load_industry_temperature_history(industry_level_2_name: str) -> list[dict[s
         return []
 
     period_snapshots: list[dict[str, object]] = []
-    for period in _historical_periods_since_2022():
+    for period in _historical_periods_since_2020():
         trading_day = period_to_trading_day(period)
         member_payloads = []
         for row in members:
@@ -92,11 +92,11 @@ def load_industry_temperature_history(industry_level_2_name: str) -> list[dict[s
 
 
 @lru_cache(maxsize=1)
-def _historical_periods_since_2022() -> tuple[str, ...]:
+def _historical_periods_since_2020() -> tuple[str, ...]:
     periods = []
     for path in FINANCIAL_TS_DIR.glob("*.parquet"):
         period = path.stem
-        if period[:4].isdigit() and int(period[:4]) >= 2022:
+        if period[:4].isdigit() and int(period[:4]) >= 2020:
             periods.append(period)
     periods.sort(key=_period_sort_key)
     return tuple(periods)

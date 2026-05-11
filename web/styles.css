@@ -1225,7 +1225,7 @@ button:hover {
 }
 
 .stock-score-lead-grid {
-  grid-template-columns: minmax(300px, 0.84fr) minmax(0, 1.16fr);
+  grid-template-columns: 1fr;
   gap: 10px 14px;
   align-items: start;
 }
@@ -1564,8 +1564,8 @@ button:hover {
 
 .stock-score-basic-info-card .profile-label {
   color: #6f8899;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  letter-spacing: 0.06em;
 }
 
 .stock-score-basic-info-card .profile-value {
