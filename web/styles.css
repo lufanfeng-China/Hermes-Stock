@@ -1611,26 +1611,6 @@ button:hover {
   color: #ffcc80;
 }
 
-.stock-score-temperature-trigger {
-  width: 100%;
-  min-height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  text-align: left;
-  justify-content: start;
-}
-
-.stock-score-temperature-trigger:hover,
-.stock-score-temperature-trigger:focus {
-  color: #ffe0ad;
-  filter: none;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .industry-temperature-history-chart {
   display: block;
   width: 100%;
@@ -1730,15 +1710,6 @@ button:hover {
   background: rgba(10, 20, 29, 0.56);
 }
 
-.stock-score-rps-row {
-  padding: 7px 10px;
-  border: 1px solid rgba(127, 153, 170, 0.12);
-  border-radius: 10px;
-  background: rgba(10, 20, 29, 0.56);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .profile-value.muted,
 .stock-score-methodology-note.muted {
   color: var(--muted);
@@ -1759,7 +1730,7 @@ button:hover {
   align-self: start;
   gap: 10px;
   margin-bottom: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .stock-score-query-totals {

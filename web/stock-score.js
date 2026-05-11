@@ -247,6 +247,12 @@ const PROFILE_PLACEHOLDERS = {
   industryTotalMeta: "暂无行业信息",
   totalMarketRank: "全市场排名: 暂无",
   totalIndustryRank: "二级行业排名: 暂无",
+  totalTemperature: "待加载行业温度",
+  totalTemperatureMeta: "基于自2022年以来行业加权PE-TTM",
+  totalValuationClassification: "待加载估值分类",
+  totalValuationClassificationMeta: "待加载分类说明",
+  totalValuationPercentile: "待加载行业内估值位置",
+  totalValuationPercentileMeta: "待加载区间标签",
   concepts: "暂无核心概念",
   basicPrice: "待加载现价",
   basicChange: "待加载涨幅",
@@ -256,23 +262,6 @@ const PROFILE_PLACEHOLDERS = {
   basicFloatShares: "待加载流通股本",
   basicEps: "待加载收益",
   basicDynamicPe: "待加载PE-TTM",
-  industryRps20: "RPS20: 暂无",
-  industryRps50: "RPS50: 暂无",
-  industryRps120: "RPS120: 暂无",
-  industryRps250: "RPS250: 暂无",
-  rps20: "RPS20: 暂无",
-  rps50: "RPS50: 暂无",
-  rps120: "RPS120: 暂无",
-  rps250: "RPS250: 暂无",
-  valuationIndustryPe: "待加载行业加权PE",
-  valuationIndustryPs: "待加载行业加权PS",
-  valuationTemperature: "待加载行业温度",
-  valuationClassification: "待加载估值分类",
-  valuationClassificationDesc: "待加载分类说明",
-  valuationSampleCount: "待加载行业样本",
-  valuationSampleStatus: "待加载样本状态",
-  valuationPercentile: "待加载行业内估值位置",
-  valuationBand: "待加载区间标签",
 };
 
 const STOCK_SCORE_EMPTY_STATES = {
@@ -403,13 +392,6 @@ function setProfileField(elementId, text, placeholder) {
   el.classList.toggle("muted", !hasText);
 }
 
-function setRpsRow(elementId, text, placeholder) {
-  const el = document.getElementById(elementId);
-  const hasText = Boolean(text && String(text).trim());
-  el.textContent = hasText ? String(text).trim() : placeholder;
-  el.classList.toggle("muted", !hasText);
-}
-
 function renderAnalysisList(elementId, items, placeholder) {
   const el = document.getElementById(elementId);
   const values = Array.isArray(items) ? items.filter(Boolean) : [];
@@ -516,34 +498,9 @@ function renderBasicInfoSummary(profile) {
 }
 
 function renderProfileSummary(profile) {
-  const rps20 = formatProfileMetric(profile?.rps_20);
-  const rps50 = formatProfileMetric(profile?.rps_50);
-  const rps120 = formatProfileMetric(profile?.rps_120);
-  const rps250 = formatProfileMetric(profile?.rps_250);
-  const industryRps20 = formatProfileMetric(profile?.industry_rps_20);
-  const industryRps50 = formatProfileMetric(profile?.industry_rps_50);
-  const industryRps120 = formatProfileMetric(profile?.industry_rps_120);
-  const industryRps250 = formatProfileMetric(profile?.industry_rps_250);
-
   renderBasicInfoSummary(profile);
   renderIndustryTotalMeta(profile);
   renderSearchConceptSummary(profile);
-  setRpsRow("hdr-rps20", rps20 ? `RPS20: ${rps20}` : "", PROFILE_PLACEHOLDERS.rps20);
-  setRpsRow("hdr-rps50", rps50 ? `RPS50: ${rps50}` : "", PROFILE_PLACEHOLDERS.rps50);
-  setRpsRow("hdr-rps120", rps120 ? `RPS120: ${rps120}` : "", PROFILE_PLACEHOLDERS.rps120);
-  setRpsRow("hdr-rps250", rps250 ? `RPS250: ${rps250}` : "", PROFILE_PLACEHOLDERS.rps250);
-  setRpsRow("hdr-industry-rps20", industryRps20 ? `RPS20: ${industryRps20}` : "", PROFILE_PLACEHOLDERS.industryRps20);
-  setRpsRow("hdr-industry-rps50", industryRps50 ? `RPS50: ${industryRps50}` : "", PROFILE_PLACEHOLDERS.industryRps50);
-  setRpsRow("hdr-industry-rps120", industryRps120 ? `RPS120: ${industryRps120}` : "", PROFILE_PLACEHOLDERS.industryRps120);
-  setRpsRow("hdr-industry-rps250", industryRps250 ? `RPS250: ${industryRps250}` : "", PROFILE_PLACEHOLDERS.industryRps250);
-  document.getElementById("hdr-rps-summary").classList.toggle(
-    "muted",
-    !(rps20 || rps50 || rps120 || rps250),
-  );
-  document.getElementById("hdr-industry-rps-summary").classList.toggle(
-    "muted",
-    !(industryRps20 || industryRps50 || industryRps120 || industryRps250),
-  );
 }
 
 function formatRelativeValuationNumber(value, suffix = "") {
@@ -556,7 +513,7 @@ function formatRelativeValuationTemperature(payload) {
   const percentile = payload?.industry_temperature_percentile_since_2022 != null
     ? `${formatRelativeValuationNumber(payload.industry_temperature_percentile_since_2022, "%")}`
     : "";
-  return [label, percentile].filter(Boolean).join(" / ");
+  return [label, percentile].filter(Boolean).join(" ");
 }
 
 function formatRelativeValuationClassification(payload) {
@@ -598,62 +555,55 @@ function formatRelativeValuationPercentile(payload) {
   return "";
 }
 
+function formatRelativeValuationPair(stockValue, industryValue) {
+  const stockText = formatRelativeValuationNumber(stockValue);
+  const industryText = formatRelativeValuationNumber(industryValue);
+  if (!stockText && !industryText) return "";
+  return `${stockText || "—"} / ${industryText || "—"}`;
+}
+
 function renderRelativeValuationSummary(payload) {
   const valuationClassification = formatRelativeValuationClassification(payload);
+  const valuationPercentile = formatRelativeValuationPercentile(payload);
   setProfileField(
     "hdr-basic-ps-ttm",
-    formatRelativeValuationNumber(payload?.ps_ttm),
+    formatRelativeValuationPair(payload?.ps_ttm, payload?.industry_weighted_ps_ttm),
     PROFILE_PLACEHOLDERS.basicPsTtm,
   );
   setProfileField(
     "hdr-basic-dynamic-pe",
-    formatRelativeValuationNumber(payload?.pe_ttm),
+    formatRelativeValuationPair(payload?.pe_ttm, payload?.industry_weighted_pe_ttm),
     PROFILE_PLACEHOLDERS.basicDynamicPe,
   );
   setProfileField(
-    "hdr-valuation-industry-pe",
-    formatRelativeValuationNumber(payload?.industry_weighted_pe_ttm),
-    PROFILE_PLACEHOLDERS.valuationIndustryPe,
-  );
-  setProfileField(
-    "hdr-valuation-industry-ps",
-    formatRelativeValuationNumber(payload?.industry_weighted_ps_ttm),
-    PROFILE_PLACEHOLDERS.valuationIndustryPs,
-  );
-  setProfileField(
-    "hdr-valuation-temperature",
+    "hdr-total-temperature",
     formatRelativeValuationTemperature(payload),
-    PROFILE_PLACEHOLDERS.valuationTemperature,
+    PROFILE_PLACEHOLDERS.totalTemperature,
   );
   setProfileField(
-    "hdr-valuation-classification",
+    "hdr-total-temperature-meta",
+    payload ? "基于自2022年以来行业加权PE-TTM" : "",
+    PROFILE_PLACEHOLDERS.totalTemperatureMeta,
+  );
+  setProfileField(
+    "hdr-total-valuation-classification",
     valuationClassification.label,
-    PROFILE_PLACEHOLDERS.valuationClassification,
+    PROFILE_PLACEHOLDERS.totalValuationClassification,
   );
   setProfileField(
-    "hdr-valuation-classification-desc",
+    "hdr-total-valuation-classification-meta",
     valuationClassification.description,
-    PROFILE_PLACEHOLDERS.valuationClassificationDesc,
+    PROFILE_PLACEHOLDERS.totalValuationClassificationMeta,
   );
   setProfileField(
-    "hdr-valuation-sample-count",
-    payload?.industry_valid_member_count != null ? String(payload.industry_valid_member_count) : "",
-    PROFILE_PLACEHOLDERS.valuationSampleCount,
+    "hdr-total-valuation-percentile",
+    valuationPercentile,
+    PROFILE_PLACEHOLDERS.totalValuationPercentile,
   );
   setProfileField(
-    "hdr-valuation-sample-status",
-    payload?.sample_status || "",
-    PROFILE_PLACEHOLDERS.valuationSampleStatus,
-  );
-  setProfileField(
-    "hdr-valuation-percentile",
-    formatRelativeValuationPercentile(payload),
-    PROFILE_PLACEHOLDERS.valuationPercentile,
-  );
-  setProfileField(
-    "hdr-valuation-band",
+    "hdr-total-valuation-percentile-meta",
     payload?.valuation_band_label || "",
-    PROFILE_PLACEHOLDERS.valuationBand,
+    PROFILE_PLACEHOLDERS.totalValuationPercentileMeta,
   );
 }
 
@@ -2062,8 +2012,8 @@ document.querySelectorAll("#industry-valuation-percentile-dialog .sub-table th.s
 document.getElementById("industry-valuation-percentile-dialog").addEventListener("click", (e) => {
   if (e.target === document.getElementById("industry-valuation-percentile-dialog")) closeIndustryValuationPercentileDialog();
 });
-document.getElementById("hdr-valuation-percentile").addEventListener("click", handleValuationPercentileClick);
-document.getElementById("hdr-valuation-temperature").addEventListener("click", handleIndustryTemperatureClick);
+document.getElementById("hdr-total-valuation-percentile").addEventListener("click", handleValuationPercentileClick);
+document.getElementById("hdr-total-temperature").addEventListener("click", handleIndustryTemperatureClick);
 document.getElementById("industry-temperature-history-close").addEventListener("click", () => closeIndustryTemperatureHistoryDialog());
 document.getElementById("industry-temperature-history-dialog").addEventListener("click", (e) => {
   if (e.target === document.getElementById("industry-temperature-history-dialog")) closeIndustryTemperatureHistoryDialog();

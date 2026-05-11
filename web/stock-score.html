@@ -71,6 +71,21 @@
               <p id="hdr-total-industry-rank" class="metric-meta">二级行业排名: 暂无</p>
               <p id="hdr-total-industry-meta" class="metric-meta">暂无行业信息</p>
             </article>
+            <article class="metric-card stock-score-total-card">
+              <p class="metric-label">行业温度</p>
+              <p id="hdr-total-temperature" class="metric-value clickable-value">—</p>
+              <p id="hdr-total-temperature-meta" class="metric-meta">基于自2022年以来行业加权PE-TTM</p>
+            </article>
+            <article class="metric-card stock-score-total-card">
+              <p class="metric-label">估值分类</p>
+              <p id="hdr-total-valuation-classification" class="metric-value">—</p>
+              <p id="hdr-total-valuation-classification-meta" class="metric-meta">待加载分类说明</p>
+            </article>
+            <article class="metric-card stock-score-total-card">
+              <p class="metric-label">行业内估值位置</p>
+              <p id="hdr-total-valuation-percentile" class="metric-value clickable-value">—</p>
+              <p id="hdr-total-valuation-percentile-meta" class="metric-meta">待加载区间标签</p>
+            </article>
           </section>
         </div>
         <article id="stock-score-basic-info-card" class="search-card stock-score-basic-info-card">
@@ -133,77 +148,6 @@
             </div>
 
             <div id="score-profile-strip" class="profile-grid stock-score-profile-grid">
-              <section class="stock-score-profile-cluster">
-                <div class="stock-score-profile-cluster-head">
-                  <p class="eyebrow">MOMENTUM</p>
-                  <h3>RPS 动量</h3>
-                </div>
-                <div class="stock-score-profile-cluster-body">
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">个股RPS</span>
-                    <div id="hdr-rps-summary" class="profile-value muted stock-score-rps-summary">
-                      <div id="hdr-rps20" class="stock-score-rps-row">待加载RPS20</div>
-                      <div id="hdr-rps50" class="stock-score-rps-row">待加载RPS50</div>
-                      <div id="hdr-rps120" class="stock-score-rps-row">待加载RPS120</div>
-                      <div id="hdr-rps250" class="stock-score-rps-row">待加载RPS250</div>
-                    </div>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">二级行业RPS</span>
-                    <div id="hdr-industry-rps-summary" class="profile-value muted stock-score-rps-summary">
-                      <div id="hdr-industry-rps20" class="stock-score-rps-row">待加载RPS20</div>
-                      <div id="hdr-industry-rps50" class="stock-score-rps-row">待加载RPS50</div>
-                      <div id="hdr-industry-rps120" class="stock-score-rps-row">待加载RPS120</div>
-                      <div id="hdr-industry-rps250" class="stock-score-rps-row">待加载RPS250</div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section id="hdr-valuation-summary" class="stock-score-profile-cluster">
-                <div class="stock-score-profile-cluster-head">
-                  <p class="eyebrow">VALUATION</p>
-                  <h3>相对估值摘要</h3>
-                </div>
-                <div class="stock-score-profile-cluster-body">
-                  <div class="profile-field stock-score-profile-field stock-score-valuation-temperature-field">
-                    <span class="profile-label">行业温度</span>
-                    <button type="button" class="profile-value muted clickable-value stock-score-temperature-trigger" id="hdr-valuation-temperature">待加载行业温度</button>
-                  </div>
-                  <div class="profile-field stock-score-profile-field stock-score-valuation-classification-field">
-                    <span class="profile-label">估值分类</span>
-                    <strong class="profile-value muted" id="hdr-valuation-classification">待加载估值分类</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field stock-score-valuation-classification-desc-field">
-                    <span class="profile-label">分类说明</span>
-                    <strong class="profile-value muted" id="hdr-valuation-classification-desc">待加载分类说明</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">行业加权PE</span>
-                    <strong class="profile-value muted" id="hdr-valuation-industry-pe">待加载行业加权PE</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">行业加权PS</span>
-                    <strong class="profile-value muted" id="hdr-valuation-industry-ps">待加载行业加权PS</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">行业样本</span>
-                    <strong class="profile-value muted" id="hdr-valuation-sample-count">待加载行业样本</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">样本状态</span>
-                    <strong class="profile-value muted" id="hdr-valuation-sample-status">待加载样本状态</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">行业内估值位置</span>
-                    <strong class="profile-value muted clickable-value" id="hdr-valuation-percentile">待加载行业内估值位置</strong>
-                  </div>
-                  <div class="profile-field stock-score-profile-field">
-                    <span class="profile-label">区间标签</span>
-                    <strong class="profile-value muted" id="hdr-valuation-band">待加载区间标签</strong>
-                  </div>
-                </div>
-              </section>
             </div>
 
             <section id="score-home-intro" class="stock-score-home-intro">
@@ -213,7 +157,7 @@
               </div>
               <ul id="score-home-intro-points" class="stock-score-home-intro-points">
                 <li>先在左侧输入股票代码、名称或 `market:symbol` 开始查询。</li>
-                <li>右侧区域会在查询后切换为最新评分摘要、RPS 动量与相对估值摘要。</li>
+                <li>右侧区域会在查询后切换为最新评分摘要，左侧总分卡片同步显示估值温度与行业位置。</li>
                 <li>下方模块保留六维拆分、细分指标与 AI 财报解读入口。</li>
               </ul>
             </section>
