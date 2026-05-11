@@ -275,6 +275,20 @@ const BASIC_GROWTH_PERIODS = [
   { elementId: "hdr-basic-growth-5y", placeholder: PROFILE_PLACEHOLDERS.basicGrowth5y, offset: 1250 },
 ];
 
+const BASIC_FLOW_FIELDS = [
+  { elementId: "hdr-basic-flow-daily", placeholder: "待加载", type: "yi" },
+  { elementId: "hdr-basic-flow-5d", placeholder: "待加载", type: "yi" },
+  { elementId: "hdr-basic-flow-5d-pct", placeholder: "待加载", type: "percent" },
+  { elementId: "hdr-basic-flow-super-large-ratio", placeholder: "待加载", type: "ratio" },
+];
+
+const BASIC_HELP_TEXT = {
+  "flow-daily": "今日主力净流入 = 当日超大单(≥100万) + 大单(20万~100万)净买入总额。正值表示主力资金净买入，负值表示净卖出。单位：亿元。",
+  "flow-5d": "近5个交易日主力净流入累计值。过滤单日噪音，反映短期资金趋势方向。连续5日正值为持续吸筹信号。单位：亿元。",
+  "flow-5d-pct": "5日主力净流入 ÷ 5日总成交额。归一化指标，使大市值和小市值股票可比。>10%表示主力高度参与，负值表示主力在出货。",
+  "flow-super-large-ratio": "5日超大单净流入 ÷ 5日大单净流入的比值。>2偏机构/北向资金驱动，<0.5偏游资或散户大单。注意：分母接近0时显示“—”。",
+};
+
 const STOCK_SCORE_EMPTY_STATES = {
   dimensions: "查询股票后显示六维评分",
   subIndicators: "查询股票后显示细分指标",
@@ -511,6 +525,51 @@ function resetBasicGrowthFields() {
   });
 }
 
+function formatSignedNumber(value, digits = 2) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+  const num = Number(value);
+  const sign = num > 0 ? "+" : "";
+  return `${sign}${num.toFixed(digits)}`;
+}
+
+function setBasicFlowField(elementId, value, placeholder, type = "yi") {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.classList.remove("basic-change-positive", "basic-change-negative", "basic-change-flat", "muted");
+  if (value == null || value === "" || Number.isNaN(Number(value))) {
+    el.textContent = placeholder;
+    el.classList.add("muted");
+    return;
+  }
+  const numericValue = Number(value);
+  if (type === "percent") {
+    el.textContent = formatSignedPercentOneDecimal(numericValue);
+  } else if (type === "ratio") {
+    el.textContent = formatSignedNumber(numericValue, 2);
+  } else {
+    el.textContent = `${formatSignedNumber(numericValue, 2)}亿`;
+  }
+  if (numericValue > 0) {
+    el.classList.add("basic-change-positive");
+  } else if (numericValue < 0) {
+    el.classList.add("basic-change-negative");
+  } else {
+    el.classList.add("basic-change-flat");
+  }
+}
+
+function resetBasicFlowFields() {
+  BASIC_FLOW_FIELDS.forEach(({ elementId, placeholder, type }) => {
+    setBasicFlowField(elementId, null, placeholder, type);
+  });
+}
+
+function setBasicFlowUnavailableFields() {
+  BASIC_FLOW_FIELDS.forEach(({ elementId, type }) => {
+    setBasicFlowField(elementId, null, "—", type);
+  });
+}
+
 function renderBasicInfoSummary(profile) {
   const basicInfo = profile?.basic_info || {};
   setProfileField(
@@ -566,6 +625,7 @@ function renderBasicInfoSummary(profile) {
     PROFILE_PLACEHOLDERS.basicDynamicPe,
   );
   resetBasicGrowthFields();
+  resetBasicFlowFields();
 }
 
 function renderProfileSummary(profile) {
@@ -730,6 +790,7 @@ function resetScoreHeaderSummary() {
 
 function resetProfileSummary() {
   searchState.basicGrowthRequestId += 1;
+  searchState.basicFlowRequestId += 1;
   renderBasicInfoSummary(null);
   renderProfileSummary(null);
   renderRelativeValuationSummary(null);
@@ -1545,6 +1606,23 @@ async function fetchStockKline(symbol, limit = 1300) {
   return payload;
 }
 
+async function fetchEastmoneyFlowClient(symbol, emMarket) {
+  const url = `https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt=120&klt=1&secid=${encodeURIComponent(`${emMarket}.${symbol}`)}&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+async function fetchEastmoneyFlowProxy(symbol) {
+  const url = `/api/proxy-eastmoney-flow?symbol=${encodeURIComponent(symbol)}`;
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+  }
+  return payload.data || payload;
+}
+
 async function fetchDataUpdateStatus() {
   const r = await fetch('/api/data-update-status');
   const payload = await r.json();
@@ -1608,11 +1686,14 @@ const industryScorePeerDialogEl = document.getElementById("industry-score-peer-d
 const industryScorePeerStatusEl = document.getElementById("industry-score-peer-status");
 const dataUpdateButtonEl = document.getElementById('stock-score-data-update-btn');
 const dataUpdateRetryButtonEl = document.getElementById('stock-score-data-update-retry-btn');
+const basicHelpTooltipEl = document.getElementById("basic-help-tooltip");
+const basicHelpTooltipTextEl = document.getElementById("basic-help-tooltip-text");
 let dataUpdatePollTimer = null;
 const searchState = {
   timer: null,
   requestId: 0,
   basicGrowthRequestId: 0,
+  basicFlowRequestId: 0,
   selectedStock: null,
   suggestions: [],
   recentSearches: [],
@@ -1711,6 +1792,126 @@ function loadBasicGrowthSummary(market, symbol, profile) {
       if (requestId !== searchState.basicGrowthRequestId || !isCurrentStockIdentity(stockIdentity)) return;
       setBasicGrowthUnavailableFields();
     });
+}
+
+function resolveEastmoneyMarketId(market, symbol) {
+  const normalizedMarket = String(market || "").toLowerCase();
+  if (normalizedMarket === "sh") return 1;
+  if (normalizedMarket === "sz") return 0;
+  return /^(60|68)/.test(String(symbol || "").trim()) ? 1 : 0;
+}
+
+function parseEastmoneyFlowKlines(payload) {
+  const klines = Array.isArray(payload?.data?.klines)
+    ? payload.data.klines
+    : Array.isArray(payload?.klines)
+      ? payload.klines
+      : [];
+  return klines.map((line) => {
+    const parts = String(line || "").split(",");
+    return {
+      date: parts[0] || "",
+      main: Number(parts[1]),
+      small: Number(parts[2]),
+      medium: Number(parts[3]),
+      large: Number(parts[4]),
+      superLarge: Number(parts[5]),
+    };
+  }).filter((row) => Number.isFinite(row.main) && Number.isFinite(row.small) && Number.isFinite(row.medium));
+}
+
+function computeBasicFlowSummary(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const latest = rows[rows.length - 1];
+  const recent = rows.slice(-5);
+  if (!latest || recent.length === 0) return null;
+  const dailyMainYi = latest.main / 1e8;
+  const flow5dYi = recent.reduce((sum, row) => sum + row.main, 0) / 1e8;
+  const totalTurnoverBase = recent.reduce((sum, row) => (
+    sum + Math.abs(row.main) + Math.abs(row.small) + Math.abs(row.medium)
+  ), 0);
+  const flow5dPct = totalTurnoverBase > 0
+    ? (recent.reduce((sum, row) => sum + row.main, 0) / totalTurnoverBase) * 100
+    : null;
+  const superLargeSum = recent.reduce((sum, row) => sum + (Number.isFinite(row.superLarge) ? row.superLarge : 0), 0);
+  const largeSum = recent.reduce((sum, row) => sum + (Number.isFinite(row.large) ? row.large : 0), 0);
+  const superLargeRatio = Math.abs(largeSum) < 1e-6 ? null : superLargeSum / largeSum;
+  return {
+    dailyMainYi,
+    flow5dYi,
+    flow5dPct,
+    superLargeRatio,
+  };
+}
+
+function renderBasicFlowSummary(summary) {
+  if (!summary) {
+    setBasicFlowUnavailableFields();
+    return;
+  }
+  setBasicFlowField("hdr-basic-flow-daily", summary.dailyMainYi, "—", "yi");
+  setBasicFlowField("hdr-basic-flow-5d", summary.flow5dYi, "—", "yi");
+  setBasicFlowField("hdr-basic-flow-5d-pct", summary.flow5dPct, "—", "percent");
+  setBasicFlowField("hdr-basic-flow-super-large-ratio", summary.superLargeRatio, "—", "ratio");
+}
+
+async function fetchBasicFlowPayload(market, symbol) {
+  const emMarket = resolveEastmoneyMarketId(market, symbol);
+  try {
+    return await fetchEastmoneyFlowClient(symbol, emMarket);
+  } catch (error) {
+    try {
+      return await fetchEastmoneyFlowProxy(symbol);
+    } catch {
+      throw error;
+    }
+  }
+}
+
+function loadBasicFlowSummary(market, symbol) {
+  const stockIdentity = `${market}:${symbol}`;
+  const requestId = ++searchState.basicFlowRequestId;
+  resetBasicFlowFields();
+  fetchBasicFlowPayload(market, symbol)
+    .then((payload) => {
+      if (requestId !== searchState.basicFlowRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      const summary = computeBasicFlowSummary(parseEastmoneyFlowKlines(payload));
+      renderBasicFlowSummary(summary);
+    })
+    .catch(() => {
+      if (requestId !== searchState.basicFlowRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      setBasicFlowUnavailableFields();
+    });
+}
+
+function closeBasicHelpTooltip() {
+  if (!basicHelpTooltipEl) return;
+  basicHelpTooltipEl.hidden = true;
+  delete basicHelpTooltipEl.dataset.helpKey;
+}
+
+function openBasicHelpTooltip(button) {
+  if (!basicHelpTooltipEl || !basicHelpTooltipTextEl || !button) return;
+  const helpKey = button.dataset.help || "";
+  const helpText = BASIC_HELP_TEXT[helpKey];
+  if (!helpText) {
+    closeBasicHelpTooltip();
+    return;
+  }
+  basicHelpTooltipTextEl.textContent = helpText;
+  basicHelpTooltipEl.hidden = false;
+  basicHelpTooltipEl.dataset.helpKey = helpKey;
+
+  const rect = button.getBoundingClientRect();
+  const margin = 12;
+  const tooltipWidth = basicHelpTooltipEl.offsetWidth || 280;
+  const tooltipHeight = basicHelpTooltipEl.offsetHeight || 0;
+  const preferredTop = rect.bottom + 10;
+  const preferredLeft = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+  const maxLeft = Math.max(margin, window.innerWidth - tooltipWidth - margin);
+  const maxTop = Math.max(margin, window.innerHeight - tooltipHeight - margin);
+  basicHelpTooltipEl.style.top = `${Math.min(maxTop, Math.max(margin, preferredTop))}px`;
+  basicHelpTooltipEl.style.left = `${Math.min(maxLeft, Math.max(margin, preferredLeft))}px`;
 }
 
 function resetPeerDialogs() {
@@ -2190,6 +2391,16 @@ document.getElementById("industry-temperature-history-close").addEventListener("
 document.getElementById("industry-temperature-history-dialog").addEventListener("click", (e) => {
   if (e.target === document.getElementById("industry-temperature-history-dialog")) closeIndustryTemperatureHistoryDialog();
 });
+document.querySelectorAll(".basic-help-btn").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (!basicHelpTooltipEl?.hidden && basicHelpTooltipEl?.dataset.helpKey === button.dataset.help) {
+      closeBasicHelpTooltip();
+      return;
+    }
+    openBasicHelpTooltip(button);
+  });
+});
 industryScorePeerDialogEl.addEventListener("keydown", (e) => {
   if (e.target.closest(".industry-score-peer-stock-trigger")) return;
   const rowTrigger = e.target.closest(".industry-score-peer-row-trigger");
@@ -2212,8 +2423,14 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !document.getElementById("industry-temperature-history-dialog").hidden) {
     closeIndustryTemperatureHistoryDialog();
   }
+  if (e.key === "Escape" && !basicHelpTooltipEl?.hidden) {
+    closeBasicHelpTooltip();
+  }
 });
 document.addEventListener("click", e => {
+  if (!e.target.closest(".basic-help-btn") && !e.target.closest("#basic-help-tooltip")) {
+    closeBasicHelpTooltip();
+  }
   if (!e.target.closest(".search-input-wrap")) {
     hideSuggestions();
   }
@@ -2342,6 +2559,7 @@ async function doSearch(selectedRow = null) {
       subdiagExplanations: {},
     };
     loadBasicGrowthSummary(market, symbol, profile);
+    loadBasicFlowSummary(market, symbol);
     saveRecentStockSearch(searchState.currentStock);
     const reportHistory = reportHistoryPayload || {};
     renderAiFinancialReport(null);

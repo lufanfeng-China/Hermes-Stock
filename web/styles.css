@@ -1543,7 +1543,7 @@ button:hover {
 
 .stock-score-basic-grid {
   display: grid;
-  grid-template-columns: 300px 300px 300px;
+  grid-template-columns: 300px 300px 300px 300px;
   justify-content: start;
   gap: 6px 12px;
 }
@@ -1567,6 +1567,26 @@ button:hover {
   color: #6f8899;
   font-size: 12px;
   letter-spacing: 0.06em;
+}
+
+.basic-help-btn {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #555;
+  border-radius: 50%;
+  background: transparent;
+  color: #888;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.basic-help-btn:hover {
+  color: #aaa;
+  border-color: #888;
 }
 
 .stock-score-basic-info-card .profile-value {
@@ -1593,6 +1613,24 @@ button:hover {
 
 .basic-change-flat {
   color: #8ea6b6 !important;
+}
+
+.basic-help-tooltip {
+  position: fixed;
+  max-width: 280px;
+  background: #1a1a2e;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 12px;
+  z-index: 1000;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.basic-help-tooltip p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #ccc;
 }
 
 .stock-score-profile-field {
@@ -2878,10 +2916,6 @@ button:hover {
 
   .stock-score-basic-grid {
     grid-template-columns: 1fr;
-  }
-
-  .stock-score-basic-grid > * {
-    grid-column: 1 !important;
   }
 
   .stock-score-subdiag-grid {
