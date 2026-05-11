@@ -262,7 +262,18 @@ const PROFILE_PLACEHOLDERS = {
   basicFloatShares: "待加载流通股本",
   basicEps: "待加载收益",
   basicDynamicPe: "待加载PE-TTM",
+  basicGrowth6m: "待加载半年增长",
+  basicGrowth1y: "待加载一年增长",
+  basicGrowth3y: "待加载三年增长",
+  basicGrowth5y: "待加载5年增长",
 };
+
+const BASIC_GROWTH_PERIODS = [
+  { elementId: "hdr-basic-growth-6m", placeholder: PROFILE_PLACEHOLDERS.basicGrowth6m, offset: 120 },
+  { elementId: "hdr-basic-growth-1y", placeholder: PROFILE_PLACEHOLDERS.basicGrowth1y, offset: 250 },
+  { elementId: "hdr-basic-growth-3y", placeholder: PROFILE_PLACEHOLDERS.basicGrowth3y, offset: 750 },
+  { elementId: "hdr-basic-growth-5y", placeholder: PROFILE_PLACEHOLDERS.basicGrowth5y, offset: 1250 },
+];
 
 const STOCK_SCORE_EMPTY_STATES = {
   dimensions: "查询股票后显示六维评分",
@@ -380,6 +391,13 @@ function formatSignedPercent(value) {
   return `${sign}${num.toFixed(2)}%`;
 }
 
+function formatSignedPercentOneDecimal(value) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+  const num = Number(value);
+  const sign = num > 0 ? "+" : "";
+  return `${sign}${num.toFixed(1)}%`;
+}
+
 function formatBasicNumber(value, suffix = "", digits = 2) {
   if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
   return `${Number(value).toFixed(digits)}${suffix}`;
@@ -441,6 +459,39 @@ function renderSearchConceptSummary(profile) {
   valueEl.classList.toggle("muted", !hasText);
 }
 
+function setBasicGrowthField(elementId, value, placeholder) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.classList.remove("basic-change-positive", "basic-change-negative", "basic-change-flat");
+  if (value == null || value === "" || Number.isNaN(Number(value))) {
+    el.textContent = placeholder;
+    el.classList.add("muted");
+    return;
+  }
+  const numericValue = Number(value);
+  el.textContent = formatSignedPercentOneDecimal(numericValue);
+  el.classList.remove("muted");
+  if (numericValue > 0) {
+    el.classList.add("basic-change-positive");
+  } else if (numericValue < 0) {
+    el.classList.add("basic-change-negative");
+  } else {
+    el.classList.add("basic-change-flat");
+  }
+}
+
+function setBasicGrowthUnavailableFields() {
+  BASIC_GROWTH_PERIODS.forEach(({ elementId, placeholder }) => {
+    setBasicGrowthField(elementId, null, "—");
+  });
+}
+
+function resetBasicGrowthFields() {
+  BASIC_GROWTH_PERIODS.forEach(({ elementId, placeholder }) => {
+    setBasicGrowthField(elementId, null, placeholder);
+  });
+}
+
 function renderBasicInfoSummary(profile) {
   const basicInfo = profile?.basic_info || {};
   setProfileField(
@@ -495,6 +546,7 @@ function renderBasicInfoSummary(profile) {
     basicInfo.dynamic_pe != null ? formatBasicNumber(basicInfo.dynamic_pe, "倍", 2) : "",
     PROFILE_PLACEHOLDERS.basicDynamicPe,
   );
+  resetBasicGrowthFields();
 }
 
 function renderProfileSummary(profile) {
@@ -658,6 +710,7 @@ function resetScoreHeaderSummary() {
 }
 
 function resetProfileSummary() {
+  searchState.basicGrowthRequestId += 1;
   renderBasicInfoSummary(null);
   renderProfileSummary(null);
   renderRelativeValuationSummary(null);
@@ -1465,6 +1518,14 @@ async function fetchSubdiagExplanation(market, symbol, subKey) {
   return payload;
 }
 
+async function fetchStockKline(symbol, limit = 1300) {
+  const url = `/api/stock-kline?symbol=${encodeURIComponent(symbol)}&limit=${encodeURIComponent(limit)}`;
+  const r = await fetch(url);
+  const payload = await r.json();
+  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
+  return payload;
+}
+
 async function fetchDataUpdateStatus() {
   const r = await fetch('/api/data-update-status');
   const payload = await r.json();
@@ -1532,6 +1593,7 @@ let dataUpdatePollTimer = null;
 const searchState = {
   timer: null,
   requestId: 0,
+  basicGrowthRequestId: 0,
   selectedStock: null,
   suggestions: [],
   recentSearches: [],
@@ -1544,6 +1606,52 @@ const searchState = {
   _industryValuationPercentileRows: null,
   _industryTemperatureHistoryRows: null,
 };
+
+function computeBasicGrowthMetrics(bars, currentPrice) {
+  if (!Array.isArray(bars) || !bars.length) return null;
+  const latestClose = Number(bars[bars.length - 1]?.close);
+  const numericCurrentPrice = Number(currentPrice);
+  const current = Number.isFinite(numericCurrentPrice) ? numericCurrentPrice : latestClose;
+  if (!Number.isFinite(current) || current <= 0) return null;
+  return BASIC_GROWTH_PERIODS.map(({ elementId, placeholder, offset }) => {
+    const targetBar = bars[bars.length - 1 - offset];
+    const pastClose = Number(targetBar?.close);
+    if (!Number.isFinite(pastClose) || pastClose <= 0) {
+      return { elementId, placeholder, value: null };
+    }
+    return {
+      elementId,
+      placeholder,
+      value: ((current - pastClose) / pastClose) * 100,
+    };
+  });
+}
+
+function renderBasicGrowthMetrics(metrics) {
+  if (!Array.isArray(metrics) || !metrics.length) {
+    setBasicGrowthUnavailableFields();
+    return;
+  }
+  metrics.forEach(({ elementId, placeholder, value }) => {
+    setBasicGrowthField(elementId, value, value == null ? "—" : placeholder);
+  });
+}
+
+function loadBasicGrowthSummary(market, symbol, profile) {
+  const stockIdentity = `${market}:${symbol}`;
+  const requestId = ++searchState.basicGrowthRequestId;
+  resetBasicGrowthFields();
+  fetchStockKline(symbol, 1300)
+    .then((payload) => {
+      if (requestId !== searchState.basicGrowthRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      const metrics = computeBasicGrowthMetrics(payload?.bars || [], profile?.basic_info?.current_price);
+      renderBasicGrowthMetrics(metrics);
+    })
+    .catch(() => {
+      if (requestId !== searchState.basicGrowthRequestId || !isCurrentStockIdentity(stockIdentity)) return;
+      setBasicGrowthUnavailableFields();
+    });
+}
 
 function resetPeerDialogs() {
   searchState.industryPeerRequestId += 1;
@@ -2173,6 +2281,7 @@ async function doSearch(selectedRow = null) {
       aiReportReady: false,
       subdiagExplanations: {},
     };
+    loadBasicGrowthSummary(market, symbol, profile);
     saveRecentStockSearch(searchState.currentStock);
     const reportHistory = reportHistoryPayload || {};
     renderAiFinancialReport(null);

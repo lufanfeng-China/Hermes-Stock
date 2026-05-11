@@ -1543,7 +1543,9 @@ button:hover {
 
 .stock-score-basic-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, 300px);
+  justify-content: start;
+  align-items: stretch;
   gap: 6px;
 }
 
@@ -1583,11 +1585,11 @@ button:hover {
 }
 
 .basic-change-positive {
-  color: #ff8f8f !important;
+  color: #ef5350 !important;
 }
 
 .basic-change-negative {
-  color: #7ce0c3 !important;
+  color: #26a69a !important;
 }
 
 .basic-change-flat {
