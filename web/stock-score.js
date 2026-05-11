@@ -480,6 +480,25 @@ function setBasicGrowthField(elementId, value, placeholder) {
   }
 }
 
+function setBasicGrowthMetricField(metric) {
+  const el = document.getElementById(metric?.elementId || "");
+  if (!el) return;
+  el.classList.remove("basic-change-positive", "basic-change-negative", "basic-change-flat", "muted");
+  if (!metric || metric.state === "empty" || metric.value == null || Number.isNaN(Number(metric.value))) {
+    el.textContent = metric?.displayText || "—";
+    el.classList.add("muted");
+    return;
+  }
+  el.textContent = metric.displayText || formatSignedPercentOneDecimal(metric.value);
+  if (metric.value > 0) {
+    el.classList.add("basic-change-positive");
+  } else if (metric.value < 0) {
+    el.classList.add("basic-change-negative");
+  } else {
+    el.classList.add("basic-change-flat");
+  }
+}
+
 function setBasicGrowthUnavailableFields() {
   BASIC_GROWTH_PERIODS.forEach(({ elementId, placeholder }) => {
     setBasicGrowthField(elementId, null, "—");
@@ -1607,22 +1626,59 @@ const searchState = {
   _industryTemperatureHistoryRows: null,
 };
 
-function computeBasicGrowthMetrics(bars, currentPrice) {
+function normalizeListedDays(profile) {
+  const candidates = [
+    profile?.listed_days,
+    profile?.basic_info?.listed_days,
+  ];
+  for (const candidate of candidates) {
+    const days = Number(candidate);
+    if (Number.isFinite(days) && days >= 0) return days;
+  }
+  return null;
+}
+
+function computeBasicGrowthMetrics(bars, currentPrice, listedDays = null) {
   if (!Array.isArray(bars) || !bars.length) return null;
-  const latestClose = Number(bars[bars.length - 1]?.close);
+  const latestClose = Number(bars[0]?.close);
   const numericCurrentPrice = Number(currentPrice);
   const current = Number.isFinite(numericCurrentPrice) ? numericCurrentPrice : latestClose;
   if (!Number.isFinite(current) || current <= 0) return null;
+
+  const barCount = bars.length;
   return BASIC_GROWTH_PERIODS.map(({ elementId, placeholder, offset }) => {
-    const targetBar = bars[bars.length - 1 - offset];
-    const pastClose = Number(targetBar?.close);
-    if (!Number.isFinite(pastClose) || pastClose <= 0) {
-      return { elementId, placeholder, value: null };
+    const hasEnoughBars = barCount >= offset;
+    const meetsIpoFallbackThreshold = (
+      offset === 1250 ? barCount >= 750 :
+      offset === 750 ? barCount >= 250 :
+      offset === 250 ? barCount >= 120 :
+      barCount > 0
+    );
+    const hasIpoContext = listedDays != null || meetsIpoFallbackThreshold;
+
+    let baseBar = null;
+    let state = "empty";
+    if (hasEnoughBars) {
+      baseBar = bars[offset - 1];
+      state = "normal";
+    } else if (hasIpoContext && meetsIpoFallbackThreshold) {
+      baseBar = bars[barCount - 1];
+      state = "since-ipo";
     }
+
+    const pastClose = Number(baseBar?.close);
+    if (!Number.isFinite(pastClose) || pastClose <= 0) {
+      return { elementId, placeholder, value: null, state: "empty", displayText: "—" };
+    }
+    const value = ((current - pastClose) / pastClose) * 100;
     return {
       elementId,
       placeholder,
-      value: ((current - pastClose) / pastClose) * 100,
+      value,
+      state,
+      displayText: state === "since-ipo"
+        ? `${formatSignedPercentOneDecimal(value)} (上市以来)`
+        : formatSignedPercentOneDecimal(value),
     };
   });
 }
@@ -1632,8 +1688,8 @@ function renderBasicGrowthMetrics(metrics) {
     setBasicGrowthUnavailableFields();
     return;
   }
-  metrics.forEach(({ elementId, placeholder, value }) => {
-    setBasicGrowthField(elementId, value, value == null ? "—" : placeholder);
+  metrics.forEach((metric) => {
+    setBasicGrowthMetricField(metric);
   });
 }
 
@@ -1644,7 +1700,11 @@ function loadBasicGrowthSummary(market, symbol, profile) {
   fetchStockKline(symbol, 1300)
     .then((payload) => {
       if (requestId !== searchState.basicGrowthRequestId || !isCurrentStockIdentity(stockIdentity)) return;
-      const metrics = computeBasicGrowthMetrics(payload?.bars || [], profile?.basic_info?.current_price);
+      const metrics = computeBasicGrowthMetrics(
+        payload?.bars || [],
+        profile?.basic_info?.current_price,
+        normalizeListedDays(profile),
+      );
       renderBasicGrowthMetrics(metrics);
     })
     .catch(() => {
