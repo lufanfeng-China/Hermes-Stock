@@ -290,13 +290,16 @@ def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]
     return candidates
 
 
-def _compute_yesterday_rps(
+def _compute_past_days_rps(
     reader: Reader,
     rps_rows: list[dict[str, Any]],
-) -> dict[tuple[str, str], dict[str, float | None]]:
-    """Compute cross-sectional RPS for all stocks on the previous trading day.
+    ndays: int = 5,
+) -> list[dict[tuple[str, str], dict[str, float | None]]]:
+    """Compute cross-sectional RPS for the past N trading days for all stocks.
 
-    Returns {(market, symbol): {'rps_20': float, 'rps_50': float, 'rps_120': float, 'rps_250': float}}
+    Returns a list of length ndays, where index 0 = yesterday (1 day ago),
+    index 1 = 2 days ago, etc.
+    Each element is {(market, symbol): {'rps_20': ..., 'rps_50': ..., 'rps_120': ..., 'rps_250': ...}}
     """
     close_history: dict[str, list[float]] = {}
     for row in rps_rows:
@@ -312,77 +315,85 @@ def _compute_yesterday_rps(
         if daily is None or daily.empty:
             continue
         closes = daily.sort_index()["close"].astype(float).tolist()
-        if len(closes) >= 260:
+        if len(closes) >= 260 + ndays:
             close_history[key] = closes
 
-    rows_by_symbol: list[dict[str, Any]] = []
-    for key, closes in close_history.items():
-        market_val, symbol_val = key.split(":", 1)
-        yesterday_idx = len(closes) - 2  # closes[-1] = today, closes[-2] = yesterday
-        ret20 = _return_pct(closes, yesterday_idx, 20)
-        ret50 = _return_pct(closes, yesterday_idx, 50)
-        ret120 = _return_pct(closes, yesterday_idx, 120)
-        ret250 = _return_pct(closes, yesterday_idx, 250)
-        if all(v is None for v in [ret20, ret50, ret120, ret250]):
+    results: list[dict[tuple[str, str], dict[str, float | None]]] = []
+
+    for day_offset in range(1, ndays + 1):
+        rows_by_symbol: list[dict[str, Any]] = []
+        for key, closes in close_history.items():
+            market_val, symbol_val = key.split(":", 1)
+            idx = len(closes) - 1 - day_offset  # today-1=yesterday, today-2=2 days ago...
+            if idx < 250:
+                continue
+            ret20 = _return_pct(closes, idx, 20)
+            ret50 = _return_pct(closes, idx, 50)
+            ret120 = _return_pct(closes, idx, 120)
+            ret250 = _return_pct(closes, idx, 250)
+            if all(v is None for v in [ret20, ret50, ret120, ret250]):
+                continue
+            rows_by_symbol.append({
+                "market": market_val,
+                "symbol": symbol_val,
+                "return_20_pct": ret20,
+                "return_50_pct": ret50,
+                "return_120_pct": ret120,
+                "return_250_pct": ret250,
+            })
+
+        if not rows_by_symbol:
+            results.append({})
             continue
-        rows_by_symbol.append({
-            "market": market_val,
-            "symbol": symbol_val,
-            "return_20_pct": ret20,
-            "return_50_pct": ret50,
-            "return_120_pct": ret120,
-            "return_250_pct": ret250,
-        })
 
-    if not rows_by_symbol:
-        return {}
+        universe_size = len(rows_by_symbol)
 
-    universe_size = len(rows_by_symbol)
+        def _rank_rps(rows: list[dict[str, Any]], field: str) -> dict[tuple[str, str], float | None]:
+            sorted_rows = sorted(
+                rows,
+                key=lambda r: float(r[field]) if r[field] is not None else float("-inf"),
+                reverse=True,
+            )
+            result: dict[tuple[str, str], float | None] = {}
+            for rank, r in enumerate(sorted_rows, start=1):
+                value = r[field]
+                if value is None:
+                    result[(r["market"], r["symbol"])] = None
+                else:
+                    result[(r["market"], r["symbol"])] = round(
+                        (universe_size - rank + 1) / universe_size * 100.0, 2
+                    )
+            return result
 
-    def _rank_rps(rows: list[dict[str, Any]], field: str) -> dict[tuple[str, str], float | None]:
-        sorted_rows = sorted(
-            rows,
-            key=lambda r: float(r[field]) if r[field] is not None else float("-inf"),
-            reverse=True,
-        )
-        result: dict[tuple[str, str], float | None] = {}
-        for rank, r in enumerate(sorted_rows, start=1):
-            value = r[field]
-            if value is None:
-                result[(r["market"], r["symbol"])] = None
-            else:
-                result[(r["market"], r["symbol"])] = round(
-                    (universe_size - rank + 1) / universe_size * 100.0, 2
-                )
-        return result
+        rps20_map = _rank_rps(rows_by_symbol, "return_20_pct")
+        rps50_map = _rank_rps(rows_by_symbol, "return_50_pct")
+        rps120_map = _rank_rps(rows_by_symbol, "return_120_pct")
+        rps250_map = _rank_rps(rows_by_symbol, "return_250_pct")
 
-    rps20_map = _rank_rps(rows_by_symbol, "return_20_pct")
-    rps50_map = _rank_rps(rows_by_symbol, "return_50_pct")
-    rps120_map = _rank_rps(rows_by_symbol, "return_120_pct")
-    rps250_map = _rank_rps(rows_by_symbol, "return_250_pct")
+        day_result: dict[tuple[str, str], dict[str, float | None]] = {}
+        for row in rows_by_symbol:
+            key = (row["market"], row["symbol"])
+            day_result[key] = {
+                "rps_20": rps20_map.get(key),
+                "rps_50": rps50_map.get(key),
+                "rps_120": rps120_map.get(key),
+                "rps_250": rps250_map.get(key),
+            }
+        results.append(day_result)
 
-    result: dict[tuple[str, str], dict[str, float | None]] = {}
-    for row in rows_by_symbol:
-        key = (row["market"], row["symbol"])
-        result[key] = {
-            "rps_20": rps20_map.get(key),
-            "rps_50": rps50_map.get(key),
-            "rps_120": rps120_map.get(key),
-            "rps_250": rps250_map.get(key),
-        }
-    return result
+    return results
 
 
 def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """RPS首次：今天 RPS20/50/120/250 全部 ≥ 90，但昨天不是（即首次突破）。"""
+    """RPS首次：今天 RPS20/50/120/250 全部 ≥ 90，且过去5个交易日从未全部 ≥ 90。"""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
     candidates = _rps_first_candidates(rps_rows)
     if not candidates:
         return []
 
-    # Compute yesterday's cross-sectional RPS for all stocks
-    yesterday_rps = _compute_yesterday_rps(reader, rps_rows)
+    # Compute cross-sectional RPS for the past 5 trading days (index 0=yesterday, 1=2days ago, ...)
+    past_rps_by_day = _compute_past_days_rps(reader, rps_rows, ndays=5)
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
     results: list[dict[str, Any]] = []
@@ -390,29 +401,34 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
         market_val = str(row.get("market", "")).strip().lower()
         symbol_val = str(row.get("symbol", "")).strip()
         key = (market_val, symbol_val)
-        prev_rps = yesterday_rps.get(key, {})
 
-        prev_rps20 = prev_rps.get("rps_20")
-        prev_rps50 = prev_rps.get("rps_50")
-        prev_rps120 = prev_rps.get("rps_120")
-        prev_rps250 = prev_rps.get("rps_250")
+        # Check if this stock ever had all 4 RPS >= 90 in the past 5 days
+        ever_above_90 = False
+        past_days_detail: dict[str, object] = {}
+        for day_idx, day_rps in enumerate(past_rps_by_day):
+            rps = day_rps.get(key, {})
+            rps20 = rps.get("rps_20")
+            rps50 = rps.get("rps_50")
+            rps120 = rps.get("rps_120")
+            rps250 = rps.get("rps_250")
+            days_ago = day_idx + 1
+            all_above = all(v is not None and v >= 90 for v in [rps20, rps50, rps120, rps250])
+            past_days_detail[f"day_{days_ago}_all_above_90"] = all_above
+            past_days_detail[f"day_{days_ago}_rps20"] = rps20
+            past_days_detail[f"day_{days_ago}_rps50"] = rps50
+            past_days_detail[f"day_{days_ago}_rps120"] = rps120
+            past_days_detail[f"day_{days_ago}_rps250"] = rps250
+            if all_above:
+                ever_above_90 = True
 
-        # "首次" = 今天全部≥90，但昨天不是全部≥90
-        yesterday_all_above_90 = all(
-            v is not None and v >= 90 for v in [prev_rps20, prev_rps50, prev_rps120, prev_rps250]
-        )
-        is_first = not yesterday_all_above_90  # 昨天未满足 → 今天是首次
+        is_first = not ever_above_90
 
-        conditions = {
+        conditions: dict[str, object] = {
             "today_rps20_ge_90": True,
             "today_rps50_ge_90": True,
             "today_rps120_ge_90": True,
             "today_rps250_ge_90": True,
-            "yesterday_rps20": prev_rps20,
-            "yesterday_rps50": prev_rps50,
-            "yesterday_rps120": prev_rps120,
-            "yesterday_rps250": prev_rps250,
-            "yesterday_all_above_90": yesterday_all_above_90,
+            **past_days_detail,
         }
 
         results.append({
