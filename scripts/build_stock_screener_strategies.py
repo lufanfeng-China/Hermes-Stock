@@ -278,36 +278,47 @@ def build_rps_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
         return []
 
     def _check_pullback(ordered: list, target_idx: int) -> tuple[bool, bool, int]:
-        """Check pullback condition for a given day index. Returns (passed, has_pullback, pullback_days)."""
-        # Look back up to 30 trading days for RPS20 < 50
-        low_idx = None
-        lookback_start = max(0, target_idx - 30)
-        for i in range(target_idx - 1, lookback_start - 1, -1):
-            r20 = _coerce_float(ordered[i][1].get("rps_20"))
-            if r20 is not None and r20 < 50:
-                low_idx = i
-                break
-        if low_idx is None:
-            return False, False, 0
+        """Check pullback condition for a given day index. Returns (passed, has_pullback, pullback_days).
 
+        The pullback is a continuous streak where RPS20 < 70.
+        Within this streak (or immediately before it), RPS20 must be < 50.
+        During the entire streak: RPS50 >= 70, RPS120 >= 75, RPS250 >= 75.
+        """
+        # Walk backwards from target_idx to find the pullback streak (RPS20 < 70)
+        # and check if RPS20 ever < 50 within or immediately before the streak
+        pullback_start = target_idx  # will be the index where RPS20 last went >= 70
+        found_low = False
         pullback_ok = True
-        has_pullback = False
         pullback_days = 0
-        for i in range(low_idx + 1, target_idx):
+
+        for i in range(target_idx - 1, max(0, target_idx - 30) - 1, -1):
             h = ordered[i][1]
             r20 = _coerce_float(h.get("rps_20"))
-            r50 = _coerce_float(h.get("rps_50"))
-            r120 = _coerce_float(h.get("rps_120"))
-            r250 = _coerce_float(h.get("rps_250"))
+
+            if r20 is not None and r20 < 50:
+                found_low = True
+
             if r20 is not None and r20 < 70:
-                has_pullback = True
+                # Inside pullback streak
                 pullback_days += 1
+                pullback_start = i
+                r50 = _coerce_float(h.get("rps_50"))
+                r120 = _coerce_float(h.get("rps_120"))
+                r250 = _coerce_float(h.get("rps_250"))
                 if (r50 is None or r50 < 70 or
                     r120 is None or r120 < 75 or
                     r250 is None or r250 < 75):
                     pullback_ok = False
                     break
-        return pullback_ok and has_pullback, has_pullback, pullback_days
+            else:
+                # RPS20 >= 70 — end of pullback streak
+                # If we haven't found a low < 50 yet, check if the day right before
+                # the streak had RPS20 < 50 (it would have been caught in the loop
+                # since this is the first day outside the streak)
+                break
+
+        has_pullback = pullback_days > 0
+        return pullback_ok and has_pullback and found_low, has_pullback, pullback_days
 
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
     results: list[dict[str, Any]] = []
