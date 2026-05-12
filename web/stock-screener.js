@@ -8,6 +8,9 @@ const STRATEGY_PRESETS = {
   rps_attack: {
     strategy: 'rps_attack',
   },
+  rps_pullback: {
+    strategy: 'rps_pullback',
+  },
   rps_first: {
     strategy: 'rps_first',
   },

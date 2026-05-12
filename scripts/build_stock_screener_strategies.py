@@ -240,38 +240,134 @@ def build_rps_attack_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, An
 
 
 def build_rps_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """RPS回踩：RPS20从50以下突破80，回踩期间(RPS20<70)RPS50≥70且RPS120/250≥75。"""
+    import json as _json
     rps_rows = load_rps_rows()
-    candidates = _latest_rps_candidates(rps_rows)
-    candidate_symbols = {str(row.get("symbol", "")).strip() for row in candidates}
-    rps_by_symbol = {str(row.get("symbol", "")).strip(): row for row in rps_rows if str(row.get("symbol", "")).strip()}
-    signal_context = _build_signal_context(rps_rows, tdxdir=tdxdir, candidate_symbols=candidate_symbols)
-    ref3_rps20 = _rps_by_symbol(signal_context["ref3_return20"])
-    ref5_rps50 = _rps_by_symbol(signal_context["ref5_return50"])
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
+    # Initial filter: today RPS20 >= 80
+    candidates: list[dict[str, Any]] = []
+    for row in rps_rows:
+        rps20 = _coerce_float(row.get("rps_20"))
+        if rps20 is not None and rps20 >= 80:
+            candidates.append(row)
+    if not candidates:
+        return []
+
+    # Load RPS history dataset
+    history_path = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.json"
+    if not history_path.exists():
+        return []
+    all_history = _json.loads(history_path.read_text(encoding="utf-8"))
+
+    # Build per-stock lookup: {(market, symbol): {trading_day: {rps_20, rps_50, rps_120, rps_250}}}
+    stock_history: dict[tuple[str, str], dict[str, dict[str, float | None]]] = {}
+    for h in all_history:
+        key = (str(h.get("market", "")).strip(), str(h.get("symbol", "")).strip())
+        if key not in stock_history:
+            stock_history[key] = {}
+        stock_history[key][str(h.get("trading_day", ""))] = {
+            "rps_20": h.get("rps_20"),
+            "rps_50": h.get("rps_50"),
+            "rps_120": h.get("rps_120"),
+            "rps_250": h.get("rps_250"),
+        }
+
+    # Get sorted trading days from any stock's history
+    sample_dates = sorted(next(iter(stock_history.values())).keys()) if stock_history else []
+    if not sample_dates:
+        return []
+
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
     results: list[dict[str, Any]] = []
+
     for row in candidates:
-        symbol = str(row.get("symbol", "")).strip()
-        latest_rps = rps_by_symbol.get(symbol) or {}
-        signal = evaluate_rps_pullback_signal(
-            latest_rps,
-            {"rps_20": ref3_rps20.get(symbol)},
-            {"rps_50": ref5_rps50.get(symbol)},
-            signal_context["candidate_bars"].get(symbol, []),
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        key = (market_val, symbol_val)
+        hist = stock_history.get(key, {})
+        if not hist:
+            continue
+
+        # Get today's date (last trading day in history)
+        today_str = sample_dates[-1]
+
+        # Build ordered history for this stock
+        ordered = sorted(
+            [(d, h) for d, h in hist.items() if d <= today_str],
+            key=lambda x: x[0],
         )
-        results.append(
-            {
-                "trading_day": row.get("trading_day"),
-                "market": str(row.get("market", "")).strip().lower(),
-                "symbol": symbol,
-                "strategy": STRATEGY_PULLBACK,
-                "strategy_label": STRATEGY_METADATA[STRATEGY_PULLBACK]["label"],
-                "passed": bool(signal.get("passed")),
-                "conditions": signal.get("conditions") or {},
-                "generated_at": generated_at,
-                "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
-            }
-        )
+        if len(ordered) < 30:
+            continue
+
+        # Find today's index
+        today_idx = None
+        for i, (d, _h) in enumerate(ordered):
+            if d == today_str:
+                today_idx = i
+                break
+        if today_idx is None:
+            continue
+
+        # Look back up to 30 trading days for the most recent RPS20 < 50
+        low_idx = None
+        lookback_start = max(0, today_idx - 30)
+        for i in range(today_idx - 1, lookback_start - 1, -1):
+            r20 = _coerce_float(ordered[i][1].get("rps_20"))
+            if r20 is not None and r20 < 50:
+                low_idx = i
+                break
+
+        if low_idx is None:
+            continue  # No recent low below 50
+
+        # From low_idx to today_idx-1: check pullback conditions
+        # Find all days where RPS20 < 70, and verify RPS50/120/250 thresholds
+        pullback_ok = True
+        has_pullback = False
+        pullback_days = []
+        for i in range(low_idx + 1, today_idx):
+            h = ordered[i][1]
+            r20 = _coerce_float(h.get("rps_20"))
+            r50 = _coerce_float(h.get("rps_50"))
+            r120 = _coerce_float(h.get("rps_120"))
+            r250 = _coerce_float(h.get("rps_250"))
+
+            if r20 is not None and r20 < 70:
+                has_pullback = True
+                pullback_days.append(ordered[i][0])
+                if (r50 is None or r50 < 70 or
+                    r120 is None or r120 < 75 or
+                    r250 is None or r250 < 75):
+                    pullback_ok = False
+                    break
+
+        if not has_pullback:
+            continue  # No pullback period — RPS20 went straight from <50 to >=80 without dipping <70
+
+        is_passed = pullback_ok
+
+        conditions: dict[str, object] = {
+            "today_rps20_ge_80": True,
+            "found_low_below_50": True,
+            "low_day": ordered[low_idx][0] if low_idx is not None else None,
+            "low_rps20": ordered[low_idx][1].get("rps_20") if low_idx is not None else None,
+            "pullback_ok": pullback_ok,
+            "pullback_day_count": len(pullback_days),
+            "has_pullback": has_pullback,
+        }
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_PULLBACK,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_PULLBACK]["label"],
+            "passed": is_passed,
+            "conditions": conditions,
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history",
+        })
+
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
     return results
 
