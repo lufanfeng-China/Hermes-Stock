@@ -2131,10 +2131,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         self.respond_json(HTTPStatus.OK, payload)
 
     def handle_sync_to_tdx_block(self) -> None:
-        """Sync screener result stocks to Tongdaxin custom block 'AI股池'."""
+        """Sync screener result stocks to Tongdaxin custom block 'AIGC' (AI股池)."""
         TDX_BLOCK_DIR = Path(TONGDAXIN_DIR) / "T0002" / "blocknew"
-        BLOCK_NAME = "AI股池"
-        block_path = TDX_BLOCK_DIR / f"{BLOCK_NAME}.blk"
+        block_path = TDX_BLOCK_DIR / "AIGC.blk"
 
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""

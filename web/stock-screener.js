@@ -178,7 +178,7 @@ function renderScreenerLoadingState() {
   currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
   countEl.textContent = '…';
   pageInfoEl.textContent = '正在筛选...';
-  tbody.innerHTML = '<tr><td colspan="14" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
 }
 
 async function runScreener(page = 1) {
@@ -203,19 +203,20 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="14" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="14" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
-  tbody.innerHTML = rows.map((row) => {
+  tbody.innerHTML = rows.map((row, idx) => {
     const industryText = [row.industry_level_1, row.industry_level_2].filter(Boolean).join(' / ') || '—';
     const marketSymbol = `${String(row.market || '').toUpperCase()}:${row.symbol || ''}`;
     return `<tr class="stock-screener-row" tabindex="0" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}">
+      <td class="stock-screener-check-col"><input type="checkbox" class="stock-screener-row-check" data-idx="${idx}"></td>
       <td><strong>${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
       <td class="num">${formatNumber(row.current_price, 2)}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
