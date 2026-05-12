@@ -277,6 +277,7 @@ def build_rps_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
 
 
 def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Find stocks where 3 out of 4 RPS >= 90 and the remaining one >= 80."""
     candidates: list[dict[str, Any]] = []
     for row in rps_rows:
         rps20 = _coerce_float(row.get("rps_20"))
@@ -285,7 +286,9 @@ def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]
         rps250 = _coerce_float(row.get("rps_250"))
         if None in (rps20, rps50, rps120, rps250):
             continue
-        if rps20 >= 90 and rps50 >= 90 and rps120 >= 90 and rps250 >= 90:
+        above_90 = sum(1 for v in (rps20, rps50, rps120, rps250) if v >= 90)
+        below_80 = sum(1 for v in (rps20, rps50, rps120, rps250) if v < 80)
+        if above_90 >= 3 and below_80 == 0:
             candidates.append(row)
     return candidates
 
@@ -385,7 +388,7 @@ def _compute_past_days_rps(
 
 
 def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """RPS首次：今天 RPS20/50/120/250 全部 ≥ 90，且过去5个交易日从未全部 ≥ 90。"""
+    """RPS首次：今天任意3个RPS≥90且余下1个≥80，且过去5个交易日从未满足此条件。"""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
     candidates = _rps_first_candidates(rps_rows)
@@ -402,8 +405,8 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
         symbol_val = str(row.get("symbol", "")).strip()
         key = (market_val, symbol_val)
 
-        # Check if this stock ever had all 4 RPS >= 90 in the past 5 days
-        ever_above_90 = False
+        # Check if this stock ever met the 3-of-4 condition in the past 5 days
+        ever_met = False
         past_days_detail: dict[str, object] = {}
         for day_idx, day_rps in enumerate(past_rps_by_day):
             rps = day_rps.get(key, {})
@@ -412,16 +415,21 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
             rps120 = rps.get("rps_120")
             rps250 = rps.get("rps_250")
             days_ago = day_idx + 1
-            all_above = all(v is not None and v >= 90 for v in [rps20, rps50, rps120, rps250])
-            past_days_detail[f"day_{days_ago}_all_above_90"] = all_above
+            
+            above_90 = sum(1 for v in (rps20, rps50, rps120, rps250) if v is not None and v >= 90)
+            below_80 = sum(1 for v in (rps20, rps50, rps120, rps250) if v is not None and v < 80)
+            day_met = above_90 >= 3 and below_80 == 0
+
+            past_days_detail[f"day_{days_ago}_met"] = day_met
+            past_days_detail[f"day_{days_ago}_above_90_count"] = above_90
             past_days_detail[f"day_{days_ago}_rps20"] = rps20
             past_days_detail[f"day_{days_ago}_rps50"] = rps50
             past_days_detail[f"day_{days_ago}_rps120"] = rps120
             past_days_detail[f"day_{days_ago}_rps250"] = rps250
-            if all_above:
-                ever_above_90 = True
+            if day_met:
+                ever_met = True
 
-        is_first = not ever_above_90
+        is_first = not ever_met
 
         conditions: dict[str, object] = {
             "today_rps20_ge_90": True,
