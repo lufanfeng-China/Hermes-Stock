@@ -1643,6 +1643,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/seed-flow-cache":
             self.handle_seed_flow_cache()
             return
+        if parsed.path == "/api/sync-to-tdx-block":
+            self.handle_sync_to_tdx_block()
+            return
         if parsed.path.startswith("/api/proxy-capital-flow"):
             self.handle_proxy_capital_flow(parsed.query)
             return
@@ -2126,6 +2129,41 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(HTTPStatus.CONFLICT, payload)
             return
         self.respond_json(HTTPStatus.OK, payload)
+
+    def handle_sync_to_tdx_block(self) -> None:
+        """Sync screener result stocks to Tongdaxin custom block 'AI股池'."""
+        TDX_BLOCK_DIR = Path(TONGDAXIN_DIR) / "T0002" / "blocknew"
+        BLOCK_NAME = "AI股池"
+        block_path = TDX_BLOCK_DIR / f"{BLOCK_NAME}.blk"
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b""
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid json"})
+            return
+
+        stocks = payload.get("stocks", [])
+        if not isinstance(stocks, list):
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "stocks must be a list"})
+            return
+
+        lines = []
+        for s in stocks:
+            market = str(s.get("market", "")).strip().lower()
+            symbol = str(s.get("symbol", "")).strip()
+            if len(symbol) != 6 or not symbol.isdigit():
+                continue
+            if market == "sh":
+                lines.append(f"1{symbol}")
+            elif market == "sz":
+                lines.append(f"0{symbol}")
+
+        TDX_BLOCK_DIR.mkdir(parents=True, exist_ok=True)
+        content = "\r\n".join(lines) + "\r\n"
+        block_path.write_text(content, encoding="ascii")
+        self.respond_json(HTTPStatus.OK, {"ok": True, "written": len(lines), "path": str(block_path)})
 
     def handle_relative_valuation(self, query: str) -> None:
         params = parse_qs(query)

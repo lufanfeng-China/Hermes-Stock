@@ -363,3 +363,28 @@ tbody.addEventListener('keydown', (event) => {
 
 bindScreenerChartPresetEvents();
 loadIndustryHierarchy().then(() => runScreener(1));
+
+// Sync to Tongdaxin block
+setTimeout(() => {
+  const syncTdxBtn = document.getElementById('stock-screener-sync-tdx-btn');
+  if (!syncTdxBtn) return;
+  syncTdxBtn.addEventListener('click', async () => {
+    const rows = currentPayload.rows || [];
+    if (!rows.length) return;
+    const stocks = rows.map(r => ({ market: r.market, symbol: r.symbol }));
+    syncTdxBtn.textContent = '同步中...';
+    syncTdxBtn.disabled = true;
+    try {
+      const res = await fetch('/api/sync-to-tdx-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stocks }),
+      });
+      const data = await res.json();
+      syncTdxBtn.textContent = data.ok ? `已同步 ${data.written} 只` : '同步失败';
+    } catch (e) {
+      syncTdxBtn.textContent = '同步失败';
+    }
+    setTimeout(() => { syncTdxBtn.textContent = '同步到AI股池'; syncTdxBtn.disabled = false; }, 2000);
+  });
+}, 0);
