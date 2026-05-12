@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
+import urllib.request
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -1639,6 +1640,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
             return
+        if parsed.path.startswith("/api/proxy-capital-flow"):
+            self.handle_proxy_capital_flow(parsed.query)
+            return
         if parsed.path == "/":
             self.serve_static("stock-score.html")
             return
@@ -1657,6 +1661,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/save-capital-flow":
             self.handle_save_capital_flow()
+            return
+        if parsed.path == "/api/seed-flow-cache":
+            self.handle_seed_flow_cache()
             return
         if parsed.path.startswith("/api/proxy-capital-flow"):
             self.handle_proxy_capital_flow(parsed.query)
@@ -2067,6 +2074,66 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             "saved": len(rows),
             "total_rows": len(df),
             "total_stocks": df["symbol"].nunique(),
+        })
+
+    def handle_proxy_capital_flow(self, query: str) -> None:
+        """代理转发东方财富资金流向 API 请求（带本地缓存，同日不重复请求）"""
+        params = parse_qs(query)
+        symbol = params.get("symbol", [""])[0].strip()
+        if not symbol or not symbol.isdigit() or len(symbol) != 6:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid symbol"})
+            return
+        # 检查本地缓存
+        cache_dir = DERIVED_FINAL_DIR.parent / "cache" / "capital_flow"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{symbol}.json"
+        today = datetime.now().strftime("%Y-%m-%d")
+        if cache_file.exists():
+            try:
+                cached = json.loads(cache_file.read_text())
+                if cached.get("cached_date") == today:
+                    self.respond_json(HTTPStatus.OK, {"ok": True, "data": cached["data"], "cached": True})
+                    return
+            except Exception:
+                pass
+        # 缓存未命中或过期：请求东方财富
+        em_mkt = "1" if symbol.startswith(("60", "68")) else "0"
+        hosts = ["push2his.eastmoney.com", "push2.eastmoney.com"]
+        last_error = None
+        for host in hosts:
+            for attempt in range(3):
+                if attempt > 0:
+                    time.sleep(2)
+                url = (
+                    f"https://{host}/api/qt/stock/fflow/daykline/get"
+                    f"?lmt=120&klt=1&secid={em_mkt}.{symbol}"
+                    f"&fields1=f1,f2,f3,f7"
+                    f"&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
+                )
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                    resp = urllib.request.urlopen(req, timeout=10)
+                    raw = json.loads(resp.read())
+                    # 写入缓存
+                    cache_file.write_text(json.dumps({
+                        "cached_date": today,
+                        "data": raw,
+                    }, separators=(",", ":")))
+                    self.respond_json(HTTPStatus.OK, {"ok": True, "data": raw, "cached": False})
+                    return
+                except Exception as e:
+                    last_error = str(e)
+        # API 不可达：回退到缓存（即使是旧数据）
+        if cache_file.exists():
+            try:
+                cached = json.loads(cache_file.read_text())
+                self.respond_json(HTTPStatus.OK, {"ok": True, "data": cached["data"], "cached": True, "stale": True})
+                return
+            except Exception:
+                pass
+        self.respond_json(HTTPStatus.BAD_GATEWAY, {
+            "ok": False,
+            "error": {"code": "proxy_failed", "message": last_error or "unknown"},
         })
 
     def _handle_data_update_start(self, retry_failed: bool = False) -> None:

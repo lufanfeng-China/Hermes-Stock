@@ -1614,7 +1614,7 @@ async function fetchEastmoneyFlowClient(symbol, emMarket) {
 }
 
 async function fetchEastmoneyFlowProxy(symbol) {
-  const url = `/api/proxy-eastmoney-flow?symbol=${encodeURIComponent(symbol)}`;
+  const url = `/api/proxy-capital-flow?symbol=${encodeURIComponent(symbol)}`;
   const response = await fetch(url);
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) {

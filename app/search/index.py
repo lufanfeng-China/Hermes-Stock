@@ -1695,6 +1695,9 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     start = (page - 1) * page_size
     end = start + page_size
 
+    data_date = ""
+    if rps_rows:
+        data_date = str(rps_rows[0].get("trading_day", ""))
     return {
         "ok": True,
         "active_strategy": active_strategy or None,
@@ -1703,6 +1706,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         "page_size": page_size,
         "total_pages": total_pages,
         "rows": filtered[start:end],
+        "data_date": data_date,
     }
 
 

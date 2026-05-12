@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>EM Bridge</title></head>
+<body>
+<script>
+// This page is loaded in an iframe pointed at eastmoney API
+// It reads the JSON response and posts it to the parent
+try {
+  const data = JSON.parse(document.body.textContent);
+  window.parent.postMessage({type: 'em-flow-data', ok: true, data: data}, '*');
+} catch(e) {
+  window.parent.postMessage({type: 'em-flow-data', ok: false, error: e.message}, '*');
+}
+</script>
+</body>
+</html>

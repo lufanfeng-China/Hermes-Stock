@@ -183,6 +183,10 @@ async function runScreener(page = 1) {
     renderScreenerRows(payload.rows || []);
     renderPagination(payload);
     statusEl.textContent = `命中 ${payload.total || 0} 只股票，当前页 ${(payload.rows || []).length} 条`;
+    const dateEl = document.getElementById('stock-screener-data-date');
+    if (dateEl) {
+      dateEl.textContent = payload.data_date ? `RPS 数据日期：${payload.data_date}` : '';
+    }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
     tbody.innerHTML = '<tr><td colspan="14" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
