@@ -204,7 +204,7 @@ function renderScreenerRows(rows) {
   tbody.innerHTML = rows.map((row) => {
     const industryText = [row.industry_level_1, row.industry_level_2].filter(Boolean).join(' / ') || '—';
     const marketSymbol = `${String(row.market || '').toUpperCase()}:${row.symbol || ''}`;
-    return `<tr class="stock-screener-row" tabindex="0" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}" data-rps20="${row.rps_20 ?? ''}" data-rps50="${row.rps_50 ?? ''}" data-rps120="${row.rps_120 ?? ''}" data-rps250="${row.rps_250 ?? ''}">
+    return `<tr class="stock-screener-row" tabindex="0" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}">
       <td><strong>${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
       <td class="num">${formatNumber(row.current_price, 2)}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
@@ -270,12 +270,7 @@ async function loadScreenerKline(row) {
 
     klineChart.load(bars, rpsHistory, currentKlinePreset);
     const stockName = bars[0]?.name || name || symbol;
-    const csRps20 = row?.dataset?.rps20 || '';
-    const csRps50 = row?.dataset?.rps50 || '';
-    const csRps120 = row?.dataset?.rps120 || '';
-    const csRps250 = row?.dataset?.rps250 || '';
-    const csRpsText = csRps20 ? `  |  策略截面RPS: ${csRps20} / ${csRps50} / ${csRps120} / ${csRps250}` : '';
-    document.getElementById('stock-screener-kline-title').textContent = `${symbol} ${stockName}${csRpsText}`;
+    document.getElementById('stock-screener-kline-title').textContent = `${symbol} ${stockName}`;
     const range = klineChart.getVisibleRange();
     document.getElementById('stock-screener-kline-range-label').textContent =
       `${range.start} ~ ${range.end}`;

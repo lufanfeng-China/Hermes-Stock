@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib
 import json
 import os
@@ -509,6 +510,10 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
         (
+            'build_rps_history',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_rps_history.py'), '--ndays', '120'],
+        ),
+        (
             'rebuild_screener_standard_launch',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
              '--strategy', 'rps_standard_launch', '--tdxdir', TONGDAXIN_DIR,
@@ -618,6 +623,7 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
             )
 
     clear_runtime_data_caches()
+    _load_rps_history_dataset.cache_clear()
     return {
         'ok': True,
         'steps': steps,
@@ -928,89 +934,37 @@ print(json.dumps({
     return json.loads(result.stdout)
 
 
+STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.json"
+
+
+@functools.lru_cache(maxsize=1)
+def _load_rps_history_dataset() -> list[dict[str, object]]:
+    """Load the precomputed cross-sectional RPS history dataset (cached in memory)."""
+    if not STOCK_RPS_HISTORY_DATASET.exists():
+        return []
+    return json.loads(STOCK_RPS_HISTORY_DATASET.read_text(encoding="utf-8"))
+
+
 def load_stock_rps_history(symbol: str) -> dict[str, object]:
-    """Compute historical RPS-20/50/120/250 for one stock using full local history."""
+    """Return cross-sectional RPS history for one stock from the precomputed dataset."""
     if not symbol.isdigit() or len(symbol) != 6:
         raise ValueError("symbol must be a 6-digit code")
+    market, _suffix = infer_market(symbol)
 
-    market, suffix = infer_market(symbol)
-    script = r"""
-import json
-import sys
-
-from mootdx.reader import Reader
-
-symbol = sys.argv[1]
-market = sys.argv[2]
-tdxdir = sys.argv[3]
-
-reader = Reader.factory(market="std", tdxdir=tdxdir)
-daily = reader.daily(symbol=symbol)
-
-if daily is None or daily.empty:
-    raise RuntimeError("daily data not found")
-
-closes = daily.sort_index()["close"].astype(float).tolist()
-dates  = daily.sort_index().index.strftime("%Y-%m-%d").tolist()
-
-def rolling_return(values, n):
-    return [None] * (n - 1) + [
-        (values[i] - values[i - n]) / values[i - n] * 100
-        if values[i - n] != 0 else None
-        for i in range(n - 1, len(values))
+    all_rows = _load_rps_history_dataset()
+    history = [
+        {
+            "trading_day": str(row.get("trading_day", "")),
+            "rps_20": row.get("rps_20"),
+            "rps_50": row.get("rps_50"),
+            "rps_120": row.get("rps_120"),
+            "rps_250": row.get("rps_250"),
+        }
+        for row in all_rows
+        if row.get("symbol") == symbol and row.get("market") == market
     ]
-
-ret20 = rolling_return(closes, 20)
-ret50 = rolling_return(closes, 50)
-ret120 = rolling_return(closes, 120)
-ret250 = rolling_return(closes, 250)
-
-WINDOW = 120
-
-def rolling_rps(values, window):
-    out = []
-    for i in range(len(values)):
-        if i < window - 1 or values[i] is None:
-            out.append(None)
-            continue
-        slice_vals = [v for v in values[max(0, i - window + 1):i + 1] if v is not None]
-        if not slice_vals:
-            out.append(None)
-            continue
-        below = sum(1 for v in slice_vals if v < values[i])
-        pct = below / len(slice_vals) * 100
-        out.append(round(pct, 2))
-    return out
-
-rps20 = rolling_rps(ret20, WINDOW)
-rps50 = rolling_rps(ret50, WINDOW)
-rps120 = rolling_rps(ret120, WINDOW)
-rps250 = rolling_rps(ret250, WINDOW)
-
-rows = []
-for i, d in enumerate(dates):
-    rows.append({
-        "trading_day": d,
-        "rps_20": rps20[i],
-        "rps_50": rps50[i],
-        "rps_120": rps120[i],
-        "rps_250": rps250[i],
-        "return_20_pct": round(ret20[i], 4) if ret20[i] is not None else None,
-        "return_50_pct": round(ret50[i], 4) if ret50[i] is not None else None,
-        "return_120_pct": round(ret120[i], 4) if ret120[i] is not None else None,
-        "return_250_pct": round(ret250[i], 4) if ret250[i] is not None else None,
-    })
-
-print(json.dumps({"ok": True, "symbol": symbol, "market": market, "history": rows}, ensure_ascii=False))
-""".strip()
-    result = subprocess.run(
-        [TONGDAXIN_PYTHON, "-c", script, symbol, market, TONGDAXIN_DIR],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "mootdx subprocess error")
-    return json.loads(result.stdout)
+    history.sort(key=lambda item: str(item.get("trading_day", "")))
+    return {"ok": True, "symbol": symbol, "market": market, "history": history}
 
 
 def load_recent_three_year_financial_reports(market: str, symbol: str) -> dict[str, object]:
