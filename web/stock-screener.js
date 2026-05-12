@@ -4,15 +4,19 @@ const PAGE_SIZE = 50;
 const STRATEGY_PRESETS = {
   rps_standard_launch: {
     strategy: 'rps_standard_launch',
+    description: 'RPS20≥92, RPS50≥88, RPS120≥85, RPS250≥80；RPS20>RPS50≥RPS120-3≥RPS250-5；收盘>MA20>MA50≥MA50[-5]；放量1.3倍',
   },
   rps_attack: {
     strategy: 'rps_attack',
+    description: 'RPS20≥88, RPS50≥82, RPS120≥80, RPS250≥75；RPS加速上翘；收盘>MA20>MA50；放量1.2倍',
   },
   rps_pullback: {
     strategy: 'rps_pullback',
+    description: 'RPS20从<50首次突破>70；回踩期中RPS50≥70且RPS120/250≥75；过去5日未出现过',
   },
   rps_first: {
     strategy: 'rps_first',
+    description: '任意3个RPS≥90且余下≥80；过去5个交易日首次满足',
   },
 };
 let currentPage = 1;
@@ -161,6 +165,10 @@ function applyStrategyPreset(strategy) {
     strategyInputEl.value = preset.strategy;
   }
   setActiveStrategyButton(preset.strategy);
+  const descEl = document.getElementById('stock-screener-strategy-desc');
+  if (descEl) {
+    descEl.textContent = preset.description || '';
+  }
   collapseScreenerFiltersAfterStrategy();
   currentPage = 1;
   runScreener(1);
@@ -317,6 +325,8 @@ function resetFilters() {
     strategyInputEl.value = '';
   }
   setActiveStrategyButton('');
+  const descEl = document.getElementById('stock-screener-strategy-desc');
+  if (descEl) descEl.textContent = '';
   currentPage = 1;
   runScreener(1);
 }
