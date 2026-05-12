@@ -8,6 +8,9 @@ const STRATEGY_PRESETS = {
   rps_attack: {
     strategy: 'rps_attack',
   },
+  rps_first: {
+    strategy: 'rps_first',
+  },
 };
 let currentPage = 1;
 let currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };

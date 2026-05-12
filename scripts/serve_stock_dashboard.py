@@ -86,7 +86,7 @@ def _tail_lines(text: str | None, limit: int = DATA_UPDATE_OUTPUT_TAIL_LINES) ->
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback"}:
+    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback", "rps_first"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
@@ -508,6 +508,30 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
+        (
+            'rebuild_screener_standard_launch',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'rps_standard_launch', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_attack',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'rps_attack', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_pullback',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'rps_pullback', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_first',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'rps_first', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
     ])
     return commands
 
