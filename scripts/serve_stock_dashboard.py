@@ -935,7 +935,7 @@ print(json.dumps({
 
 
 STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.json"
-CAPITAL_FLOW_CACHE = DERIVED_DIR / "cache" / "capital_flow" / "capital_flow_full.json"
+CAPITAL_FLOW_CACHE = PROJECT_ROOT / "data" / "derived" / "cache" / "capital_flow" / "capital_flow_full.json"
 
 
 @functools.lru_cache(maxsize=1)
