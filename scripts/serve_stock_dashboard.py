@@ -935,6 +935,7 @@ print(json.dumps({
 
 
 STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.json"
+CAPITAL_FLOW_CACHE = DERIVED_DIR / "cache" / "capital_flow" / "capital_flow_full.json"
 
 
 @functools.lru_cache(maxsize=1)
@@ -1646,6 +1647,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/sync-to-tdx-block":
             self.handle_sync_to_tdx_block()
             return
+        if parsed.path == "/api/capital-flow-ranking":
+            self.handle_capital_flow_ranking()
+            return
+        if parsed.path == "/api/capital-flow-refresh":
+            self.handle_capital_flow_refresh()
+            return
         if parsed.path.startswith("/api/proxy-capital-flow"):
             self.handle_proxy_capital_flow(parsed.query)
             return
@@ -2172,6 +2179,35 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         content = "\r\n".join(merged) + "\r\n"
         block_path.write_text(content, encoding="ascii")
         self.respond_json(HTTPStatus.OK, {"ok": True, "written": len(lines), "path": str(block_path)})
+
+    def handle_capital_flow_ranking(self) -> None:
+        """Return top 20 inflow/outflow from cached capital flow data."""
+        if CAPITAL_FLOW_CACHE.exists():
+            payload = json.loads(CAPITAL_FLOW_CACHE.read_text(encoding="utf-8"))
+            self.respond_json(HTTPStatus.OK, {
+                "ok": True,
+                "updated_at": payload.get("updated_at"),
+                "total": payload.get("total"),
+                "top_inflow": payload.get("top_inflow", []),
+                "top_outflow": payload.get("top_outflow", []),
+            })
+            return
+        self.respond_json(HTTPStatus.OK, {"ok": True, "total": 0, "top_inflow": [], "top_outflow": [], "updated_at": None})
+
+    def handle_capital_flow_refresh(self) -> None:
+        """Trigger a background fetch of capital flow data."""
+        import threading
+        def _fetch():
+            subprocess.run(
+                [TONGDAXIN_PYTHON, str(PROJECT_ROOT / "scripts/fetch_capital_flow.py")],
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+        t = threading.Thread(target=_fetch, daemon=True)
+        t.start()
+        self.respond_json(HTTPStatus.OK, {"ok": True, "message": "fetch started"})
 
     def handle_relative_valuation(self, query: str) -> None:
         params = parse_qs(query)
