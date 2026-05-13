@@ -12,10 +12,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CACHE_PATH = PROJECT_ROOT / "data/derived/cache/capital_flow/capital_flow_full.json"
 
 FIELDS = "f12,f14,f2,f3,f62,f66,f69,f72,f75,f78,f184"
-PAGE_SIZE = 500
+PAGE_SIZE = 100
 # All A-share stocks (SH main + STAR + SZ main + ChiNext)
 MARKET_FILTER = "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23"
 BASE_URL = "https://push2.eastmoney.com/api/qt/clist/get"
+DELAY_BETWEEN_PAGES = 2.0      # seconds between successful pages
+RETRY_DELAYS = [10, 30, 60]     # seconds before each retry on failure
 
 
 def fetch_page(page: int) -> dict | None:
@@ -29,16 +31,17 @@ def fetch_page(page: int) -> dict | None:
         "Referer": "https://data.eastmoney.com/",
     }
     req = urllib.request.Request(url, headers=headers)
-    for attempt in range(3):
+    for attempt, delay in enumerate(RETRY_DELAYS + [0]):
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as exc:
-            if attempt < 2:
-                time.sleep(2)
+            if delay > 0:
+                time.sleep(delay)
                 continue
-            print(f"  page {page} failed: {exc}", flush=True)
+            print(f"  page {page} failed after {len(RETRY_DELAYS)+1} attempts: {exc}", flush=True)
             return None
+    return None
 
 
 def main() -> None:
@@ -58,7 +61,7 @@ def main() -> None:
         if page == 1:
             data = p1
         else:
-            time.sleep(0.8)  # rate limit
+            time.sleep(DELAY_BETWEEN_PAGES)
             data = fetch_page(page)
 
         if data and data.get("data"):
