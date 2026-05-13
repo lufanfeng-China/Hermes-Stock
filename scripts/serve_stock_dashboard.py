@@ -2159,8 +2159,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             elif market == "sz":
                 lines.append(f"0{symbol}")
 
+        # Merge with existing block content (append, deduplicate)
+        existing: set[str] = set()
+        if block_path.exists():
+            for raw_line in block_path.read_text(encoding="ascii").splitlines():
+                code = raw_line.strip()
+                if code and len(code) == 7 and code[0] in "01":
+                    existing.add(code)
+        merged = list(existing) + [l for l in lines if l not in existing]
+
         TDX_BLOCK_DIR.mkdir(parents=True, exist_ok=True)
-        content = "\r\n".join(lines) + "\r\n"
+        content = "\r\n".join(merged) + "\r\n"
         block_path.write_text(content, encoding="ascii")
         self.respond_json(HTTPStatus.OK, {"ok": True, "written": len(lines), "path": str(block_path)})
 
