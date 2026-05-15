@@ -1,4 +1,4 @@
-import { KlineChart } from './kline-chart.js';
+import { KlineChart } from './kline-chart.js?v=20260513-ma';
 
 const PAGE_SIZE = 50;
 const STRATEGY_PRESETS = {

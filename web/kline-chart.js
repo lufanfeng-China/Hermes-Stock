@@ -19,6 +19,8 @@ const DEFAULTS = {
   downColor: '#26a69a',
   ma5Color: '#f7d06a',
   ma10Color: '#82b1ff',
+  ma20Color: '#ef9a9a',
+  ma30Color: '#a5d6a7',
   rps20Color: '#ce93d8',
   rps50Color: '#80cbc4',
   rps120Color: '#ffcc80',
@@ -40,7 +42,7 @@ export class KlineChart {
     this.bars = [];
     this.visible = { windowStart: 0, windowEnd: 0, visibleWindow: 60 };
     this.presets = [20, 60, 120, 250, -1];
-    this.maWindows = [5, 10];
+    this.maWindows = [5, 10, 20, 30];
     this.maSeries = {};
     this.rpsHistory = [];   // [{trading_day, rps_20, rps_50, rps_120, rps_250}, ...]
     this.hoveredIndex = null;
@@ -112,7 +114,7 @@ export class KlineChart {
     this.maGroup.setAttribute('clip-path', `url(#${this.clipId})`);
     this.svg.appendChild(this.maGroup);
 
-    const maColors = [this.cfg.ma5Color, this.cfg.ma10Color];
+    const maColors = [this.cfg.ma5Color, this.cfg.ma10Color, this.cfg.ma20Color, this.cfg.ma30Color];
     this.maLines = {};
     for (let i = 0; i < this.maWindows.length; i++) {
       const g = document.createElementNS(ns, 'g');
@@ -795,6 +797,11 @@ export class KlineChart {
     this.crosshairDot.setAttribute('fill', bar.close >= bar.open ? this.cfg.upColor : this.cfg.downColor);
 
     // Tooltip
+    const barIndex = this.visible.windowStart + visibleIndex;
+    const maVals = {};
+    for (const w of this.maWindows) {
+      maVals[w] = (this.maSeries[w] || [])[barIndex] ?? null;
+    }
     const lines = [
       `日期: ${bar.trading_day}`,
       `开盘价: ${this._formatTooltipNumber(bar.open)}`,
@@ -802,6 +809,10 @@ export class KlineChart {
       `最低价: ${this._formatTooltipNumber(bar.low)}`,
       `收盘价: ${this._formatTooltipNumber(bar.close)}`,
       `成交量: ${this._formatTooltipVolume(bar.volume)}`,
+      `MA5:  ${this._formatTooltipNumber(maVals[5])}`,
+      `MA10: ${this._formatTooltipNumber(maVals[10])}`,
+      `MA20: ${this._formatTooltipNumber(maVals[20])}`,
+      `MA30: ${this._formatTooltipNumber(maVals[30])}`,
       `RPS20: ${this._formatTooltipNumber(rpsRow?.rps_20, 1)}`,
       `RPS50: ${this._formatTooltipNumber(rpsRow?.rps_50, 1)}`,
       `RPS120: ${this._formatTooltipNumber(rpsRow?.rps_120, 1)}`,
