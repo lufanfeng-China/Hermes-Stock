@@ -18,6 +18,10 @@ const STRATEGY_PRESETS = {
     strategy: 'rps_first',
     description: '任意3个RPS≥90且余下≥80；过去5个交易日首次满足',
   },
+  ma_cross: {
+    strategy: 'ma_cross',
+    description: 'MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10向上 + 均线粘合<10%',
+  },
 };
 let currentPage = 1;
 let currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };

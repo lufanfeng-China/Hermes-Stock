@@ -87,7 +87,7 @@ def _tail_lines(text: str | None, limit: int = DATA_UPDATE_OUTPUT_TAIL_LINES) ->
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback", "rps_first"}:
+    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback", "rps_first", "ma_cross"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
@@ -535,6 +535,12 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             'rebuild_screener_first',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
              '--strategy', 'rps_first', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_ma_cross',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'ma_cross', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
     ])

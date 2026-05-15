@@ -30,6 +30,7 @@ STRATEGY_STANDARD = "rps_standard_launch"
 STRATEGY_ATTACK = "rps_attack"
 STRATEGY_PULLBACK = "rps_pullback"
 STRATEGY_FIRST = "rps_first"
+STRATEGY_MA_CROSS = "ma_cross"
 STRATEGY_METADATA = {
     STRATEGY_STANDARD: {
         "label": "RPS标准",
@@ -42,6 +43,9 @@ STRATEGY_METADATA = {
     },
     STRATEGY_FIRST: {
         "label": "RPS首次",
+    },
+    STRATEGY_MA_CROSS: {
+        "label": "均线选股",
     },
 }
 
@@ -573,6 +577,86 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
     return results
 
 
+def build_ma_cross_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """均线选股：MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10上升 + 均线粘合<10%"""
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    rps_rows = load_rps_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[dict[str, Any]] = []
+
+    for row in rps_rows:
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        if not market_val or not symbol_val:
+            continue
+
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        closes = daily["close"].astype(float).tolist()
+        if len(closes) < 35:
+            continue
+
+        def _ma(values, period, idx):
+            if idx < period - 1:
+                return None
+            return sum(values[idx - period + 1 : idx + 1]) / period
+
+        ti = len(closes) - 1
+        yi = ti - 1
+
+        ma5_t = _ma(closes, 5, ti)
+        ma10_t = _ma(closes, 10, ti)
+        ma20_t = _ma(closes, 20, ti)
+        ma30_t = _ma(closes, 30, ti)
+        ma5_y = _ma(closes, 5, yi)
+        ma10_y = _ma(closes, 10, yi)
+        ma20_y = _ma(closes, 20, yi)
+
+        if None in (ma5_t, ma10_t, ma20_t, ma30_t, ma5_y, ma10_y, ma20_y):
+            continue
+
+        # COND1: CROSS(MA5, MA20)
+        cross = ma5_t > ma20_t and ma5_y <= ma20_y
+        # COND2: MA30 > MA5 > MA20 > MA10
+        order_ok = ma30_t > ma5_t > ma20_t > ma10_t
+        # COND3+4: we use yesterday's close vs open as approximation for 阳线 + rising
+        opens = daily["open"].astype(float).tolist()
+        bullish = closes[ti] > opens[ti] if len(opens) > ti else True
+        rising = ma5_t > ma5_y and ma10_t > ma10_y
+        # COND5: spread < 10%
+        mas = [ma5_t, ma10_t, ma20_t, ma30_t]
+        spread = (max(mas) - min(mas)) / min(mas) * 100.0
+        sticky = spread < 10.0
+
+        passed = cross and order_ok and bullish and rising and sticky
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_MA_CROSS,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_MA_CROSS]["label"],
+            "passed": passed,
+            "conditions": {
+                "cross_ma5_ma20": cross,
+                "order_ma30_5_20_10": order_ok,
+                "bullish": bullish,
+                "rising_ma5_ma10": rising,
+                "sticky_pct": round(spread, 2),
+            },
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
 def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Replace one strategy's rows while preserving other strategies in the shared output file."""
     existing_rows: list[dict[str, Any]] = []
@@ -604,8 +688,10 @@ def main() -> None:
         rows = build_rps_attack_rows(tdxdir=args.tdxdir)
     elif args.strategy == STRATEGY_PULLBACK:
         rows = build_rps_pullback_rows(tdxdir=args.tdxdir)
-    else:
+    elif args.strategy == STRATEGY_FIRST:
         rows = build_rps_first_rows(tdxdir=args.tdxdir)
+    else:
+        rows = build_ma_cross_rows(tdxdir=args.tdxdir)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output_rows = merge_strategy_rows_for_output(output, args.strategy, rows)
