@@ -336,6 +336,11 @@ const REALTIME_SCENARIOS = {
       },
     ],
   },
+  ma_cross: {
+    key: 'ma_cross',
+    label: '均线选股',
+    modules: [],
+  },
 };
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
