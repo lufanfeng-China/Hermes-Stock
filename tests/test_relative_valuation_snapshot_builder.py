@@ -94,7 +94,7 @@ class RelativeValuationSnapshotBuilderTests(unittest.TestCase):
                     "pe_ttm": 8.0,
                     "ps_ttm": 1.2,
                     "classification": "A_NORMAL_EARNING",
-                    "classification_label": "A类 正常盈利",
+                    "classification_label": "正常盈利",
                 }],
             }
         ]

@@ -123,7 +123,7 @@ class StockScreenerApiTests(unittest.TestCase):
         self.assertEqual("600001", payload["rows"][0]["symbol"])
         self.assertEqual("测试半导体", payload["rows"][0]["stock_name"])
         self.assertEqual(42.1, payload["rows"][0]["current_price"])
-        self.assertEqual("A类 正常盈利", payload["rows"][0]["classification_label"])
+        self.assertEqual("正常盈利", payload["rows"][0]["classification_label"])
         self.assertEqual("合理偏低", payload["rows"][0]["valuation_band_label"])
         self.assertEqual("半导体", payload["rows"][0]["industry_level_2"])
 

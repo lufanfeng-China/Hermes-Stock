@@ -652,25 +652,25 @@ function formatRelativeValuationClassification(payload) {
   const subClassification = String(payload?.sub_classification || '').trim();
   if (classification === 'A_NORMAL_EARNING') {
     return {
-      label: 'A类 正常盈利',
+      label: '正常盈利',
       description: '按 PE-TTM 排位',
     };
   }
   if (classification === 'B_THIN_PROFIT_DISTORTED') {
     return {
-      label: 'B类 微盈利畸高',
+      label: '微盈利畸高',
       description: '按 PS-TTM 排位',
     };
   }
   if (classification === 'C_LOSS') {
     if (subClassification === 'C3_NO_REVENUE_CONCEPT' || subClassification === 'C4_LIQUIDATION_RISK') {
       return {
-        label: 'D类 高风险例外',
+        label: '高风险例外',
         description: '不输出常规估值分位',
       };
     }
     return {
-      label: 'C类 亏损经营',
+      label: '亏损经营',
       description: '仅在亏损同类中按 PS-TTM 辅助比较',
     };
   }

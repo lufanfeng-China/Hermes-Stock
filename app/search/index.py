@@ -1071,13 +1071,13 @@ def _classification_label(classification: str, sub_classification: str = "") -> 
     classification_text = _normalize_text(classification)
     sub_text = _normalize_text(sub_classification).upper()
     if classification_text == "A_NORMAL_EARNING":
-        return "A类 正常盈利"
+        return "正常盈利"
     if classification_text == "B_THIN_PROFIT_DISTORTED":
-        return "B类 微盈利畸高"
+        return "微盈利畸高"
     if classification_text == "C_LOSS":
         if sub_text in {"C3", "C4", "C3_NO_REVENUE_CONCEPT", "C4_LIQUIDATION_RISK"}:
-            return "D类 高风险例外"
-        return "C类 亏损经营"
+            return "高风险例外"
+        return "亏损经营"
     return classification_text
 
 
