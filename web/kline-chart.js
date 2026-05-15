@@ -750,6 +750,24 @@ export class KlineChart {
       t.textContent = label.text;
       this.sectionLabels.appendChild(t);
     });
+    // MA legend in price section
+    const maItems = [
+      { label: 'MA5',  color: this.cfg.ma5Color },
+      { label: 'MA10', color: this.cfg.ma10Color },
+      { label: 'MA20', color: this.cfg.ma20Color },
+      { label: 'MA30', color: this.cfg.ma30Color },
+    ];
+    const maX = d.ml + 4;
+    maItems.forEach((item, idx) => {
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', maX + 40 * idx);
+      t.setAttribute('y', d.priceTop + 26);
+      t.setAttribute('fill', item.color);
+      t.setAttribute('font-size', '10');
+      t.setAttribute('font-family', 'monospace');
+      t.textContent = item.label;
+      this.sectionLabels.appendChild(t);
+    });
   }
 
   _formatTooltipNumber(value, digits = 2) {
