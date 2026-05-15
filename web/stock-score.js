@@ -383,6 +383,16 @@ function formatAmountYi(value) {
   return `${yi.toFixed(2)}亿`;
 }
 
+function formatDiagnosticAmount(value) {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+  const num = Number(value);
+  const absVal = Math.abs(num);
+  if (absVal >= 1e8) return `${(num / 1e8).toFixed(2)}亿`;
+  if (absVal >= 1e4) return `${(num / 1e4).toFixed(2)}万`;
+  if (Number.isInteger(num)) return num.toLocaleString("zh-CN");
+  return num.toFixed(4);
+}
+
 function formatProfileMetric(value) {
   if (value == null || value === "" || Number.isNaN(Number(value))) return null;
   return Number(value).toFixed(2);
@@ -1262,6 +1272,8 @@ function renderSubIndicatorDiagnostic(subKey, meta, context) {
   const {
     currentDisplay,
     previousDisplay,
+    rawVal,
+    prevVal,
     yoy,
     marketScore,
     industryScore,
@@ -1312,6 +1324,7 @@ function renderSubIndicatorDiagnostic(subKey, meta, context) {
           <div class="profile-value">
             <div><strong>${escapeHtml(meta.name)}</strong> · ${escapeHtml(DIM_NAMES[meta.dim] || "未分类")}</div>
             <div>当期 ${escapeHtml(currentDisplay)} / 上年同期 ${escapeHtml(previousDisplay)} / 同比 ${yoyBadge}</div>
+            <div class="profile-meta">本期: ${escapeHtml(formatDiagnosticAmount(rawVal))}　｜　上年同期: ${escapeHtml(formatDiagnosticAmount(prevVal))}</div>
             <div class="profile-meta">${escapeHtml(changeSummary)}</div>
             <div class="profile-meta">${escapeHtml(describeYoyDirection(yoy, meta))}</div>
           </div>
@@ -1404,6 +1417,8 @@ function renderSubTable(scoreData, indSubIndicators, rawSubIndicators, prevRawSu
         ${renderSubIndicatorDiagnostic(key, meta, {
           currentDisplay,
           previousDisplay,
+          rawVal,
+          prevVal,
           yoy,
           marketScore: val,
           industryScore: indVal,
