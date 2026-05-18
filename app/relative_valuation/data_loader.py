@@ -147,22 +147,45 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
     elif current_price is not None and _to_float((basic_info or {}).get("total_shares")) is not None:
         total_market_cap = current_price * _to_float((basic_info or {}).get("total_shares"))
 
-    ttm_net_profit = normalize_amount_to_yi(compute_ttm_metric_from_rows(
-        period=latest_period,
-        field_name="归属于母公司所有者的净利润",
-        current_row=current_row,
-        previous_quarter_rows=previous_quarter_rows,
-        prev_annual_row=prev_annual_row,
-        prev_same_row=prev_same_row,
-    ))
-    ttm_revenue = normalize_amount_to_yi(compute_ttm_metric_from_rows_by_fields(
-        period=latest_period,
-        field_names=("其中：营业收入", "营业收入"),
-        current_row=current_row,
-        previous_quarter_rows=previous_quarter_rows,
-        prev_annual_row=prev_annual_row,
-        prev_same_row=prev_same_row,
-    ))
+    # —— TTM 净利润：优先使用通达信预计算字段，回退手动计算 ——
+    ttm_net_profit = None
+    try:
+        ttm_net_precomputed = current_row.get("ttm_net_profit_yi") if hasattr(current_row, "get") else None
+        if ttm_net_precomputed is not None:
+            ttm_net_precomputed = _to_float(getattr(ttm_net_precomputed, "iloc[0]", ttm_net_precomputed) if hasattr(ttm_net_precomputed, "iloc") else ttm_net_precomputed)
+        if ttm_net_precomputed is not None and ttm_net_precomputed > 0:
+            ttm_net_profit = ttm_net_precomputed
+    except Exception:
+        pass
+    if ttm_net_profit is None:
+        ttm_net_profit = normalize_amount_to_yi(compute_ttm_metric_from_rows(
+            period=latest_period,
+            field_name="归属于母公司所有者的净利润",
+            current_row=current_row,
+            previous_quarter_rows=previous_quarter_rows,
+            prev_annual_row=prev_annual_row,
+            prev_same_row=prev_same_row,
+        ))
+
+    # —— TTM 营收：优先使用通达信预计算字段，回退手动计算 ——
+    ttm_revenue = None
+    try:
+        ttm_rev_precomputed = current_row.get("ttm_revenue_yi") if hasattr(current_row, "get") else None
+        if ttm_rev_precomputed is not None:
+            ttm_rev_precomputed = _to_float(getattr(ttm_rev_precomputed, "iloc[0]", ttm_rev_precomputed) if hasattr(ttm_rev_precomputed, "iloc") else ttm_rev_precomputed)
+        if ttm_rev_precomputed is not None and ttm_rev_precomputed > 0:
+            ttm_revenue = ttm_rev_precomputed
+    except Exception:
+        pass
+    if ttm_revenue is None:
+        ttm_revenue = normalize_amount_to_yi(compute_ttm_metric_from_rows_by_fields(
+            period=latest_period,
+            field_names=("其中：营业收入", "营业收入"),
+            current_row=current_row,
+            previous_quarter_rows=previous_quarter_rows,
+            prev_annual_row=prev_annual_row,
+            prev_same_row=prev_same_row,
+        ))
 
     revenue_yoy = _normalize_percent(search_index._pick(current_row.get("营业收入增长率(%)")))
     gross_margin = _extract_gross_margin(search_index, current_row)

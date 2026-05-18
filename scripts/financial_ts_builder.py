@@ -203,6 +203,23 @@ def main():
 
             row_dict = {**row.to_dict(), "report_date": rd, "announce_date": ad, "code": code}
 
+            # —— 提取通达信预计算 TTM 字段（万元 → 亿）——
+            _ttm_net = row.get("近一年归母净利润（万元）", None)
+            try:
+                _ttm_net = float(_ttm_net)
+                if not pd.isna(_ttm_net) and _ttm_net > 0:
+                    row_dict["ttm_net_profit_yi"] = _ttm_net / 1_0000.0
+            except (TypeError, ValueError):
+                pass
+
+            _ttm_rev = row.get("营业总收入TTM(万元)", None)
+            try:
+                _ttm_rev = float(_ttm_rev)
+                if not pd.isna(_ttm_rev) and _ttm_rev > 0:
+                    row_dict["ttm_revenue_yi"] = _ttm_rev / 1_0000.0
+            except (TypeError, ValueError):
+                pass
+
             # 更新 meta
             if code not in meta["stocks"]:
                 meta["stocks"][code] = {"name": "", "periods": {}, "latest_period": ""}

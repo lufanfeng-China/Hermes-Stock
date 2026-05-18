@@ -897,29 +897,69 @@ def industry_hierarchy_response() -> dict[str, object]:
     return {"ok": True, "industries": tree}
 
 
+def _is_word_boundary(s: str, pos: int) -> bool:
+    """Check if position *pos* in *s* is at a word boundary (start of string or preceded by non-alphanumeric)."""
+    if pos == 0:
+        return True
+    return not s[pos - 1].isalnum()
+
+
 def concept_list_response(query: str = "", limit: int = 100) -> dict[str, object]:
-    """Return active concept names, optionally filtered by query prefix match."""
+    """Return active concept names, fuzzy-matched with scoring, sorted by stock_count desc.
+    
+    Single-stock concepts (stock_count <= 1) are filtered out entirely.
+    """
     concept_dict_path = Path(DEFAULT_DATASET_DIR) / "dataset_concept_dictionary.json"
     all_concepts = _load_json_rows(concept_dict_path)
 
     # Only active concepts
     active = [c for c in all_concepts if c.get("is_active", False)]
 
+    # Build stock count lookup from concept → stock mapping (do this FIRST)
+    stock_count_by_concept: dict[str, int] = {}
+    try:
+        concept_rows = load_concept_rows()
+        for row in concept_rows:
+            cn = (row.get("concept_name") or "").strip()
+            if cn:
+                stock_count_by_concept[cn] = stock_count_by_concept.get(cn, 0) + 1
+    except Exception:
+        pass  # non-critical, proceed without counts
+
+    # Build results with stock counts, filtering out single-stock concepts
+    results: list[dict[str, object]] = []
+    for c in active:
+        name = c.get("concept_name") or ""
+        cnt = stock_count_by_concept.get(name, 0)
+        if cnt <= 1:
+            continue  # skip single-stock concepts
+        results.append({
+            "concept_id": c.get("concept_id", ""),
+            "concept_name": name,
+            "stock_count": cnt,
+        })
+
     if query:
         q = query.strip().lower()
-        filtered = [c for c in active if q in (c.get("concept_name") or "").lower()]
+        # Score each result by match position (earlier = better) and word-boundary boost
+        scored: list[tuple[int, int, dict[str, object]]] = []
+        for r in results:
+            name_lower = r["concept_name"].lower()
+            pos = name_lower.find(q)
+            if pos == -1:
+                continue  # no match, exclude
+            boundary_bonus = 1000 if _is_word_boundary(name_lower, pos) else 0
+            score = boundary_bonus - pos  # higher = better
+            scored.append((score, r["stock_count"], r))
+
+        # Sort by score DESC then stock_count DESC
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        results = [item[2] for item in scored]
     else:
-        filtered = active
+        # No query: sort by stock_count descending only
+        results.sort(key=lambda r: r["stock_count"], reverse=True)
 
-    results = [
-        {
-            "concept_id": c.get("concept_id", ""),
-            "concept_name": c.get("concept_name", ""),
-        }
-        for c in filtered[:limit]
-    ]
-
-    return {"ok": True, "query": query, "count": len(results), "results": results}
+    return {"ok": True, "query": query, "count": len(results[:limit]), "results": results[:limit]}
 
 
 def pool_filter_response(
@@ -1628,16 +1668,20 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             continue
         if param_key.startswith("min_dim_"):
             dim_key = param_key[8:]
+            weight = _DIM_WEIGHTS.get(dim_key, 1.0)
+            adjusted_threshold = threshold * weight if weight > 0 else threshold
             filtered = [
                 row for row in filtered
-                if _passes_min_max((row.get("dim_scores") or {}).get(dim_key), min_value=threshold)
+                if _passes_min_max((row.get("dim_scores") or {}).get(dim_key), min_value=adjusted_threshold)
             ]
             continue
         if param_key.startswith("max_dim_"):
             dim_key = param_key[8:]
+            weight = _DIM_WEIGHTS.get(dim_key, 1.0)
+            adjusted_threshold = threshold * weight if weight > 0 else threshold
             filtered = [
                 row for row in filtered
-                if _passes_min_max((row.get("dim_scores") or {}).get(dim_key), max_value=threshold)
+                if _passes_min_max((row.get("dim_scores") or {}).get(dim_key), max_value=adjusted_threshold)
             ]
             continue
         if param_key.startswith("min_sub_"):

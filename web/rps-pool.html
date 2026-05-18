@@ -6,6 +6,67 @@
   <title>RPS Pool Screener</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
+    /* ── Stock search in filter bar ─────────────────────────── */
+    .stock-search-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #pool-stock-search {
+      background: #1e1e2e;
+      border: 1px solid #2a2a3a;
+      color: #ccccee;
+      border-radius: 3px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-family: monospace;
+      width: 180px;
+    }
+    #pool-stock-search:focus {
+      outline: none;
+      border-color: #4a4a6a;
+    }
+    #pool-stock-search::placeholder {
+      color: #555;
+    }
+    #pool-stock-search-dropdown {
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 0;
+      background: #1e1e2e;
+      border: 1px solid #2a2a3a;
+      border-radius: 3px;
+      max-height: 260px;
+      overflow-y: auto;
+      z-index: 201;
+      display: none;
+      min-width: 300px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    #pool-stock-search-dropdown.active { display: block; }
+    .stock-search-option {
+      padding: 7px 12px;
+      font-size: 12px;
+      color: #ccccee;
+      cursor: pointer;
+      font-family: monospace;
+      white-space: nowrap;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .stock-search-option:hover { background: #2a2a3a; }
+    .stock-search-option .stock-search-code {
+      color: #888;
+      font-size: 11px;
+    }
+    .stock-search-option.empty {
+      color: #555;
+      cursor: default;
+    }
+    .stock-search-option.empty:hover { background: transparent; }
+
     /* ── Pool Filter Section ─────────────────────────────────── */
     .pool-filter-section {
       background: #161622;
@@ -336,6 +397,11 @@
       <!-- ── Filter Section ── -->
       <div class="pool-filter-section">
         <div class="pool-filter-row">
+          <div class="filter-group stock-search-wrap">
+            <span class="filter-label">搜索</span>
+            <input id="pool-stock-search" type="text" placeholder="代码/名称/拼音首字母" autocomplete="off">
+            <div id="pool-stock-search-dropdown"></div>
+          </div>
           <div class="filter-group">
             <span class="filter-label">申万一级</span>
             <select id="pool-level1" class="filter-select">
@@ -439,6 +505,6 @@
     </section>
   </main>
 
-  <script type="module" src="/rps-pool.js"></script>
+  <script type="module" src="/rps-pool.js?v=20260516c"></script>
 </body>
 </html>

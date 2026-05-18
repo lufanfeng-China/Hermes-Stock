@@ -26,6 +26,12 @@ let industryRpsSortDirection = 'desc';
 let poolKlineChart = null;
 let currentKlinePreset = 60;
 
+// Stock search state
+let stockSearchTimer = null;
+let stockSearchRequestId = 0;
+let stockSearchSuggestions = [];
+let stockSearchSelected = null;
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', init);
@@ -132,32 +138,41 @@ document.addEventListener('click', (e) => {
   }
 });
 
-function showConceptDropdown(query) {
-  const q = query.toLowerCase();
-  const filtered = conceptList
-    .filter(c => (c.concept_name || '').toLowerCase().includes(q))
-    .slice(0, 20);
+async function showConceptDropdown(query) {
+  const q = query.trim();
+  if (!q) { conceptDropdown.classList.remove('active'); return; }
 
-  if (filtered.length === 0) {
-    conceptDropdown.innerHTML = '<div class="concept-option" style="color:#555;cursor:default">无匹配概念</div>';
-    conceptDropdown.classList.add('active');
-    return;
-  }
-
-  conceptDropdown.innerHTML = '';
-  for (const c of filtered) {
-    const div = document.createElement('div');
-    div.className = 'concept-option' + (selectedConcepts.has(c.concept_name) ? ' selected' : '');
-    div.textContent = c.concept_name;
-    div.addEventListener('click', (e) => {
-      e.stopPropagation();
-      addConcept(c.concept_name);
-      conceptInput.value = '';
-      conceptDropdown.classList.remove('active');
-    });
-    conceptDropdown.appendChild(div);
-  }
+  conceptDropdown.innerHTML = '<div class="concept-option" style="color:#555;cursor:default">搜索中…</div>';
   conceptDropdown.classList.add('active');
+
+  try {
+    const res = await fetch(`/api/concept-list?q=${encodeURIComponent(q)}&limit=20`);
+    const json = await res.json();
+    const filtered = json.ok ? (json.results || []) : [];
+
+    if (filtered.length === 0) {
+      conceptDropdown.innerHTML = '<div class="concept-option" style="color:#555;cursor:default">无匹配概念</div>';
+      return;
+    }
+
+    conceptDropdown.innerHTML = '';
+    for (const c of filtered) {
+      const div = document.createElement('div');
+      div.className = 'concept-option' + (selectedConcepts.has(c.concept_name) ? ' selected' : '');
+      const count = c.stock_count != null ? ` (${c.stock_count}只)` : '';
+      div.textContent = c.concept_name + count;
+      div.addEventListener('click', (e) => {
+        e.stopPropagation();
+        addConcept(c.concept_name);
+        conceptInput.value = '';
+        conceptDropdown.classList.remove('active');
+      });
+      conceptDropdown.appendChild(div);
+    }
+  } catch (err) {
+    console.error('showConceptDropdown error:', err);
+    conceptDropdown.innerHTML = '<div class="concept-option" style="color:#555;cursor:default">搜索失败</div>';
+  }
 }
 
 function addConcept(name) {
@@ -185,6 +200,126 @@ function renderConceptTags() {
   }
 }
 
+// ─── Stock Search (by code/name/initial) ────────────────────────────────
+
+const stockSearchInput = document.getElementById('pool-stock-search');
+const stockSearchDropdown = document.getElementById('pool-stock-search-dropdown');
+
+stockSearchInput.addEventListener('input', (e) => {
+  const val = e.target.value.trim();
+  stockSearchSelected = null;
+  window.clearTimeout(stockSearchTimer);
+  stockSearchTimer = window.setTimeout(() => {
+    fetchStockSearchSuggestions(val);
+  }, 200);
+});
+
+stockSearchInput.addEventListener('focus', () => {
+  if (stockSearchInput.value.trim().length > 0) {
+    fetchStockSearchSuggestions(stockSearchInput.value.trim());
+  }
+});
+
+stockSearchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    if (stockSearchSuggestions.length === 1) {
+      selectStockFromSearch(stockSearchSuggestions[0]);
+    } else if (stockSearchSuggestions.length > 0) {
+      selectStockFromSearch(stockSearchSuggestions[0]);
+    }
+    hideStockSearchDropdown();
+  } else if (e.key === 'Escape') {
+    hideStockSearchDropdown();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.stock-search-wrap')) {
+    hideStockSearchDropdown();
+  }
+});
+
+async function fetchStockSearchSuggestions(query) {
+  const trimmed = query.trim();
+  const requestId = ++stockSearchRequestId;
+
+  if (!trimmed) {
+    hideStockSearchDropdown();
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/search/stocks?q=${encodeURIComponent(trimmed)}&limit=10`);
+    const json = await res.json();
+    if (requestId !== stockSearchRequestId) return;
+    const results = json.results || [];
+    stockSearchSuggestions = results;
+    renderStockSearchDropdown(results);
+  } catch (err) {
+    if (requestId !== stockSearchRequestId) return;
+    stockSearchDropdown.innerHTML = '<div class="stock-search-option empty">搜索失败</div>';
+    stockSearchDropdown.classList.add('active');
+  }
+}
+
+function renderStockSearchDropdown(results) {
+  if (!results.length) {
+    stockSearchDropdown.innerHTML = '<div class="stock-search-option empty">无匹配股票</div>';
+    stockSearchDropdown.classList.add('active');
+    return;
+  }
+
+  stockSearchDropdown.innerHTML = results.map((row) => `
+    <div class="stock-search-option" data-market="${escapeHtml(row.market || '')}" data-symbol="${escapeHtml(row.symbol || '')}">
+      <span>${escapeHtml(row.stock_name || '')}</span>
+      <span class="stock-search-code">${escapeHtml((row.market || '').toUpperCase())}:${escapeHtml(row.symbol || '')}</span>
+    </div>
+  `).join('');
+
+  stockSearchDropdown.querySelectorAll('.stock-search-option').forEach(opt => {
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const market = opt.dataset.market;
+      const symbol = opt.dataset.symbol;
+      const stockName = opt.querySelector('span').textContent;
+      selectStockFromSearch({ market, symbol, stock_name: stockName });
+      hideStockSearchDropdown();
+    });
+  });
+
+  stockSearchDropdown.classList.add('active');
+}
+
+function hideStockSearchDropdown() {
+  stockSearchDropdown.classList.remove('active');
+}
+
+function selectStockFromSearch(row) {
+  if (!row || !row.symbol) return;
+
+  stockSearchSelected = row;
+  stockSearchInput.value = `${row.stock_name || ''} (${(row.market || '').toUpperCase()}:${row.symbol})`;
+
+  // Search in current pool data
+  const found = poolData.find(s => s.symbol === row.symbol);
+  if (found) {
+    // Highlight the stock in the table
+    selectPoolSymbol(row.symbol);
+    // Navigate to the page containing this stock
+    const idx = poolData.findIndex(s => s.symbol === row.symbol);
+    if (idx >= 0) {
+      poolPage = Math.floor(idx / POOL_PAGE_SIZE) + 1;
+      renderPoolTable();
+      selectPoolSymbol(row.symbol);
+    }
+  } else {
+    // Stock not in current pool — fetch RPS data and show chart
+    document.getElementById('pool-chart-section').classList.remove('hidden');
+    document.getElementById('pool-kline-stock-title').textContent = `${row.symbol} — 加载中…`;
+    loadPoolKline(row.symbol);
+  }
+}
+
 // ─── Pool Filter ─────────────────────────────────────────────────────────────
 
 document.getElementById('pool-apply-btn').addEventListener('click', applyPoolFilter);
@@ -196,7 +331,36 @@ async function applyPoolFilter() {
   const params = new URLSearchParams();
   if (level1) params.append('level1', level1);
   if (level2) params.append('level2', level2);
-  for (const c of selectedConcepts) params.append('concepts', c);
+
+  // Collect concepts from both selected tags and matching input text (server-side search)
+  const conceptsToUse = new Set(selectedConcepts);
+  const conceptText = conceptInput.value.trim();
+  if (conceptText) {
+    try {
+      const res = await fetch(`/api/concept-list?q=${encodeURIComponent(conceptText)}&limit=20`);
+      const json = await res.json();
+      const matches = (json.ok ? json.results : []) || [];
+      if (matches.length > 0) {
+        // Use matching concepts as filters (user doesn't need to click each one)
+        for (const c of matches) {
+          conceptsToUse.add(c.concept_name);
+          // Also auto-add as visual tag
+          if (!selectedConcepts.has(c.concept_name)) {
+            addConcept(c.concept_name);
+          }
+        }
+        conceptInput.value = '';
+      } else {
+        // No concept matches — use raw text as a concept filter directly
+        conceptsToUse.add(conceptText);
+      }
+    } catch (err) {
+      console.error('applyPoolFilter concept search error:', err);
+      // Fallback: use raw text
+      conceptsToUse.add(conceptText);
+    }
+  }
+  for (const c of conceptsToUse) params.append('concepts', c);
 
   try {
     const res = await fetch(`/api/pool-filter?${params.toString()}`);

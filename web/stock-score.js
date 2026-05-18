@@ -1736,12 +1736,14 @@ function normalizeListedDays(profile) {
 
 function computeBasicGrowthMetrics(bars, currentPrice, listedDays = null) {
   if (!Array.isArray(bars) || !bars.length) return null;
-  const latestClose = Number(bars[0]?.close);
+  const barCount = bars.length;
+  // bars are in ascending order (oldest → newest)
+  const latestBar = bars[barCount - 1];
+  const latestClose = Number(latestBar?.close);
   const numericCurrentPrice = Number(currentPrice);
   const current = Number.isFinite(numericCurrentPrice) ? numericCurrentPrice : latestClose;
   if (!Number.isFinite(current) || current <= 0) return null;
 
-  const barCount = bars.length;
   return BASIC_GROWTH_PERIODS.map(({ elementId, placeholder, offset }) => {
     const hasEnoughBars = barCount >= offset;
     const meetsIpoFallbackThreshold = (
@@ -1755,10 +1757,10 @@ function computeBasicGrowthMetrics(bars, currentPrice, listedDays = null) {
     let baseBar = null;
     let state = "empty";
     if (hasEnoughBars) {
-      baseBar = bars[offset - 1];
+      baseBar = bars[barCount - offset];
       state = "normal";
     } else if (hasIpoContext && meetsIpoFallbackThreshold) {
-      baseBar = bars[barCount - 1];
+      baseBar = bars[0];
       state = "since-ipo";
     }
 
