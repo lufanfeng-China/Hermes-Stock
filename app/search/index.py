@@ -3447,13 +3447,20 @@ def _derive_sub_fields(frow, frow_prev):
     out["inv_days"]   = vv("存货周转天数(非金融类指标)")
     out["asset_turn"] = vv("总资产周转率(非金融类指标)")
 
-    # cashflow
-    if op_cf is not None and net_profit and net_profit != 0:
+    # cashflow — 使用TTM口径（近12个月），使Q1/Q2/Q3/Q4可互相比较
+    ttm_ocf   = _pick(frow.get("近一年经营活动现金流净额"))  # 元
+    ttm_np_wan = _pick(frow.get("近一年归母净利润（万元）"))    # 万元
+    if ttm_ocf is not None and ttm_np_wan is not None and ttm_np_wan != 0:
+        out["ocf_to_profit"] = ttm_ocf / (ttm_np_wan * 10000.0)
+    elif op_cf is not None and net_profit and net_profit != 0:
         out["ocf_to_profit"] = op_cf / net_profit
     else:
         out["ocf_to_profit"] = None
     out["ocf_to_rev"] = vv("经营活动产生的现金流量净额/营业收入")
-    if op_cf is not None and capex is not None:
+    # free_cf: 用TTM经营现金流，capex暂无TTM字段，暂用累计值近似
+    if ttm_ocf is not None and capex is not None:
+        out["free_cf"] = ttm_ocf - capex
+    elif op_cf is not None and capex is not None:
         out["free_cf"] = op_cf - capex
     else:
         out["free_cf"] = None
