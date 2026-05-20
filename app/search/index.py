@@ -3423,8 +3423,14 @@ def _derive_sub_fields(frow, frow_prev):
 
     out = {}
 
-    # profitability
-    if equity and ex_net_prof is not None and equity != 0:
+    # profitability — ROE使用TTM扣非净利润（近12个月），更准确反映真实盈利水平
+    ttm_ex_profit_wan = _pick(frow.get("近一年扣非净利润（万元）"))
+    if equity and ttm_ex_profit_wan is not None and ttm_ex_profit_wan != 0 and equity != 0:
+        # 万元 → 元
+        ttm_ex_profit_yuan = ttm_ex_profit_wan * 10000.0
+        out["roe_ex"] = ttm_ex_profit_yuan / equity * 100.0
+    elif equity and ex_net_prof is not None and equity != 0:
+        # 回退：使用累计扣非净利润
         out["roe_ex"] = ex_net_prof / equity * 100.0
     else:
         out["roe_ex"] = None
