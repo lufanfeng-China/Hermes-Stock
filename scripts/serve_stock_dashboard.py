@@ -1620,6 +1620,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/data-update-status":
             self.handle_data_update_status(parsed.query)
             return
+        if parsed.path == "/api/technical-eval":
+            self.handle_technical_eval(parsed.query)
+            return
         if parsed.path == "/api/industry-valuation-percentile":
             self.handle_industry_valuation_percentile(parsed.query)
             return
@@ -2647,6 +2650,45 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "price_percentile_error", "message": str(exc)}},
             )
+
+    def handle_technical_eval(self, query: str) -> None:
+        """Return single-stock technical evaluation from pre-computed JSON."""
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol.isdigit() or len(symbol) != 6:
+            self.respond_json(HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol required"}})
+            return
+
+        try:
+            import json
+            from pathlib import Path
+            path = Path(__file__).resolve().parent.parent / "data" / "derived" / "datasets" / "final" / "dataset_technical_eval.json"
+            if not path.is_file():
+                self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "tech_data_not_found"})
+                return
+
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            stocks = raw.get("stocks", raw)
+            entry = stocks.get(symbol)
+            if not entry:
+                self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "stock_not_found"})
+                return
+
+            # Enrich with stock name
+            search_index = importlib.import_module("app.search.index")
+            name = search_index._stock_name_lookup().get((market, symbol), "")
+            entry["stock_name"] = str(name)
+            entry["market"] = market
+            entry["data_date"] = raw.get("data_date", "")
+
+            self.respond_json(HTTPStatus.OK, {"ok": True, **entry})
+
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "tech_eval_error", "message": str(exc)}})
 
     def handle_stock_score_report_history(self, query: str) -> None:
         params = parse_qs(query)

@@ -1,5 +1,5 @@
 // technical-score.js — Technical evaluation page
-// Reads from /api/stock-screener with tech fields
+// Uses /api/technical-eval for direct single-stock lookup
 
 const $input = document.getElementById('search-input');
 const $btn = document.getElementById('search-btn');
@@ -14,7 +14,6 @@ async function search(query) {
   $status.textContent = '...';
   $status.className = 'loading';
 
-  // Determine market from code
   let market = 'sh';
   let symbol = query;
   if (query.length >= 8 && query[1] === 'h') {
@@ -27,8 +26,9 @@ async function search(query) {
   } else {
     market = 'bj';
   }
+
   if (symbol.length !== 6 || !/^\d{6}$/.test(symbol)) {
-    // Try name search
+    // Name search: resolve via stock-search API
     try {
       const r = await fetch(`/api/stock-search?q=${encodeURIComponent(query)}&limit=1`);
       const d = await r.json();
@@ -40,23 +40,14 @@ async function search(query) {
   }
 
   try {
-    const url = `/api/stock-screener?page_size=500&page=1`;
+    const url = `/api/technical-eval?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`;
     const r = await fetch(url);
     const d = await r.json();
-    if (!d.ok || !d.rows?.length) {
-      $status.textContent = '无数据';
+    if (!d.ok) {
+      $status.textContent = d.error || '无数据';
       return;
     }
-    // Find exact match
-    const row = d.rows.find(r => 
-      r.market === market && r.symbol === symbol
-    );
-    if (!row) {
-      // Try loading more pages or fall back
-      $status.textContent = '未找到该股票';
-      return;
-    }
-    render(row);
+    render(d);
     $status.textContent = '';
   } catch (e) {
     $status.textContent = '错误: ' + e.message;
@@ -64,29 +55,38 @@ async function search(query) {
   }
 }
 
-function render(row) {
-  const name = row.stock_name || (row.market + ':' + row.symbol);
-  const price = row.current_price?.toFixed(2) || '--';
-  const code = (row.market || '').toUpperCase() + ':' + (row.symbol || '');
+function render(d) {
+  const name = d.stock_name || (d.market + ':' + d.symbol);
+  const price = d.latest_close ? d.latest_close.toFixed(2) : '--';
+  const code = (d.market || '').toUpperCase() + ':' + (d.symbol || '');
 
-  // Tech fields
-  const trend = row.tech_trend || '--';
-  const trendLabel = row.tech_trend_label || '--';
-  const momentum = row.tech_momentum || '--';
-  const momentumLabel = row.tech_momentum_label || '--';
-  const volume = row.tech_volume_signal || '--';
-  const volumeLabel = row.tech_volume_label || '--';
-  const position = row.tech_position || '--';
-  const positionLabel = row.tech_position_label || '--';
-  const conclusion = row.tech_conclusion || 'hold_watch';
-  const conclusionLabel = row.tech_conclusion_label || '--';
-  const conclusionColor = row.tech_conclusion_color || 'yellow';
-  const conclusionReason = row.tech_conclusion_reason || '';
-  const buyTrigger = row.tech_buy_trigger;
-  const buyLabel = row.tech_buy_trigger_label;
-  const entryPrice = row.tech_entry_price;
-  const stopLoss = row.tech_stop_loss;
-  const riskPct = row.tech_risk_pct;
+  // Fields are returned without tech_ prefix from /api/technical-eval
+  const trend = d.trend || '--';
+  const trendLabel = d.trend_label || '--';
+  const trendDetail = d.trend_detail || '';
+  const momentum = d.momentum || '--';
+  const momentumLabel = d.momentum_label || '--';
+  const momentumDetail = d.momentum_detail || '';
+  const volume = d.volume_signal || '--';
+  const volumeLabel = d.volume_label || '--';
+  const volumeDetail = d.volume_detail || '';
+  const position = d.position || '--';
+  const positionLabel = d.position_label || '--';
+  const positionDetail = d.position_detail || '';
+  const conclusion = d.conclusion || 'hold_watch';
+  const conclusionLabel = d.conclusion_label || '--';
+  const conclusionColor = d.conclusion_color || 'yellow';
+  const conclusionReason = d.conclusion_reason || '';
+
+  // Buy trigger
+  const buyTriggers = d.buy_triggers || [];
+  const bestTrigger = buyTriggers[0] || d;
+  const buyTrigger = d.buy_trigger;
+  const buyLabel = d.buy_trigger_label;
+  const buyDetail = d.buy_trigger_detail;
+  const entryPrice = d.entry_price;
+  const stopLoss = d.stop_loss;
+  const riskPct = d.risk_pct;
 
   const signalEmoji = {
     strong_bullish: '🟢', bullish: '🟢', recovering: '🟡',
@@ -110,10 +110,11 @@ function render(row) {
   // Buy trigger section
   let buyHTML = '';
   if (buyTrigger) {
-    const isWatch = row.tech_conclusion === 'buy_watch';
+    const isWatch = conclusion === 'buy_watch';
     buyHTML = `
     <div class="buy-card${isWatch ? ' watch' : ''}">
       <div style="font-weight:700;margin-bottom:6px">⚡ ${isWatch ? '买点观察' : '买入信号'}: ${buyLabel || buyTrigger}</div>
+      ${buyDetail ? `<div class="meta">${buyDetail}</div>` : ''}
       ${entryPrice ? `<div class="meta">买入参考价: <b>¥${entryPrice}</b></div>` : ''}
       ${stopLoss ? `<div class="meta">止损价: <b class="stop-loss red">¥${stopLoss}</b></div>` : ''}
       ${riskPct != null ? `<div class="meta">风险比例: <b>${(riskPct*100).toFixed(1)}%</b></div>` : ''}
@@ -140,10 +141,10 @@ function render(row) {
 
     <div class="card">
       <h3>📈 六维技术评估</h3>
-      ${dimSignal('趋势', trend, row.tech_trend_detail || trendLabel)}
-      ${dimSignal('动强', momentum, row.tech_momentum_detail || momentumLabel)}
-      ${dimSignal('量价', volume, row.tech_volume_detail || volumeLabel)}
-      ${dimSignal('位置', position, row.tech_position_detail || positionLabel)}
+      ${dimSignal('趋势', trend, trendDetail || trendLabel)}
+      ${dimSignal('动强', momentum, momentumDetail || momentumLabel)}
+      ${dimSignal('量价', volume, volumeDetail || volumeLabel)}
+      ${dimSignal('位置', position, positionDetail || positionLabel)}
     </div>
 
     ${buyHTML}
