@@ -505,7 +505,9 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             ],
         )]
     commands: list[tuple[str, list[str]]] = []
-    if trading_day:
+    today = datetime.now().strftime('%Y-%m-%d')
+    # Skip archive_daily when trading day is today — minute data may not yet be synced
+    if trading_day and trading_day != today:
         commands.append((
             'archive_daily',
             [

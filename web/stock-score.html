@@ -29,26 +29,18 @@
     </header>
 
     <section class="search-grid stock-score-lead-grid">
-      <div class="stock-score-search-stack">
+      <div class="stock-score-top-row">
         <article class="search-card stock-score-search-card">
           <div class="search-card-header">
             <div>
               <p class="eyebrow">SCORE LOOKUP</p>
               <h2><span id="hdr-name">—</span> <span id="hdr-symbol" class="stock-score-symbol">—</span></h2>
             </div>
-            <p class="search-meta"><span id="hdr-report-date"></span><span id="hdr-announce-date"></span></p>
           </div>
           <form class="search-form stock-score-search-form" onsubmit="return false;">
             <div class="search-input-wrap">
               <input type="text" id="stock-input" placeholder="600519 / sh:600519 / 贵州茅台" autocomplete="off">
               <div class="search-dropdown" id="stock-dropdown"></div>
-            </div>
-            <div class="stock-score-search-actions">
-              <button id="search-btn" type="button">查询评分</button>
-              <label class="stock-score-detail-toggle" for="financial-detail-toggle">
-                <input id="financial-detail-toggle" type="checkbox">
-                <span>财务明细</span>
-              </label>
             </div>
           </form>
           <div id="stock-score-search-concepts" class="stock-score-search-hints" aria-label="概念摘要">
@@ -57,6 +49,23 @@
           </div>
           <section id="loading-msg" class="status stock-score-status stock-score-search-status">输入股票代码查询财务评分</section>
         </article>
+        <article class="search-card stock-score-tech-conclusion-card" id="tech-conclusion-card">
+          <div class="search-card-header">
+            <div>
+              <p class="eyebrow">TECH CONCLUSION</p>
+              <h2>技术综合结论</h2>
+            </div>
+          </div>
+          <div class="tech-conclusion-body">
+            <span id="tech-conclusion-icon" class="tech-conclusion-icon">—</span>
+            <div>
+              <div id="tech-conclusion-label" class="tech-conclusion-label">查询股票后显示</div>
+              <div id="tech-conclusion-reason" class="tech-conclusion-reason muted">基于趋势、动量、量价、位置的信号灯综合判断</div>
+            </div>
+          </div>
+        </article>
+      </div>
+      <div class="stock-score-search-stack">
         <div id="stock-score-query-totals" class="stock-score-query-totals">
           <section id="score-workbench-totals" class="metrics stock-score-metrics">
             <article class="metric-card stock-score-total-card">
@@ -257,7 +266,7 @@
             <p class="eyebrow">SUB-INDICATORS</p>
             <h2>细分指标</h2>
           </div>
-          <p class="search-meta">原始值、双口径评分、公式说明</p>
+          <p class="search-meta"><span id="hdr-report-date"></span><span id="hdr-announce-date"></span></p>
         </div>
         <div class="stock-score-table-wrap">
           <table class="sub-table" id="sub-table">
@@ -318,7 +327,13 @@
           </section>
         </div>
         <details id="ai-report-raw-data" class="ai-report-raw-data">
-          <summary id="ai-report-raw-toggle">展开最近3年报告期原始财报数据</summary>
+          <summary id="ai-report-raw-toggle">
+            <span>最近3年报告期原始财报数据待加载</span>
+            <label class="stock-score-detail-toggle" for="financial-detail-toggle">
+              <input id="financial-detail-toggle" type="checkbox">
+              <span>财务明细</span>
+            </label>
+          </summary>
           <div class="stock-score-table-wrap ai-report-raw-wrap">
             <table id="ai-report-raw-table" class="sub-table ai-report-raw-table">
               <thead>

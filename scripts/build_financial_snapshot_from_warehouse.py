@@ -115,7 +115,7 @@ def derive_sub_fields(frow) -> dict:
     out = {}
 
     # profitability — ROE使用TTM扣非净利润（近12个月），更准确反映真实盈利水平
-    ttm_ex_profit_wan = _pick(frow.get("近一年扣非净利润（万元）"))
+    ttm_ex_profit_wan = vv("近一年扣非净利润（万元）")
     if equity and ttm_ex_profit_wan is not None and ttm_ex_profit_wan != 0 and equity != 0:
         ttm_ex_profit_yuan = ttm_ex_profit_wan * 10000.0
         out["roe_ex"] = ttm_ex_profit_yuan / equity * 100.0
@@ -137,8 +137,8 @@ def derive_sub_fields(frow) -> dict:
     out["asset_turn"] = vv("总资产周转率(非金融类指标)")
 
     # cashflow — 使用TTM口径（近12个月），使Q1/Q2/Q3/Q4可互相比较
-    ttm_ocf   = _pick(frow.get("近一年经营活动现金流净额"))
-    ttm_np_wan = _pick(frow.get("近一年归母净利润（万元）"))
+    ttm_ocf   = vv("近一年经营活动现金流净额")
+    ttm_np_wan = vv("近一年归母净利润（万元）")
     if ttm_ocf is not None and ttm_np_wan is not None and ttm_np_wan != 0:
         out["ocf_to_profit"] = ttm_ocf / (ttm_np_wan * 10000.0)
     elif op_cf is not None and net_profit and net_profit != 0:

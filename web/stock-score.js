@@ -887,7 +887,8 @@ function toggleAiReportRawData(hasData) {
   const summary = document.getElementById("ai-report-raw-toggle");
   details.classList.toggle("is-empty", !hasData);
   if (!hasData) details.open = false;
-  summary.textContent = hasData ? "展开最近3年报告期原始财报数据" : "最近3年报告期原始财报数据待加载";
+  const span = summary?.querySelector("span");
+  if (span) span.textContent = hasData ? "展开最近3年报告期原始财报数据" : "最近3年报告期原始财报数据待加载";
 }
 
 function buildAiReportSummaryText() {
@@ -1976,19 +1977,23 @@ function loadTechEvalSummary(market, symbol) {
       setTechCard('tech-volume-value', 'tech-volume-detail', 'tech-volume-card', d.volume_signal, d.volume_label, d.volume_detail);
       setTechCard('tech-position-value', 'tech-position-detail', 'tech-position-card', d.position, d.position_label, d.position_detail);
 
+      // Override position detail with actual percentile
+      if (d.position_detail) {
+        const pd = document.getElementById('tech-position-detail');
+        if (pd) pd.textContent = d.position_detail;
+      }
+
       // Buy trigger card
       const tv = document.getElementById('tech-trigger-value');
       const td = document.getElementById('tech-trigger-detail');
       if (d.buy_trigger) {
         tv.innerHTML = `${TECH_EMOJI[d.buy_trigger]||''} ${d.buy_trigger_label||d.buy_trigger}`;
         tv.style.color = TECH_COLORS[d.buy_trigger] || 'var(--green)';
-        tv.style.fontSize = '14px';
         td.textContent = _explain(d.buy_trigger, d.buy_trigger_label);
       } else {
         tv.textContent = '—';
         tv.style.color = 'var(--muted)';
         td.textContent = '暂无触发';
-        tv.style.fontSize = '';
       }
       if (d.entry_price || d.stop_loss) {
         td.textContent += ' · ';
@@ -1996,6 +2001,9 @@ function loadTechEvalSummary(market, symbol) {
         if (d.entry_price && d.stop_loss) td.textContent += ' ';
         if (d.stop_loss) td.textContent += `止损 ¥${d.stop_loss}`;
       }
+
+      // Tech conclusion card
+      setTechConclusion(d);
     })
     .catch(() => setTechPlaceholders());
 }
@@ -2008,14 +2016,42 @@ function setTechCard(valueId, detailId, cardId, key, label, detail) {
   const emoji = TECH_EMOJI[key] || '';
   v.innerHTML = `${emoji} ${label || key}`;
   v.style.color = TECH_COLORS[key] || 'var(--muted)';
-  v.style.fontSize = '13px';
   v.style.fontWeight = '600';
   const explain = _explain(key, label);
   d.textContent = explain;
   if (c) c.style.borderLeft = `2px solid ${TECH_COLORS[key] || 'var(--border)'}`;
 }
 
+function setTechConclusion(d) {
+  const icon = document.getElementById('tech-conclusion-icon');
+  const label = document.getElementById('tech-conclusion-label');
+  const reason = document.getElementById('tech-conclusion-reason');
+  const card = document.getElementById('tech-conclusion-card');
+  if (!icon || !label || !reason) return;
+  const cc = d.conclusion_color === 'green' ? '#00e676' :
+             d.conclusion_color === 'red' ? '#ff5252' : '#ffc107';
+  const ce = d.conclusion_color === 'green' ? '🟢' :
+             d.conclusion_color === 'red' ? '🔴' : '🟡';
+  icon.textContent = ce;
+  label.textContent = d.conclusion_label || '—';
+  label.style.color = cc;
+  reason.textContent = d.conclusion_reason || '';
+  if (card) card.style.borderLeft = `3px solid ${cc}`;
+}
+
+function resetTechConclusion() {
+  const icon = document.getElementById('tech-conclusion-icon');
+  const label = document.getElementById('tech-conclusion-label');
+  const reason = document.getElementById('tech-conclusion-reason');
+  const card = document.getElementById('tech-conclusion-card');
+  if (icon) icon.textContent = '—';
+  if (label) { label.textContent = '查询股票后显示'; label.style.color = ''; }
+  if (reason) reason.textContent = '基于趋势、动量、量价、位置的信号灯综合判断';
+  if (card) card.style.borderLeft = '';
+}
+
 function setTechPlaceholders() {
+  resetTechConclusion();
   ['trend','momentum','volume','position'].forEach(k => {
     const v = document.getElementById(`tech-${k}-value`);
     const d = document.getElementById(`tech-${k}-detail`);
@@ -2337,7 +2373,6 @@ async function loadSuggestions(query) {
   }
 }
 
-document.getElementById("search-btn").addEventListener("click", () => doSearch());
 async function startDataUpdateRequest(fetcher, startingText) {
   const infoEl = document.getElementById('stock-score-data-update-info');
   if (infoEl) infoEl.textContent = startingText;
@@ -2382,9 +2417,17 @@ stockInputEl.addEventListener("input", e => {
   }, SEARCH_DEBOUNCE_MS);
 });
 stockInputEl.addEventListener("focus", () => {
+  if (searchState.currentStock) {
+    stockInputEl.value = "";
+    searchState.selectedStock = null;
+  }
   renderRecentStockSearches();
 });
 stockInputEl.addEventListener("click", () => {
+  if (searchState.currentStock) {
+    stockInputEl.value = "";
+    searchState.selectedStock = null;
+  }
   renderRecentStockSearches();
 });
 stockInputEl.addEventListener("keydown", e => {
@@ -3025,4 +3068,36 @@ updateAiReportButtons();
 refreshDataUpdateStatus().catch((error) => {
   const infoEl = document.getElementById('stock-score-data-update-info');
   if (infoEl) infoEl.textContent = `最新更新读取失败: ${error.message}`;
+});
+
+// ── 财务明细 toggle: 勾选时加载最近3年原始财报数据 ─────────────────────────
+financialDetailToggleEl?.addEventListener("change", async () => {
+  const stock = searchState.currentStock;
+  if (!stock) return;
+  if (financialDetailToggleEl.checked) {
+    try {
+      setAiReportStatus("正在加载最近3年报告期数据...");
+      const payload = await fetchReportHistory(stock.market, stock.symbol);
+      const reports = payload?.reports || [];
+      renderAiReportRawTable(reports);
+      toggleAiReportRawData(reports.length > 0);
+      if (payload?.latest_report || payload?.latest_period_label) {
+        const latestPeriod = payload.latest_period_label ? formatPeriod(payload.latest_period_label) : "";
+        const latestReport = payload.latest_report?.report_date || "";
+        const latestLabel = [latestPeriod, latestReport].filter(Boolean).join(" · ");
+        setAiReportStatus(`已加载最近3年报告期数据${latestLabel ? `（最新：${latestLabel}）` : ""}，可继续生成AI解读`);
+      } else {
+        setAiReportStatus("未加载到最近3年报告期数据，可继续生成AI解读", true);
+      }
+    } catch (err) {
+      console.error(err);
+      setAiReportStatus(`加载失败: ${err.message}`, true);
+      renderAiReportRawTable([]);
+      toggleAiReportRawData(false);
+    }
+  } else {
+    renderAiReportRawTable([]);
+    toggleAiReportRawData(false);
+    setAiReportStatus("财务明细未加载，可勾选后加载数据；也可直接生成AI解读");
+  }
 });
