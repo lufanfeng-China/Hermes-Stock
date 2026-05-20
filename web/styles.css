@@ -50,9 +50,12 @@ body {
 }
 
 .topbar-actions {
-  grid-template-columns: auto auto;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
   align-items: center;
-  justify-content: end;
+  justify-content: flex-end;
+  overflow: hidden;
 }
 
 .rps-page-grid {
@@ -2766,9 +2769,14 @@ button:hover {
   -moz-appearance: textfield;
 }
 
-/* ── RPS group: 2-column fixed for pairs ── */
+/* ── RPS group: 4-column fixed ── */
 .filter-group:last-of-type {
   grid-template-columns: repeat(4, 1fr);
+}
+
+/* ── Tech signals: 3-column ── */
+.filter-tech-signals {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .stock-screener-filter-actions {

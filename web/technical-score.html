@@ -4,40 +4,47 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>技术面评估 — Project Hermes Stock</title>
+<link rel="stylesheet" href="/styles.css">
 <style>
   :root {
     --bg: #0d1117; --card: #161b22; --border: #30363d;
     --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
     --green: #3fb950; --red: #f85149; --orange: #d2991d;
-    --purple: #a371f7;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font: 13px/1.6 'Segoe UI', system-ui, sans-serif; }
-  .topbar {
-    display: flex; gap: 12px; align-items: center; padding: 8px 16px;
-    background: var(--card); border-bottom: 1px solid var(--border);
-  }
-  .topbar a { color: var(--muted); text-decoration: none; font-size: 12px; padding: 4px 10px; border-radius: 4px; }
-  .topbar a:hover, .topbar a.active { color: var(--text); background: #21262d; }
-  .search-bar {
-    display: flex; gap: 8px; padding: 12px 16px; background: #0d1117;
-    border-bottom: 1px solid var(--border); align-items: center;
-  }
-  .search-bar input {
-    background: #0d1117; color: var(--text); border: 1px solid var(--border);
-    padding: 6px 12px; border-radius: 6px; font-size: 13px; width: 200px;
-  }
-  .search-bar input:focus { outline: none; border-color: var(--accent); }
-  .search-bar button {
-    background: var(--accent); color: #000; border: none;
-    padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600;
-  }
   .main { max-width: 900px; margin: 0 auto; padding: 16px; }
   .card {
     background: var(--card); border: 1px solid var(--border);
     border-radius: 8px; padding: 16px; margin-bottom: 12px;
   }
   .card h3 { font-size: 13px; color: var(--accent); margin-bottom: 10px; }
+
+  /* Search */
+  .search-wrap { position: relative; margin-bottom: 12px; }
+  .search-wrap input {
+    width: 100%; padding: 10px 14px; background: #0d1117;
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-size: 14px;
+  }
+  .search-wrap input:focus { outline: none; border-color: var(--accent); }
+  .search-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #0d1117; border: 1px solid var(--border);
+    border-radius: 0 0 8px 8px; max-height: 320px; overflow-y: auto;
+    z-index: 100; display: none;
+  }
+  .search-dropdown.visible { display: block; }
+  .search-option {
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%; padding: 8px 14px; background: none; border: none;
+    color: var(--text); font: inherit; cursor: pointer; text-align: left;
+  }
+  .search-option:hover, .search-option.focused { background: #21262d; }
+  .search-option .name { font-weight: 600; }
+  .search-option .code { font-size: 11px; color: var(--muted); }
+  .search-option .type { font-size: 10px; color: var(--orange); }
+
   /* Signal rows */
   .signal-row {
     display: flex; align-items: center; gap: 12px; padding: 8px 0;
@@ -47,14 +54,11 @@
   .signal-icon { font-size: 20px; width: 28px; text-align: center; }
   .signal-label { font-size: 13px; font-weight: 600; min-width: 60px; }
   .signal-detail { font-size: 11px; color: var(--muted); flex: 1; }
-  .green { color: var(--green); }
-  .red { color: var(--red); }
-  .orange { color: var(--orange); }
-  .yellow { color: var(--orange); }
-  /* Conclusion highlight */
+
+  /* Highlight */
   .highlight {
     border-radius: 8px; padding: 14px 16px; margin: 12px 0;
-    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    display: flex; gap: 16px; align-items: center;
   }
   .highlight-green { background: #1a2a1a; border: 1px solid var(--green); }
   .highlight-yellow { background: #2a2400; border: 1px solid var(--orange); }
@@ -63,46 +67,43 @@
   .big-icon { font-size: 36px; }
   .big-text { font-size: 18px; font-weight: 700; }
   .meta { font-size: 11px; color: var(--muted); }
-  /* Table */
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 500; }
-  td.num { text-align: right; }
-  .hidden { display: none !important; }
-  .loading { color: var(--orange); }
-  /* Buy trigger card */
+
+  /* Buy card */
   .buy-card {
     background: #1a2a1a; border: 1px solid var(--green);
     border-radius: 8px; padding: 14px 16px; margin: 12px 0;
   }
-  .buy-card.watch {
-    background: #2a2400; border-color: var(--orange);
-  }
-  .stop-loss { font-family: 'Consolas', monospace; font-size: 13px; }
+  .buy-card.watch { background: #2a2400; border-color: var(--orange); }
+
+  .loading { color: var(--orange); }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
 
-<nav class="topbar">
-  <a href="/">财务评分</a>
-  <a href="/realtime-screener.html">实时选股</a>
-  <a href="/rps-pool.html">RPS股池</a>
-  <a href="/industry-heatmap.html">行业热图</a>
-  <a href="/stock-screener.html">股票筛选</a>
-  <a href="/valuation-model.html">估值模型</a>
-  <a href="/technical-score.html" class="active">技术面</a>
-</nav>
+<header class="topbar">
+  <div><p class="eyebrow">TECHNICAL EVALUATION</p><h1>技术面评估</h1></div>
+  <div class="topbar-actions">
+    <a href="/stock-score.html" class="nav-link">财务评分</a>
+    <a href="/stock-screener.html" class="nav-link">股票筛选</a>
+    <a href="/realtime-screener.html" class="nav-link">实时选股</a>
+    <a href="/rps-pool.html" class="nav-link">RPS</a>
+    <a href="/valuation-model.html" class="nav-link">估值模型</a>
+    <a href="/technical-score.html" class="nav-link active">技术面</a>
+  </div>
+</header>
 
-<div class="search-bar">
-  <input id="search-input" type="text" placeholder="输入代码 (如 600519)" autofocus>
-  <button id="search-btn">查询</button>
-  <span id="status"></span>
+<div class="main">
+  <div class="search-wrap">
+    <input id="search-input" type="text" placeholder="600519 / 贵州茅台 / gzmt" autocomplete="off">
+    <div id="search-dropdown" class="search-dropdown"></div>
+  </div>
+
+  <div id="content">
+    <div class="card"><p style="color:var(--muted)">输入股票代码或名称查看技术面评估</p></div>
+  </div>
 </div>
 
-<div id="content" class="main">
-  <div class="card"><p style="color:var(--muted)">输入股票代码查看技术面评估</p></div>
-</div>
-
-<script type="module" src="/technical-score.js?v=20260520"></script>
+<script type="module" src="/technical-score.js?v=20260520-v2"></script>
 </body>
 </html>
