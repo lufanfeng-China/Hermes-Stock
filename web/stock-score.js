@@ -2006,7 +2006,7 @@ function setTechCard(valueId, detailId, cardId, key, label, detail) {
   v.style.fontSize = '13px';
   v.style.fontWeight = '600';
   const explain = _explain(key, label);
-  d.textContent = detail ? `${detail}  ·  ${explain}` : explain;
+  d.textContent = explain;
   if (c) c.style.borderLeft = `2px solid ${TECH_COLORS[key] || 'var(--border)'}`;
 }
 
