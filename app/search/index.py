@@ -823,6 +823,21 @@ def _load_price_percentile_5y(
 
 
 @lru_cache(maxsize=1)
+def _load_technical_eval(
+    dataset_dir: str | Path = DEFAULT_DATASET_DIR,
+) -> dict[str, dict[str, object]]:
+    """Load pre-computed 6-dimension technical evaluation.
+    Returns dict keyed by 6-digit symbol.
+    """
+    path = Path(dataset_dir) / "dataset_technical_eval.json"
+    if not path.is_file():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    return raw.get("stocks", raw)  # handle both {stocks:{}} and flat {} formats
+
+
+@lru_cache(maxsize=1)
 def load_rps_index(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
     return build_rps_index(
         load_rps_rows(dataset_dir),
@@ -1444,6 +1459,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
 
     # Load 5-year price percentile data
     price_pct_rows = _load_price_percentile_5y()
+    tech_eval_rows = _load_technical_eval()
 
     security_lookup = {_security_key(row): row for row in securities}
     industry_lookup = {_security_key(row): row for row in industry_rows}
@@ -1618,6 +1634,14 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         pct_data = price_pct_lookup.get(symbol) or {}
         row["price_percentile_5y"] = _coerce_float(pct_data.get("price_percentile_5y"))
         row["price_band_5y"] = pct_data.get("price_band_5y")
+        # Add technical evaluation
+        tech = tech_eval_rows.get(symbol) or {}
+        for field in ("trend", "trend_label", "momentum", "momentum_label",
+                      "volume_signal", "volume_label", "position", "position_label",
+                      "buy_trigger", "buy_trigger_label", "conclusion", "conclusion_label",
+                      "conclusion_color", "conclusion_reason", "entry_price", "stop_loss",
+                      "risk_pct"):
+            row[f"tech_{field}"] = tech.get(field)
         for window in (20, 50, 120, 250):
             count_key = f"count_rps_{window}"
             count = int(industry_rps.get(count_key) or 0)
@@ -1652,6 +1676,15 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         "min_price_percentile_5y": ("price_percentile_5y", "min"),
         "max_price_percentile_5y": ("price_percentile_5y", "max"),
     }
+    # Technical evaluation text filters (value matching)
+    tech_text_filters = {
+        "tech_trend": "tech_trend",
+        "tech_momentum": "tech_momentum",
+        "tech_volume": "tech_volume_signal",
+        "tech_position": "tech_position",
+        "tech_conclusion": "tech_conclusion",
+        "tech_buy_trigger": "tech_buy_trigger",
+    }
 
     filtered = rows
     if active_strategy:
@@ -1674,6 +1707,29 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             ]
             continue
         filtered = [row for row in filtered if _matches_keyword_filter(row.get(field_name), expected)]
+
+    # Apply technical evaluation text filters (support !prefix for "not")
+    for param_key, field_name in tech_text_filters.items():
+        raw = _normalize_text(params.get(param_key))
+        if not raw:
+            continue
+        if raw.startswith("!"):
+            # "not" filter: semantic exclusion (e.g. !bearish excludes bearish+strong_bearish)
+            exclude_val = raw[1:]
+            _negation_map = {
+                "bearish": {"bearish", "strong_bearish"},
+                "weak": {"weak"},
+                "divergence": {"divergence"},
+                "high": {"high", "overheated"},
+                "avoid": {"avoid"},
+            }
+            exclude_set = _negation_map.get(exclude_val, {exclude_val})
+            filtered = [row for row in filtered if _normalize_text(row.get(field_name)) not in exclude_set]
+        elif raw == "any":
+            # "any" means any non-null value
+            filtered = [row for row in filtered if row.get(field_name)]
+        else:
+            filtered = [row for row in filtered if _normalize_text(row.get(field_name)) == raw]
 
     for param_key, (field_name, bound) in numeric_field_filters.items():
         threshold = _coerce_float(params.get(param_key))
