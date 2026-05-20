@@ -1990,7 +1990,12 @@ function loadTechEvalSummary(market, symbol) {
         td.textContent = '暂无触发';
         tv.style.fontSize = '';
       }
-      if (d.entry_price) td.textContent += ` · 参考价 ¥${d.entry_price}`;
+      if (d.entry_price || d.stop_loss) {
+        td.textContent += ' · ';
+        if (d.entry_price) td.textContent += `参考价 ¥${d.entry_price}`;
+        if (d.entry_price && d.stop_loss) td.textContent += ' ';
+        if (d.stop_loss) td.textContent += `止损 ¥${d.stop_loss}`;
+      }
     })
     .catch(() => setTechPlaceholders());
 }
