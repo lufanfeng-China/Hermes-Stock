@@ -1922,6 +1922,51 @@ const TECH_EMOJI = {
   buy_confirmed:'🟢',buy_watch:'🟡',avoid:'🔴',
 };
 
+const TECH_EXPLAIN = {
+  // Trend
+  strong_bullish: '均线多头排列 · 趋势健康向上',
+  bullish: '短期在中期之上 · 趋势向上',
+  recovering: '短期开始转强 · 刚从下跌中修复',
+  neutral_trend: '均线缠绕无方向 · 震荡',
+  bearish: '短期在中期之下 · 趋势偏弱',
+  strong_bearish: '均线全面反序 · 典型的下跌趋势',
+  // Momentum
+  super_strong: '多周期领先全市场 · 极强',
+  strong: '中期跑赢70%股票 · 强势',
+  startup: '近期突然转强 · 值得关注',
+  early_startup: '短期快速拉升 · 基础较弱',
+  neutral_momentum: '跟随大盘 · 不突出',
+  weak: '持续跑输70%股票 · 弱势',
+  // Volume
+  bullish_vol: '放量上涨 · 资金积极买入',
+  normal_vol: '量比正常 · 交易平稳',
+  low_volume: '交易冷清 · 缩量',
+  divergence: '放量下跌或无量空涨 · 危险信号',
+  // Position
+  low: '近5年低位区间 · 相对便宜',
+  mid: '中间位置',
+  high: '近5年高位区间 · 相对贵',
+  overheated: '高位+快速拉升 · 追涨风险极大',
+  new_stock: '上市不足1年 · 暂无分位',
+  // Buy triggers
+  breakout: '放量突破 · 可入场',
+  pullback: '缩量回踩 · 经典买点',
+  golden_cross: '金叉 · 观察确认',
+  strong_break: '强势突破 · 可入场',
+};
+
+function _explain(key, label) {
+  if (TECH_EXPLAIN[key]) return TECH_EXPLAIN[key];
+  // Try with suffix
+  const suffixed = {
+    neutral: { trend: 'neutral_trend', momentum: 'neutral_momentum', volume_signal: 'normal_vol' }
+  };
+  for (const [cat, map] of Object.entries(suffixed)) {
+    if (map[key]) return TECH_EXPLAIN[map[key]] || label;
+  }
+  return label || key;
+}
+
 function loadTechEvalSummary(market, symbol) {
   fetch(`/api/technical-eval?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`)
     .then(r => r.json())
@@ -1938,19 +1983,18 @@ function loadTechEvalSummary(market, symbol) {
       // Buy trigger card
       const tv = document.getElementById('tech-trigger-value');
       const td = document.getElementById('tech-trigger-detail');
-      const tc = document.getElementById('tech-trigger-card');
       if (d.buy_trigger) {
-        tv.textContent = TECH_EMOJI[d.buy_trigger] || '⚡';
+        tv.innerHTML = `${TECH_EMOJI[d.buy_trigger]||''} ${d.buy_trigger_label||d.buy_trigger}`;
         tv.style.color = TECH_COLORS[d.buy_trigger] || 'var(--green)';
-        td.textContent = d.buy_trigger_label || d.buy_trigger;
-        tv.style.fontSize = '24px';
+        tv.style.fontSize = '14px';
+        td.textContent = _explain(d.buy_trigger, d.buy_trigger_label);
       } else {
         tv.textContent = '—';
         tv.style.color = 'var(--muted)';
         td.textContent = '暂无触发';
         tv.style.fontSize = '';
       }
-      if (d.entry_price) td.textContent += ` · ¥${d.entry_price}`;
+      if (d.entry_price) td.textContent += ` · 参考价 ¥${d.entry_price}`;
     })
     .catch(() => setTechPlaceholders());
 }
@@ -1961,10 +2005,12 @@ function setTechCard(valueId, detailId, cardId, key, label, detail) {
   const c = document.getElementById(cardId);
   if (!v || !d) return;
   const emoji = TECH_EMOJI[key] || '';
-  v.textContent = emoji || label || key;
+  v.innerHTML = `${emoji} ${label || key}`;
   v.style.color = TECH_COLORS[key] || 'var(--muted)';
-  v.style.fontSize = '22px';
-  d.textContent = (detail || label || key);
+  v.style.fontSize = '13px';
+  v.style.fontWeight = '600';
+  const explain = _explain(key, label);
+  d.textContent = detail ? `${detail}  ·  ${explain}` : explain;
   if (c) c.style.borderLeft = `2px solid ${TECH_COLORS[key] || 'var(--border)'}`;
 }
 
@@ -1972,13 +2018,17 @@ function setTechPlaceholders() {
   ['trend','momentum','volume','position'].forEach(k => {
     const v = document.getElementById(`tech-${k}-value`);
     const d = document.getElementById(`tech-${k}-detail`);
-    if (v) { v.textContent = '—'; v.style.color = 'var(--muted)'; v.style.fontSize = ''; }
-    if (d) d.textContent = '暂无数据';
+    const c = document.getElementById(`tech-${k}-card`);
+    if (v) { v.textContent = '—'; v.style.color = 'var(--muted)'; v.style.fontSize = ''; v.style.fontWeight = ''; }
+    if (d) d.textContent = '查询股票后显示';
+    if (c) c.style.borderLeft = '';
   });
   const tv = document.getElementById('tech-trigger-value');
   const td = document.getElementById('tech-trigger-detail');
-  if (tv) { tv.textContent = '—'; tv.style.color = 'var(--muted)'; }
-  if (td) td.textContent = '暂无触发';
+  const tc = document.getElementById('tech-trigger-card');
+  if (tv) { tv.textContent = '—'; tv.style.color = 'var(--muted)'; tv.style.fontSize = ''; }
+  if (td) td.textContent = '查询股票后显示';
+  if (tc) tc.style.borderLeft = '';
 }
 
 function closeBasicHelpTooltip() {
