@@ -52,7 +52,7 @@ let _suggestTimer = null;
 async function showSuggestions(q) {
   if (!q || q.trim().length < 1) { showRecent(); return; }
   try {
-    const r = await fetch(`/api/stock-search?q=${encodeURIComponent(q.trim())}&limit=10`);
+    const r = await fetch(`/api/search/stocks?q=${encodeURIComponent(q.trim())}&limit=10`);
     const d = await r.json();
     const items = d.ok ? (d.results || []) : [];
     _focusedIdx = -1;
@@ -111,7 +111,7 @@ async function resolveAndQuery(raw) {
 
   // Name search
   try {
-    const r = await fetch(`/api/stock-search?q=${encodeURIComponent(raw)}&limit=1`);
+    const r = await fetch(`/api/search/stocks?q=${encodeURIComponent(raw)}&limit=1`);
     const d = await r.json();
     if (d.ok && d.results?.length > 0) {
       const s = d.results[0];
