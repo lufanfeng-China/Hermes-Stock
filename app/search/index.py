@@ -809,6 +809,20 @@ def load_concept_index(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[di
 
 
 @lru_cache(maxsize=1)
+def _load_price_percentile_5y(
+    dataset_dir: str | Path = DEFAULT_DATASET_DIR,
+) -> dict[str, dict[str, object]]:
+    """Load pre-computed 5-year price percentile data.
+    Returns dict keyed by 6-digit symbol → {price_percentile_5y, price_band_5y, ...}
+    """
+    path = Path(dataset_dir) / "dataset_price_percentile_5y.json"
+    if not path.is_file():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@lru_cache(maxsize=1)
 def load_rps_index(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
     return build_rps_index(
         load_rps_rows(dataset_dir),
@@ -1428,9 +1442,13 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     active_strategy = _normalize_text(params.get("strategy"))
     strategy_rows = load_stock_screener_strategy_rows() if active_strategy else []
 
+    # Load 5-year price percentile data
+    price_pct_rows = _load_price_percentile_5y()
+
     security_lookup = {_security_key(row): row for row in securities}
     industry_lookup = {_security_key(row): row for row in industry_rows}
     rps_lookup = {_security_key(row): row for row in rps_rows}
+    price_pct_lookup = price_pct_rows  # keyed by symbol string
     market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup = _score_rank_lookups(
         score_rows if isinstance(score_rows, dict) else {},
         industry_lookup,
@@ -1596,6 +1614,10 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             "industry_rps_120": None,
             "industry_rps_250": None,
         }
+        # Add 5-year price percentile
+        pct_data = price_pct_lookup.get(symbol) or {}
+        row["price_percentile_5y"] = _coerce_float(pct_data.get("price_percentile_5y"))
+        row["price_band_5y"] = pct_data.get("price_band_5y")
         for window in (20, 50, 120, 250):
             count_key = f"count_rps_{window}"
             count = int(industry_rps.get(count_key) or 0)
@@ -1627,6 +1649,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         "max_primary_percentile": ("primary_percentile", "max"),
         "min_current_price": ("current_price", "min"),
         "max_current_price": ("current_price", "max"),
+        "min_price_percentile_5y": ("price_percentile_5y", "min"),
+        "max_price_percentile_5y": ("price_percentile_5y", "max"),
     }
 
     filtered = rows

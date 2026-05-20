@@ -45,37 +45,65 @@
 
       <form id="stock-screener-filter-form" class="stock-screener-filter-grid" onsubmit="return false;" hidden>
         <input name="strategy" type="hidden" value="">
-        <label><span>全市场总分</span><input name="min_total_score" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>行业内总分</span><input name="min_ind_total_score" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>全市场排名</span><input name="max_market_rank" type="number" step="1" placeholder="≤ 名次（1最佳）"></label>
-        <label><span>二级行业排名</span><input name="max_industry_rank" type="number" step="1" placeholder="≤ 名次（1最佳）"></label>
 
-        <label><span>申万一级</span><select id="stock-screener-level1" name="industry_level_1"><option value="">全部</option></select></label>
-        <label><span>申万二级</span><select id="stock-screener-level2" name="industry_level_2"><option value="">全部</option></select></label>
-        <label><span>行业温度</span><select id="stock-screener-temperature" name="industry_temperature_label" multiple><option value="">全部</option><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></label>
-        <label><span>估值分类</span><select name="classification"><option value="">全部</option><option value="A_NORMAL_EARNING">A类 正常盈利</option><option value="B_THIN_PROFIT_DISTORTED">B类 微盈利畸高</option><option value="C_LOSS">C/D 亏损或高风险</option></select></label>
-        <label><span>行业内估值位置</span><input name="max_primary_percentile" type="number" step="0.1" placeholder="≤ 百分位"></label>
-        <label><span>区间标签</span><select name="valuation_band"><option value="">全部</option><option value="低估区间">低估区间</option><option value="合理偏低">合理偏低</option><option value="合理">合理</option><option value="合理偏高">合理偏高</option><option value="高估区间">高估区间</option><option value="样本不足">样本不足</option><option value="次新股">次新股</option></select></label>
+        <!-- ── 评分与排名 ── -->
+        <fieldset class="filter-group">
+          <legend>评分与排名</legend>
+          <label><input name="min_total_score" type="number" step="0.1" placeholder="全市场总分 ≥"></label>
+          <label><input name="min_ind_total_score" type="number" step="0.1" placeholder="行业内总分 ≥"></label>
+          <label><input name="max_market_rank" type="number" step="1" placeholder="全市场排名 ≤"></label>
+          <label><input name="max_industry_rank" type="number" step="1" placeholder="二级行业排名 ≤"></label>
+        </fieldset>
 
-        <label><span>盈利能力</span><input name="min_dim_profitability" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>成长能力</span><input name="min_dim_growth" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>现金流质量</span><input name="min_dim_cashflow" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>偿债能力</span><input name="min_dim_solvency" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>资产质量</span><input name="min_dim_asset_quality" type="number" step="0.1" placeholder="≥ 0-100分"></label>
+        <!-- ── 行业与估值 ── -->
+        <fieldset class="filter-group">
+          <legend>行业与估值</legend>
+          <label><select id="stock-screener-level1" name="industry_level_1"><option value="">申万一级</option></select></label>
+          <label><select id="stock-screener-level2" name="industry_level_2"><option value="">申万二级</option></select></label>
+          <label><select id="stock-screener-temperature" name="industry_temperature_label" multiple><option value="">行业温度</option><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></label>
+          <label><select name="classification"><option value="">估值分类</option><option value="A_NORMAL_EARNING">A类 正常盈利</option><option value="B_THIN_PROFIT_DISTORTED">B类 微盈利畸高</option><option value="C_LOSS">C/D 亏损或高风险</option></select></label>
+          <label><input name="max_primary_percentile" type="number" step="0.1" placeholder="行业内估值位置 ≤"></label>
+          <label><select name="valuation_band"><option value="">区间标签</option><option value="低估区间">低估区间</option><option value="合理偏低">合理偏低</option><option value="合理">合理</option><option value="合理偏高">合理偏高</option><option value="高估区间">高估区间</option><option value="样本不足">样本不足</option><option value="次新股">次新股</option></select></label>
+        </fieldset>
 
-        <label><span>细分 ROE</span><input name="min_sub_roe_ex" type="number" step="0.1" placeholder="扣非ROE分 ≥ 0-100"></label>
-        <label><span>细分 净利增速</span><input name="min_sub_profit_growth" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>细分 自由现金流</span><input name="min_sub_free_cf" type="number" step="0.1" placeholder="≥ 0-100分"></label>
-        <label><span>现价</span><input name="max_current_price" type="number" step="0.01" placeholder="≤"></label>
+        <!-- ── 财务维度 ── -->
+        <fieldset class="filter-group">
+          <legend>财务维度</legend>
+          <label><input name="min_dim_profitability" type="number" step="0.1" placeholder="盈利能力 ≥"></label>
+          <label><input name="min_dim_growth" type="number" step="0.1" placeholder="成长能力 ≥"></label>
+          <label><input name="min_dim_cashflow" type="number" step="0.1" placeholder="现金流质量 ≥"></label>
+          <label><input name="min_dim_solvency" type="number" step="0.1" placeholder="偿债能力 ≥"></label>
+          <label><input name="min_dim_asset_quality" type="number" step="0.1" placeholder="资产质量 ≥"></label>
+        </fieldset>
 
-        <label><span>个股RPS20</span><input name="min_rps_20" type="number" step="0.1" placeholder="≥ 0-100"></label>
-        <label><span>个股RPS50</span><input name="min_rps_50" type="number" step="0.1" placeholder="≥ 0-100"></label>
-        <label><span>个股RPS120</span><input name="min_rps_120" type="number" step="0.1" placeholder="≥ 0-100"></label>
-        <label><span>个股RPS250</span><input name="min_rps_250" type="number" step="0.1" placeholder="≥ 0-100"></label>
-        <label><span>二级行业RPS20</span><input name="min_industry_rps_20" type="number" step="0.1" placeholder="≥ 0-100"></label>
-        <label><span>二级行业RPS50</span><input name="min_industry_rps_50" type="number" step="0.1" placeholder="≥ 0-100"></label>
-        <label><span>二级行业RPS120</span><input name="min_industry_rps_120" type="number" step="0.1" placeholder="≥ 0-100"></label>
-        <label><span>二级行业RPS250</span><input name="min_industry_rps_250" type="number" step="0.1" placeholder="≥ 0-100"></label>
+        <!-- ── 细分指标 ── -->
+        <fieldset class="filter-group">
+          <legend>细分指标</legend>
+          <label><input name="min_sub_roe_ex" type="number" step="0.1" placeholder="扣非ROE ≥"></label>
+          <label><input name="min_sub_profit_growth" type="number" step="0.1" placeholder="净利增速 ≥"></label>
+          <label><input name="min_sub_free_cf" type="number" step="0.1" placeholder="自由现金流 ≥"></label>
+        </fieldset>
+
+        <!-- ── 价格区间 ── -->
+        <fieldset class="filter-group">
+          <legend>价格区间</legend>
+          <label><input name="max_current_price" type="number" step="0.01" placeholder="现价 ≤"></label>
+          <label><input name="min_price_percentile_5y" type="number" step="0.1" placeholder="5年分位 ≥"></label>
+          <label><input name="max_price_percentile_5y" type="number" step="0.1" placeholder="5年分位 ≤"></label>
+        </fieldset>
+
+        <!-- ── RPS ── -->
+        <fieldset class="filter-group">
+          <legend>RPS 动量</legend>
+          <label><input name="min_rps_20" type="number" step="0.1" placeholder="个股RPS20 ≥"></label>
+          <label><input name="min_rps_50" type="number" step="0.1" placeholder="个股RPS50 ≥"></label>
+          <label><input name="min_rps_120" type="number" step="0.1" placeholder="个股RPS120 ≥"></label>
+          <label><input name="min_rps_250" type="number" step="0.1" placeholder="个股RPS250 ≥"></label>
+          <label><input name="min_industry_rps_20" type="number" step="0.1" placeholder="行业RPS20 ≥"></label>
+          <label><input name="min_industry_rps_50" type="number" step="0.1" placeholder="行业RPS50 ≥"></label>
+          <label><input name="min_industry_rps_120" type="number" step="0.1" placeholder="行业RPS120 ≥"></label>
+          <label><input name="min_industry_rps_250" type="number" step="0.1" placeholder="行业RPS250 ≥"></label>
+        </fieldset>
 
         <div class="stock-screener-filter-actions">
           <button id="stock-screener-apply-btn" type="button">执行筛选</button>

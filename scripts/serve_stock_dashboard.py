@@ -28,6 +28,19 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.industry.heatmap import DEFAULT_INDUSTRY_LIMIT, industry_heatmap_response
 from app.relative_valuation.service import build_relative_valuation_result
+from app.valuation.models import (
+    calc_intrinsic_value_dcf,
+    calc_gordon_growth,
+    calc_cost_of_equity_capm,
+    calc_cost_of_debt,
+    calc_wacc,
+    calc_tax_rate,
+    calc_altman_z_score,
+    calc_piotroski_f_score,
+    calc_dupont_analysis,
+    calc_enterprise_value_breakdown,
+    safe_div,
+)
 from app.search.index import (
     build_stock_screener_response,
     concept_search_response,
@@ -1613,6 +1626,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/relative-valuation":
             self.handle_relative_valuation(parsed.query)
             return
+        if parsed.path == "/api/valuation-models":
+            self.handle_valuation_models(parsed.query)
+            return
         if parsed.path == "/api/stock-price-percentile":
             self.handle_stock_price_percentile(parsed.query)
             return
@@ -2214,6 +2230,351 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         t = threading.Thread(target=_fetch, daemon=True)
         t.start()
         self.respond_json(HTTPStatus.OK, {"ok": True, "message": "fetch started"})
+
+    def handle_valuation_models(self, query: str) -> None:
+        """Compute DCF, WACC, Altman Z, Piotroski, DuPont for a stock."""
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol 参数不合法"}},
+            )
+            return
+
+        def _to_float(v: object) -> float | None:
+            try:
+                return float(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        def _to_yi(v: float | None) -> float:
+            """Convert raw yuan to 亿元."""
+            if v is None:
+                return 0
+            return v / 1e8
+
+        try:
+            search_index = importlib.import_module("app.search.index")
+            latest_period = search_index._snapshot_latest_period(market, symbol)
+            if not latest_period:
+                self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "no_financial_data"})
+                return
+
+            current = search_index._load_financial_quarter_row(latest_period, symbol)
+            if current is None:
+                self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "no_financial_data"})
+                return
+
+            year = int(str(latest_period)[:4])
+            prev_period = f"{year - 1}{str(latest_period)[4:]}"
+            previous = search_index._load_financial_quarter_row(prev_period, symbol)
+
+            stock_name = search_index._stock_name_lookup().get((market, symbol), "")
+            daily = search_index._load_latest_daily_snapshot(market, symbol)
+            basic_info = search_index._load_stock_basic_info(market, symbol)
+            current_price = _to_float((basic_info or {}).get("current_price"))
+            if current_price is None:
+                current_price = _to_float((daily or {}).get("latest_close"))
+
+            # ── Extract financial data from CW rows (raw yuan → 亿元) ──
+            _pick = search_index._pick
+            def _f(key): return _to_yi(_pick(current.get(key)))
+
+            revenue          = _f("营业收入") or 0
+            net_profit       = _f("归属于母公司所有者的净利润") or 0
+            ocf              = _f("经营活动产生的现金流量净额") or 0
+            current_assets   = _f("流动资产合计") or 0
+            current_liab     = _f("流动负债合计") or 0
+            total_assets     = _f("资产总计") or 0
+            total_liab       = _f("负债合计") or 0
+            equity_attr      = _f("归属于母公司股东权益(资产负债表)") or 0
+            retained_earn    = _f("未分配利润") or 0
+            total_shares_raw = _pick(current.get("总股本"))
+            total_shares     = total_shares_raw / 1e8 if total_shares_raw else 0  # 股→亿股
+            short_debt       = _f("短期借款") or 0
+            long_debt        = _f("长期借款") or 0
+            bonds            = _f("应付债券") or 0
+            interest_expense = _f("其中:利息费用(利润表-财务费用)") or 0
+            income_tax       = _f("所得税费用") or 0
+            income_before_tax = _f("利润总额") or 0
+            ebit             = _f("息税前利润(EBIT)") or 0
+            cash_equiv       = _f("货币资金") or 0
+            capex            = _f("购建固定资产、无形资产和其他长期资产支付的现金") or 0
+            revenue_prev     = _f("营业收入") if previous is not None else None
+            net_profit_prev  = _f("归属于母公司所有者的净利润") if previous is not None else None
+            total_assets_prev = _f("资产总计") if previous is not None else None
+
+            # Derived
+            free_cf = ocf - capex
+            total_debt = short_debt + long_debt + bonds
+            working_capital = current_assets - current_liab
+
+            # ── Pre-computed TTM & YoY from CW ──
+            ttm_net = _to_yi(_pick(current.get("近一年归母净利润（万元）"))) or _to_yi(_pick(current.get("ttm_net_profit_yi")))
+            ttm_rev = _to_yi(_pick(current.get("营业总收入TTM(万元)"))) or _to_yi(_pick(current.get("ttm_revenue_yi")))
+
+            # Derived ratios
+            derived = search_index._derive_sub_fields(current, previous)
+            gross_margin = derived.get("gross_margin") or 0
+            asset_turnover = derived.get("asset_turnover") or 0
+            roe_current = derived.get("roe_ex") or 0
+            debt_ratio = derived.get("debt_ratio") or 0
+            current_ratio = derived.get("current_ratio") or 0
+
+            prev_derived = search_index._derive_sub_fields(previous, None) if previous is not None else {}
+            gross_margin_prev = prev_derived.get("gross_margin") or 0
+            asset_turnover_prev = prev_derived.get("asset_turnover") or 0
+            roe_prev = prev_derived.get("roe_ex") or 0
+            current_ratio_prev = prev_derived.get("current_ratio") or 0
+            debt_ratio_prev = prev_derived.get("debt_ratio") or 0
+
+            # ── Market data ──
+            free_float_shares = _pick(current.get("无限售流通股")) or _pick(current.get("自由流通股"))
+            free_float_shares = free_float_shares / 1e8 if free_float_shares else total_shares * 0.7
+
+            market_cap = current_price * total_shares if current_price and total_shares else 0
+            free_float_market_cap = current_price * free_float_shares if current_price and free_float_shares else 0
+
+            # Previous year values for Piotroski
+            prev_ocf = _to_yi(_pick(previous.get("经营活动产生的现金流量净额"))) if previous is not None else 0
+            prev_net = _to_yi(_pick(previous.get("归属于母公司所有者的净利润"))) if previous is not None else 0
+            prev_total_assets_val = _to_yi(_pick(previous.get("资产总计"))) if previous is not None else 0
+            prev_current_assets = _to_yi(_pick(previous.get("流动资产合计"))) if previous is not None else 0
+            prev_current_liab = _to_yi(_pick(previous.get("流动负债合计"))) if previous is not None else 0
+            prev_total_liab_val = _to_yi(_pick(previous.get("负债合计"))) if previous is not None else 0
+            prev_total_shares_raw = _pick(previous.get("总股本")) if previous is not None else None
+            prev_total_shares_val = prev_total_shares_raw / 1e8 if prev_total_shares_raw else total_shares
+            prev_revenue = _to_yi(_pick(previous.get("营业收入"))) if previous is not None else 0
+
+            # ── Simple beta approximation using RPS data ──
+            rps_data = (daily or {}).get("rps_20") if daily else None
+            beta = 1.0  # Default for A-shares
+            if rps_data is not None:
+                try:
+                    rps_val = float(rps_data)
+                    beta = max(0.3, min(2.5, 1.0 + (rps_val - 50) / 100))
+                except (ValueError, TypeError):
+                    pass
+
+            # ── China market parameters ──
+            RISK_FREE_RATE = 0.025   # China 10Y government bond
+            MARKET_RISK_PREMIUM = 0.06  # A-share historical ERP
+
+            # ── Industry classification & special handling ──
+            stock_name_str = str(stock_name).replace(" ", "").replace("\u3000", "")
+            # Detect financial companies by name
+            is_financial = any(kw in stock_name_str for kw in [
+                "银行", "保险", "证券", "信托", "金融", "农商", "城商",
+            ])
+            # Detect real estate separately (different model)
+            is_real_estate = any(kw in stock_name_str for kw in [
+                "地产", "房产", "置业", "万科", "保利", "招商蛇口", "金地", "绿地",
+                "华夏幸福", "新城控股", "中南建设", "荣盛发展", "滨江集团",
+            ])
+            # Detect construction companies (DCF-OK, high leverage is normal)
+            is_construction = any(kw in stock_name_str for kw in [
+                "建筑", "铁建", "中铁", "交建", "电建", "中冶", "化学工程",
+                "葛洲坝", "隧道", "路桥",
+            ])
+            # Assets/market_cap heuristic — catch remaining financial firms
+            assets_to_mcap = total_assets / market_cap if market_cap > 0 and total_assets > 0 else 0
+            if not is_financial and not is_real_estate and not is_construction and assets_to_mcap > 10:
+                is_financial = True  # likely financial/leasing company not caught by name
+
+            # For banks/financials, try alternative interest expense fields
+            if is_financial and interest_expense == 0:
+                alt_interest = _f("利息支出") or _f("其中:利息支出") or _f("利息净收入")
+                if alt_interest == 0:
+                    interest_income = _f("利息收入") or 0
+                    alt_interest = interest_income * 0.15
+                interest_expense = alt_interest if alt_interest else interest_expense
+
+            # ── Annualize single-quarter ROE ──
+            period_str = str(latest_period)
+            annualize_factor = 1.0
+            if period_str.endswith("Q1"):
+                annualize_factor = 4.0
+            elif period_str.endswith("Q2"):
+                annualize_factor = 2.0
+            elif period_str.endswith("Q3"):
+                annualize_factor = 4.0 / 3.0
+            # Q4 and annual reports: factor = 1.0
+            net_profit_annualized = net_profit * annualize_factor
+            roe_annualized = safe_div(net_profit_annualized, equity_attr) if equity_attr else 0
+            roa_annualized = safe_div(net_profit_annualized, total_assets) if total_assets else 0
+
+            # ── Compute models ──
+            # 1. WACC
+            cost_of_equity = calc_cost_of_equity_capm(RISK_FREE_RATE, beta, MARKET_RISK_PREMIUM)
+            cost_of_debt = calc_cost_of_debt(interest_expense, total_debt) if total_debt else 0.04
+            tax_rate = calc_tax_rate(income_tax, income_before_tax)
+            wacc_result = calc_wacc(
+                market_value_equity=market_cap,
+                market_value_debt=total_debt,
+                cost_of_equity=cost_of_equity,
+                cost_of_debt=cost_of_debt,
+                tax_rate=tax_rate,
+            )
+            wacc_val = wacc_result.get("wacc", 0.08)
+
+            # 2. Valuation model (DCF for industrials, PB-ROE for financial/real estate)
+            growth_rate = max(0.02, min(0.25, derived.get("profit_growth", 8) / 100)) if derived.get("profit_growth") else 0.08
+            if is_financial or is_real_estate:
+                bvps = safe_div(equity_attr, total_shares) if total_shares else 0
+                if is_real_estate:
+                    # Real estate: discounted book value (reflect development risk)
+                    discount = 0.40  # typical A-share real estate PB discount
+                    pb_intrinsic = bvps * (1 - discount)
+                    note = "房地产企业建议使用NAV估值，以下为折价净资产参考"
+                    formula = "内在价值 = BVPS × (1 - 40% 风险折价)"
+                else:
+                    # Financial: PB-ROE model
+                    pb_intrinsic = bvps * (roe_annualized / cost_of_equity) if cost_of_equity > 0 and roe_annualized > 0 else bvps
+                    note = "金融企业不适用传统DCF，以下为 PB-ROE 估值模型"
+                    formula = "内在价值 = BVPS × (ROE年化 ÷ COE)"
+                dcf_result = {
+                    "_financial_note": note,
+                    "free_cash_flow": round(free_cf, 2),
+                    "growth_rate": round(growth_rate, 4),
+                    "book_value_per_share": round(bvps, 2),
+                    "roe": round(roe_annualized, 4),
+                    "cost_of_equity": round(cost_of_equity, 4),
+                    "pb_intrinsic_value": round(pb_intrinsic, 2),
+                    "intrinsic_value_per_share": round(pb_intrinsic, 2),
+                    "formula": formula,
+                    "periods": 0,
+                    "terminal_value": 0,
+                    "enterprise_value": 0,
+                    "equity_value": 0,
+                    "pv_details": [],
+                }
+            else:
+                # Annualize quarterly FCF for DCF
+                fcf_annualized = free_cf * annualize_factor
+                if fcf_annualized <= 0:
+                    # Negative FCF — DCF not applicable this quarter
+                    dcf_result = {
+                        "_financial_note": f"当前季度自由现金流为负({free_cf:.1f}亿)，DCF不适用。建议参考PB或等待年报数据。",
+                        "free_cash_flow": round(free_cf, 2),
+                        "growth_rate": 0, "perpetual_growth_rate": 0,
+                        "wacc": 0, "periods": 0,
+                        "terminal_value": 0, "enterprise_value": 0,
+                        "equity_value": 0, "intrinsic_value_per_share": 0,
+                        "pv_details": [],
+                    }
+                else:
+                    dcf_result = calc_intrinsic_value_dcf(
+                        free_cash_flow=fcf_annualized,
+                        growth_rate=growth_rate,
+                        perpetual_growth_rate=0.03,
+                        wacc=max(wacc_val, 0.05),
+                        cash_and_equivalents=cash_equiv,
+                        total_debt=total_debt,
+                        shares_outstanding=total_shares if total_shares > 0 else 1,
+                    )
+
+            # 3. Gordon Growth
+            dps = safe_div(net_profit * 0.3, total_shares)  # Assume 30% payout
+            gordon_result = calc_gordon_growth(
+                dividends_per_share=dps,
+                cost_of_equity=cost_of_equity,
+                growth_rate=min(growth_rate * 0.7, cost_of_equity - 0.01),
+            )
+
+            # 4. Altman Z-Score
+            altman_result = calc_altman_z_score(
+                current_assets=current_assets,
+                current_liabilities=current_liab,
+                total_assets=total_assets,
+                retained_earnings=retained_earn if retained_earn else net_profit * 0.4,
+                ebit=ebit if ebit else (net_profit + interest_expense),
+                market_cap=market_cap,
+                total_liabilities=total_liab if total_liab > 0 else 1,
+                revenue=revenue,
+            )
+
+            # 5. Piotroski F-Score
+            piotroski_result = calc_piotroski_f_score(
+                net_income=net_profit,
+                ocf=abs(ocf),
+                roa=safe_div(net_profit, total_assets),
+                total_assets=total_assets,
+                current_assets=current_assets,
+                current_liabilities=current_liab,
+                total_liabilities=total_liab,
+                shares_outstanding=total_shares,
+                gross_margin=gross_margin,
+                asset_turnover=asset_turnover,
+                prev_net_income=prev_net,
+                prev_ocf=abs(prev_ocf),
+                prev_roa=safe_div(prev_net or 0, prev_total_assets_val),
+                prev_current_assets=prev_current_assets,
+                prev_current_liabilities=prev_current_liab,
+                prev_total_liabilities=prev_total_liab_val,
+                prev_total_assets=prev_total_assets_val,
+                prev_shares_outstanding=prev_total_shares_val,
+                prev_gross_margin=gross_margin_prev,
+                prev_asset_turnover=asset_turnover_prev,
+            )
+
+            # 6. DuPont
+            dupont_result = calc_dupont_analysis(
+                net_income=net_profit,
+                revenue=revenue,
+                total_assets=total_assets,
+                total_equity=equity_attr if equity_attr else total_assets - total_liab,
+                ebit=ebit,
+                income_before_tax=income_before_tax,
+            )
+
+            # 7. Enterprise Value
+            ev_result = calc_enterprise_value_breakdown(
+                market_cap=market_cap,
+                total_debt=total_debt,
+                cash_and_equivalents=cash_equiv,
+            )
+
+            # ── Response ──
+            self.respond_json(HTTPStatus.OK, {
+                "ok": True,
+                "market": market,
+                "symbol": symbol,
+                "stock_name": str(stock_name),
+                "latest_period": str(latest_period),
+                "market_data": {
+                    "close_price": round(current_price or 0, 2),
+                    "total_market_cap": round(market_cap, 2),
+                    "total_shares": round(total_shares, 2),
+                    "free_float_market_cap": round(free_float_market_cap, 2),
+                    "beta": round(beta, 4),
+                },
+                "financial_summary": {
+                    "revenue": round(revenue, 2),
+                    "net_profit": round(net_profit, 2),
+                    "ocf": round(ocf, 2),
+                    "free_cf": round(free_cf, 2),
+                    "total_assets": round(total_assets, 2),
+                    "total_liabilities": round(total_liab, 2),
+                    "total_equity": round(equity_attr, 2),
+                    "total_debt": round(total_debt, 2),
+                    "cash_equiv": round(cash_equiv, 2),
+                },
+                "wacc": wacc_result,
+                "dcf": dcf_result,
+                "gordon_growth": gordon_result,
+                "altman_z": altman_result,
+                "piotroski": piotroski_result,
+                "dupont": dupont_result,
+                "enterprise_value": ev_result,
+            })
+
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "valuation_error", "message": str(exc)}},
+            )
 
     def handle_relative_valuation(self, query: str) -> None:
         params = parse_qs(query)
