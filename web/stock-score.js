@@ -1901,6 +1901,86 @@ function loadBasicFlowSummary(market, symbol) {
     });
 }
 
+// ── Technical eval summary cards ──────────────────────────────────────────────
+
+const TECH_COLORS = {
+  strong_bullish: 'var(--green)', bullish: 'var(--green)', recovering: 'var(--orange)',
+  neutral: 'var(--muted)', bearish: 'var(--red)', strong_bearish: 'var(--red)',
+  super_strong: 'var(--green)', strong: 'var(--green)', startup: 'var(--green)',
+  early_startup: 'var(--orange)', weak: 'var(--red)',
+  bullish: 'var(--green)', normal: 'var(--muted)', low_volume: 'var(--orange)', divergence: 'var(--red)',
+  low: 'var(--green)', mid: 'var(--muted)', high: 'var(--red)', overheated: 'var(--red)',
+  new_stock: 'var(--muted)',
+  buy_confirmed: 'var(--green)', buy_watch: 'var(--orange)', avoid: 'var(--red)',
+};
+
+const TECH_EMOJI = {
+  strong_bullish:'🟢',bullish:'🟢',recovering:'🟡',neutral:'⚪',bearish:'🔴',strong_bearish:'🔴',
+  super_strong:'🟢',strong:'🟢',startup:'🟢',early_startup:'🟡',weak:'🔴',
+  bullish:'🟢',normal:'⚪',low_volume:'🟡',divergence:'🔴',
+  low:'🟢',mid:'⚪',high:'🔴',overheated:'🔴',new_stock:'⚪',
+  buy_confirmed:'🟢',buy_watch:'🟡',avoid:'🔴',
+};
+
+function loadTechEvalSummary(market, symbol) {
+  fetch(`/api/technical-eval?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) {
+        setTechPlaceholders();
+        return;
+      }
+      setTechCard('tech-trend-value', 'tech-trend-detail', 'tech-trend-card', d.trend, d.trend_label, d.trend_detail);
+      setTechCard('tech-momentum-value', 'tech-momentum-detail', 'tech-momentum-card', d.momentum, d.momentum_label, d.momentum_detail);
+      setTechCard('tech-volume-value', 'tech-volume-detail', 'tech-volume-card', d.volume_signal, d.volume_label, d.volume_detail);
+      setTechCard('tech-position-value', 'tech-position-detail', 'tech-position-card', d.position, d.position_label, d.position_detail);
+
+      // Buy trigger card
+      const tv = document.getElementById('tech-trigger-value');
+      const td = document.getElementById('tech-trigger-detail');
+      const tc = document.getElementById('tech-trigger-card');
+      if (d.buy_trigger) {
+        tv.textContent = TECH_EMOJI[d.buy_trigger] || '⚡';
+        tv.style.color = TECH_COLORS[d.buy_trigger] || 'var(--green)';
+        td.textContent = d.buy_trigger_label || d.buy_trigger;
+        tv.style.fontSize = '24px';
+      } else {
+        tv.textContent = '—';
+        tv.style.color = 'var(--muted)';
+        td.textContent = '暂无触发';
+        tv.style.fontSize = '';
+      }
+      if (d.entry_price) td.textContent += ` · ¥${d.entry_price}`;
+    })
+    .catch(() => setTechPlaceholders());
+}
+
+function setTechCard(valueId, detailId, cardId, key, label, detail) {
+  const v = document.getElementById(valueId);
+  const d = document.getElementById(detailId);
+  const c = document.getElementById(cardId);
+  if (!v || !d) return;
+  const emoji = TECH_EMOJI[key] || '';
+  v.textContent = emoji || label || key;
+  v.style.color = TECH_COLORS[key] || 'var(--muted)';
+  v.style.fontSize = '22px';
+  d.textContent = (detail || label || key);
+  if (c) c.style.borderLeft = `2px solid ${TECH_COLORS[key] || 'var(--border)'}`;
+}
+
+function setTechPlaceholders() {
+  ['trend','momentum','volume','position'].forEach(k => {
+    const v = document.getElementById(`tech-${k}-value`);
+    const d = document.getElementById(`tech-${k}-detail`);
+    if (v) { v.textContent = '—'; v.style.color = 'var(--muted)'; v.style.fontSize = ''; }
+    if (d) d.textContent = '暂无数据';
+  });
+  const tv = document.getElementById('tech-trigger-value');
+  const td = document.getElementById('tech-trigger-detail');
+  if (tv) { tv.textContent = '—'; tv.style.color = 'var(--muted)'; }
+  if (td) td.textContent = '暂无触发';
+}
+
 function closeBasicHelpTooltip() {
   if (!basicHelpTooltipEl) return;
   basicHelpTooltipEl.hidden = true;
@@ -1964,6 +2044,7 @@ function resetStockScoreDashboardState() {
   clearSubIndicatorTable();
   resetPeerDialogs();
   resetAiFinancialReport("查询股票后可生成分析");
+  setTechPlaceholders();
 }
 
 function toStockIdentity(row) {
@@ -2577,6 +2658,7 @@ async function doSearch(selectedRow = null) {
     };
     loadBasicGrowthSummary(market, symbol, profile);
     loadBasicFlowSummary(market, symbol);
+    loadTechEvalSummary(market, symbol);
     saveRecentStockSearch(searchState.currentStock);
     const reportHistory = reportHistoryPayload || {};
     renderAiFinancialReport(null);
