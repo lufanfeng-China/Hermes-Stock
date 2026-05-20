@@ -1927,7 +1927,7 @@ const TECH_EXPLAIN = {
   strong_bullish: '均线多头排列 · 趋势健康向上',
   bullish: '短期在中期之上 · 趋势向上',
   recovering: '短期开始转强 · 刚从下跌中修复',
-  neutral_trend: '均线缠绕无方向 · 震荡',
+  neutral: '均线缠绕无方向 · 震荡',
   bearish: '短期在中期之下 · 趋势偏弱',
   strong_bearish: '均线全面反序 · 典型的下跌趋势',
   // Momentum
@@ -1938,8 +1938,8 @@ const TECH_EXPLAIN = {
   neutral_momentum: '跟随大盘 · 不突出',
   weak: '持续跑输70%股票 · 弱势',
   // Volume
-  bullish_vol: '放量上涨 · 资金积极买入',
-  normal_vol: '量比正常 · 交易平稳',
+  bullish: '放量上涨 · 资金积极买入',
+  normal: '量比正常 · 交易平稳',
   low_volume: '交易冷清 · 缩量',
   divergence: '放量下跌或无量空涨 · 危险信号',
   // Position
@@ -1956,14 +1956,10 @@ const TECH_EXPLAIN = {
 };
 
 function _explain(key, label) {
+  // Check direct key match
   if (TECH_EXPLAIN[key]) return TECH_EXPLAIN[key];
-  // Try with suffix
-  const suffixed = {
-    neutral: { trend: 'neutral_trend', momentum: 'neutral_momentum', volume_signal: 'normal_vol' }
-  };
-  for (const [cat, map] of Object.entries(suffixed)) {
-    if (map[key]) return TECH_EXPLAIN[map[key]] || label;
-  }
+  // Momentum neutral has same key as trend neutral, disambiguate by label
+  if (key === 'neutral' && label && label.includes('中')) return TECH_EXPLAIN['neutral_momentum'];
   return label || key;
 }
 
