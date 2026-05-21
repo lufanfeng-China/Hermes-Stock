@@ -1640,6 +1640,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-screener":
             self.handle_stock_screener(parsed.query)
             return
+        if parsed.path == "/api/rps-trading-days":
+            self.handle_rps_trading_days()
+            return
         if parsed.path == "/api/realtime-screener":
             self.handle_realtime_screener(parsed.query)
             return
@@ -1906,12 +1909,27 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             if values
         }
         try:
-            ensure_stock_screener_strategy_dataset(params.get("strategy", ""))
+            # Only ensure current strategy dataset when NOT in historical mode
+            as_of_date = params.get("as_of_date", "").strip()
+            if not as_of_date:
+                ensure_stock_screener_strategy_dataset(params.get("strategy", ""))
             self.respond_json(HTTPStatus.OK, build_stock_screener_response(params))
         except Exception as exc:
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "stock_screener_error", "message": str(exc)}},
+            )
+
+    def handle_rps_trading_days(self) -> None:
+        """Return sorted list of unique trading days from RPS history dataset."""
+        try:
+            history = _load_rps_history_dataset()
+            days = sorted({str(r.get("trading_day", "")) for r in history if r.get("trading_day")})
+            self.respond_json(HTTPStatus.OK, {"ok": True, "trading_days": days})
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "rps_trading_days_error", "message": str(exc)}},
             )
 
     def handle_realtime_screener(self, query: str) -> None:

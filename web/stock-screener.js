@@ -42,6 +42,20 @@ const filterToggleEl = document.getElementById('stock-screener-filter-toggle');
 const strategyButtonsEl = document.getElementById('stock-screener-strategy-buttons');
 const strategyInputEl = form?.elements?.namedItem('strategy');
 const temperatureSelectEl = document.getElementById('stock-screener-temperature');
+const asOfDateInput = document.getElementById('stock-screener-asof-date');
+const asOfDateDisplay = document.getElementById('stock-screener-asof-display');
+const asOfDateText = document.getElementById('stock-screener-asof-text');
+const asOfDropdown = document.getElementById('stock-screener-asof-dropdown');
+const asOfDaysGrid = document.getElementById('asof-days-grid');
+const asOfMonthLabel = document.getElementById('asof-month-label');
+const asOfPrevBtn = document.getElementById('asof-prev-month');
+const asOfNextBtn = document.getElementById('asof-next-month');
+
+// Calendar state
+let tradingDaysSet = new Set();
+let calendarYear = 2026;
+let calendarMonth = 5;
+let selectedDate = '';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -93,6 +107,8 @@ function buildParams(page = currentPage) {
   if (temperatureLabels.length) {
     params.set('industry_temperature_label', temperatureLabels.join(','));
   }
+  const asOfDate = asOfDateInput?.value?.trim();
+  if (asOfDate) params.set('as_of_date', asOfDate);
   params.set('page', String(page));
   params.set('page_size', String(PAGE_SIZE));
   return params;
@@ -146,7 +162,13 @@ function setActiveStrategyButton(strategy) {
 }
 
 function clearManualFilters() {
+  // Preserve date and strategy before reset
+  const savedDate = asOfDateInput?.value || '';
+  const savedStrategy = strategyInputEl?.value || '';
   form.reset();
+  // Restore
+  if (asOfDateInput && savedDate) asOfDateInput.value = savedDate;
+  if (strategyInputEl && savedStrategy) strategyInputEl.value = savedStrategy;
   if (temperatureSelectEl?.multiple) {
     [...temperatureSelectEl.options].forEach((option, index) => {
       option.selected = index === 0;
@@ -203,7 +225,22 @@ async function runScreener(page = 1) {
     statusEl.textContent = `命中 ${payload.total || 0} 只股票，当前页 ${(payload.rows || []).length} 条`;
     const dateEl = document.getElementById('stock-screener-data-date');
     if (dateEl) {
-      dateEl.textContent = payload.data_date ? `RPS 数据日期：${payload.data_date}` : '';
+      const parts = [];
+      if (payload.is_historical) {
+        parts.push(`回测日期：${payload.effective_date || payload.data_date || '—'}`);
+        if (payload.data_date && payload.data_date !== payload.effective_date) {
+          parts.push(`RPS 实际数据日：${payload.data_date}`);
+        }
+        if (!payload.tech_eval_ready) {
+          parts.push('⚠ 技术面数据生成中，当前技术面筛选不可用');
+        }
+        if (payload.is_historical && payload.strategy_ready === false) {
+          parts.push('⚠ 策略数据生成中，预设方案暂时不可用');
+        }
+      } else if (payload.data_date) {
+        parts.push(`RPS 数据日期：${payload.data_date}`);
+      }
+      dateEl.textContent = parts.join(' · ');
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
@@ -367,7 +404,199 @@ tbody.addEventListener('keydown', (event) => {
 });
 
 bindScreenerChartPresetEvents();
-loadIndustryHierarchy().then(() => runScreener(1));
+loadTradingDays().then(() => loadIndustryHierarchy()).then(() => runScreener(1));
+
+// ── Calendar widget ──────────────────────────────────────────
+
+async function loadTradingDays() {
+  try {
+    const resp = await fetch('/api/rps-trading-days');
+    const data = await resp.json();
+    if (data.ok && data.trading_days) {
+      tradingDaysSet = new Set(data.trading_days);
+    }
+  } catch (e) {
+    console.warn('Failed to load trading days', e);
+  }
+}
+
+function isTradingDay(dateStr) {
+  return tradingDaysSet.has(dateStr);
+}
+
+function getLatestTradingDay() {
+  const sorted = [...tradingDaysSet].sort();
+  return sorted[sorted.length - 1] || '';
+}
+
+function formatDateCN(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return `${y}年${parseInt(m)}月${parseInt(d)}日`;
+}
+
+function renderCalendar() {
+  if (!asOfDaysGrid) return;
+  const year = calendarYear;
+  const month = calendarMonth;
+  asOfMonthLabel.textContent = `${year}年${month}月`;
+
+  const firstDay = new Date(year, month - 1, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  let html = '';
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    html += '<span class="asof-day-cell outside"></span>';
+  }
+  // Day cells
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isTrading = isTradingDay(dateStr);
+    const isToday = dateStr === todayStr;
+    const isSelected = dateStr === selectedDate;
+    let cls = 'asof-day-cell';
+    if (isTrading) cls += ' trading';
+    if (isToday) cls += ' today';
+    if (isSelected) cls += ' selected';
+    html += `<span class="${cls}" data-date="${dateStr}">${d}</span>`;
+  }
+  asOfDaysGrid.innerHTML = html;
+
+  // Click handler
+  asOfDaysGrid.querySelectorAll('.trading').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const date = cell.dataset.date;
+      selectDate(date);
+    });
+  });
+}
+
+function selectDate(dateStr) {
+  selectedDate = dateStr;
+  asOfDateInput.value = dateStr;
+  if (asOfDateText) {
+    asOfDateText.textContent = formatDateCN(dateStr);
+  }
+  closeCalendar();
+  currentPage = 1;
+  runScreener(1);
+}
+
+function clearDate() {
+  selectedDate = '';
+  asOfDateInput.value = '';
+  if (asOfDateText) {
+    asOfDateText.textContent = '当前数据（最新）';
+  }
+  closeCalendar();
+  currentPage = 1;
+  runScreener(1);
+}
+
+function openCalendar() {
+  if (!asOfDropdown) return;
+  // Sync calendar to selected date or today
+  if (selectedDate) {
+    const [y, m] = selectedDate.split('-');
+    calendarYear = parseInt(y);
+    calendarMonth = parseInt(m);
+  } else {
+    const now = new Date();
+    calendarYear = now.getFullYear();
+    calendarMonth = now.getMonth() + 1;
+  }
+  renderCalendar();
+  asOfDropdown.hidden = false;
+  asOfDateDisplay?.classList.add('active');
+}
+
+function closeCalendar() {
+  if (asOfDropdown) asOfDropdown.hidden = true;
+  asOfDateDisplay?.classList.remove('active');
+}
+
+function toggleCalendar() {
+  if (asOfDropdown?.hidden) {
+    openCalendar();
+  } else {
+    closeCalendar();
+  }
+}
+
+function changeMonth(delta) {
+  calendarMonth += delta;
+  if (calendarMonth > 12) { calendarMonth = 1; calendarYear++; }
+  if (calendarMonth < 1) { calendarMonth = 12; calendarYear--; }
+  renderCalendar();
+}
+
+// Find the nearest trading day at or before a target date
+function nearestTradingDay(targetStr) {
+  const sorted = [...tradingDaysSet].sort();
+  // Find the last day <= target
+  let best = '';
+  for (const d of sorted) {
+    if (d <= targetStr) best = d;
+    else break;
+  }
+  return best;
+}
+
+// Quick preset: go back N calendar days and find nearest trading day
+function applyPresetOffset(offsetDays) {
+  const target = new Date();
+  target.setDate(target.getDate() - offsetDays);
+  const targetStr = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
+  const trading = nearestTradingDay(targetStr);
+  if (trading) {
+    selectDate(trading);
+  } else {
+    console.warn('No trading day found for offset', offsetDays);
+  }
+}
+
+// Event bindings
+if (asOfDateDisplay) {
+  asOfDateDisplay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCalendar();
+  });
+}
+if (asOfPrevBtn) {
+  asOfPrevBtn.addEventListener('click', (e) => { e.stopPropagation(); changeMonth(-1); });
+}
+if (asOfNextBtn) {
+  asOfNextBtn.addEventListener('click', (e) => { e.stopPropagation(); changeMonth(1); });
+}
+document.getElementById('asof-clear-date')?.addEventListener('click', (e) => { e.stopPropagation(); clearDate(); });
+document.getElementById('asof-today-date')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const latest = getLatestTradingDay();
+  if (latest) selectDate(latest);
+});
+
+// Quick presets
+document.querySelectorAll('.asof-preset-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const offset = parseInt(btn.dataset.offset, 10);
+    if (!isNaN(offset)) applyPresetOffset(offset);
+  });
+});
+
+// Close calendar when clicking outside
+document.addEventListener('click', (e) => {
+  if (asOfDropdown && !asOfDropdown.hidden) {
+    const picker = document.getElementById('stock-screener-asof-picker');
+    if (picker && !picker.contains(e.target)) {
+      closeCalendar();
+    }
+  }
+});
 
 // Sync to Tongdaxin block
 setTimeout(() => {

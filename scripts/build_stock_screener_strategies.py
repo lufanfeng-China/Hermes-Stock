@@ -680,19 +680,62 @@ def main() -> None:
     parser.add_argument("--strategy", default=STRATEGY_STANDARD, choices=sorted(STRATEGY_METADATA))
     parser.add_argument("--tdxdir", default=DEFAULT_TDX_DIR)
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
+    parser.add_argument("--trading-day", default=None, help="Build as of historical date (YYYY-MM-DD)")
     args = parser.parse_args()
 
-    if args.strategy == STRATEGY_STANDARD:
-        rows = build_rps_standard_launch_rows(tdxdir=args.tdxdir)
-    elif args.strategy == STRATEGY_ATTACK:
-        rows = build_rps_attack_rows(tdxdir=args.tdxdir)
-    elif args.strategy == STRATEGY_PULLBACK:
-        rows = build_rps_pullback_rows(tdxdir=args.tdxdir)
-    elif args.strategy == STRATEGY_FIRST:
-        rows = build_rps_first_rows(tdxdir=args.tdxdir)
+    trading_day = args.trading_day
+
+    # When trading_day is set, use date-specific output
+    if trading_day:
+        output = DEFAULT_DATASET_DIR / f"dataset_stock_screener_strategies_{trading_day}.json"
     else:
-        rows = build_ma_cross_rows(tdxdir=args.tdxdir)
-    output = Path(args.output)
+        output = Path(args.output)
+
+    # Monkey-patch load_rps_rows to use historical RPS when trading_day is set
+    if trading_day:
+        from app.search.index import load_rps_rows_as_of
+        import app.search.index as _idx
+
+        _orig_load_rps_rows = _idx.load_rps_rows
+        _idx.load_rps_rows = lambda **kw: load_rps_rows_as_of(trading_day)
+
+        # Also monkey-patch rps_pullback / rps_first which read history directly
+        _orig_Reader_factory = Reader.factory
+
+        def _patched_factory(*fa, **kw):
+            reader = _orig_Reader_factory(*fa, **kw)
+            _orig_daily = reader.daily
+
+            def _daily_wrapper(**dkw):
+                result = _orig_daily(**dkw)
+                if result is not None and not result.empty and trading_day:
+                    result = result.sort_index()
+                    mask = result.index <= trading_day
+                    result = result.loc[mask]
+                return result
+
+            reader.daily = _daily_wrapper
+            return reader
+
+        Reader.factory = staticmethod(_patched_factory)
+
+    try:
+        if args.strategy == STRATEGY_STANDARD:
+            rows = build_rps_standard_launch_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_ATTACK:
+            rows = build_rps_attack_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_PULLBACK:
+            rows = build_rps_pullback_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_FIRST:
+            rows = build_rps_first_rows(tdxdir=args.tdxdir)
+        else:
+            rows = build_ma_cross_rows(tdxdir=args.tdxdir)
+    finally:
+        # Restore monkey-patches
+        if trading_day:
+            _idx.load_rps_rows = _orig_load_rps_rows
+            Reader.factory = staticmethod(_orig_Reader_factory)
+
     output.parent.mkdir(parents=True, exist_ok=True)
     output_rows = merge_strategy_rows_for_output(output, args.strategy, rows)
     output.write_text(json.dumps(output_rows, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -786,6 +787,45 @@ def load_rps_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[st
     return _load_json_rows(Path(dataset_dir) / "dataset_stock_rps_current.json")
 
 
+def load_rps_rows_as_of(as_of_date: str, dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
+    """Load RPS data as of a historical date using the precomputed history dataset.
+
+    For each (market, symbol), returns the latest record with trading_day <= as_of_date.
+    Returns list in the same format as load_rps_rows().
+    """
+    history_path = Path(dataset_dir) / "dataset_stock_rps_history.json"
+    if not history_path.exists():
+        return load_rps_rows(dataset_dir)
+
+    all_history = _load_json_rows(history_path)
+    if not all_history:
+        return load_rps_rows(dataset_dir)
+
+    # Group by (market, symbol), keep latest record <= as_of_date
+    best: dict[tuple[str, str], dict[str, object]] = {}
+    for record in all_history:
+        td = str(record.get("trading_day", ""))
+        if td > as_of_date:
+            continue
+        key = (_normalize_text(record.get("market")), _normalize_text(record.get("symbol")))
+        if key not in best or td > str(best[key].get("trading_day", "")):
+            best[key] = record
+
+    # Return as list with consistent keys matching load_rps_rows format
+    result: list[dict[str, object]] = []
+    for record in best.values():
+        result.append({
+            "trading_day": str(record.get("trading_day", "")),
+            "market": _normalize_text(record.get("market")),
+            "symbol": _normalize_text(record.get("symbol")),
+            "rps_20": record.get("rps_20"),
+            "rps_50": record.get("rps_50"),
+            "rps_120": record.get("rps_120"),
+            "rps_250": record.get("rps_250"),
+        })
+    return result
+
+
 @lru_cache(maxsize=1)
 def load_industry_valuation_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
     return _load_json_rows(Path(dataset_dir) / "dataset_industry_valuation_current.json")
@@ -797,6 +837,27 @@ def load_stock_screener_strategy_rows(dataset_dir: str | Path = DEFAULT_DATASET_
     if not path.exists():
         return []
     return _load_json_rows(path)
+
+
+# Dict cache for date-specific strategy files
+_strategy_rows_cache: dict[str, list[dict[str, object]]] = {}
+
+
+def load_stock_screener_strategy_rows_as_of(
+    trading_day: str,
+    dataset_dir: str | Path = DEFAULT_DATASET_DIR,
+) -> list[dict[str, object]]:
+    """Load strategy dataset for a specific trading day."""
+    if trading_day in _strategy_rows_cache:
+        return _strategy_rows_cache[trading_day]
+
+    path = Path(dataset_dir) / f"dataset_stock_screener_strategies_{trading_day}.json"
+    if not path.exists():
+        return []
+
+    rows = _load_json_rows(path)
+    _strategy_rows_cache[trading_day] = rows
+    return rows
 
 
 @lru_cache(maxsize=1)
@@ -822,19 +883,89 @@ def _load_price_percentile_5y(
         return json.load(f)
 
 
-@lru_cache(maxsize=1)
+# Manual cache keyed by (dataset_dir, as_of_date)
+_tech_eval_cache: dict[tuple[str, str], dict[str, dict[str, object]]] = {}
+
+
 def _load_technical_eval(
     dataset_dir: str | Path = DEFAULT_DATASET_DIR,
+    as_of_date: str = "",
 ) -> dict[str, dict[str, object]]:
     """Load pre-computed 6-dimension technical evaluation.
+    When as_of_date is provided, loads date-specific cached file.
     Returns dict keyed by 6-digit symbol.
     """
-    path = Path(dataset_dir) / "dataset_technical_eval.json"
+    cache_key = (str(dataset_dir), as_of_date)
+    if cache_key in _tech_eval_cache:
+        return _tech_eval_cache[cache_key]
+
+    if as_of_date:
+        path = Path(dataset_dir) / f"dataset_technical_eval_{as_of_date}.json"
+    else:
+        path = Path(dataset_dir) / "dataset_technical_eval.json"
     if not path.is_file():
+        if as_of_date:
+            _build_tech_eval_async(as_of_date)
+        # Don't cache empty results — file may be created by background build
         return {}
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)
-    return raw.get("stocks", raw)  # handle both {stocks:{}} and flat {} formats
+    result = raw.get("stocks", raw)
+    _tech_eval_cache[cache_key] = result
+    return result
+
+
+def _build_tech_eval_async(trading_day: str) -> None:
+    """Spawn background process to build tech eval for a given date."""
+    import subprocess
+    try:
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(PROJECT_ROOT / "scripts" / "build_technical_eval.py"),
+                "--trading-day", trading_day,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass  # silently fail — background build is best-effort
+
+
+def _build_strategy_async(trading_day: str, strategy: str) -> None:
+    """Spawn background process to build ALL strategy datasets for a given date.
+    Builds all 5 strategies so the date file is complete after first visit."""
+    import subprocess
+    all_strategies = ["rps_standard_launch", "rps_attack", "rps_pullback", "rps_first", "ma_cross"]
+    # Build the requested strategy first (fastest path), then the rest
+    ordered = [strategy] + [s for s in all_strategies if s != strategy]
+    try:
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(PROJECT_ROOT / "scripts" / "build_stock_screener_strategies.py"),
+                "--strategy", ordered[0],
+                "--trading-day", trading_day,
+                "--tdxdir", "/mnt/c/new_tdx64",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        # Start remaining strategies after a short delay (let first one finish)
+        for s in ordered[1:]:
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "build_stock_screener_strategies.py"),
+                    "--strategy", s,
+                    "--trading-day", trading_day,
+                    "--tdxdir", "/mnt/c/new_tdx64",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except Exception:
+        pass
 
 
 @lru_cache(maxsize=1)
@@ -1134,6 +1265,20 @@ def pool_filter_response(
 
 def _normalize_text(value: object) -> str:
     return str(value or "").strip()
+
+
+def _is_valid_date(date_str: str) -> bool:
+    """Check if date_str is YYYY-MM-DD format."""
+    if not date_str or len(date_str) != 10:
+        return False
+    parts = date_str.split("-")
+    if len(parts) != 3:
+        return False
+    try:
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+        return 2020 <= y <= 2099 and 1 <= m <= 12 and 1 <= d <= 31
+    except (ValueError, TypeError):
+        return False
 
 
 def _classification_label(classification: str, sub_classification: str = "") -> str:
@@ -1452,14 +1597,37 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     score_rows = snapshot.get("scores") or {}
     securities = load_security_rows()
     industry_rows = load_industry_rows()
-    rps_rows = load_rps_rows()
+    as_of_date = _normalize_text(params.get("as_of_date"))
+    if as_of_date and _is_valid_date(as_of_date):
+        rps_rows = load_rps_rows_as_of(as_of_date)
+    else:
+        rps_rows = load_rps_rows()
+        as_of_date = ""  # clear invalid date
     valuation_rows = load_industry_valuation_rows()
     active_strategy = _normalize_text(params.get("strategy"))
-    strategy_rows = load_stock_screener_strategy_rows() if active_strategy else []
+    if active_strategy and as_of_date:
+        all_strategy_rows = load_stock_screener_strategy_rows_as_of(as_of_date)
+        # Filter to only the active strategy
+        strategy_rows = [
+            r for r in all_strategy_rows
+            if _normalize_text(r.get("strategy")) == active_strategy
+        ]
+        if not strategy_rows and all_strategy_rows:
+            # File exists but doesn't have this strategy — trigger async merge-build
+            _build_strategy_async(as_of_date, active_strategy)
+            _strategy_rows_cache.pop(as_of_date, None)  # invalidate cache
+            strategy_rows = []
+        elif not all_strategy_rows:
+            # File doesn't exist at all
+            _build_strategy_async(as_of_date, active_strategy)
+            _strategy_rows_cache.pop(as_of_date, None)  # invalidate cache
+            strategy_rows = []
+    else:
+        strategy_rows = load_stock_screener_strategy_rows() if active_strategy else []
 
     # Load 5-year price percentile data
     price_pct_rows = _load_price_percentile_5y()
-    tech_eval_rows = _load_technical_eval()
+    tech_eval_rows = _load_technical_eval(as_of_date=as_of_date)
 
     security_lookup = {_security_key(row): row for row in securities}
     industry_lookup = {_security_key(row): row for row in industry_rows}
@@ -1688,7 +1856,9 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
 
     filtered = rows
     if active_strategy:
-        filtered = [row for row in filtered if row.get("strategy") == active_strategy]
+        if strategy_rows:
+            filtered = [row for row in filtered if row.get("strategy") == active_strategy]
+        # else: strategy data not yet built for this historical date — skip filter, show all
     for param_key, field_name in text_filters.items():
         expected = _normalize_text(params.get(param_key))
         if not expected:
@@ -1822,6 +1992,9 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     data_date = ""
     if rps_rows:
         data_date = str(rps_rows[0].get("trading_day", ""))
+    effective_date = data_date
+    if as_of_date:
+        effective_date = as_of_date
     return {
         "ok": True,
         "active_strategy": active_strategy or None,
@@ -1831,6 +2004,10 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         "total_pages": total_pages,
         "rows": filtered[start:end],
         "data_date": data_date,
+        "effective_date": effective_date,
+        "is_historical": bool(as_of_date),
+        "tech_eval_ready": bool(tech_eval_rows),
+        "strategy_ready": bool(strategy_rows) if active_strategy else True,
     }
 
 

@@ -2768,8 +2768,14 @@ button:hover {
 
 .stock-screener-filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px 16px;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+@media (max-width: 720px) {
+  .stock-screener-filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .stock-screener-filter-grid[hidden] {
@@ -2778,24 +2784,24 @@ button:hover {
 
 /* ── Filter groups ── */
 .filter-group {
-  border: 1px solid rgba(127, 153, 170, 0.14);
-  border-radius: 12px;
-  background: rgba(7, 16, 24, 0.45);
-  padding: 10px 12px 12px;
+  border: 1px solid rgba(127, 153, 170, 0.12);
+  border-radius: 10px;
+  background: rgba(7, 16, 24, 0.35);
+  padding: 8px 10px 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px 8px;
   align-content: start;
   min-width: 0;
 }
 
 .filter-group legend {
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 0 6px;
-  margin-bottom: 2px;
+  padding: 0 5px;
+  margin-bottom: 1px;
 }
 
 .filter-group label {
@@ -2806,11 +2812,11 @@ button:hover {
 .filter-group input,
 .filter-group select {
   width: 100%;
-  min-height: 32px;
-  padding: 5px 7px;
-  border-radius: 7px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 6px;
   background: rgba(7, 16, 24, 0.92);
-  border: 1px solid rgba(127, 153, 170, 0.18);
+  border: 1px solid rgba(127, 153, 170, 0.16);
   color: var(--text);
   font-family: inherit;
   font-size: 11px;
@@ -2819,22 +2825,24 @@ button:hover {
 .filter-group input::placeholder,
 .filter-group select::placeholder {
   color: var(--muted);
-  opacity: 0.6;
+  opacity: 0.55;
+  font-size: 10px;
 }
 
 .filter-group input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* ── RPS group: 4-column fixed ── */
-.filter-group:last-of-type {
-  grid-template-columns: repeat(4, 1fr);
-}
+/* ── Filter group column overrides ── */
+.filter-group.filter-col-1 { grid-template-columns: 1fr; }
+.filter-group.filter-col-3 { grid-template-columns: repeat(3, 1fr); }
+.filter-group.filter-col-4 { grid-template-columns: repeat(4, 1fr); }
+
+/* ── RPS group: 4-column ── */
+.filter-rps { grid-template-columns: repeat(4, 1fr); }
 
 /* ── Tech signals: 3-column ── */
-.filter-tech-signals {
-  grid-template-columns: repeat(3, 1fr);
-}
+.filter-tech-signals { grid-template-columns: repeat(3, 1fr); }
 
 .stock-screener-filter-actions {
   grid-column: 1 / -1;
@@ -3360,4 +3368,188 @@ button:hover {
   font-size: 11px;
   color: #52b3ff;
   white-space: nowrap;
+}
+
+/* ── 回测日期栏（header 级别，始终可见） ─────────────────── */
+.screener-date-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(127, 153, 170, 0.16);
+  border-radius: 10px;
+  background: rgba(7, 16, 24, 0.5);
+  flex-wrap: wrap;
+}
+
+.screener-date-bar-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+/* ── 日期显示按钮 ── */
+.asof-date-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 200px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: rgba(7, 16, 24, 0.92);
+  border: 1px solid rgba(127, 153, 170, 0.25);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.asof-date-display:hover {
+  border-color: rgba(82, 179, 255, 0.45);
+}
+.asof-date-display.active {
+  border-color: rgba(82, 179, 255, 0.55);
+  box-shadow: 0 0 0 2px rgba(82, 179, 255, 0.12);
+}
+.asof-date-icon {
+  font-size: 14px;
+}
+.asof-date-arrow {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+.asof-date-display.active .asof-date-arrow {
+  transform: rotate(180deg);
+}
+
+/* ── 下拉日历面板 ── */
+.asof-date-dropdown {
+  position: absolute;
+  z-index: 100;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 260px;
+  background: rgba(10, 22, 34, 0.97);
+  border: 1px solid rgba(127, 153, 170, 0.25);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.asof-date-picker {
+  position: relative;
+}
+
+/* ── 日历导航 ── */
+.asof-date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+.asof-nav-btn {
+  background: none;
+  border: 1px solid rgba(127,153,170,0.2);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 3px 8px;
+  font-size: 11px;
+  transition: background 0.15s;
+}
+.asof-nav-btn:hover {
+  background: rgba(82,179,255,0.12);
+}
+#asof-month-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── 星期头 ── */
+.asof-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+  text-align: center;
+}
+.asof-weekdays span {
+  font-size: 10px;
+  color: var(--muted);
+  padding: 2px 0;
+}
+
+/* ── 日期网格 ── */
+.asof-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.asof-day-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: default;
+  color: rgba(127,153,170,0.3);
+}
+.asof-day-cell.trading {
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s;
+}
+.asof-day-cell.trading:hover {
+  background: rgba(82,179,255,0.15);
+}
+.asof-day-cell.trading.selected {
+  background: rgba(82,179,255,0.28);
+  color: #52b3ff;
+  font-weight: 700;
+}
+.asof-day-cell.today {
+  border: 1px solid rgba(82,179,255,0.4);
+  font-weight: 600;
+}
+.asof-day-cell.outside {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── 日历底部操作 ── */
+.asof-date-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(127,153,170,0.12);
+}
+.asof-date-actions .nav-link {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+/* ── 快捷预设按钮 ── */
+.asof-quick-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.asof-preset-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.asof-preset-btn:hover {
+  opacity: 1;
 }

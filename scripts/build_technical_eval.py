@@ -5,9 +5,11 @@ evaluates buy triggers with ATR stop-loss, outputs JSON.
 
 Usage:
     ~/.venvs/moontdx-china-stock-data/bin/python scripts/build_technical_eval.py
+    ~/.venvs/moontdx-china-stock-data/bin/python scripts/build_technical_eval.py --trading-day 2026-05-08
 """
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import statistics
@@ -494,8 +496,13 @@ def detect_limits(df, market_plate, lookback=3):
 
 # ── Main ──
 
-def main():
+def main(trading_day: str | None = None):
     t0 = time.time()
+
+    # Output path: use date-specific name if trading_day is set
+    global OUTPUT
+    if trading_day:
+        OUTPUT = DATA_DIR / f"dataset_technical_eval_{trading_day}.json"
 
     # Load RPS data (array of records → dict keyed by symbol)
     rps_data = {}
@@ -503,9 +510,12 @@ def main():
         with open(RPS_PATH) as f:
             raw = json.load(f)
         if isinstance(raw, list):
-            # Group by symbol, take latest trading_day
+            # Filter by trading_day if specified
             by_symbol: dict[str, list] = {}
             for row in raw:
+                td = str(row.get("trading_day", ""))
+                if trading_day and td > trading_day:
+                    continue
                 sym = str(row.get("symbol", ""))
                 if len(sym) == 6:
                     by_symbol.setdefault(sym, []).append(row)
@@ -553,6 +563,12 @@ def main():
                 errors += 1; continue
 
             daily = daily.sort_index()
+            # Truncate to trading_day if specified
+            if trading_day:
+                mask = daily.index <= trading_day
+                daily = daily.loc[mask]
+                if daily.empty:
+                    errors += 1; continue
             if len(daily) < MIN_DAYS:
                 errors += 1; continue
 
@@ -664,7 +680,7 @@ def main():
 
     # Write output
     output = {
-        "data_date": time.strftime("%Y-%m-%d"),
+        "data_date": trading_day or time.strftime("%Y-%m-%d"),
         "total_stocks": len(results),
         "stocks": results,
     }
@@ -687,4 +703,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Build technical evaluation dataset")
+    parser.add_argument("--trading-day", type=str, default=None,
+                        help="Compute as of this date (YYYY-MM-DD). Default: today")
+    args = parser.parse_args()
+    main(trading_day=args.trading_day)
