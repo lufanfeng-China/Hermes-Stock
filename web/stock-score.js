@@ -1462,6 +1462,7 @@ function renderScore(result) {
     market_total_universe_size,
     industry_total_rank,
     industry_total_universe_size,
+    latest_report_analysis,
   } = result;
 
   if (!ok || !total_score) {
@@ -2008,6 +2009,375 @@ function loadTechEvalSummary(market, symbol) {
     .catch(() => setTechPlaceholders());
 }
 
+
+// ── Structured Insights Builder ──────────────────────────────────────────────
+
+/**
+ * Build comprehensive structured insights from score result, profile, and valuation data.
+ * Returns { strengths: [], neutral: [], risks: [] } where each item is {dim, data, eval}.
+ */
+function buildStructuredInsights(scoreResult, profileData, valuationPayload) {
+  const strengths = [];
+  const neutral = [];
+  const risks = [];
+
+  const sd = scoreResult?.score_data || {};
+  const rsi = scoreResult?.raw_sub_indicators || {};
+  const mds = scoreResult?.dim_scores || {};
+  const ids = scoreResult?.ind_dim_scores || {};
+  const diag = scoreResult?.sub_indicator_diagnostics || {};
+  const totalScore = scoreResult?.total_score;
+  const marketRank = scoreResult?.market_total_rank;
+  const marketSize = scoreResult?.market_total_universe_size;
+  const indRank = scoreResult?.industry_total_rank;
+  const indSize = scoreResult?.industry_total_universe_size;
+
+  // ── Helper: score emoji based on percentile ──
+  const scoreEmoji = (pct) => pct >= 80 ? '🟢' : pct >= 50 ? '🟡' : '🔴';
+  // Max scores per dimension (from methodology weights)
+  const MAX_DIM_SCORES = {
+    profitability: 25, growth: 20, operating: 15,
+    cashflow: 20, solvency: 10, asset_quality: 10,
+  };
+  const dimScoreFmt = (key) => {
+    const marketVal = mds[key];
+    const indVal = ids[key];
+    if (marketVal == null && indVal == null) return null;
+    const maxScore = MAX_DIM_SCORES[key] || 25;
+    const m = marketVal != null ? (marketVal / maxScore * 100) : null;
+    const i = indVal != null ? (indVal / maxScore * 100) : null;
+    const pct = m != null ? m : i;
+    return { marketPct: m, indPct: i, pct: pct || 0 };
+  };
+
+  // ── RPS Momentum (from profile) ──
+  if (profileData) {
+    const rps20 = profileData.rps_20;
+    const rps50 = profileData.rps_50;
+    const rps120 = profileData.rps_120;
+    const rps250 = profileData.rps_250;
+    const minRps = Math.min(rps20||0, rps50||0, rps120||0, rps250||0);
+
+    if (rps20 != null || rps50 != null || rps120 != null || rps250 != null) {
+      const parts = [];
+      if (rps20 != null) parts.push(`20=${rps20.toFixed(0)}`);
+      if (rps50 != null) parts.push(`50=${rps50.toFixed(0)}`);
+      if (rps120 != null) parts.push(`120=${rps120.toFixed(0)}`);
+      if (rps250 != null) parts.push(`250=${rps250.toFixed(0)}`);
+
+      let evalText;
+      if (minRps >= 90) evalText = '🟢 全周期极强，近半年几乎最强';
+      else if (minRps >= 80) evalText = '🟢 全周期强势';
+      else if (minRps >= 70) evalText = '🟡 中等偏强';
+      else evalText = '🔴 动量偏弱';
+
+      if (minRps >= 70) {
+        strengths.push({dim: 'RPS 动量', data: parts.join(', '), eval: evalText});
+      } else if (minRps >= 50) {
+        neutral.push({dim: 'RPS 动量', data: parts.join(', ')});
+      } else {
+        risks.push({dim: 'RPS 动量', data: parts.join(', '), eval: evalText});
+      }
+    }
+  }
+
+  // ── Profit Growth ──
+  const profitGrowth = rsi.profit_growth;
+  const profitGrowthPct = sd.profit_growth;
+  if (profitGrowth != null || profitGrowthPct != null) {
+    const val = profitGrowth != null ? profitGrowth : 0;
+    const pct = profitGrowthPct != null ? profitGrowthPct : 50;
+    const sign = val >= 0 ? '+' : '';
+    const label = `${sign}${val.toFixed(1)}%`;
+    const rankStr = profitGrowthPct != null ? `，${profitGrowthPct.toFixed(0)}分位` : '';
+
+    const prevGrowthDiag = diag.profit_growth?.change;
+    const yoyStr = prevGrowthDiag?.summary || '';
+
+    let evalText = scoreEmoji(pct);
+    if (pct >= 80) evalText += ' 爆发式增长';
+    else if (pct >= 60) evalText += ' 增长良好';
+    else if (pct >= 40) evalText += ' 增长一般';
+    else evalText += ' 增长乏力';
+
+    const dataStr = `${label}${rankStr}${yoyStr ? '（' + yoyStr + '）' : ''}`;
+    if (pct >= 60) strengths.push({dim: '利润增速', data: dataStr, eval: evalText});
+    else if (pct >= 40) neutral.push({dim: '利润增速', data: dataStr});
+    else risks.push({dim: '利润增速', data: dataStr, eval: evalText});
+  }
+
+  // ── Revenue Growth ──
+  const revGrowth = rsi.revenue_growth;
+  const revGrowthPct = sd.revenue_growth;
+  if (revGrowth != null || revGrowthPct != null) {
+    const val = revGrowth != null ? revGrowth : 0;
+    const pct = revGrowthPct != null ? revGrowthPct : 50;
+    const sign = val >= 0 ? '+' : '';
+    const dataStr = `${sign}${val.toFixed(1)}%${revGrowthPct != null ? '，' + revGrowthPct.toFixed(0) + '分位' : ''}`;
+
+    if (pct >= 70) strengths.push({dim: '营收增速', data: dataStr, eval: '🟢 强劲'});
+    else if (pct >= 40) neutral.push({dim: '营收增速', data: dataStr});
+    else risks.push({dim: '营收增速', data: dataStr, eval: '🔴 偏弱'});
+  }
+
+  // ── Free Cash Flow ──
+  const freeCfPct = sd.free_cf;
+  if (freeCfPct != null) {
+    const dataStr = `${freeCfPct.toFixed(0)}分位`;
+    if (freeCfPct >= 70) strengths.push({dim: '自由现金流', data: dataStr, eval: '🟢 资本开支后仍有现金沉淀'});
+    else if (freeCfPct >= 40) neutral.push({dim: '自由现金流', data: dataStr});
+    else risks.push({dim: '自由现金流', data: dataStr, eval: '🔴 现金质量偏弱'});
+  }
+
+  // ── Asset Turnover ──
+  const assetTurnPct = sd.asset_turn;
+  if (assetTurnPct != null) {
+    const dataStr = `${assetTurnPct.toFixed(0)}分位`;
+    if (assetTurnPct >= 80) strengths.push({dim: '资产周转', data: dataStr, eval: '🟢 运营效率极高'});
+    else if (assetTurnPct >= 50) neutral.push({dim: '资产周转', data: dataStr});
+    else risks.push({dim: '资产周转', data: dataStr, eval: '🔴 周转偏慢'});
+  }
+
+  // ── ROE ──
+  const roeEx = rsi.roe_ex;
+  const roeExPct = sd.roe_ex;
+  if (roeEx != null || roeExPct != null) {
+    const dataStr = `${roeEx != null ? roeEx.toFixed(1) + '%' : '—'}${roeExPct != null ? '，' + roeExPct.toFixed(0) + '分位' : ''}`;
+    if (roeExPct != null && roeExPct >= 70) strengths.push({dim: '扣非ROE', data: dataStr, eval: '🟢 优质'});
+    else if (roeExPct != null && roeExPct >= 40) neutral.push({dim: '扣非ROE', data: dataStr});
+    else risks.push({dim: '扣非ROE', data: dataStr, eval: '🔴 偏低'});
+  }
+
+  // ── Industry Position ──
+  if (indRank != null && indSize != null) {
+    const dataStr = `排名 ${indRank}/${indSize}`;
+    if (indRank <= indSize * 0.2) strengths.push({dim: '行业地位', data: dataStr, eval: '🟢 行业前列'});
+    else if (indRank <= indSize * 0.5) neutral.push({dim: '行业地位', data: dataStr});
+    else risks.push({dim: '行业地位', data: dataStr, eval: '🔴 行业落后'});
+  }
+
+  // ── Concepts ──
+  if (profileData?.core_concepts?.length) {
+    const count = profileData.concept_count || profileData.core_concepts.length;
+    const topConcepts = profileData.core_concepts.slice(0, 5).map(c => c.concept_name).join('/');
+    strengths.push({dim: '概念', data: `${count}个：${topConcepts}...`, eval: '🟢 概念丰富'});
+  }
+
+  // ── Total Score ──
+  if (totalScore != null) {
+    const rankStr = marketRank != null ? `，全市场 ${marketRank}/${marketSize || '—'}` : '';
+    neutral.push({dim: '总分', data: `${totalScore.toFixed(1)}${rankStr}`});
+  }
+
+  // ── Valuation ──
+  if (valuationPayload) {
+    const pe = valuationPayload.pe_ttm;
+    const ps = valuationPayload.ps_ttm;
+    const band = valuationPayload.valuation_band_label;
+    const classification = valuationPayload.classification;
+
+    const parts = [];
+    if (pe != null && pe > 0) parts.push(`PE ${pe.toFixed(1)}`);
+    if (ps != null && ps > 0) parts.push(`PS ${ps.toFixed(1)}`);
+    if (band) parts.push(band);
+    if (classification) parts.push(classification);
+
+    if (parts.length) {
+      const peHigh = pe != null && pe > 50;
+      if (band === '低估区间' || band === '合理偏低') {
+        strengths.push({dim: '估值', data: parts.join(' · '), eval: '🟢 相对便宜'});
+      } else if (band === '高估区间') {
+        risks.push({dim: '估值', data: parts.join(' · '), eval: '🔴 估值偏高'});
+      } else {
+        neutral.push({dim: '估值', data: parts.join(' · ') + (peHigh ? '（偏高但可能对应高增速）' : '')});
+      }
+    }
+  }
+
+  // ── Solvency ──
+  const solvencyInfo = dimScoreFmt('solvency');
+  if (solvencyInfo) {
+    const debtRatio = rsi.debt_ratio;
+    const currentRatio = rsi.current_ratio;
+    const parts = [`${solvencyInfo.pct.toFixed(0)}分位`];
+    if (debtRatio != null) parts.push(`负债率 ${debtRatio.toFixed(1)}%`);
+    if (currentRatio != null) parts.push(`流动比率 ${currentRatio.toFixed(1)}`);
+
+    if (solvencyInfo.pct < 40) {
+      risks.push({dim: '偿债能力', data: parts.join('，'), eval: '🔴 短板明显'});
+    } else if (solvencyInfo.pct < 60) {
+      neutral.push({dim: '偿债能力', data: parts.join('，')});
+    } else {
+      strengths.push({dim: '偿债能力', data: parts.join('，'), eval: '🟢 健康'});
+    }
+  }
+
+  // ── Cashflow Quality ──
+  const cashflowInfo = dimScoreFmt('cashflow');
+  if (cashflowInfo) {
+    const ocfPct = sd.ocf_to_profit;
+    const parts = [`${cashflowInfo.pct.toFixed(0)}分位`];
+    if (ocfPct != null) parts.push(`净现比 ${ocfPct.toFixed(0)}分位`);
+
+    if (cashflowInfo.pct < 40) {
+      risks.push({dim: '现金流质量', data: parts.join('，'), eval: '🔴 利润的现金含量偏低'});
+    } else if (cashflowInfo.pct < 60) {
+      neutral.push({dim: '现金流质量', data: parts.join('，')});
+    } else {
+      strengths.push({dim: '现金流质量', data: parts.join('，'), eval: '🟢 现金充裕'});
+    }
+  }
+
+  // ── OCF trend ──
+  const ocfDiag = diag.ocf_to_profit?.change;
+  if (ocfDiag?.delta_value != null && Math.abs(ocfDiag.delta_value) > 5) {
+    const trendDown = ocfDiag.delta_value < 0;
+    const dataStr = ocfDiag.summary || `同比 ${ocfDiag.delta_value > 0 ? '+' : ''}${ocfDiag.delta_value.toFixed(1)}%`;
+    if (trendDown) {
+      risks.push({dim: '净现比趋势', data: dataStr, eval: '🔴 在走弱'});
+    } else {
+      strengths.push({dim: '净现比趋势', data: dataStr, eval: '🟢 在改善'});
+    }
+  }
+
+  // ── Concept-based flags (high receivables, governance, etc.) ──
+  if (profileData?.concepts?.length) {
+    const conceptNames = profileData.concepts.map(c => c.concept_name || '').join(' ');
+    const auxNames = profileData.auxiliary_concepts?.membership?.map(m => m.concept_name || '').join(' ') || '';
+
+    if (conceptNames.includes('高应收款') || auxNames.includes('高应收款')) {
+      risks.push({dim: '高应收款', data: '概念标签"高应收款隐忧"', eval: '🔴 需关注回款'});
+    }
+    if (conceptNames.includes('董高') || conceptNames.includes('高管变动') || conceptNames.includes('频繁变动') ||
+        auxNames.includes('董高') || auxNames.includes('高管变动')) {
+      risks.push({dim: '董监高', data: '高管变动相关标签', eval: '⚠️ 治理风险'});
+    }
+    if (conceptNames.includes('减持') || conceptNames.includes('退出') ||
+        auxNames.includes('减持') || auxNames.includes('退出')) {
+      risks.push({dim: '大股东', data: '减持/退出相关标签', eval: '⚠️'});
+    }
+  }
+
+  return { strengths, neutral, risks };
+}
+
+// ── Summary Line Generator ───────────────────────────────────────────────────
+
+/**
+ * Generate a compact one-line summary from structured insights.
+ * Example: "RPS 动量极强 + 利润爆发 + 概念丰富，但偿债弱、治理有隐忧。高赔率但有瑕疵的成长股。"
+ */
+function buildSummaryLine(structuredInsights) {
+  const { strengths, risks } = structuredInsights || {};
+  if (!strengths?.length && !risks?.length) return '';
+
+  // Pick top strengths — find ones with positive eval emoji
+  const topStrengths = (strengths || [])
+    .filter(s => s.eval && (s.eval.includes('🟢') || s.eval.includes('极强') || s.eval.includes('爆发') || s.eval.includes('强劲') || s.eval.includes('前列') || s.eval.includes('丰富')))
+    .slice(0, 3);
+
+  // Pick top risks
+  const topRisks = (risks || []).slice(0, 2);
+
+  const strengthParts = topStrengths.map(s => {
+    // Extract the core descriptor from the eval string
+    const evalText = s.eval || '';
+    if (evalText.includes('极强')) return s.dim + '极强';
+    if (evalText.includes('爆发')) return s.dim + '爆发';
+    if (evalText.includes('强劲')) return s.dim + '强';
+    if (evalText.includes('前列')) return s.dim + '领先';
+    if (evalText.includes('丰富')) return '多概念';
+    if (evalText.includes('沉淀')) return '现金流好';
+    if (evalText.includes('优质')) return s.dim + '优';
+    if (evalText.includes('便宜')) return '估值低';
+    // Fallback: use the dim name shortened
+    return s.dim.replace(/[能力质量效率地位]$/, '');
+  });
+
+  const riskParts = topRisks.map(s => {
+    const evalText = s.eval || '';
+    if (evalText.includes('短板') || evalText.includes('偏弱') || evalText.includes('偏低')) return s.dim + '弱';
+    if (evalText.includes('回款')) return '高应收';
+    if (evalText.includes('治理')) return '治理隐忧';
+    if (evalText.includes('减持') || evalText.includes('退出')) return '股东减持';
+    if (evalText.includes('偏高') || evalText.includes('过热')) return s.dim + '高';
+    // Fallback
+    return s.dim;
+  });
+
+  const posPart = strengthParts.length ? strengthParts.join(' + ') : '';
+  const negPart = riskParts.length ? ('但' + riskParts.join('、')) : '';
+
+  // Final verdict
+  const strongCount = topStrengths.length;
+  const riskCount = topRisks.length;
+  let verdict = '';
+  if (strongCount >= 3 && riskCount <= 1) {
+    verdict = '综合实力强劲，值得重点关注。';
+  } else if (strongCount >= 3 && riskCount >= 2) {
+    verdict = '高赔率但有瑕疵的成长股。';
+  } else if (strongCount >= 2 && riskCount >= 2) {
+    verdict = '亮点与风险并存，需权衡。';
+  } else if (riskCount >= 2 && strongCount <= 1) {
+    verdict = '风险较多，需谨慎对待。';
+  } else {
+    verdict = '整体表现中等，关注后续变化。';
+  }
+
+  return `${posPart}${negPart ? '，' + negPart + '。' : '。'}${verdict}`;
+}
+
+// ── Insights Rendering ───────────────────────────────────────────────────────
+
+function renderInsights(structuredInsights) {
+  const body = document.getElementById('insights-body');
+  if (!body) return;
+
+  const { strengths, neutral: neut, risks } = structuredInsights || {};
+  if (!strengths?.length && !neut?.length && !risks?.length) {
+    body.innerHTML = '<p class="muted">暂无综合洞察数据</p>';
+    return;
+  }
+
+  // ── One-line summary ──
+  const summaryLine = buildSummaryLine(structuredInsights);
+  const summaryHtml = summaryLine
+    ? `<p class="insight-summary">${escapeHtml(summaryLine)}</p>`
+    : '';
+
+  const renderTable = (title, emoji, rows, colorClass) => {
+    if (!rows?.length) return '';
+    const rowsHtml = rows.map(r => {
+      const evalCell = r.eval ? `<td class="insight-eval">${escapeHtml(r.eval)}</td>` : '<td class="insight-eval"></td>';
+      return `<tr>
+        <td class="insight-dim">${escapeHtml(r.dim)}</td>
+        ${evalCell}
+        <td class="insight-data">${escapeHtml(r.data)}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="insight-section ${colorClass}">
+      <h3 class="insight-section-title">${emoji} ${title}</h3>
+      <table class="insight-table">
+        <thead><tr>
+          <th>维度</th><th>评价</th><th>数据</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+  };
+
+  body.innerHTML = summaryHtml + [
+    renderTable('亮点', '🟢', strengths, 'insight-strengths'),
+    renderTable('中性', '🟡', neut, 'insight-neutral'),
+    renderTable('风险', '🔴', risks, 'insight-risks'),
+  ].filter(Boolean).join('');
+}
+
+function resetInsights() {
+  const body = document.getElementById('insights-body');
+  if (body) body.innerHTML = '<p class="muted">查询股票后显示综合洞察</p>';
+}
+
 function setTechCard(valueId, detailId, cardId, key, label, detail) {
   const v = document.getElementById(valueId);
   const d = document.getElementById(detailId);
@@ -2132,6 +2502,7 @@ function resetStockScoreDashboardState() {
   resetPeerDialogs();
   resetAiFinancialReport("查询股票后可生成分析");
   setTechPlaceholders();
+  resetInsights();
 }
 
 function toStockIdentity(row) {
@@ -2741,6 +3112,9 @@ async function doSearch(selectedRow = null) {
     }
     renderProfileSummary(profile);
     renderRelativeValuationSummary(valuationPayload);
+    // Build and render comprehensive insights from score + profile + valuation
+    const structuredInsights = buildStructuredInsights(result, profile, valuationPayload);
+    renderInsights(structuredInsights);
     searchState.currentStock = {
       market,
       symbol,

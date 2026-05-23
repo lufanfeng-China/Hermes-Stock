@@ -200,8 +200,8 @@ function clearManualFilters() {
   if (asOfDateInput && savedDate) asOfDateInput.value = savedDate;
   if (strategyInputEl && savedStrategy) strategyInputEl.value = savedStrategy;
   if (temperatureSelectEl?.multiple) {
-    [...temperatureSelectEl.options].forEach((option, index) => {
-      option.selected = index === 0;
+    [...temperatureSelectEl.options].forEach((option) => {
+      option.selected = false;
     });
   }
   populateLevel2('');

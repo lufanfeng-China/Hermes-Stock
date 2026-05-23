@@ -1240,20 +1240,108 @@ button:hover {
 }
 
 .stock-score-search-card {
-  width: 400px;
-  min-width: 400px;
+  width: 250px;
+  min-width: 250px;
   flex-shrink: 0;
   height: 250px;
   overflow: hidden;
 }
 
 .stock-score-tech-conclusion-card {
-  width: 400px;
-  min-width: 400px;
+  width: 250px;
+  min-width: 250px;
   flex-shrink: 0;
   padding: 16px 18px 14px;
   height: 250px;
   overflow: hidden;
+}
+
+.stock-score-insight-card {
+  min-width: 280px;
+  flex: 1 1 auto;
+  padding: 16px 18px 14px;
+  height: 250px;
+  overflow-y: auto;
+}
+
+/* ── Insights table layout ── */
+.insights-body {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.insight-section {
+  margin-bottom: 10px;
+}
+
+.insight-section:last-child {
+  margin-bottom: 0;
+}
+
+.insight-summary {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid var(--green);
+  border-radius: 2px;
+}
+
+.insight-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+
+.insight-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+}
+
+.insight-table th {
+  text-align: left;
+  padding: 2px 6px 3px;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+
+.insight-table th:first-child { width: 14%; }
+.insight-table th:nth-child(2) { width: 40%; }
+.insight-table th:last-child { width: 46%; }
+
+.insight-table td {
+  padding: 2px 6px;
+  vertical-align: top;
+  color: var(--text);
+}
+
+.insight-table .insight-dim {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.insight-table .insight-data {
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-table .insight-eval {
+  font-size: 10px;
+}
+
+.insight-strengths .insight-table th {
+  border-bottom-color: rgba(0, 230, 118, 0.3);
+}
+
+.insight-risks .insight-table th {
+  border-bottom-color: rgba(255, 82, 82, 0.3);
 }
 
 .tech-conclusion-body {
@@ -3552,4 +3640,35 @@ button:hover {
 }
 .asof-preset-btn:hover {
   opacity: 1;
+}
+
+/* ── Filter row: label + input ── */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.filter-row label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+  min-width: 0;
+}
+.filter-row input,
+.filter-row select {
+  flex: 1 1 auto;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(7, 16, 24, 0.92);
+  border: 1px solid rgba(127, 153, 170, 0.16);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  min-width: 0;
+}
+.filter-row input[type="number"] {
+  -moz-appearance: textfield;
 }

@@ -1841,6 +1841,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         "max_primary_percentile": ("primary_percentile", "max"),
         "min_current_price": ("current_price", "min"),
         "max_current_price": ("current_price", "max"),
+        "min_pe_ttm": ("pe_ttm", "min"),
+        "max_pe_ttm": ("pe_ttm", "max"),
         "min_price_percentile_5y": ("price_percentile_5y", "min"),
         "max_price_percentile_5y": ("price_percentile_5y", "max"),
     }

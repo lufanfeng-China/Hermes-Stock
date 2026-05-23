@@ -85,72 +85,78 @@
         <input name="strategy" type="hidden" value="">
         <input type="hidden" id="stock-screener-asof-date" name="as_of_date" value="">
 
-        <!-- ── Row 2: 评分与排名 | RPS 动量 ── -->
+        <!-- ── 评分与排名 ── -->
         <fieldset class="filter-group">
           <legend>评分与排名</legend>
-          <label><input name="min_total_score" type="number" step="0.1" placeholder="全市场总分 ≥"></label>
-          <label><input name="min_ind_total_score" type="number" step="0.1" placeholder="行业内总分 ≥"></label>
-          <label><input name="max_market_rank" type="number" step="1" placeholder="全市场排名 ≤"></label>
-          <label><input name="max_industry_rank" type="number" step="1" placeholder="二级行业排名 ≤"></label>
+          <div class="filter-row"><label>全市场总分 ≥</label><input name="min_total_score" type="number" step="0.1"></div>
+          <div class="filter-row"><label>行业内总分 ≥</label><input name="min_ind_total_score" type="number" step="0.1"></div>
+          <div class="filter-row"><label>全市场排名 ≤</label><input name="max_market_rank" type="number" step="1"></div>
+          <div class="filter-row"><label>二级行业排名 ≤</label><input name="max_industry_rank" type="number" step="1"></div>
         </fieldset>
 
+        <!-- ── 行业和概念 ── -->
+        <fieldset class="filter-group">
+          <legend>行业和概念</legend>
+          <div class="filter-row"><label>申万一级</label><select id="stock-screener-level1" name="industry_level_1" multiple></select></div>
+          <div class="filter-row"><label>申万二级</label><select id="stock-screener-level2" name="industry_level_2" multiple></select></div>
+        </fieldset>
+
+        <!-- ── RPS 动量 ── -->
         <fieldset class="filter-group filter-rps">
           <legend>RPS 动量</legend>
-          <label><input name="min_rps_20" type="number" step="0.1" placeholder="个股RPS20 ≥"></label>
-          <label><input name="min_rps_50" type="number" step="0.1" placeholder="个股RPS50 ≥"></label>
-          <label><input name="min_rps_120" type="number" step="0.1" placeholder="个股RPS120 ≥"></label>
-          <label><input name="min_rps_250" type="number" step="0.1" placeholder="个股RPS250 ≥"></label>
-          <label><input name="min_industry_rps_20" type="number" step="0.1" placeholder="行业RPS20 ≥"></label>
-          <label><input name="min_industry_rps_50" type="number" step="0.1" placeholder="行业RPS50 ≥"></label>
-          <label><input name="min_industry_rps_120" type="number" step="0.1" placeholder="行业RPS120 ≥"></label>
-          <label><input name="min_industry_rps_250" type="number" step="0.1" placeholder="行业RPS250 ≥"></label>
+          <div class="filter-row"><label>个股 RPS20 ≥</label><input name="min_rps_20" type="number" step="0.1"></div>
+          <div class="filter-row"><label>个股 RPS50 ≥</label><input name="min_rps_50" type="number" step="0.1"></div>
+          <div class="filter-row"><label>个股 RPS120 ≥</label><input name="min_rps_120" type="number" step="0.1"></div>
+          <div class="filter-row"><label>个股 RPS250 ≥</label><input name="min_rps_250" type="number" step="0.1"></div>
+          <div class="filter-row"><label>行业 RPS20 ≥</label><input name="min_industry_rps_20" type="number" step="0.1"></div>
+          <div class="filter-row"><label>行业 RPS50 ≥</label><input name="min_industry_rps_50" type="number" step="0.1"></div>
+          <div class="filter-row"><label>行业 RPS120 ≥</label><input name="min_industry_rps_120" type="number" step="0.1"></div>
+          <div class="filter-row"><label>行业 RPS250 ≥</label><input name="min_industry_rps_250" type="number" step="0.1"></div>
         </fieldset>
 
-        <!-- ── Row 3: 行业与估值 | 技术面 ── -->
+        <!-- ── 估值信息 ── -->
         <fieldset class="filter-group">
-          <legend>行业与估值</legend>
-          <label><select id="stock-screener-level1" name="industry_level_1" multiple><option value="">申万一级</option></select></label>
-          <label><select id="stock-screener-level2" name="industry_level_2" multiple><option value="">申万二级</option></select></label>
-          <label><select id="stock-screener-temperature" name="industry_temperature_label" multiple><option value="">行业温度</option><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></label>
-          <label><select name="classification"><option value="">估值分类</option><option value="A_NORMAL_EARNING">A类 正常盈利</option><option value="B_THIN_PROFIT_DISTORTED">B类 微盈利畸高</option><option value="C_LOSS">C/D 亏损或高风险</option></select></label>
-          <label><input name="max_primary_percentile" type="number" step="0.1" placeholder="行业内估值位置 ≤"></label>
-          <label><select id="stock-screener-valuation-band" name="valuation_band" multiple><option value="">区间标签</option><option value="低估区间">低估区间</option><option value="合理偏低">合理偏低</option><option value="合理">合理</option><option value="合理偏高">合理偏高</option><option value="高估区间">高估区间</option><option value="样本不足">样本不足</option><option value="次新股">次新股</option></select></label>
+          <legend>估值信息</legend>
+          <div class="filter-row"><label>估值分类</label><select name="classification"><option value="">不限</option><option value="A_NORMAL_EARNING">A类 正常盈利</option><option value="B_THIN_PROFIT_DISTORTED">B类 微盈利畸高</option><option value="C_LOSS">C/D 亏损或高风险</option></select></div>
+          <div class="filter-row"><label>区间标签</label><select id="stock-screener-valuation-band" name="valuation_band" multiple><option value="低估区间">低估区间</option><option value="合理偏低">合理偏低</option><option value="合理">合理</option><option value="合理偏高">合理偏高</option><option value="高估区间">高估区间</option><option value="样本不足">样本不足</option><option value="次新股">次新股</option></select></div>
+          <div class="filter-row"><label>行业内估值位置 ≤</label><input name="max_primary_percentile" type="number" step="0.1"></div>
+          <div class="filter-row"><label>行业温度</label><select id="stock-screener-temperature" name="industry_temperature_label" multiple><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></div>
         </fieldset>
 
+        <!-- ── 技术面（信号灯） ── -->
         <fieldset class="filter-group filter-tech-signals">
           <legend>技术面（信号灯）</legend>
-          <label><select name="trend_switch"><option value="">趋势切换：不限</option><option value="recovering">🟡 刚变修复中</option><option value="bullish">🟢 刚变多头</option><option value="strong_bullish">🟢 刚变强多头</option></select></label>
-          <label><select name="tech_trend"><option value="">趋势：不限</option><option value="strong_bullish">🟢 强多头</option><option value="bullish">🟢 多头</option><option value="recovering">🟡 修复中</option><option value="!bearish">🟢🟡 非空头</option></select></label>
-          <label><select name="tech_momentum"><option value="">动量：不限</option><option value="super_strong">🟢 极强</option><option value="strong">🟢 强势</option><option value="startup">🟢 启动</option><option value="!weak">🟢🟡 非弱势</option></select></label>
-          <label><select name="tech_volume"><option value="">量能：不限</option><option value="bullish">🟢 放量配合</option><option value="!divergence">🟢🟡 非背离</option></select></label>
-          <label><select name="tech_position"><option value="">位置：不限</option><option value="low">🟢 低位</option><option value="!high">🟢🟡 非高位</option><option value="mid">🟡 中位</option></select></label>
-          <label><select name="tech_conclusion"><option value="">综合：不限</option><option value="buy_confirmed">🟢 确认买入</option><option value="buy_watch">🟡 买点观察</option><option value="wait_buy">🟡 等待买点</option><option value="left_observe">🟡 左侧观察</option><option value="!avoid">🟢🟡 非回避</option></select></label>
-          <label><select name="tech_buy_trigger"><option value="">买入触发：不限</option><option value="any">有任意买入信号</option><option value="breakout">突破买入</option><option value="pullback">回踩买入</option><option value="strong_break">强势突破</option><option value="golden_cross">金叉观察</option></select></label>
+          <div class="filter-row"><label>趋势切换</label><select name="trend_switch"><option value="">不限</option><option value="recovering">🟡 刚变修复中</option><option value="bullish">🟢 刚变多头</option><option value="strong_bullish">🟢 刚变强多头</option></select></div>
+          <div class="filter-row"><label>趋势</label><select name="tech_trend"><option value="">不限</option><option value="strong_bullish">🟢 强多头</option><option value="bullish">🟢 多头</option><option value="recovering">🟡 修复中</option><option value="!bearish">🟢🟡 非空头</option></select></div>
+          <div class="filter-row"><label>动量</label><select name="tech_momentum"><option value="">不限</option><option value="super_strong">🟢 极强</option><option value="strong">🟢 强势</option><option value="startup">🟢 启动</option><option value="!weak">🟢🟡 非弱势</option></select></div>
+          <div class="filter-row"><label>量能</label><select name="tech_volume"><option value="">不限</option><option value="bullish">🟢 放量配合</option><option value="!divergence">🟢🟡 非背离</option></select></div>
+          <div class="filter-row"><label>位置</label><select name="tech_position"><option value="">不限</option><option value="low">🟢 低位</option><option value="!high">🟢🟡 非高位</option><option value="mid">🟡 中位</option></select></div>
+          <div class="filter-row"><label>综合</label><select name="tech_conclusion"><option value="">不限</option><option value="buy_confirmed">🟢 确认买入</option><option value="buy_watch">🟡 买点观察</option><option value="wait_buy">🟡 等待买点</option><option value="left_observe">🟡 左侧观察</option><option value="!avoid">🟢🟡 非回避</option></select></div>
+          <div class="filter-row"><label>买入触发</label><select name="tech_buy_trigger"><option value="">不限</option><option value="any">有任意买入信号</option><option value="breakout">突破买入</option><option value="pullback">回踩买入</option><option value="strong_break">强势突破</option><option value="golden_cross">金叉观察</option></select></div>
         </fieldset>
 
-        <!-- ── Row 4: 财务维度 | 细分指标 ── -->
+        <!-- ── 财务维度 ── -->
         <fieldset class="filter-group">
           <legend>财务维度</legend>
-          <label><input name="min_dim_profitability" type="number" step="0.1" placeholder="盈利能力 ≥"></label>
-          <label><input name="min_dim_growth" type="number" step="0.1" placeholder="成长能力 ≥"></label>
-          <label><input name="min_dim_cashflow" type="number" step="0.1" placeholder="现金流质量 ≥"></label>
-          <label><input name="min_dim_solvency" type="number" step="0.1" placeholder="偿债能力 ≥"></label>
-          <label><input name="min_dim_asset_quality" type="number" step="0.1" placeholder="资产质量 ≥"></label>
+          <div class="filter-row"><label>盈利能力 ≥</label><input name="min_dim_profitability" type="number" step="0.1"></div>
+          <div class="filter-row"><label>成长能力 ≥</label><input name="min_dim_growth" type="number" step="0.1"></div>
+          <div class="filter-row"><label>现金流质量 ≥</label><input name="min_dim_cashflow" type="number" step="0.1"></div>
+          <div class="filter-row"><label>偿债能力 ≥</label><input name="min_dim_solvency" type="number" step="0.1"></div>
+          <div class="filter-row"><label>资产质量 ≥</label><input name="min_dim_asset_quality" type="number" step="0.1"></div>
+          <div class="filter-row"><label>扣非ROE ≥</label><input name="min_sub_roe_ex" type="number" step="0.1"></div>
+          <div class="filter-row"><label>净利增速 ≥</label><input name="min_sub_profit_growth" type="number" step="0.1"></div>
+          <div class="filter-row"><label>自由现金流 ≥</label><input name="min_sub_free_cf" type="number" step="0.1"></div>
         </fieldset>
 
-        <fieldset class="filter-group">
-          <legend>细分指标</legend>
-          <label><input name="min_sub_roe_ex" type="number" step="0.1" placeholder="扣非ROE ≥"></label>
-          <label><input name="min_sub_profit_growth" type="number" step="0.1" placeholder="净利增速 ≥"></label>
-          <label><input name="min_sub_free_cf" type="number" step="0.1" placeholder="自由现金流 ≥"></label>
-        </fieldset>
-
-        <!-- ── Row 5: 价格区间 | (empty) ── -->
+        <!-- ── 价格区间 ── -->
         <fieldset class="filter-group">
           <legend>价格区间</legend>
-          <label><input name="max_current_price" type="number" step="0.01" placeholder="现价 ≤"></label>
-          <label><input name="min_price_percentile_5y" type="number" step="0.1" placeholder="5年分位 ≥"></label>
-          <label><input name="max_price_percentile_5y" type="number" step="0.1" placeholder="5年分位 ≤"></label>
+          <div class="filter-row"><label>现价 ≥</label><input name="min_current_price" type="number" step="0.01"></div>
+          <div class="filter-row"><label>现价 ≤</label><input name="max_current_price" type="number" step="0.01"></div>
+          <div class="filter-row"><label>5年分位 ≥</label><input name="min_price_percentile_5y" type="number" step="0.1"></div>
+          <div class="filter-row"><label>5年分位 ≤</label><input name="max_price_percentile_5y" type="number" step="0.1"></div>
+          <div class="filter-row"><label>PE-TTM ≥</label><input name="min_pe_ttm" type="number" step="0.01"></div>
+          <div class="filter-row"><label>PE-TTM ≤</label><input name="max_pe_ttm" type="number" step="0.01"></div>
         </fieldset>
 
         <div class="stock-screener-filter-actions">
@@ -223,6 +229,6 @@
     </section>
   </main>
 
-  <script type="module" src="/stock-screener.js?v=20260523-v3"></script>
+  <script type="module" src="/stock-screener.js?v=20260523-fix-temp"></script>
 </body>
 </html>
