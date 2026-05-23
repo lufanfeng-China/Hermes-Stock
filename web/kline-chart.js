@@ -504,7 +504,7 @@ export class KlineChart {
   _barWidth() {
     const d = this._getPlotDims();
     const totalSlots = this.visible.visibleWindow;
-    return Math.max(1, Math.floor(d.plotW / totalSlots) - this.cfg.candleSpacing);
+    return Math.max(1, d.plotW / totalSlots - this.cfg.candleSpacing);
   }
 
   _priceToY(price) {

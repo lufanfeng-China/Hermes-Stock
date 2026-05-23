@@ -61,8 +61,10 @@
             <div>
               <div id="tech-conclusion-label" class="tech-conclusion-label">查询股票后显示</div>
               <div id="tech-conclusion-reason" class="tech-conclusion-reason muted">基于趋势、动量、量价、位置的信号灯综合判断</div>
+              <div id="tech-conclusion-detail" class="tech-conclusion-detail muted"></div>
             </div>
           </div>
+          <a id="tech-kline-link" class="tech-kline-link" href="#" hidden>📈 K线趋势图</a>
         </article>
         <article class="search-card stock-score-insight-card" id="insights-card">
           <div class="search-card-header">
@@ -561,6 +563,21 @@
     </div>
   </div>
 
-  <script type="module" src="/stock-score.js?v=20260523-insights"></script>
+  <div id="kline-chart-dialog" class="industry-score-peer-dialog" hidden aria-hidden="true">
+    <div class="kline-chart-dialog-card" role="dialog" aria-modal="true" aria-labelledby="kline-chart-title">
+      <div class="search-card-header">
+        <div>
+          <p class="eyebrow">K-LINE CHART</p>
+          <h2 id="kline-chart-title">K线趋势图</h2>
+        </div>
+        <button id="kline-chart-close" type="button" class="sub-period-industry-average-btn">关闭</button>
+      </div>
+      <div class="kline-chart-body">
+        <svg id="kline-chart-svg" class="kline-chart-svg" role="img" aria-label="K线趋势图"></svg>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/stock-score.js?v=20260523-kline"></script>
 </body>
 </html>

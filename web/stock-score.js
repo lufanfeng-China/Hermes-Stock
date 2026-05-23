@@ -1,4 +1,5 @@
 // stock-score.js — Financial Score Viewer (dual radar: market + industry)
+import { KlineChart } from './kline-chart.js?v=20260513-ma';
 
 const SUB_META = {
   roe_ex: { name: "扣非ROE", dim: "profitability", higherBetter: true, zeroPenalty: true, unit: "%", desc: "扣除非经常性损益ROE", formula: "扣除非经常性损益后的净利润 / 归属于母公司股东权益", meaning: "反映股东资本的核心回报效率" },
@@ -2392,10 +2393,85 @@ function setTechCard(valueId, detailId, cardId, key, label, detail) {
   if (c) c.style.borderLeft = `2px solid ${TECH_COLORS[key] || 'var(--border)'}`;
 }
 
+// ── Dynamic conclusion detail builder ─────────────────────────────────────────
+
+function buildConclusionDetail(d) {
+  const c = d.conclusion;
+  if (!c) return '';
+
+  // Shared helpers
+  const trendOk = d.trend === 'bullish' || d.trend === 'strong_bullish';
+  const momentumOk = d.momentum !== 'weak';
+  const volumeOk = d.volume_signal !== 'divergence';
+  const positionOk = d.position !== 'overheated';
+
+  if (c === 'insufficient_data') {
+    return '交易日不足60日，数据不足以进行技术综合判断。';
+  }
+
+  if (c === 'avoid') {
+    const reasons = [];
+    if (d.trend === 'strong_bearish' && d.momentum === 'weak') {
+      reasons.push('趋势' + (d.trend_label || '强空头') + ' + 动量' + (d.momentum_label || '弱势'));
+    }
+    if (d.volume_signal === 'divergence' && (d.trend === 'bearish' || d.trend === 'strong_bearish')) {
+      reasons.push('量价背离且趋势偏空');
+    }
+    if (d.trend === 'bearish' || d.trend === 'strong_bearish') {
+      if (!reasons.length) reasons.push('趋势偏弱（' + (d.trend_label || d.trend) + '）');
+    }
+    return '建议回避：' + (reasons.length ? reasons.join('；') : '技术面综合偏弱') + '。';
+  }
+
+  if (c === 'buy_confirmed') {
+    return '✅ 满足全部条件：趋势' + (d.trend_label || '多头') + ' + 动量' + (d.momentum_label || '') + ' + 量价正常 + 位置不热 + 无跌停 + 止损≤8%。综合判断可入场。';
+  }
+
+  if (c === 'buy_watch') {
+    const fails = [];
+    if (d.buy_trigger_label) {
+      // Has a buy trigger but conditions not fully met — list which failed
+      if (!trendOk) fails.push('趋势不够强（当前：' + (d.trend_label || d.trend) + '）');
+      if (!momentumOk) fails.push('动量偏弱（当前：' + (d.momentum_label || d.momentum) + '）');
+      if (!volumeOk) fails.push('量价背离（当前：' + (d.volume_label || d.volume_signal) + '）');
+      if (!positionOk) fails.push('位置过热（当前：' + (d.position_label || d.position) + '）');
+      if (d.buy_trigger_label.includes('金叉') || d.buy_trigger_label.includes('观察')) {
+        // It's a watch-level trigger (golden_cross, etc.)
+        fails.push('仅有观察级信号（' + d.buy_trigger_label + '），需等待确认');
+      } else if (!fails.length) {
+        // Has confirmed trigger but other conditions fail
+        fails.push('止损偏大或近期有跌停记录');
+      }
+      return '有' + d.buy_trigger_label + '信号，但' + fails.join('，') + '。建议继续观察。';
+    }
+    return '有买入信号但条件未完全确认，建议继续观察。';
+  }
+
+  if (c === 'wait_buy') {
+    return '趋势' + (d.trend_label || '') + ' + 动量' + (d.momentum_label || '') + '，量价正常，位置不热。趋势和动量都好，等待触发买入信号。';
+  }
+
+  if (c === 'wait_pullback') {
+    return '趋势' + (d.trend_label || '') + ' + 动量' + (d.momentum_label || '') + '，但处于高位（' + (d.position_label || '') + '）。等待缩量回踩均线。';
+  }
+
+  if (c === 'left_observe') {
+    return '处于近5年历史低位（' + (d.position_label || '') + '），趋势' + (d.trend_label || '') + '。可能接近底部，可加自选等待反转。';
+  }
+
+  if (c === 'hold_watch') {
+    if (d.position === 'overheated') return '位置过热（' + (d.position_label || '') + '），建议观望。';
+    return '信号不明确（趋势' + (d.trend_label || '') + '，动量' + (d.momentum_label || '') + '），建议观望。';
+  }
+
+  return '';
+}
+
 function setTechConclusion(d) {
   const icon = document.getElementById('tech-conclusion-icon');
   const label = document.getElementById('tech-conclusion-label');
   const reason = document.getElementById('tech-conclusion-reason');
+  const detail = document.getElementById('tech-conclusion-detail');
   const card = document.getElementById('tech-conclusion-card');
   if (!icon || !label || !reason) return;
   const cc = d.conclusion_color === 'green' ? '#00e676' :
@@ -2406,18 +2482,102 @@ function setTechConclusion(d) {
   label.textContent = d.conclusion_label || '—';
   label.style.color = cc;
   reason.textContent = d.conclusion_reason || '';
+  if (detail) detail.textContent = buildConclusionDetail(d);
   if (card) card.style.borderLeft = `3px solid ${cc}`;
+  showKlineLink();
 }
 
 function resetTechConclusion() {
   const icon = document.getElementById('tech-conclusion-icon');
   const label = document.getElementById('tech-conclusion-label');
   const reason = document.getElementById('tech-conclusion-reason');
+  const detail = document.getElementById('tech-conclusion-detail');
   const card = document.getElementById('tech-conclusion-card');
   if (icon) icon.textContent = '—';
   if (label) { label.textContent = '查询股票后显示'; label.style.color = ''; }
   if (reason) reason.textContent = '基于趋势、动量、量价、位置的信号灯综合判断';
+  if (detail) detail.textContent = '';
   if (card) card.style.borderLeft = '';
+  hideKlineLink();
+}
+
+// ── K-line Chart Dialog ──────────────────────────────────────────────────────
+
+let scoreKlineChart = null;
+
+function showKlineLink() {
+  const link = document.getElementById('tech-kline-link');
+  if (link) link.hidden = false;
+}
+
+function hideKlineLink() {
+  const link = document.getElementById('tech-kline-link');
+  if (link) link.hidden = true;
+}
+
+async function openKlineDialog(market, symbol) {
+  const dialog = document.getElementById('kline-chart-dialog');
+  const title = document.getElementById('kline-chart-title');
+  const svg = document.getElementById('kline-chart-svg');
+  if (!dialog || !title || !svg) return;
+
+  dialog.hidden = false;
+  dialog.setAttribute('aria-hidden', 'false');
+  title.textContent = `${symbol} — 加载中…`;
+
+  try {
+    const [klineRes, rpsRes] = await Promise.all([
+      fetch(`/api/stock-kline?symbol=${encodeURIComponent(symbol)}&limit=300`),
+      fetch(`/api/stock-rps-history?symbol=${encodeURIComponent(symbol)}`),
+    ]);
+    const klineJson = await klineRes.json();
+    const rpsJson = await rpsRes.json();
+
+    if (!klineJson.ok) {
+      title.textContent = `${symbol} — 数据不可用`;
+      return;
+    }
+
+    const bars = klineJson.bars || [];
+    const rpsHistory = (rpsJson.history || []).map(h => ({
+      trading_day: h.trading_day,
+      rps_20: h.rps_20,
+      rps_50: h.rps_50,
+      rps_120: h.rps_120,
+      rps_250: h.rps_250,
+    }));
+
+    const stockName = bars[0]?.name || symbol;
+    if (!scoreKlineChart) {
+      scoreKlineChart = new KlineChart(svg, { marginRight: 20 });
+    }
+    scoreKlineChart.load(bars, rpsHistory, 250);
+    title.textContent = `${symbol} ${stockName}`;
+  } catch (e) {
+    console.error('Kline dialog error:', e);
+    title.textContent = `${symbol} — 加载失败`;
+  }
+}
+
+function closeKlineDialog() {
+  const dialog = document.getElementById('kline-chart-dialog');
+  if (dialog) {
+    dialog.hidden = true;
+    dialog.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function bindKlineDialogEvents() {
+  document.getElementById('tech-kline-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (searchState.currentStock) {
+      openKlineDialog(searchState.currentStock.market, searchState.currentStock.symbol);
+    }
+  });
+  document.getElementById('kline-chart-close')?.addEventListener('click', closeKlineDialog);
+  document.getElementById('kline-chart-dialog')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeKlineDialog();
+  });
 }
 
 function setTechPlaceholders() {
@@ -3475,3 +3635,5 @@ financialDetailToggleEl?.addEventListener("change", async () => {
     setAiReportStatus("财务明细未加载，可勾选后加载数据；也可直接生成AI解读");
   }
 });
+
+bindKlineDialogEvents();
