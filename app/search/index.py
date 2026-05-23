@@ -934,9 +934,9 @@ def _build_tech_eval_async(trading_day: str) -> None:
 
 def _build_strategy_async(trading_day: str, strategy: str) -> None:
     """Spawn background process to build ALL strategy datasets for a given date.
-    Builds all 5 strategies so the date file is complete after first visit."""
+    Builds all strategies so the date file is complete after first visit."""
     import subprocess
-    all_strategies = ["rps_standard_launch", "rps_attack", "rps_pullback", "rps_first", "ma_cross"]
+    all_strategies = ["rps_standard_launch", "rps_attack", "rps_pullback", "rps_first", "ma_cross", "first_board", "washout", "rps_climb", "blowup_stall"]
     # Build the requested strategy first (fastest path), then the rest
     ordered = [strategy] + [s for s in all_strategies if s != strategy]
     try:
@@ -1804,7 +1804,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         row["price_band_5y"] = pct_data.get("price_band_5y")
         # Add technical evaluation
         tech = tech_eval_rows.get(symbol) or {}
-        for field in ("trend", "trend_label", "momentum", "momentum_label",
+        for field in ("trend", "trend_label", "trend_prev", "trend_prev_label", "momentum", "momentum_label",
                       "volume_signal", "volume_label", "position", "position_label",
                       "buy_trigger", "buy_trigger_label", "conclusion", "conclusion_label",
                       "conclusion_color", "conclusion_reason", "entry_price", "stop_loss",
@@ -1858,12 +1858,14 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     if active_strategy:
         if strategy_rows:
             filtered = [row for row in filtered if row.get("strategy") == active_strategy]
-        # else: strategy data not yet built for this historical date — skip filter, show all
+        else:
+            # Strategy data not yet built for this historical date — show empty
+            filtered = []
     for param_key, field_name in text_filters.items():
         expected = _normalize_text(params.get(param_key))
         if not expected:
             continue
-        if param_key == "industry_temperature_label":
+        if param_key in {"industry_temperature_label", "valuation_band", "industry_level_1", "industry_level_2"}:
             expected_values = {
                 value.strip()
                 for value in expected.split(",")
@@ -1900,6 +1902,17 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             filtered = [row for row in filtered if row.get(field_name)]
         else:
             filtered = [row for row in filtered if _normalize_text(row.get(field_name)) == raw]
+
+
+    # Trend switch filter: today trend == target AND yesterday trend != target
+    trend_switch_target = _normalize_text(params.get("trend_switch"))
+    if trend_switch_target:
+        filtered = [
+            row for row in filtered
+            if _normalize_text(row.get("tech_trend")) == trend_switch_target
+            and _normalize_text(row.get("tech_trend_prev")) != trend_switch_target
+            and _normalize_text(row.get("tech_trend_prev")) != ""
+        ]
 
     for param_key, (field_name, bound) in numeric_field_filters.items():
         threshold = _coerce_float(params.get(param_key))

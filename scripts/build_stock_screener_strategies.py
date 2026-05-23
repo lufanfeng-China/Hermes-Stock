@@ -21,6 +21,7 @@ from app.search.index import (
     evaluate_rps_attack_signal,
     evaluate_rps_pullback_signal,
     evaluate_rps_standard_launch_signal,
+    load_industry_valuation_rows,
     load_rps_rows,
 )
 
@@ -31,6 +32,10 @@ STRATEGY_ATTACK = "rps_attack"
 STRATEGY_PULLBACK = "rps_pullback"
 STRATEGY_FIRST = "rps_first"
 STRATEGY_MA_CROSS = "ma_cross"
+STRATEGY_FIRST_BOARD = "first_board"
+STRATEGY_WASHOUT = "washout"
+STRATEGY_RPS_CLIMB = "rps_climb"
+STRATEGY_BLOWUP_STALL = "blowup_stall"
 STRATEGY_METADATA = {
     STRATEGY_STANDARD: {
         "label": "RPS标准",
@@ -46,6 +51,18 @@ STRATEGY_METADATA = {
     },
     STRATEGY_MA_CROSS: {
         "label": "均线选股",
+    },
+    STRATEGY_FIRST_BOARD: {
+        "label": "首板股池",
+    },
+    STRATEGY_WASHOUT: {
+        "label": "涨停洗盘",
+    },
+    STRATEGY_RPS_CLIMB: {
+        "label": "RPS爬升",
+    },
+    STRATEGY_BLOWUP_STALL: {
+        "label": "爆量滞涨",
     },
 }
 
@@ -657,6 +674,477 @@ def build_ma_cross_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]
     return results
 
 
+def build_first_board_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """首板股池：30日内有涨停; 周/月线处于底部; 回撤5%-20%; PE-TTM 0~50"""
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    rps_rows = load_rps_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    # Build PE-TTM lookup from relative valuation dataset
+    valuation_groups = load_industry_valuation_rows()
+    pe_ttm_map: dict[tuple[str, str], float] = {}
+    for group in valuation_groups:
+        for member in group.get("member_valuation_rows", []) or []:
+            market = str(member.get("market", "")).strip().lower()
+            symbol = str(member.get("symbol", "")).strip()
+            pe = _coerce_float(member.get("pe_ttm"))
+            if market and symbol and pe is not None:
+                pe_ttm_map[(market, symbol)] = pe
+
+    def _limit_up_threshold(market_str: str, symbol_str: str) -> float:
+        """Return limit-up gain threshold based on board (symbol prefix)."""
+        if symbol_str.startswith("688"):
+            return 19.5  # STAR / 科创板 (sh market)
+        if symbol_str.startswith(("300", "301")):
+            return 19.5  # ChiNext / 创业板 (sz market)
+        if market_str == "bj" or symbol_str.startswith("92"):
+            return 29.5  # BSE / 北交所
+        return 9.5  # 主板 (sh.60xxxx, sz.00xxxx)
+
+    results: list[dict[str, Any]] = []
+    for row in rps_rows:
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        if not market_val or not symbol_val:
+            continue
+
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        closes = daily["close"].astype(float).tolist()
+        highs = daily["high"].astype(float).tolist()
+        if len(closes) < 250:
+            continue
+
+        # Condition A: 30天内有过涨停
+        threshold = _limit_up_threshold(market_val, symbol_val)
+        lu_idx = -1
+        scan_start = max(0, len(closes) - 30)
+        for i in range(len(closes) - 1, scan_start - 1, -1):
+            if i == 0:
+                continue
+            c = closes[i]
+            h = highs[i]
+            prev_c = closes[i - 1]
+            if prev_c <= 0:
+                continue
+            gain_pct = (c - prev_c) / prev_c * 100.0
+            if gain_pct >= threshold and c >= h * 0.99:
+                lu_idx = i
+                break
+
+        if lu_idx < 0:
+            continue  # No limit-up in last 30 days
+
+        # Condition B: 距离上次涨停股价回撤5%-20%
+        limit_up_close = closes[lu_idx]
+        current_close = closes[-1]
+        if limit_up_close <= 0:
+            continue
+        pullback_pct = (limit_up_close - current_close) / limit_up_close * 100.0
+        if pullback_pct < 5.0 or pullback_pct > 20.0:
+            continue
+
+        # Condition C: 周线和月线在底部位置
+        max_100 = max(closes[-100:])
+        min_100 = min(closes[-100:])
+        if max_100 == min_100:
+            continue
+        week_position = (current_close - min_100) / (max_100 - min_100)
+        week_bottom = week_position < 0.30
+
+        max_250 = max(closes[-250:])
+        min_250 = min(closes[-250:])
+        if max_250 == min_250:
+            continue
+        month_position = (current_close - min_250) / (max_250 - min_250)
+        month_bottom = month_position < 0.30
+
+        if not week_bottom or not month_bottom:
+            continue
+
+        # Condition D: 市盈率TTM 0~50
+        pe_ttm = pe_ttm_map.get((market_val, symbol_val))
+        if pe_ttm is None or pe_ttm <= 0 or pe_ttm > 50:
+            continue
+
+        # All conditions passed
+        passed = True
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_FIRST_BOARD,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST_BOARD]["label"],
+            "passed": passed,
+            "conditions": {
+                "has_limit_up_30d": True,
+                "pullback_pct": round(pullback_pct, 2),
+                "week_bottom": week_bottom,
+                "month_bottom": month_bottom,
+                "pe_ttm": round(pe_ttm, 2),
+            },
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily+relative_valuation",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
+def build_washout_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """涨停洗盘：30日内有首板涨停; 涨停次日高开低走且量2-4倍; 最新价首次站上洗盘日开盘价"""
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    rps_rows = load_rps_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    def _limit_up_threshold(symbol_str: str) -> float:
+        """Return limit-up gain threshold based on board (symbol prefix)."""
+        if symbol_str.startswith("688"):
+            return 19.5
+        if symbol_str.startswith(("300", "301")):
+            return 19.5
+        if symbol_str.startswith("92"):
+            return 29.5
+        return 9.5
+
+    results: list[dict[str, Any]] = []
+    for row in rps_rows:
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        if not market_val or not symbol_val:
+            continue
+
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        closes = daily["close"].astype(float).tolist()
+        opens = daily["open"].astype(float).tolist()
+        highs = daily["high"].astype(float).tolist()
+        volumes = daily["volume"].astype(float).tolist()
+        if len(closes) < 60:
+            continue
+
+        threshold = _limit_up_threshold(symbol_val)
+        n = len(closes)
+
+        # Condition A: Find a 首板涨停 in the last 30 trading days
+        # 首板 = limit-up day where the previous day was NOT a limit-up
+        lu_idx = -1
+        scan_start = max(0, n - 30)
+        for i in range(n - 2, scan_start - 1, -1):  # n-2 to leave room for next-day check
+            # Check if bar i is a limit-up
+            c = closes[i]
+            h = highs[i]
+            prev_c = closes[i - 1]
+            if prev_c <= 0 or c <= 0:
+                continue
+            gain_pct = (c - prev_c) / prev_c * 100.0
+            if gain_pct >= threshold and c >= h * 0.99:
+                # Check if it was a 首板 (previous day NOT a limit-up)
+                # Need to check i-1 was not a limit-up
+                if i - 1 >= 0:
+                    prev_prev_c = closes[i - 2] if i - 2 >= 0 else 0
+                    if prev_prev_c > 0:
+                        prev_gain = (closes[i - 1] - prev_prev_c) / prev_prev_c * 100.0
+                        prev_h = highs[i - 1]
+                        if prev_gain >= threshold and closes[i - 1] >= prev_h * 0.99:
+                            continue  # Previous day was also limit-up, not a 首板
+                lu_idx = i
+                break
+
+        if lu_idx < 0:
+            continue  # No 首板涨停 in last 30 days
+
+        # Condition B: 涨停次日高开低走，成交量2-4倍
+        next_idx = lu_idx + 1
+        if next_idx >= n:
+            continue  # No next-day data
+
+        next_open = opens[next_idx]
+        next_close = closes[next_idx]
+        prev_close = closes[lu_idx]
+
+        # 高开: next_open > prev_close
+        if next_open <= prev_close:
+            continue
+
+        # 低走: next_close < next_open (bearish candle)
+        if next_close >= next_open:
+            continue
+
+        # 成交量: next_vol / lu_vol between 2x and 4x
+        lu_vol = volumes[lu_idx]
+        next_vol = volumes[next_idx]
+        if lu_vol <= 0:
+            continue
+        vol_ratio = next_vol / lu_vol
+        if vol_ratio < 2.0 or vol_ratio > 4.0:
+            continue
+
+        washout_open = next_open  # The open of the washout day (target to break above)
+
+        # Condition C: 最新价首次站上涨停后一个交易日（洗盘日）的开盘价
+        current_close = closes[-1]
+        if current_close <= washout_open:
+            continue
+
+        # 首次站上: 洗盘日后、今天之前的所有交易日收盘价都 ≤ 洗盘日开盘价
+        first_breakout = True
+        for j in range(next_idx + 1, n - 1):
+            if closes[j] > washout_open:
+                first_breakout = False
+                break
+        if not first_breakout:
+            continue
+
+        # All conditions passed — no PE-TTM filter
+        passed = True
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_WASHOUT,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_WASHOUT]["label"],
+            "passed": passed,
+            "conditions": {
+                "limit_up_gain_pct": round((closes[lu_idx] - closes[lu_idx - 1]) / closes[lu_idx - 1] * 100.0, 2),
+                "washout_open_above": round((next_open - prev_close) / prev_close * 100.0, 2),
+                "washout_body_pct": round((next_open - next_close) / next_open * 100.0, 2),
+                "vol_ratio": round(vol_ratio, 2),
+                "current_above_washout_open": round((current_close - washout_open) / washout_open * 100.0, 2),
+            },
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
+def build_rps_climb_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """RPS爬升：RPS20>50>120>250多头排列; RPS20>50; RPS20/50/120连续3天高于5日前"""
+    rps_rows = load_rps_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    # Load RPS history dataset
+    history_path = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.json"
+    if not history_path.exists():
+        return []
+    all_history = json.loads(history_path.read_text(encoding="utf-8"))
+
+    # Build per-stock lookup: {(market, symbol): {trading_day: {rps_20, rps_50, rps_120, rps_250}}}
+    stock_history: dict[tuple[str, str], dict[str, dict[str, float | None]]] = {}
+    for h in all_history:
+        key = (str(h.get("market", "")).strip(), str(h.get("symbol", "")).strip())
+        if key not in stock_history:
+            stock_history[key] = {}
+        stock_history[key][str(h.get("trading_day", ""))] = {
+            "rps_20": h.get("rps_20"),
+            "rps_50": h.get("rps_50"),
+            "rps_120": h.get("rps_120"),
+            "rps_250": h.get("rps_250"),
+        }
+
+    sample_dates = sorted(next(iter(stock_history.values())).keys()) if stock_history else []
+    if not sample_dates:
+        return []
+
+    results: list[dict[str, Any]] = []
+    for row in rps_rows:
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        key = (market_val, symbol_val)
+        hist = stock_history.get(key, {})
+        if not hist:
+            continue
+
+        # Get ordered history for this stock
+        today_str = sample_dates[-1]
+        ordered = sorted(
+            [(d, h) for d, h in hist.items() if d <= today_str],
+            key=lambda x: x[0],
+        )
+        if len(ordered) < 10:
+            continue
+
+        # Find today's index in ordered list
+        today_idx = None
+        for i, (d, _h) in enumerate(ordered):
+            if d == today_str:
+                today_idx = i
+                break
+        if today_idx is None or today_idx < 7:
+            continue
+
+        def _rps_at(idx: int) -> dict[str, float | None]:
+            _, h = ordered[idx]
+            return {
+                "rps_20": _coerce_float(h.get("rps_20")),
+                "rps_50": _coerce_float(h.get("rps_50")),
+                "rps_120": _coerce_float(h.get("rps_120")),
+                "rps_250": _coerce_float(h.get("rps_250")),
+            }
+
+        today = _rps_at(today_idx)
+
+        # Condition 1: RPS20 > RPS50 > RPS120 > RPS250 (bullish alignment)
+        r20 = today["rps_20"]
+        r50 = today["rps_50"]
+        r120 = today["rps_120"]
+        r250 = today["rps_250"]
+        if None in (r20, r50, r120, r250):
+            continue
+        if not (r20 > r50 > r120 > r250):
+            continue
+
+        # Condition 2: RPS20 > 50
+        if r20 <= 50:
+            continue
+
+        # Condition 3: RPS20/50/120 > 5-day-ago values, for 3 consecutive days
+        def _climb_ok(day_idx: int) -> bool:
+            """Check if at day_idx, all RPS20/50/120 are above their 5-day-ago values."""
+            ref_idx = day_idx - 5
+            if ref_idx < 0:
+                return False
+            cur = _rps_at(day_idx)
+            ref = _rps_at(ref_idx)
+            for w in ("rps_20", "rps_50", "rps_120"):
+                cv = cur[w]
+                rv = ref[w]
+                if cv is None or rv is None or cv <= rv:
+                    return False
+            return True
+
+        climb_today = _climb_ok(today_idx)
+        climb_yesterday = _climb_ok(today_idx - 1)
+        climb_2d_ago = _climb_ok(today_idx - 2)
+
+        if not (climb_today and climb_yesterday and climb_2d_ago):
+            continue
+
+        passed = True
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_RPS_CLIMB,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_RPS_CLIMB]["label"],
+            "passed": passed,
+            "conditions": {
+                "rps20": round(r20, 2),
+                "rps50": round(r50, 2),
+                "rps120": round(r120, 2),
+                "rps250": round(r250, 2),
+                "bullish_alignment": True,
+                "climb_3days": True,
+            },
+            "generated_at": generated_at,
+            "data_source": "dataset_stock_rps_current+dataset_stock_rps_history",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
+def build_blowup_stall_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """爆量滞涨：连续两天真阳线上涨; 每天量>3倍50日均量; 涨前5天量均<2倍50日均量"""
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    rps_rows = load_rps_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[dict[str, Any]] = []
+
+    for row in rps_rows:
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        if not market_val or not symbol_val:
+            continue
+
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        closes = daily["close"].astype(float).tolist()
+        opens = daily["open"].astype(float).tolist()
+        volumes = daily["volume"].astype(float).tolist()
+        if len(closes) < 55:  # need 2 up days + 50 MA + 1 extra
+            continue
+
+        n = len(closes)
+        t_idx = n - 1   # today
+        y_idx = n - 2   # yesterday
+
+        # Condition 1: 连续两天上涨，且每天收盘>开盘（真阳线）
+        if not (closes[t_idx] > closes[y_idx] > closes[y_idx - 1]):
+            continue
+        if not (closes[t_idx] > opens[t_idx] and closes[y_idx] > opens[y_idx]):
+            continue
+
+        # 50日成交均量基线: 涨前一天的 50 日均量
+        # 涨前一天 = y_idx - 1 (the day before the first up day)
+        ma_start = y_idx - 1 - 49
+        if ma_start < 0:
+            continue
+        ma_vol = sum(volumes[ma_start : y_idx]) / 50.0
+        if ma_vol <= 0:
+            continue
+
+        # Condition 2: 两天上涨的成交量都 > 3x 50日均量
+        vol_y = volumes[y_idx]
+        vol_t = volumes[t_idx]
+        if not (vol_y > ma_vol * 3.0 and vol_t > ma_vol * 3.0):
+            continue
+
+        # Condition 3: 涨前5天的成交量都 < 2x 50日均量
+        vol_before_ok = True
+        for j in range(y_idx - 5, y_idx):
+            if j < 0:
+                vol_before_ok = False
+                break
+            if volumes[j] >= ma_vol * 2.0:
+                vol_before_ok = False
+                break
+        if not vol_before_ok:
+            continue
+
+        passed = True
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_BLOWUP_STALL,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_BLOWUP_STALL]["label"],
+            "passed": passed,
+            "conditions": {
+                "vol_ratio_y": round(vol_y / ma_vol, 2),
+                "vol_ratio_t": round(vol_t / ma_vol, 2),
+                "before_5d_all_below_2x": True,
+                "ma_vol": round(ma_vol, 0),
+            },
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
 def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Replace one strategy's rows while preserving other strategies in the shared output file."""
     existing_rows: list[dict[str, Any]] = []
@@ -670,7 +1158,22 @@ def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[
         except Exception:
             existing_rows = []
     merged = [row for row in existing_rows if str(row.get("strategy", "")).strip() != strategy]
-    merged.extend(rows)
+    if rows:
+        merged.extend(rows)
+    else:
+        # Sentinel row: marks this strategy as "built with 0 results" so the API
+        # can distinguish from "not yet built" and show 0 results instead of all.
+        merged.append({
+            "trading_day": "",
+            "market": "__sentinel__",
+            "symbol": "000000",
+            "strategy": strategy,
+            "strategy_label": STRATEGY_METADATA.get(strategy, {}).get("label", strategy),
+            "passed": False,
+            "conditions": {},
+            "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "data_source": "sentinel",
+        })
     merged.sort(key=lambda item: (str(item.get("strategy", "")), not bool(item.get("passed")), str(item.get("market", "")), str(item.get("symbol", ""))))
     return merged
 
@@ -728,6 +1231,16 @@ def main() -> None:
             rows = build_rps_pullback_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_FIRST:
             rows = build_rps_first_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_MA_CROSS:
+            rows = build_ma_cross_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_FIRST_BOARD:
+            rows = build_first_board_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_WASHOUT:
+            rows = build_washout_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_RPS_CLIMB:
+            rows = build_rps_climb_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_BLOWUP_STALL:
+            rows = build_blowup_stall_rows(tdxdir=args.tdxdir)
         else:
             rows = build_ma_cross_rows(tdxdir=args.tdxdir)
     finally:

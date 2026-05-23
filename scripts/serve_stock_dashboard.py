@@ -100,7 +100,7 @@ def _tail_lines(text: str | None, limit: int = DATA_UPDATE_OUTPUT_TAIL_LINES) ->
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback", "rps_first", "ma_cross"}:
+    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback", "rps_first", "ma_cross", "first_board", "washout", "rps_climb", "blowup_stall"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
@@ -556,6 +556,30 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             'rebuild_screener_ma_cross',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
              '--strategy', 'ma_cross', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_first_board',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'first_board', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_washout',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'washout', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_rps_climb',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'rps_climb', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_blowup_stall',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'blowup_stall', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
     ])
@@ -1904,7 +1928,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
 
     def handle_stock_screener(self, query: str) -> None:
         params = {
-            key: values[0].strip()
+            key: ",".join(v.strip() for v in values if v.strip())
             for key, values in parse_qs(query, keep_blank_values=True).items()
             if values
         }

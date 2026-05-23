@@ -22,6 +22,22 @@ const STRATEGY_PRESETS = {
     strategy: 'ma_cross',
     description: 'MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10向上 + 均线粘合<10%',
   },
+  first_board: {
+    strategy: 'first_board',
+    description: '30日内有涨停; 周/月线处于底部; 回撤5%-20%; PE-TTM 0~50',
+  },
+  washout: {
+    strategy: 'washout',
+    description: '30日内有首板涨停; 次日高开低走且量2-4倍; 最新价首次站上洗盘日开盘',
+  },
+  rps_climb: {
+    strategy: 'rps_climb',
+    description: 'RPS20>50>120>250多头排列; RPS20>50; RPS20/50/120连续3天高于5日前',
+  },
+  blowup_stall: {
+    strategy: 'blowup_stall',
+    description: '连续两天真阳线上涨; 每天量>3倍50日均量; 涨前5天量均<2倍50日均量',
+  },
 };
 let currentPage = 1;
 let currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
@@ -107,6 +123,19 @@ function buildParams(page = currentPage) {
   if (temperatureLabels.length) {
     params.set('industry_temperature_label', temperatureLabels.join(','));
   }
+  const valuationBandEl = document.getElementById('stock-screener-valuation-band');
+  const valuationBands = collectMultiSelectValues(valuationBandEl);
+  if (valuationBands.length) {
+    params.set('valuation_band', valuationBands.join(','));
+  }
+  const level1Values = collectMultiSelectValues(level1El);
+  if (level1Values.length) {
+    params.set('industry_level_1', level1Values.join(','));
+  }
+  const level2Values = collectMultiSelectValues(level2El);
+  if (level2Values.length) {
+    params.set('industry_level_2', level2Values.join(','));
+  }
   const asOfDate = asOfDateInput?.value?.trim();
   if (asOfDate) params.set('as_of_date', asOfDate);
   params.set('page', String(page));
@@ -133,10 +162,11 @@ async function loadIndustryHierarchy() {
   }
 }
 
-function populateLevel2(level1Name) {
+function populateLevel2(level1Names) {
+  const names = Array.isArray(level1Names) ? level1Names : (level1Names ? [level1Names] : []);
   const values = new Set();
   for (const level1 of industryHierarchy) {
-    if (level1Name && level1.name !== level1Name) continue;
+    if (names.length && !names.includes(level1.name)) continue;
     for (const level2 of level1.level2 || []) values.add(level2);
   }
   level2El.innerHTML = '<option value="">全部</option>';
@@ -373,8 +403,9 @@ function resetFilters() {
   runScreener(1);
 }
 
-level1El.addEventListener('change', (event) => {
-  populateLevel2(event.target.value);
+level1El.addEventListener('change', () => {
+  const selected = collectMultiSelectValues(level1El);
+  populateLevel2(selected);
 });
 document.getElementById('stock-screener-apply-btn').addEventListener('click', () => runScreener(1));
 document.getElementById('stock-screener-reset-btn').addEventListener('click', resetFilters);

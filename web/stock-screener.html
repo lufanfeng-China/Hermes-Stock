@@ -20,7 +20,7 @@
         <a href="/rps-pool.html" class="nav-link">RPS</a>
         <a href="/valuation-model.html" class="nav-link">估值模型</a>
         <a href="/technical-score.html" class="nav-link">技术面</a>
-      </nav>
+      </div>
     </header>
 
     <!-- ── 日期栏（始终可见，第一步操作） ── -->
@@ -73,6 +73,10 @@
         <button type="button" class="nav-link" data-strategy="rps_pullback">RPS回踩</button>
         <button type="button" class="nav-link" data-strategy="rps_first">RPS首次</button>
         <button type="button" class="nav-link" data-strategy="ma_cross">均线选股</button>
+        <button type="button" class="nav-link" data-strategy="first_board">首板股池</button>
+        <button type="button" class="nav-link" data-strategy="washout">涨停洗盘</button>
+        <button type="button" class="nav-link" data-strategy="rps_climb">RPS爬升</button>
+        <button type="button" class="nav-link" data-strategy="blowup_stall">爆量滞涨</button>
         <button id="stock-screener-sync-tdx-btn" class="nav-link" type="button" style="margin-left:16px">同步到AI股池</button>
       </div>
       <p id="stock-screener-strategy-desc" class="search-meta stock-screener-strategy-desc"></p>
@@ -105,16 +109,17 @@
         <!-- ── Row 3: 行业与估值 | 技术面 ── -->
         <fieldset class="filter-group">
           <legend>行业与估值</legend>
-          <label><select id="stock-screener-level1" name="industry_level_1"><option value="">申万一级</option></select></label>
-          <label><select id="stock-screener-level2" name="industry_level_2"><option value="">申万二级</option></select></label>
+          <label><select id="stock-screener-level1" name="industry_level_1" multiple><option value="">申万一级</option></select></label>
+          <label><select id="stock-screener-level2" name="industry_level_2" multiple><option value="">申万二级</option></select></label>
           <label><select id="stock-screener-temperature" name="industry_temperature_label" multiple><option value="">行业温度</option><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></label>
           <label><select name="classification"><option value="">估值分类</option><option value="A_NORMAL_EARNING">A类 正常盈利</option><option value="B_THIN_PROFIT_DISTORTED">B类 微盈利畸高</option><option value="C_LOSS">C/D 亏损或高风险</option></select></label>
           <label><input name="max_primary_percentile" type="number" step="0.1" placeholder="行业内估值位置 ≤"></label>
-          <label><select name="valuation_band"><option value="">区间标签</option><option value="低估区间">低估区间</option><option value="合理偏低">合理偏低</option><option value="合理">合理</option><option value="合理偏高">合理偏高</option><option value="高估区间">高估区间</option><option value="样本不足">样本不足</option><option value="次新股">次新股</option></select></label>
+          <label><select id="stock-screener-valuation-band" name="valuation_band" multiple><option value="">区间标签</option><option value="低估区间">低估区间</option><option value="合理偏低">合理偏低</option><option value="合理">合理</option><option value="合理偏高">合理偏高</option><option value="高估区间">高估区间</option><option value="样本不足">样本不足</option><option value="次新股">次新股</option></select></label>
         </fieldset>
 
         <fieldset class="filter-group filter-tech-signals">
           <legend>技术面（信号灯）</legend>
+          <label><select name="trend_switch"><option value="">趋势切换：不限</option><option value="recovering">🟡 刚变修复中</option><option value="bullish">🟢 刚变多头</option><option value="strong_bullish">🟢 刚变强多头</option></select></label>
           <label><select name="tech_trend"><option value="">趋势：不限</option><option value="strong_bullish">🟢 强多头</option><option value="bullish">🟢 多头</option><option value="recovering">🟡 修复中</option><option value="!bearish">🟢🟡 非空头</option></select></label>
           <label><select name="tech_momentum"><option value="">动量：不限</option><option value="super_strong">🟢 极强</option><option value="strong">🟢 强势</option><option value="startup">🟢 启动</option><option value="!weak">🟢🟡 非弱势</option></select></label>
           <label><select name="tech_volume"><option value="">量能：不限</option><option value="bullish">🟢 放量配合</option><option value="!divergence">🟢🟡 非背离</option></select></label>
@@ -218,6 +223,6 @@
     </section>
   </main>
 
-  <script type="module" src="/stock-screener.js?v=20260512-sync2"></script>
+  <script type="module" src="/stock-screener.js?v=20260523-v3"></script>
 </body>
 </html>

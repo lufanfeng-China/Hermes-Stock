@@ -598,6 +598,12 @@ def main(trading_day: str | None = None):
 
             # Trend
             trend, trend_label, trend_detail = classify_trend(closes, available)
+
+            # Previous day's trend (for trend-switch filter)
+            if available > 60:
+                prev_trend, prev_trend_label, _prev_detail = classify_trend(closes[:-1], available - 1)
+            else:
+                prev_trend = prev_trend_label = ""
             ma20_arr = rolling_mean(closes, 20)
 
             # Momentum (from RPS)
@@ -646,6 +652,8 @@ def main(trading_day: str | None = None):
                 "trend": trend,
                 "trend_label": trend_label,
                 "trend_detail": trend_detail,
+                "trend_prev": prev_trend,
+                "trend_prev_label": prev_trend_label,
                 "momentum": momentum,
                 "momentum_label": momentum_label,
                 "momentum_detail": momentum_detail,
