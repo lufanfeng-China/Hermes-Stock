@@ -121,6 +121,20 @@
     }
 
     /* K-line dialog */
+    #kline-dialog[open] {
+      display: flex;
+      flex-direction: column;
+      width: 95vw;
+      max-width: 1100px;
+      height: 85vh;
+      max-height: 90vh;
+      border: 1px solid rgba(124, 224, 195, 0.2);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(7, 16, 24, 0.99), rgba(10, 20, 29, 0.99));
+      color: var(--text);
+      padding: 0;
+      overflow: hidden;
+    }
     #kline-dialog {
       width: 95vw;
       max-width: 1100px;
@@ -132,8 +146,6 @@
       color: var(--text);
       padding: 0;
       overflow: hidden;
-      display: flex;
-      flex-direction: column;
     }
     #kline-dialog::backdrop {
       background: rgba(0, 0, 0, 0.7);
