@@ -129,6 +129,23 @@ def _load_industry_temp() -> dict:
     except Exception:
         return {}
 
+def _load_prev_tech_evals(max_days: int = 20) -> list[dict]:
+    """Load previous tech eval files (newest first), return [{symbol: {trend, trend_label}}, ...]."""
+    import glob
+    pattern = str(DERIVED_FINAL_DIR / "dataset_technical_eval_*.json")
+    files = sorted(glob.glob(pattern), reverse=True)
+    results = []
+    for fp in files[:max_days]:
+        try:
+            with open(fp) as f:
+                data = json.load(f)
+            stocks = data.get("stocks", {}) if isinstance(data, dict) else {}
+            results.append({s: {"trend": v.get("trend"), "trend_label": v.get("trend_label")}
+                           for s, v in stocks.items()})
+        except Exception:
+            results.append({})
+    return results
+
 
 class DataUpdateStepError(RuntimeError):
     def __init__(
@@ -2085,6 +2102,13 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         tech_data = _load_tech_eval()
         ind_temp = _load_industry_temp()
 
+        # Init mootdx reader for price/return data
+        from mootdx.reader import Reader
+        reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
+
+        # Load a few historical tech eval files for trend duration
+        prev_tech_days = _load_prev_tech_evals(max_days=20)
+
         for entry in wl["stocks"]:
             market = str(entry.get("market", ""))
             symbol = str(entry.get("symbol", ""))
@@ -2141,6 +2165,34 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             if temp:
                 row["industry_temperature_label"] = temp.get("label", "")
                 row["industry_temperature_percentile_since_2022"] = temp.get("percentile")
+
+            # Price / returns from mootdx kline
+            if "_error" not in row:
+                try:
+                    daily = reader.daily(symbol=symbol)
+                    if daily is not None and not daily.empty and len(daily) >= 21:
+                        daily = daily.sort_index()
+                        closes = daily["close"].tolist()
+                        row["current_price"] = float(closes[-1])
+                        row["return_5_pct"] = round((closes[-1] / closes[-6] - 1) * 100, 2)
+                        row["return_20_pct"] = round((closes[-1] / closes[-21] - 1) * 100, 2)
+                except Exception:
+                    pass
+
+            # Trend duration (延续天数)
+            if "_error" not in row:
+                try:
+                    current_trend = row.get("tech_trend", "")
+                    duration = 1
+                    for day_data in prev_tech_days:
+                        prev = day_data.get(symbol.zfill(6))
+                        if prev and prev.get("trend") == current_trend:
+                            duration += 1
+                        else:
+                            break
+                    row["trend_duration"] = duration
+                except Exception:
+                    row["trend_duration"] = 1
 
             stocks_out.append(row)
 

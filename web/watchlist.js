@@ -15,21 +15,13 @@ function tempEmoji(percentile) {
   return '⚪';
 }
 
-function tempLabelClass(label) {
-  const s = String(label || '');
-  if (s.includes('过热') || s.includes('高估')) return 'var(--red)';
-  if (s.includes('偏热')) return '#ffc107';
-  if (s.includes('偏冷') || s.includes('冰点')) return '#448aff';
-  return 'var(--green)';
-}
-
 // ── Trend color ────────────────────────────────────────────────────────────
 
 function trendColor(label) {
   const s = String(label || '');
-  if (/多头|强势|放量|突破|建议关注/.test(s)) return 'var(--green)';
-  if (/空头|弱势|缩量|回避|左侧/.test(s)) return 'var(--red)';
-  if (/震荡|中性|观望|正常/.test(s)) return 'var(--muted)';
+  if (/多头|强多|极强|强势|放量|突破|买点|买入|确认|建议关注/.test(s)) return 'var(--accent)';
+  if (/空头|强空|极弱|弱势|缩量|回避/.test(s)) return 'var(--danger)';
+  if (/震荡|中性|观望|正常|修复|左侧/.test(s)) return 'var(--muted)';
   return 'var(--text)';
 }
 
@@ -53,8 +45,19 @@ function fmtTemp(stock) {
   const pct = stock.industry_temperature_percentile_since_2022;
   const label = stock.industry_temperature_label || '—';
   const emoji = tempEmoji(pct);
-  const pctStr = pct != null ? ` ${Number(pct).toFixed(0)}%` : '';
-  return `${emoji} ${esc(label)}${pctStr}`;
+  const pctStr = pct != null ? `${Number(pct).toFixed(0)}%` : '—';
+  return `${emoji} ${pctStr}`;
+}
+
+function fmtPct(v) {
+  if (v == null) return '—';
+  const n = Number(v);
+  return (n >= 0 ? '+' : '') + n.toFixed(1) + '%';
+}
+
+function pctColor(v) {
+  if (v == null) return 'var(--muted)';
+  return Number(v) >= 0 ? 'var(--accent)' : 'var(--danger)';
 }
 
 // ── Render ──────────────────────────────────────────────────────────────────
@@ -80,8 +83,14 @@ function renderTable(stocks) {
     const conclusion = s.tech_conclusion_label || '—';
     const concColor = s.tech_conclusion_color || trendColor(conclusion);
 
+    const price = s.current_price != null ? Number(s.current_price).toFixed(2) : '—';
+    const r5 = fmtPct(s.return_5_pct);
+    const r20 = fmtPct(s.return_20_pct);
+    const dur = s.trend_duration != null ? String(s.trend_duration) + '天' : '—';
+
     return `<tr data-idx="${i}" data-market="${esc(s.market)}" data-symbol="${esc(s.symbol)}" data-name="${esc(name)}" tabindex="0">
-      <td><span class="wl-stock-name">${esc(name)}</span><span class="wl-stock-symbol">${esc(marketSymbol)}</span></td>
+      <td><span class="wl-stock-name">${esc(name)}</span><br><span class="wl-stock-symbol">${esc(marketSymbol)}</span></td>
+      <td class="num">${price}</td>
       <td class="num"><span class="wl-score">${ms}</span> ${mr}</td>
       <td class="num"><span class="wl-score">${is_}</span> ${ir}</td>
       <td>${esc(ind)}</td>
@@ -90,6 +99,9 @@ function renderTable(stocks) {
       <td style="color:${trendColor(momentum)}">${esc(momentum)}</td>
       <td style="color:${trendColor(volume)}">${esc(volume)}</td>
       <td>${buyTrigger}</td>
+      <td class="num" style="color:${pctColor(s.return_5_pct)}">${r5}</td>
+      <td class="num" style="color:${pctColor(s.return_20_pct)}">${r20}</td>
+      <td class="num">${dur}</td>
       <td style="color:${concColor};font-weight:600" title="${esc(s.tech_conclusion_reason || '')}">${esc(conclusion)}</td>
       <td><button class="wl-remove-btn" data-idx="${i}" type="button">✕</button></td>
     </tr>`;
@@ -204,7 +216,6 @@ async function openKline(market, symbol, name) {
   dialog.showModal();
 
   try {
-    const querySymbol = `${market}:${symbol}`;
     const [klineResp, rpsResp] = await Promise.all([
       fetch(`/api/stock-kline?symbol=${encodeURIComponent(symbol)}&limit=250`),
       fetch(`/api/stock-rps-history?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`),
