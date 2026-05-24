@@ -1482,6 +1482,14 @@ function renderScore(result) {
   document.getElementById("hdr-name").textContent = stock_name || "—";
   document.getElementById("hdr-symbol").textContent = `${result.market}:${result.symbol}`;
 
+  // Show watchlist add button
+  const wlBtn = document.getElementById("wl-score-add-btn");
+  if (wlBtn) {
+    wlBtn.style.display = "";
+    wlBtn.dataset.market = result.market;
+    wlBtn.dataset.symbol = result.symbol;
+  }
+
   const rdEl = document.getElementById("hdr-report-date");
   const adEl = document.getElementById("hdr-announce-date");
   const periodText = formatPeriod(latest_period);
@@ -3637,3 +3645,31 @@ financialDetailToggleEl?.addEventListener("change", async () => {
 });
 
 bindKlineDialogEvents();
+
+// ── Watchlist add button ──────────────────────────────────────────────────
+
+document.getElementById("wl-score-add-btn")?.addEventListener("click", async function() {
+  const market = this.dataset.market;
+  const symbol = this.dataset.symbol;
+  if (!market || !symbol) return;
+
+  this.disabled = true;
+  this.textContent = "添加中...";
+  try {
+    const resp = await fetch("/api/watchlist/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stocks: [{ market, symbol }] }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      this.textContent = "✅ 已加入";
+      setTimeout(() => { this.textContent = "⭐ 加入自选"; }, 2000);
+    } else {
+      this.textContent = "⭐ 加入自选";
+    }
+  } catch (e) {
+    this.textContent = "⭐ 加入自选";
+  }
+  this.disabled = false;
+});

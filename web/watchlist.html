@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自选股</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .watchlist-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .watchlist-toolbar .count-badge {
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(124, 224, 195, 0.12);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .watchlist-table-wrap {
+      overflow-x: auto;
+      max-height: calc(100vh - 220px);
+      overflow-y: auto;
+      border: 1px solid rgba(124, 224, 195, 0.12);
+      border-radius: 10px;
+    }
+    #watchlist-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    #watchlist-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    #watchlist-table th {
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: rgba(7, 16, 24, 0.98);
+      border-bottom: 1px solid rgba(124, 224, 195, 0.16);
+    }
+    #watchlist-table th.num { text-align: right; }
+    #watchlist-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(124, 224, 195, 0.06);
+      color: var(--text);
+      vertical-align: middle;
+    }
+    #watchlist-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    #watchlist-table tbody tr {
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    #watchlist-table tbody tr:hover {
+      background: rgba(124, 224, 195, 0.05);
+    }
+    .wl-stock-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .wl-stock-symbol {
+      font-size: 10px;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+    .wl-score {
+      font-weight: 600;
+    }
+    .wl-rank {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .wl-remove-btn {
+      background: none;
+      border: 1px solid rgba(255, 107, 107, 0.2);
+      color: var(--red);
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .wl-remove-btn:hover {
+      background: rgba(255, 107, 107, 0.12);
+      border-color: rgba(255, 107, 107, 0.4);
+    }
+    .wl-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .wl-empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .wl-empty-link {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 10px 24px;
+      border: 1px solid rgba(124, 224, 195, 0.3);
+      border-radius: 10px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .wl-empty-link:hover {
+      background: rgba(124, 224, 195, 0.08);
+      border-color: rgba(124, 224, 195, 0.5);
+    }
+    .wl-loading {
+      text-align: center;
+      padding: 30px;
+      color: var(--muted);
+    }
+
+    /* K-line dialog */
+    #kline-dialog {
+      width: 95vw;
+      max-width: 1100px;
+      max-height: 90vh;
+      border: 1px solid rgba(124, 224, 195, 0.2);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(7, 16, 24, 0.99), rgba(10, 20, 29, 0.99));
+      color: var(--text);
+      padding: 0;
+      overflow: hidden;
+    }
+    #kline-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.7);
+    }
+    #kline-dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(124, 224, 195, 0.12);
+    }
+    #kline-dialog-header h2 {
+      margin: 0;
+      font-size: 15px;
+    }
+    #kline-dialog-close {
+      background: none;
+      border: 1px solid rgba(124, 224, 195, 0.2);
+      color: var(--text);
+      cursor: pointer;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    #kline-dialog-close:hover {
+      background: rgba(124, 224, 195, 0.08);
+    }
+    #kline-container {
+      padding: 12px;
+      min-height: 400px;
+    }
+  </style>
+</head>
+<body>
+<main class="app-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">WATCHLIST</p>
+      <h1>自选股 <span id="wl-count" class="count-badge" style="display:none">0</span></h1>
+    </div>
+    <div class="topbar-actions">
+      <a href="/stock-score.html" class="nav-link">财务评分</a>
+      <a href="/stock-screener.html" class="nav-link">股票筛选</a>
+      <a href="/realtime-screener.html" class="nav-link">实时选股</a>
+      <a href="/rps-pool.html" class="nav-link">RPS</a>
+      <a href="/watchlist.html" class="nav-link active">自选股</a>
+      <a href="/backtest.html" class="nav-link">回测</a>
+    </div>
+  </header>
+
+  <div id="wl-loading" class="wl-loading">加载中...</div>
+
+  <div id="wl-empty" class="wl-empty" style="display:none">
+    <div class="wl-empty-icon">📋</div>
+    <p>自选股清单为空</p>
+    <p style="font-size:12px;color:var(--muted)">前往股票筛选页面，勾选感兴趣的股票，然后点击「加入自选」即可在此查看</p>
+    <a href="/stock-screener.html" class="wl-empty-link">前往股票筛选</a>
+  </div>
+
+  <div id="wl-content" style="display:none">
+    <div class="watchlist-toolbar">
+      <button id="wl-refresh-btn" class="nav-link" type="button">刷新</button>
+      <span id="wl-status" class="search-meta"></span>
+    </div>
+    <div class="watchlist-table-wrap">
+      <table id="watchlist-table">
+        <thead><tr>
+          <th>股票</th>
+          <th class="num">全市场</th>
+          <th class="num">行业内</th>
+          <th>行业</th>
+          <th>温度</th>
+          <th>趋势</th>
+          <th>动向</th>
+          <th>量价</th>
+          <th>买入触发</th>
+          <th>综合结论</th>
+          <th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <dialog id="kline-dialog">
+    <div id="kline-dialog-header">
+      <h2 id="kline-dialog-title">K线图</h2>
+      <button id="kline-dialog-close" type="button">关闭</button>
+    </div>
+    <div id="kline-container"></div>
+  </dialog>
+</main>
+<script type="module" src="/watchlist.js"></script>
+</body>
+</html>

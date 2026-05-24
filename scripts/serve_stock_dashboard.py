@@ -43,6 +43,7 @@ from app.valuation.models import (
 )
 from app.search.index import (
     build_stock_screener_response,
+    compute_stock_score,
     concept_search_response,
     rps_ranking_response,
     stock_profile_response,
@@ -73,6 +74,60 @@ DATA_UPDATE_JOB_STATE: dict[str, object] = {
     'current_progress_text': '暂无数据更新任务',
 }
 DATA_UPDATE_OUTPUT_TAIL_LINES = 8
+
+# ── Watchlist persistence ──────────────────────────────────────────────────
+
+WATCHLIST_PATH = PROJECT_ROOT / "data" / "derived" / "watchlist.json"
+
+def _load_watchlist() -> dict:
+    """Load watchlist, return {'stocks': [...]}."""
+    if not WATCHLIST_PATH.exists():
+        return {"stocks": []}
+    try:
+        with open(WATCHLIST_PATH) as f:
+            data = json.load(f)
+        if not isinstance(data.get("stocks"), list):
+            return {"stocks": []}
+        return data
+    except Exception:
+        return {"stocks": []}
+
+def _save_watchlist(data: dict) -> None:
+    WATCHLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(WATCHLIST_PATH, "w") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def _load_tech_eval() -> dict:
+    """Load technical evaluation data, keyed by 6-digit symbol."""
+    path = DERIVED_FINAL_DIR / "dataset_technical_eval.json"
+    if not path.exists():
+        return {}
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data.get("stocks", {}) if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+def _load_industry_temp() -> dict:
+    """Load industry temperature, keyed by industry_level_2_name -> {label, percentile}."""
+    path = DERIVED_FINAL_DIR / "dataset_industry_valuation_current.json"
+    if not path.exists():
+        return {}
+    try:
+        with open(path) as f:
+            rows = json.load(f)
+        result = {}
+        for row in rows:
+            name = (row.get("industry_level_2_name") or "").strip()
+            if name:
+                result[name] = {
+                    "label": row.get("temperature_label", ""),
+                    "percentile": row.get("temperature_percentile_since_2022"),
+                }
+        return result
+    except Exception:
+        return {}
 
 
 class DataUpdateStepError(RuntimeError):
@@ -1667,6 +1722,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/rps-trading-days":
             self.handle_rps_trading_days()
             return
+        if parsed.path == "/api/run-backtest":
+            self.handle_run_backtest()
+            return
+        if parsed.path == "/api/watchlist":
+            self.handle_watchlist_get()
+            return
         if parsed.path == "/api/realtime-screener":
             self.handle_realtime_screener(parsed.query)
             return
@@ -1709,6 +1770,18 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path.startswith("/api/proxy-capital-flow"):
             self.handle_proxy_capital_flow(parsed.query)
+            return
+        if parsed.path == "/api/run-backtest":
+            self.handle_run_backtest()
+            return
+        if parsed.path == "/api/watchlist/add":
+            self.handle_watchlist_add()
+            return
+        if parsed.path == "/api/watchlist/remove":
+            self.handle_watchlist_remove()
+            return
+        if parsed.path == "/api/watchlist/reorder":
+            self.handle_watchlist_reorder()
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -1955,6 +2028,210 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "rps_trading_days_error", "message": str(exc)}},
             )
+
+    def handle_run_backtest(self) -> None:
+        """Run backtest script synchronously, return result path."""
+        import subprocess, uuid
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            body = json.loads(raw.decode("utf-8"))
+        except Exception:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON body"})
+            return
+        
+        result_id = uuid.uuid4().hex[:8]
+        output_path = PROJECT_ROOT / "data" / "derived" / "backtest" / f"bt_{result_id}.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        cmd = [
+            sys.executable, str(PROJECT_ROOT / "scripts" / "run_backtest.py"),
+            "--start", str(body.get("start_date", "")),
+            "--end", str(body.get("end_date", "")),
+            "--stop-loss", str(body.get("stop_loss_pct", -0.08)),
+            "--take-profit", str(body.get("take_profit_pct", 0.20)),
+            "--max-hold-days", str(body.get("max_hold_days", 20)),
+            "--max-holdings", str(body.get("max_holdings", 10)),
+            "--output", str(output_path),
+        ]
+        if body.get("strategy"):
+            cmd += ["--strategy", body["strategy"]]
+        if body.get("filters"):
+            cmd += ["--filters", json.dumps(body["filters"], separators=(",", ":"))]
+        if body.get("ma_period"):
+            cmd += ["--ma-period", str(body["ma_period"])]
+        if body.get("trailing_pct"):
+            cmd += ["--trailing-pct", str(body["trailing_pct"])]
+        
+        try:
+            subprocess.run(cmd, check=True, timeout=600, capture_output=True, text=True)
+            self.respond_json(HTTPStatus.OK, {"ok": True, "result_path": f"/data/derived/backtest/bt_{result_id}.json"})
+        except subprocess.TimeoutExpired:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": "回测超时"})
+        except subprocess.CalledProcessError as e:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": f"回测失败: {e.stderr[:200] if e.stderr else str(e)}"})
+
+    # ── Watchlist handlers ───────────────────────────────────────────────
+
+    def handle_watchlist_get(self) -> None:
+        """Return watchlist with live score/tech/temp data."""
+        wl = _load_watchlist()
+        stocks_out = []
+
+        if not wl.get("stocks"):
+            self.respond_json(HTTPStatus.OK, {"stocks": []})
+            return
+
+        tech_data = _load_tech_eval()
+        ind_temp = _load_industry_temp()
+
+        for entry in wl["stocks"]:
+            market = str(entry.get("market", ""))
+            symbol = str(entry.get("symbol", ""))
+            if not market or not symbol:
+                continue
+
+            row: dict = {
+                "market": market,
+                "symbol": symbol,
+                "added_at": entry.get("added_at", ""),
+            }
+
+            # Score data
+            try:
+                score = compute_stock_score(market, symbol)
+                row["stock_name"] = score.get("stock_name", symbol)
+                row["industry_level_1"] = score.get("ind1", "")
+                row["industry_level_2"] = score.get("ind2", "")
+                row["market_total_score"] = score.get("total_score")
+                row["market_total_rank"] = score.get("market_total_rank")
+                row["market_total_universe_size"] = score.get("market_total_universe_size")
+                row["industry_total_score"] = score.get("ind_total_score")
+                row["industry_total_rank"] = score.get("industry_total_rank")
+                row["industry_total_universe_size"] = score.get("industry_total_universe_size")
+                row["dim_scores"] = score.get("dim_scores", {})
+            except Exception as e:
+                row["_error"] = f"score: {e}"
+
+            # RPS data from stock_profile
+            if "_error" not in row:
+                try:
+                    profile = stock_profile_response(symbol)
+                    if profile.get("ok"):
+                        rps = profile.get("rps", {}) or {}
+                        row["rps_20"] = rps.get("rps_20")
+                        row["rps_50"] = rps.get("rps_50")
+                        row["rps_120"] = rps.get("rps_120")
+                        row["rps_250"] = rps.get("rps_250")
+                except Exception:
+                    pass
+
+            # Tech data
+            tech = tech_data.get(symbol.zfill(6), {})
+            if tech:
+                for field in ("trend", "trend_label", "momentum", "momentum_label",
+                              "volume_signal", "volume_label",
+                              "buy_trigger", "buy_trigger_label",
+                              "conclusion", "conclusion_label", "conclusion_color", "conclusion_reason"):
+                    row[f"tech_{field}"] = tech.get(field)
+
+            # Industry temperature
+            ind2 = row.get("industry_level_2", "")
+            temp = ind_temp.get(ind2)
+            if temp:
+                row["industry_temperature_label"] = temp.get("label", "")
+                row["industry_temperature_percentile_since_2022"] = temp.get("percentile")
+
+            stocks_out.append(row)
+
+        self.respond_json(HTTPStatus.OK, {"stocks": stocks_out})
+
+    def handle_watchlist_add(self) -> None:
+        """Add stocks to watchlist. Body: {stocks: [{market, symbol}, ...]}"""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            body = json.loads(raw.decode("utf-8"))
+        except Exception:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON body"})
+            return
+
+        incoming = body.get("stocks")
+        if not isinstance(incoming, list) or not incoming:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing stocks array"})
+            return
+
+        wl = _load_watchlist()
+        existing = {(str(s["market"]), str(s["symbol"])) for s in wl.get("stocks", [])}
+        added = 0
+        skipped = 0
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        for s in incoming:
+            key = (str(s.get("market", "")), str(s.get("symbol", "")))
+            if not key[0] or not key[1]:
+                continue
+            if key in existing:
+                skipped += 1
+                continue
+            wl["stocks"].append({"market": key[0], "symbol": key[1], "added_at": now})
+            existing.add(key)
+            added += 1
+
+        _save_watchlist(wl)
+        self.respond_json(HTTPStatus.OK, {"ok": True, "added": added, "skipped": skipped})
+
+    def handle_watchlist_remove(self) -> None:
+        """Remove a stock from watchlist. Body: {market, symbol}"""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            body = json.loads(raw.decode("utf-8"))
+        except Exception:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON body"})
+            return
+
+        market = str(body.get("market", ""))
+        symbol = str(body.get("symbol", ""))
+        if not market or not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing market/symbol"})
+            return
+
+        wl = _load_watchlist()
+        wl["stocks"] = [s for s in wl["stocks"] if not (s["market"] == market and s["symbol"] == symbol)]
+        _save_watchlist(wl)
+        self.respond_json(HTTPStatus.OK, {"ok": True})
+
+    def handle_watchlist_reorder(self) -> None:
+        """Reorder watchlist. Body: {stocks: [{market, symbol}, ...]}"""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            body = json.loads(raw.decode("utf-8"))
+        except Exception:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON body"})
+            return
+
+        incoming = body.get("stocks")
+        if not isinstance(incoming, list):
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing stocks array"})
+            return
+
+        wl = _load_watchlist()
+        # Build lookup for original added_at
+        orig = {(s["market"], s["symbol"]): s.get("added_at", "") for s in wl.get("stocks", [])}
+        now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        new_stocks = []
+        for s in incoming:
+            key = (str(s.get("market", "")), str(s.get("symbol", "")))
+            if not key[0] or not key[1]:
+                continue
+            new_stocks.append({"market": key[0], "symbol": key[1], "added_at": orig.get(key, now)})
+
+        wl["stocks"] = new_stocks
+        _save_watchlist(wl)
+        self.respond_json(HTTPStatus.OK, {"ok": True})
 
     def handle_realtime_screener(self, query: str) -> None:
         params = {

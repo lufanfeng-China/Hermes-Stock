@@ -3726,3 +3726,116 @@ button:hover {
 .filter-row input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* ── Backtest ──────────────────────────────────────────────────────────────── */
+
+.strategy-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.strategy-backtest-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 3px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+
+.strategy-backtest-btn:hover {
+  opacity: 1;
+}
+
+.backtest-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 10, 16, 0.74);
+  backdrop-filter: blur(8px);
+}
+
+.backtest-dialog[hidden] {
+  display: none !important;
+}
+
+.backtest-dialog-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+  width: min(420px, 90vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.backtest-dialog-card h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.backtest-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.backtest-dialog-form .filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.backtest-dialog-form .filter-row label {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.backtest-dialog-form .filter-row input {
+  width: 140px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.backtest-charts-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.backtest-chart-card {
+  flex: 1;
+  min-width: 0;
+}
+
+.backtest-chart-legend {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#backtest-summary {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#backtest-summary .metric-card {
+  min-width: 120px;
+}

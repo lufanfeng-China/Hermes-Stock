@@ -653,3 +653,151 @@ setTimeout(() => {
     setTimeout(() => { syncTdxBtn.textContent = '同步到AI股池'; syncTdxBtn.disabled = false; }, 2000);
   });
 }, 0);
+
+// ── Backtest dialog ──────────────────────────────────────────────────────────
+
+let backtestFilters = null;
+
+function openBacktestDialog(strategy) {
+  document.getElementById('backtest-strategy-input').value = strategy || '';
+  // Capture current screener filter state for custom (non-strategy) backtest
+  if (!strategy) {
+    const params = buildParams(currentPage);
+    const filters = {};
+    for (const [key, value] of params.entries()) {
+      if (key === 'page' || key === 'page_size') continue;
+      filters[key] = value;
+    }
+    backtestFilters = Object.keys(filters).length ? filters : null;
+    document.getElementById('backtest-filters-input').value = JSON.stringify(backtestFilters);
+  } else {
+    backtestFilters = null;
+    document.getElementById('backtest-filters-input').value = '';
+  }
+  document.getElementById('backtest-dialog').hidden = false;
+  document.getElementById('backtest-dialog').setAttribute('aria-hidden', 'false');
+}
+
+function closeBacktestDialog() {
+  document.getElementById('backtest-dialog').hidden = true;
+  document.getElementById('backtest-dialog').setAttribute('aria-hidden', 'true');
+}
+
+document.querySelectorAll('.strategy-backtest-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openBacktestDialog(btn.dataset.strategy);
+  });
+});
+
+document.getElementById('backtest-custom-btn')?.addEventListener('click', () => {
+  openBacktestDialog('');
+});
+
+document.getElementById('backtest-cancel-btn')?.addEventListener('click', closeBacktestDialog);
+
+document.getElementById('backtest-dialog')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeBacktestDialog();
+});
+
+document.getElementById('backtest-run-btn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('backtest-run-btn');
+  btn.disabled = true;
+  btn.textContent = '回测中...';
+
+  const strategy = document.getElementById('backtest-strategy-input').value;
+  const body = {
+    strategy: strategy || undefined,
+    start_date: document.getElementById('backtest-start').value,
+    end_date: document.getElementById('backtest-end').value,
+    stop_loss_pct: parseFloat(document.getElementById('backtest-stop-loss').value) / 100,
+    take_profit_pct: parseFloat(document.getElementById('backtest-take-profit').value) / 100,
+    max_hold_days: parseInt(document.getElementById('backtest-max-hold').value),
+    max_holdings: parseInt(document.getElementById('backtest-max-holdings').value),
+  };
+  // Pass captured filters for custom backtest
+  if (!strategy && backtestFilters) {
+    body.filters = backtestFilters;
+  }
+  const ma = parseInt(document.getElementById('backtest-ma').value);
+  if (ma > 0) body.ma_period = ma;
+  const trailing = parseInt(document.getElementById('backtest-trailing').value);
+  if (trailing > 0) body.trailing_pct = trailing / 100;
+
+  try {
+    const resp = await fetch('/api/run-backtest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      window.open(`/backtest.html?result=${encodeURIComponent(data.result_path)}`, '_blank');
+      closeBacktestDialog();
+    } else {
+      alert('回测失败: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('回测请求失败: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '开始回测';
+});
+
+// ── Watchlist add ───────────────────────────────────────────────────────
+
+const wlAddBtn = document.getElementById('wl-add-btn');
+
+function updateWlAddBtn() {
+  if (!wlAddBtn) return;
+  const checked = document.querySelectorAll('.stock-screener-row-check:checked');
+  wlAddBtn.style.display = checked.length > 0 ? '' : 'none';
+  wlAddBtn.textContent = `⭐ 加入自选 (已选 ${checked.length} 只)`;
+}
+
+// Delegate checkbox changes on the results table
+document.getElementById('stock-screener-results-tbody')?.addEventListener('change', (e) => {
+  if (e.target.classList.contains('stock-screener-row-check')) {
+    updateWlAddBtn();
+  }
+});
+
+wlAddBtn?.addEventListener('click', async () => {
+  const checks = document.querySelectorAll('.stock-screener-row-check:checked');
+  const stocks = [];
+  checks.forEach(cb => {
+    const row = cb.closest('tr');
+    if (!row) return;
+    const market = row.dataset.market;
+    const symbol = row.dataset.symbol;
+    if (market && symbol) stocks.push({ market, symbol });
+  });
+  if (!stocks.length) return;
+
+  wlAddBtn.disabled = true;
+  wlAddBtn.textContent = '添加中...';
+  try {
+    const resp = await fetch('/api/watchlist/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stocks }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      // Uncheck all
+      checks.forEach(cb => { cb.checked = false; });
+      updateWlAddBtn();
+      // Brief toast via status
+      const statusEl = document.getElementById('wl-add-btn');
+      const original = statusEl.textContent;
+      statusEl.textContent = `✅ 已添加 ${data.added} 只`;
+      setTimeout(() => { statusEl.textContent = original; }, 2000);
+    } else {
+      alert('添加失败: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('请求失败: ' + e.message);
+  }
+  wlAddBtn.disabled = false;
+  updateWlAddBtn();
+});
