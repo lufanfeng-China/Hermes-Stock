@@ -276,4 +276,19 @@ document.getElementById('kline-dialog')?.addEventListener('click', (e) => {
 
 document.getElementById('wl-refresh-btn')?.addEventListener('click', loadWatchlist);
 
+document.getElementById('wl-clear-btn')?.addEventListener('click', async () => {
+  if (!confirm('确定清空全部自选股？')) return;
+  const btn = document.getElementById('wl-clear-btn');
+  btn.disabled = true;
+  btn.textContent = '清空中...';
+  try {
+    await fetch('/api/watchlist/clear', { method: 'POST' });
+    loadWatchlist();
+  } catch (e) {
+    alert('清空失败: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '清空全部';
+  }
+});
+
 loadWatchlist();

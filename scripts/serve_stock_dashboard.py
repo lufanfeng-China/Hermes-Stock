@@ -1800,6 +1800,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/watchlist/reorder":
             self.handle_watchlist_reorder()
             return
+        if parsed.path == "/api/watchlist/clear":
+            self.handle_watchlist_clear()
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_HEAD(self) -> None:  # noqa: N802
@@ -2283,6 +2286,11 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
 
         wl["stocks"] = new_stocks
         _save_watchlist(wl)
+        self.respond_json(HTTPStatus.OK, {"ok": True})
+
+    def handle_watchlist_clear(self) -> None:
+        """Clear entire watchlist."""
+        _save_watchlist({"stocks": []})
         self.respond_json(HTTPStatus.OK, {"ok": True})
 
     def handle_realtime_screener(self, query: str) -> None:
