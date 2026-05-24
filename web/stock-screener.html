@@ -79,7 +79,6 @@
         <span class="strategy-btn-group"><button type="button" class="nav-link" data-strategy="blowup_stall">爆量滞涨</button><button type="button" class="strategy-backtest-btn" data-strategy="blowup_stall" title="回测此策略">📊</button></span>
         <button id="stock-screener-sync-tdx-btn" class="nav-link" type="button" style="margin-left:16px">同步到AI股池</button>
         <button id="backtest-custom-btn" class="nav-link" type="button" style="margin-left:8px">方案回测</button>
-        <button id="wl-add-btn" class="nav-link" type="button" style="margin-left:8px;display:none">⭐ 加入自选</button>
       </div>
       <p id="stock-screener-strategy-desc" class="search-meta stock-screener-strategy-desc"></p>
 
@@ -177,6 +176,10 @@
         <p id="stock-screener-page-info" class="search-meta">第 1 / 1 页</p>
         <p id="stock-screener-data-date" class="search-meta" style="color:#6f8899;font-size:10px"></p>
       </div>
+      <div id="stock-screener-results-toolbar" class="stock-screener-results-toolbar" style="display:none">
+        <label class="wl-select-all-label"><input type="checkbox" id="wl-select-all"> 全选</label>
+        <button id="wl-add-btn" class="nav-link" type="button">⭐ 加入自选 (<span id="wl-selected-count">0</span>)</button>
+      </div>
       <div class="stock-screener-results-wrap">
         <table class="sub-table stock-screener-table">
           <thead>
@@ -202,6 +205,10 @@
             <tr><td colspan="14" class="stock-score-empty-row">设置条件后点击“执行筛选”</td></tr>
           </tbody>
         </table>
+      </div>
+      <div id="stock-screener-results-toolbar-bottom" class="stock-screener-results-toolbar" style="display:none">
+        <label class="wl-select-all-label"><input type="checkbox" id="wl-select-all-bottom"> 全选</label>
+        <button id="wl-add-btn-bottom" class="nav-link" type="button">⭐ 加入自选</button>
       </div>
       <div id="stock-screener-pagination" class="stock-screener-pagination">
         <button id="stock-screener-prev" type="button" class="nav-link">上一页</button>

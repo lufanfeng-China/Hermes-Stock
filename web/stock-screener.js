@@ -252,6 +252,9 @@ async function runScreener(page = 1) {
     currentPage = payload.page || page;
     renderScreenerRows(payload.rows || []);
     renderPagination(payload);
+    // Update watchlist toolbar + highlight rows
+    updateWatchlistToolbar();
+    rerenderCurrentRows();
     statusEl.textContent = `命中 ${payload.total || 0} 只股票，当前页 ${(payload.rows || []).length} 条`;
     const dateEl = document.getElementById('stock-screener-data-date');
     if (dateEl) {
@@ -744,25 +747,68 @@ document.getElementById('backtest-run-btn')?.addEventListener('click', async () 
   btn.textContent = '开始回测';
 });
 
-// ── Watchlist add ───────────────────────────────────────────────────────
+// ── Watchlist integration ───────────────────────────────────────────────
 
-const wlAddBtn = document.getElementById('wl-add-btn');
+let watchlistSymbols = new Set();  // "market:symbol" strings of already-watchlisted
 
-function updateWlAddBtn() {
-  if (!wlAddBtn) return;
-  const checked = document.querySelectorAll('.stock-screener-row-check:checked');
-  wlAddBtn.style.display = checked.length > 0 ? '' : 'none';
-  wlAddBtn.textContent = `⭐ 加入自选 (已选 ${checked.length} 只)`;
+async function loadWatchlistSet() {
+  try {
+    const resp = await fetch('/api/watchlist');
+    const data = await resp.json();
+    watchlistSymbols = new Set(
+      (data.stocks || []).map(s => `${s.market}:${s.symbol}`)
+    );
+  } catch (e) { /* ignore */ }
 }
+
+function isInWatchlist(market, symbol) {
+  return watchlistSymbols.has(`${market}:${symbol}`);
+}
+
+// Update toolbar visibility + selected count
+function updateWatchlistToolbar() {
+  const checks = document.querySelectorAll('.stock-screener-row-check:checked');
+  const count = checks.length;
+  const hasResults = document.querySelectorAll('.stock-screener-row-check').length > 0;
+
+  // Top toolbar
+  const toolbar = document.getElementById('stock-screener-results-toolbar');
+  if (toolbar) toolbar.style.display = hasResults ? '' : 'none';
+  const countEl = document.getElementById('wl-selected-count');
+  if (countEl) countEl.textContent = String(count);
+  const addBtn = document.getElementById('wl-add-btn');
+  if (addBtn) addBtn.disabled = count === 0;
+
+  // Bottom toolbar
+  const toolbarBtm = document.getElementById('stock-screener-results-toolbar-bottom');
+  if (toolbarBtm) toolbarBtm.style.display = hasResults ? '' : 'none';
+  const addBtnBtm = document.getElementById('wl-add-btn-bottom');
+  if (addBtnBtm) addBtnBtm.disabled = count === 0;
+}
+
+// Select all / deselect all
+function setAllCheckboxes(checked) {
+  document.querySelectorAll('.stock-screener-row-check').forEach(cb => { cb.checked = checked; });
+  document.querySelectorAll('#wl-select-all, #wl-select-all-bottom').forEach(el => { el.checked = checked; });
+  updateWatchlistToolbar();
+}
+
+document.getElementById('wl-select-all')?.addEventListener('change', function() {
+  setAllCheckboxes(this.checked);
+});
+document.getElementById('wl-select-all-bottom')?.addEventListener('change', function() {
+  setAllCheckboxes(this.checked);
+});
 
 // Delegate checkbox changes on the results table
 document.getElementById('stock-screener-results-tbody')?.addEventListener('change', (e) => {
   if (e.target.classList.contains('stock-screener-row-check')) {
-    updateWlAddBtn();
+    updateWatchlistToolbar();
   }
 });
 
-wlAddBtn?.addEventListener('click', async () => {
+// Add to watchlist action
+async function addToWatchlist() {
   const checks = document.querySelectorAll('.stock-screener-row-check:checked');
   const stocks = [];
   checks.forEach(cb => {
@@ -774,8 +820,11 @@ wlAddBtn?.addEventListener('click', async () => {
   });
   if (!stocks.length) return;
 
-  wlAddBtn.disabled = true;
-  wlAddBtn.textContent = '添加中...';
+  const btn = document.getElementById('wl-add-btn');
+  const btnBtm = document.getElementById('wl-add-btn-bottom');
+  if (btn) { btn.disabled = true; btn.textContent = '添加中...'; }
+  if (btnBtm) { btnBtm.disabled = true; btnBtm.textContent = '添加中...'; }
+
   try {
     const resp = await fetch('/api/watchlist/add', {
       method: 'POST',
@@ -784,20 +833,44 @@ wlAddBtn?.addEventListener('click', async () => {
     });
     const data = await resp.json();
     if (data.ok) {
-      // Uncheck all
-      checks.forEach(cb => { cb.checked = false; });
-      updateWlAddBtn();
-      // Brief toast via status
-      const statusEl = document.getElementById('wl-add-btn');
-      const original = statusEl.textContent;
-      statusEl.textContent = `✅ 已添加 ${data.added} 只`;
-      setTimeout(() => { statusEl.textContent = original; }, 2000);
+      // Uncheck all + reload watchlist set
+      setAllCheckboxes(false);
+      await loadWatchlistSet();
+      // Re-render rows to update highlight
+      rerenderCurrentRows();
+      // Feedback
+      if (btn) { btn.textContent = `✅ 已添加 ${data.added} 只`; setTimeout(() => { btn.innerHTML = '⭐ 加入自选 (<span id=\"wl-selected-count\">0</span>)'; updateWatchlistToolbar(); }, 2000); }
+      if (btnBtm) { btnBtm.textContent = '✅ 已添加'; setTimeout(() => { btnBtm.textContent = '⭐ 加入自选'; }, 2000); }
     } else {
-      alert('添加失败: ' + (data.error || 'unknown'));
+      if (btn) { btn.innerHTML = '⭐ 加入自选 (<span id=\"wl-selected-count\">0</span>)'; btn.disabled = false; }
+      if (btnBtm) { btnBtm.textContent = '⭐ 加入自选'; btnBtm.disabled = false; }
     }
   } catch (e) {
-    alert('请求失败: ' + e.message);
+    if (btn) { btn.innerHTML = '⭐ 加入自选 (<span id=\"wl-selected-count\">0</span>)'; btn.disabled = false; }
+    if (btnBtm) { btnBtm.textContent = '⭐ 加入自选'; btnBtm.disabled = false; }
   }
-  wlAddBtn.disabled = false;
-  updateWlAddBtn();
+}
+
+document.getElementById('wl-add-btn')?.addEventListener('click', addToWatchlist);
+document.getElementById('wl-add-btn-bottom')?.addEventListener('click', addToWatchlist);
+
+// Re-render current rows (to update watchlist highlight colors)
+function rerenderCurrentRows() {
+  const rows = document.querySelectorAll('#stock-screener-results-tbody tr');
+  rows.forEach(row => {
+    const market = row.dataset.market;
+    const symbol = row.dataset.symbol;
+    if (market && symbol && isInWatchlist(market, symbol)) {
+      row.classList.add('wl-highlighted');
+    } else {
+      row.classList.remove('wl-highlighted');
+    }
+  });
+}
+
+// Load watchlist set on page init
+loadWatchlistSet().then(() => {
+  // Re-highlight after watchlist data arrives
+  rerenderCurrentRows();
+  updateWatchlistToolbar();
 });

@@ -188,7 +188,19 @@ async function openKline(market, symbol, name) {
   if (!dialog || !container) return;
 
   title.textContent = `${name || symbol} (${String(market).toUpperCase()}:${symbol})`;
-  container.innerHTML = '<div class="wl-loading">加载K线数据...</div>';
+  // Show loading inside SVG
+  const svgEl = document.getElementById('kline-chart-svg-wl');
+  if (svgEl) {
+    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+    const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    textEl.setAttribute('x', '50%');
+    textEl.setAttribute('y', '50%');
+    textEl.setAttribute('text-anchor', 'middle');
+    textEl.setAttribute('fill', '#888');
+    textEl.setAttribute('font-size', '14');
+    textEl.textContent = '加载中...';
+    svgEl.appendChild(textEl);
+  }
   dialog.showModal();
 
   try {
@@ -210,13 +222,11 @@ async function openKline(market, symbol, name) {
       rps_250: h.rps_250,
     })) : [];
 
-    container.innerHTML = '';
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 800 500');
-    svg.style.width = '100%';
-    svg.style.height = 'auto';
-    svg.style.minHeight = '400px';
-    container.appendChild(svg);
+    // Use pre-existing SVG with proper CSS sizing
+    const svg = document.getElementById('kline-chart-svg-wl');
+    if (!svg) return;
+    // Clear previous content
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     if (!klineChart) {
       klineChart = new KlineChart(svg, { marginRight: 20 });
@@ -226,7 +236,18 @@ async function openKline(market, symbol, name) {
     klineChart.load(bars, rpsHistory, 250);
 
   } catch (err) {
-    container.innerHTML = `<p style="color:var(--red);padding:20px">K线加载失败: ${esc(err.message)}</p>`;
+    const svg = document.getElementById('kline-chart-svg-wl');
+    if (svg) {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      textEl.setAttribute('x', '50%');
+      textEl.setAttribute('y', '50%');
+      textEl.setAttribute('text-anchor', 'middle');
+      textEl.setAttribute('fill', '#ff5252');
+      textEl.setAttribute('font-size', '13');
+      textEl.textContent = `加载失败: ${err.message}`;
+      svg.appendChild(textEl);
+    }
   }
 }
 

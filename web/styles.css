@@ -3839,3 +3839,40 @@ button:hover {
 #backtest-summary .metric-card {
   min-width: 120px;
 }
+
+/* ── Watchlist toolbar in screener ────────────────────────────────────── */
+
+.stock-screener-results-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid rgba(124, 224, 195, 0.12);
+  border-radius: 8px;
+  margin: 8px 0;
+  background: rgba(7, 16, 24, 0.5);
+}
+
+.wl-select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.wl-select-all-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Highlight stocks already in watchlist */
+.stock-screener-row.wl-highlighted {
+  background: rgba(124, 224, 195, 0.08) !important;
+}
+
+.stock-screener-row.wl-highlighted:hover {
+  background: rgba(124, 224, 195, 0.14) !important;
+}

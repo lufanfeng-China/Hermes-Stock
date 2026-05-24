@@ -124,6 +124,7 @@
     #kline-dialog {
       width: 95vw;
       max-width: 1100px;
+      height: 85vh;
       max-height: 90vh;
       border: 1px solid rgba(124, 224, 195, 0.2);
       border-radius: 14px;
@@ -131,6 +132,8 @@
       color: var(--text);
       padding: 0;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
     #kline-dialog::backdrop {
       background: rgba(0, 0, 0, 0.7);
@@ -159,8 +162,9 @@
       background: rgba(124, 224, 195, 0.08);
     }
     #kline-container {
-      padding: 12px;
-      min-height: 400px;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
     }
   </style>
 </head>
@@ -220,7 +224,9 @@
       <h2 id="kline-dialog-title">K线图</h2>
       <button id="kline-dialog-close" type="button">关闭</button>
     </div>
-    <div id="kline-container"></div>
+    <div id="kline-container" class="kline-chart-body">
+      <svg id="kline-chart-svg-wl" class="kline-chart-svg" role="img" aria-label="K线趋势图"></svg>
+    </div>
   </dialog>
 </main>
 <script type="module" src="/watchlist.js"></script>
