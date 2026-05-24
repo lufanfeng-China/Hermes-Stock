@@ -37,8 +37,7 @@ function fmtScore(v) {
 function fmtRank(rank, size) {
   if (rank == null) return '';
   const r = Number(rank);
-  const s = size != null ? `/${size}` : '';
-  return `<span class="wl-rank">#${r}${s}</span>`;
+  return `<span class="wl-rank">#${r}</span>`;
 }
 
 function fmtTemp(stock) {
@@ -200,19 +199,6 @@ async function openKline(market, symbol, name) {
   if (!dialog || !container) return;
 
   title.textContent = `${name || symbol} (${String(market).toUpperCase()}:${symbol})`;
-  // Show loading inside SVG
-  const svgEl = document.getElementById('kline-chart-svg-wl');
-  if (svgEl) {
-    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-    const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    textEl.setAttribute('x', '50%');
-    textEl.setAttribute('y', '50%');
-    textEl.setAttribute('text-anchor', 'middle');
-    textEl.setAttribute('fill', '#888');
-    textEl.setAttribute('font-size', '14');
-    textEl.textContent = '加载中...';
-    svgEl.appendChild(textEl);
-  }
   dialog.showModal();
 
   try {
@@ -233,11 +219,10 @@ async function openKline(market, symbol, name) {
       rps_250: h.rps_250,
     })) : [];
 
-    // Use pre-existing SVG with proper CSS sizing
+    // Use pre-existing SVG — KlineChart manages its own child groups
     const svg = document.getElementById('kline-chart-svg-wl');
     if (!svg) return;
-    // Clear previous content
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    // Do NOT clear SVG children — KlineChart.render() clears sub-groups internally
 
     if (!klineChart) {
       klineChart = new KlineChart(svg, { marginRight: 20 });
@@ -247,18 +232,7 @@ async function openKline(market, symbol, name) {
     klineChart.load(bars, rpsHistory, 250);
 
   } catch (err) {
-    const svg = document.getElementById('kline-chart-svg-wl');
-    if (svg) {
-      while (svg.firstChild) svg.removeChild(svg.firstChild);
-      const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      textEl.setAttribute('x', '50%');
-      textEl.setAttribute('y', '50%');
-      textEl.setAttribute('text-anchor', 'middle');
-      textEl.setAttribute('fill', '#ff5252');
-      textEl.setAttribute('font-size', '13');
-      textEl.textContent = `加载失败: ${err.message}`;
-      svg.appendChild(textEl);
-    }
+    console.error('Kline load error:', err);
   }
 }
 
