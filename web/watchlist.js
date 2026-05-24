@@ -250,6 +250,26 @@ document.getElementById('kline-dialog')?.addEventListener('click', (e) => {
 
 document.getElementById('wl-refresh-btn')?.addEventListener('click', loadWatchlist);
 
+document.getElementById('wl-sync-tdx-btn')?.addEventListener('click', async () => {
+  if (!watchlistData.length) return;
+  const stocks = watchlistData.map(s => ({ market: s.market, symbol: s.symbol }));
+  const btn = document.getElementById('wl-sync-tdx-btn');
+  btn.textContent = '同步中...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/sync-to-tdx-block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stocks }),
+    });
+    const data = await res.json();
+    btn.textContent = data.ok ? `已同步 ${data.written} 只` : '同步失败';
+  } catch (e) {
+    btn.textContent = '同步失败';
+  }
+  setTimeout(() => { btn.textContent = '同步到AI股池'; btn.disabled = false; }, 2000);
+});
+
 document.getElementById('wl-clear-btn')?.addEventListener('click', async () => {
   if (!confirm('确定清空全部自选股？')) return;
   const btn = document.getElementById('wl-clear-btn');
