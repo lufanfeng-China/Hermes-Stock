@@ -2177,6 +2177,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         daily = daily.sort_index()
                         closes = daily["close"].tolist()
                         row["current_price"] = float(closes[-1])
+                        row["return_1_pct"] = round((closes[-1] / closes[-2] - 1) * 100, 2)
                         row["return_5_pct"] = round((closes[-1] / closes[-6] - 1) * 100, 2)
                         row["return_20_pct"] = round((closes[-1] / closes[-21] - 1) * 100, 2)
                 except Exception:
