@@ -88,6 +88,7 @@ function renderTable(stocks) {
     const dur = s.trend_duration != null ? String(s.trend_duration) + '天' : '—';
 
     return `<tr data-idx="${i}" data-market="${esc(s.market)}" data-symbol="${esc(s.symbol)}" data-name="${esc(name)}" tabindex="0">
+      <td><input type="checkbox" class="wl-row-check" data-idx="${i}"></td>
       <td><span class="wl-stock-name">${esc(name)}</span><br><span class="wl-stock-symbol">${esc(marketSymbol)}</span></td>
       <td class="num">${price}</td>
       <td class="num"><span class="wl-score">${ms}</span> ${mr}</td>
@@ -143,7 +144,8 @@ function bindRowEvents() {
 
   // Row click → K-line
   document.querySelectorAll('#watchlist-table tbody tr').forEach(row => {
-    row.addEventListener('click', () => {
+    row.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
       openKline(row.dataset.market, row.dataset.symbol, row.dataset.name);
     });
     row.addEventListener('keydown', (e) => {
@@ -250,11 +252,22 @@ document.getElementById('kline-dialog')?.addEventListener('click', (e) => {
 
 document.getElementById('wl-refresh-btn')?.addEventListener('click', loadWatchlist);
 
+// Select all / deselect all
+document.getElementById('wl-select-all')?.addEventListener('change', function() {
+  document.querySelectorAll('.wl-row-check').forEach(cb => { cb.checked = this.checked; });
+});
+
 document.getElementById('wl-sync-tdx-btn')?.addEventListener('click', async () => {
-  if (!watchlistData.length) return;
-  const stocks = watchlistData.map(s => ({ market: s.market, symbol: s.symbol }));
+  const checks = document.querySelectorAll('.wl-row-check:checked');
+  if (!checks.length) return;
+  const stocks = [];
+  checks.forEach(cb => {
+    const idx = Number(cb.dataset.idx);
+    const s = watchlistData[idx];
+    if (s) stocks.push({ market: s.market, symbol: s.symbol });
+  });
   const btn = document.getElementById('wl-sync-tdx-btn');
-  btn.textContent = '同步中...';
+  btn.textContent = `同步中(${stocks.length})...`;
   btn.disabled = true;
   try {
     const res = await fetch('/api/sync-to-tdx-block', {

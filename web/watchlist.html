@@ -207,6 +207,7 @@
 
   <div id="wl-content" style="display:none">
     <div class="watchlist-toolbar">
+      <label class="wl-select-all-label"><input type="checkbox" id="wl-select-all"> 全选</label>
       <button id="wl-refresh-btn" class="nav-link" type="button">刷新</button>
       <button id="wl-sync-tdx-btn" class="nav-link" type="button">同步到AI股池</button>
       <button id="wl-clear-btn" class="nav-link" type="button" style="color:var(--danger);border-color:rgba(255,107,107,0.2)">清空全部</button>
@@ -215,6 +216,7 @@
     <div class="watchlist-table-wrap">
       <table id="watchlist-table">
         <thead><tr>
+          <th></th>
           <th>股票</th>
           <th class="num">现价</th>
           <th class="num">全市场</th>
@@ -246,6 +248,6 @@
     </div>
   </dialog>
 </main>
-<script type="module" src="/watchlist.js?v=20260524-sync"></script>
+<script type="module" src="/watchlist.js?v=20260524-chk"></script>
 </body>
 </html>
