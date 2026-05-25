@@ -87,6 +87,8 @@ function renderTable(stocks) {
     const r1 = fmtPct(s.return_1_pct);
     const r20 = fmtPct(s.return_20_pct);
     const dur = s.trend_duration != null ? String(s.trend_duration) + '天' : '—';
+    const pat = s.candle_pattern || '—';
+    const patEmoji = s.candle_pattern_dir === 'bullish' ? '🟢' : s.candle_pattern_dir === 'bearish' ? '🔴' : s.candle_pattern_dir === 'neutral' ? '⚪' : '';
 
     return `<tr data-idx="${i}" data-market="${esc(s.market)}" data-symbol="${esc(s.symbol)}" data-name="${esc(name)}" tabindex="0">
       <td><input type="checkbox" class="wl-row-check" data-idx="${i}"></td>
@@ -100,10 +102,11 @@ function renderTable(stocks) {
       <td style="color:${trendColor(momentum)}">${esc(momentum)}</td>
       <td style="color:${trendColor(volume)}">${esc(volume)}</td>
       <td>${buyTrigger}</td>
-      <td class="num" style="color:${pctColor(s.return_5_pct)}">${r5}</td>
       <td class="num" style="color:${pctColor(s.return_1_pct)}">${r1}</td>
+      <td class="num" style="color:${pctColor(s.return_5_pct)}">${r5}</td>
       <td class="num" style="color:${pctColor(s.return_20_pct)}">${r20}</td>
       <td class="num">${dur}</td>
+      <td>${patEmoji} ${esc(pat)}</td>
       <td style="color:${concColor};font-weight:600" title="${esc(s.tech_conclusion_reason || '')}">${esc(conclusion)}</td>
       <td><button class="wl-remove-btn" data-idx="${i}" type="button">✕</button></td>
     </tr>`;

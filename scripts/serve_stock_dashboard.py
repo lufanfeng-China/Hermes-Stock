@@ -2180,6 +2180,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         row["return_1_pct"] = round((closes[-1] / closes[-2] - 1) * 100, 2)
                         row["return_5_pct"] = round((closes[-1] / closes[-6] - 1) * 100, 2)
                         row["return_20_pct"] = round((closes[-1] / closes[-21] - 1) * 100, 2)
+
+                        # Candlestick pattern detection
+                        try:
+                            from app.candlestick_patterns import detect_latest_pattern
+                            bars = daily[["open", "high", "low", "close"]].to_dict("records")
+                            pattern = detect_latest_pattern(bars)
+                            if pattern:
+                                row["candle_pattern"] = pattern["name"]
+                                row["candle_pattern_dir"] = pattern["direction"]
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
