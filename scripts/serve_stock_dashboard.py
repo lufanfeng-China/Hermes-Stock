@@ -1673,6 +1673,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-kline":
             self.handle_stock_kline(parsed.query)
             return
+        if parsed.path == "/api/stock-candle-patterns":
+            self.handle_stock_candle_patterns(parsed.query)
+            return
         if parsed.path == "/api/stock-rps-history":
             self.handle_stock_rps_history(parsed.query)
             return
@@ -1886,6 +1889,47 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "kline_unavailable", "message": str(exc)}},
             )
+
+    def handle_stock_candle_patterns(self, query: str) -> None:
+        """Return last N candlestick patterns for a stock."""
+        from app.candlestick_patterns import _bar_type, PATTERNS
+        from mootdx.reader import Reader
+        params = parse_qs(query)
+        symbol = params.get("symbol", [DEFAULT_SYMBOL])[0].strip() or DEFAULT_SYMBOL
+        limit = min(int(params.get("limit", ["10"])[0]), 30)
+        try:
+            reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
+            daily = reader.daily(symbol=symbol)
+            if daily is None or daily.empty:
+                self.respond_json(HTTPStatus.OK, {"ok": True, "patterns": []})
+                return
+            daily = daily.sort_index()
+            bars = daily[["open", "high", "low", "close"]].to_dict("records")
+            n = len(bars)
+            result = []
+            for i in range(max(0, n - limit), n):
+                bar = bars[i]
+                found = None
+                for name, fn, lookback, direction in PATTERNS:
+                    if lookback == 1:
+                        try:
+                            if fn(bar):
+                                found = {"name": name, "direction": direction}
+                                break
+                        except Exception:
+                            continue
+                if not found:
+                    try:
+                        name, direction = _bar_type(bar)
+                        found = {"name": name, "direction": direction}
+                    except Exception:
+                        found = {"name": "—", "direction": "neutral"}
+                result.append(found)
+            result.reverse()
+            self.respond_json(HTTPStatus.OK, {"ok": True, "patterns": result})
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
+                           {"ok": False, "error": str(exc)})
 
     def handle_stock_rps_history(self, query: str) -> None:
         params = parse_qs(query)

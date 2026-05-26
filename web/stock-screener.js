@@ -36,6 +36,10 @@ const STRATEGY_PRESETS = {
   },
   blowup_stall: {
     strategy: 'blowup_stall',
+    description: '放巨量但涨不动：量>2.5x50日均量 + 涨幅<2% + 冲高回落/高位, 按信号强度排序',
+  },
+  blowup_break: {
+    strategy: 'blowup_break',
     description: '连续两天真阳线上涨; 每天量>3倍50日均量; 涨前5天量均<2倍50日均量',
   },
 };

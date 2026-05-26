@@ -36,6 +36,7 @@ STRATEGY_FIRST_BOARD = "first_board"
 STRATEGY_WASHOUT = "washout"
 STRATEGY_RPS_CLIMB = "rps_climb"
 STRATEGY_BLOWUP_STALL = "blowup_stall"
+STRATEGY_BLOWUP_BREAK = "blowup_break"
 STRATEGY_METADATA = {
     STRATEGY_STANDARD: {
         "label": "RPS标准",
@@ -63,6 +64,9 @@ STRATEGY_METADATA = {
     },
     STRATEGY_BLOWUP_STALL: {
         "label": "爆量滞涨",
+    },
+    STRATEGY_BLOWUP_BREAK: {
+        "label": "爆量突破",
     },
 }
 
@@ -1059,8 +1063,8 @@ def build_rps_climb_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
     return results
 
 
-def build_blowup_stall_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """爆量滞涨：连续两天真阳线上涨; 每天量>3倍50日均量; 涨前5天量均<2倍50日均量"""
+def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """爆量突破：连续两天真阳线上涨; 每天量>3倍50日均量; 涨前5天量均<2倍50日均量"""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -1128,8 +1132,8 @@ def build_blowup_stall_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
             "trading_day": row.get("trading_day"),
             "market": market_val,
             "symbol": symbol_val,
-            "strategy": STRATEGY_BLOWUP_STALL,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_BLOWUP_STALL]["label"],
+            "strategy": STRATEGY_BLOWUP_BREAK,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_BLOWUP_BREAK]["label"],
             "passed": passed,
             "conditions": {
                 "vol_ratio_y": round(vol_y / ma_vol, 2),
@@ -1145,8 +1149,105 @@ def build_blowup_stall_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
     return results
 
 
+def build_blowup_stall_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """爆量滞涨：放巨量但涨幅极小甚至冲高回落，疑似主力出货。
+
+    条件：量>2.5x50日均量 + 涨幅<2% + 上影线>40% 或 近20日>10%
+    按信号强度排序：量比越大×涨幅越小×上影越长 = 信号越强
+    """
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    rps_rows = load_rps_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[dict[str, Any]] = []
+
+    for row in rps_rows:
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        if not market_val or not symbol_val:
+            continue
+
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        if len(daily) < 75:
+            continue
+
+        n = len(daily)
+        closes = daily["close"].astype(float).tolist()
+        opens = daily["open"].astype(float).tolist()
+        highs = daily["high"].astype(float).tolist()
+        lows = daily["low"].astype(float).tolist()
+        volumes = daily["volume"].astype(float).tolist()
+
+        t = n - 1
+
+        ma_start = t - 50
+        if ma_start < 0:
+            continue
+        ma_vol = sum(volumes[ma_start:t]) / 50.0
+        if ma_vol <= 0:
+            continue
+
+        vol_r = volumes[t] / ma_vol
+        if vol_r < 2.5:
+            continue
+
+        o_t, c_t, h_t, l_t = opens[t], closes[t], highs[t], lows[t]
+        rng = h_t - l_t
+        if rng == 0:
+            continue
+        upper_r = (h_t - max(o_t, c_t)) / rng
+        chg = (c_t / closes[t - 1] - 1) * 100
+
+        if chg > 2.0:
+            continue
+
+        has_shadow = upper_r > 0.4
+
+        p20 = max(0, t - 20)
+        if p20 >= t:
+            continue
+        ret20 = (c_t / closes[p20] - 1) * 100
+        is_high = ret20 > 10.0
+
+        if not (has_shadow or is_high):
+            continue
+
+        score = round(vol_r * (1 + upper_r) / max(abs(chg), 0.1), 2)
+        if score < 10:
+            continue
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_BLOWUP_STALL,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_BLOWUP_STALL]["label"],
+            "passed": True,
+            "conditions": {
+                "vol_ratio": round(vol_r, 2),
+                "change_pct": round(chg, 2),
+                "upper_shadow_ratio": round(upper_r, 2),
+                "ret_20d_pct": round(ret20, 2),
+                "has_upper_shadow": has_shadow,
+                "is_high_position": is_high,
+                "ma_vol": round(ma_vol, 0),
+                "signal_score": score,
+            },
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily",
+        })
+
+    results.sort(key=lambda item: (-float(item.get("conditions", {}).get("signal_score", 0)),
+                                    item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
 def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Replace one strategy's rows while preserving other strategies in the shared output file."""
     existing_rows: list[dict[str, Any]] = []
     if output.exists():
         try:
@@ -1241,6 +1342,8 @@ def main() -> None:
             rows = build_rps_climb_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_BLOWUP_STALL:
             rows = build_blowup_stall_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_BLOWUP_BREAK:
+            rows = build_blowup_break_rows(tdxdir=args.tdxdir)
         else:
             rows = build_ma_cross_rows(tdxdir=args.tdxdir)
     finally:

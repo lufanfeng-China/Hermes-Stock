@@ -1982,6 +1982,8 @@ function loadTechEvalSummary(market, symbol) {
         setTechPlaceholders();
         return;
       }
+      d.market = market;
+      d.symbol = symbol;
       setTechCard('tech-trend-value', 'tech-trend-detail', 'tech-trend-card', d.trend, d.trend_label, d.trend_detail);
       setTechCard('tech-momentum-value', 'tech-momentum-detail', 'tech-momentum-card', d.momentum, d.momentum_label, d.momentum_detail);
       setTechCard('tech-volume-value', 'tech-volume-detail', 'tech-volume-card', d.volume_signal, d.volume_label, d.volume_detail);
@@ -2493,6 +2495,7 @@ function setTechConclusion(d) {
   if (detail) detail.textContent = buildConclusionDetail(d);
   if (card) card.style.borderLeft = `3px solid ${cc}`;
   showKlineLink();
+  loadCandlePatterns(d.symbol, d.market);
 }
 
 function resetTechConclusion() {
@@ -2507,6 +2510,35 @@ function resetTechConclusion() {
   if (detail) detail.textContent = '';
   if (card) card.style.borderLeft = '';
   hideKlineLink();
+  resetCandlePatterns();
+}
+
+async function loadCandlePatterns(symbol, market) {
+  const row = document.getElementById('candle-patterns-row');
+  if (!row) return;
+  try {
+    const resp = await fetch(`/api/stock-candle-patterns?symbol=${encodeURIComponent(symbol)}&limit=12`);
+    const data = await resp.json();
+    if (!data.ok || !data.patterns) { row.style.display = 'none'; return; }
+    const emoji = { bullish: '🟢', bearish: '🔴', neutral: '⚪' };
+    const chips = data.patterns.map((p, i) =>
+      `<span class="candle-pattern-chip ${p.direction}"><span class="candle-pattern-num">${i + 1}</span> ${emoji[p.direction] || ''} ${p.name}</span>`
+    );
+    // Arrange in 3 columns, 4 per column, newest first (1=top-left)
+    const cols = [[], [], []];
+    chips.forEach((chip, i) => cols[i % 3].push(chip));
+    row.innerHTML = cols.map(col =>
+      `<div class="candle-pattern-col">${col.join('<br>')}</div>`
+    ).join('');
+    row.style.display = 'flex';
+  } catch (e) {
+    row.style.display = 'none';
+  }
+}
+
+function resetCandlePatterns() {
+  const row = document.getElementById('candle-patterns-row');
+  if (row) row.style.display = 'none';
 }
 
 // ── K-line Chart Dialog ──────────────────────────────────────────────────────
