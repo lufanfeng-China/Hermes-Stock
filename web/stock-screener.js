@@ -2,29 +2,13 @@ import { KlineChart } from './kline-chart.js?v=20260513-ma';
 
 const PAGE_SIZE = 50;
 const STRATEGY_PRESETS = {
-  rps_standard_launch: {
-    strategy: 'rps_standard_launch',
-    description: 'RPS20≥92, RPS50≥88, RPS120≥85, RPS250≥80；RPS20>RPS50≥RPS120-3≥RPS250-5；收盘>MA20>MA50≥MA50[-5]；放量1.3倍',
-  },
-  rps_attack: {
-    strategy: 'rps_attack',
-    description: 'RPS20≥88, RPS50≥82, RPS120≥80, RPS250≥75；RPS加速上翘；收盘>MA20>MA50；放量1.2倍',
-  },
-  rps_pullback: {
-    strategy: 'rps_pullback',
-    description: 'RPS20从<50首次突破>70；回踩期中RPS50≥70且RPS120/250≥75；过去5日未出现过',
-  },
   rps_first: {
     strategy: 'rps_first',
-    description: '任意3个RPS≥90且余下≥80；过去5个交易日首次满足',
+    description: '任意3个RPS≥85且余下≥75，且过去60个交易日首次满足',
   },
   ma_cross: {
     strategy: 'ma_cross',
     description: 'MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10向上 + 均线粘合<10%',
-  },
-  first_board: {
-    strategy: 'first_board',
-    description: '30日内有涨停; 周/月线处于底部; 回撤5%-20%; PE-TTM 0~50',
   },
   washout: {
     strategy: 'washout',
@@ -36,7 +20,7 @@ const STRATEGY_PRESETS = {
   },
   blowup_stall: {
     strategy: 'blowup_stall',
-    description: '放巨量但涨不动：量>2.5x50日均量 + 涨幅<2% + 冲高回落/高位, 按信号强度排序',
+    description: '放巨量但涨不动：量>2.5x50日均量 + 阳线 + 涨幅<2% + 距20日最高≤2% + 冲高回落/高位, 按信号强度排序',
   },
   blowup_break: {
     strategy: 'blowup_break',
@@ -281,13 +265,13 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row, idx) => {
@@ -298,17 +282,15 @@ function renderScreenerRows(rows) {
       <td><strong>${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
       <td class="num">${formatNumber(row.current_price, 2)}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
-      <td class="num">${formatNumber(row.ps_ttm, 2)}</td>
-      <td class="num">${formatMarketCapYi(row.total_market_cap)}</td>
+      <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)} / ${formatNumber(row.rps_20, 0)}/${formatNumber(row.rps_50, 0)}/${formatNumber(row.rps_120, 0)}/${formatNumber(row.rps_250, 0)}</td>
+      <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
       <td class="num">${formatRank(row.market_total_rank, row.market_total_universe_size)}</td>
       <td class="num">${formatRank(row.industry_total_rank, row.industry_total_universe_size)}</td>
-      <td>${escapeHtml(row.classification_label || row.classification || '—')}</td>
       <td>${escapeHtml(row.valuation_band_label || '—')}</td>
       <td class="num">${formatPercentile(row.primary_percentile)}</td>
       <td>${escapeHtml(row.industry_temperature_label || '—')}<span class="stock-screener-symbol">${escapeHtml(formatPercentile(row.industry_temperature_percentile_since_2022))}</span></td>
       <td>${escapeHtml(industryText)}</td>
       <td class="num">${formatNumber(row.industry_total_score, 1)}</td>
-      <td class="num">${formatRank(row.industry_total_rank, row.industry_total_universe_size)}</td>
     </tr>`;
   }).join('');
 }
@@ -660,96 +642,6 @@ setTimeout(() => {
     setTimeout(() => { syncTdxBtn.textContent = '同步到AI股池'; syncTdxBtn.disabled = false; }, 2000);
   });
 }, 0);
-
-// ── Backtest dialog ──────────────────────────────────────────────────────────
-
-let backtestFilters = null;
-
-function openBacktestDialog(strategy) {
-  document.getElementById('backtest-strategy-input').value = strategy || '';
-  // Capture current screener filter state for custom (non-strategy) backtest
-  if (!strategy) {
-    const params = buildParams(currentPage);
-    const filters = {};
-    for (const [key, value] of params.entries()) {
-      if (key === 'page' || key === 'page_size') continue;
-      filters[key] = value;
-    }
-    backtestFilters = Object.keys(filters).length ? filters : null;
-    document.getElementById('backtest-filters-input').value = JSON.stringify(backtestFilters);
-  } else {
-    backtestFilters = null;
-    document.getElementById('backtest-filters-input').value = '';
-  }
-  document.getElementById('backtest-dialog').hidden = false;
-  document.getElementById('backtest-dialog').setAttribute('aria-hidden', 'false');
-}
-
-function closeBacktestDialog() {
-  document.getElementById('backtest-dialog').hidden = true;
-  document.getElementById('backtest-dialog').setAttribute('aria-hidden', 'true');
-}
-
-document.querySelectorAll('.strategy-backtest-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    openBacktestDialog(btn.dataset.strategy);
-  });
-});
-
-document.getElementById('backtest-custom-btn')?.addEventListener('click', () => {
-  openBacktestDialog('');
-});
-
-document.getElementById('backtest-cancel-btn')?.addEventListener('click', closeBacktestDialog);
-
-document.getElementById('backtest-dialog')?.addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) closeBacktestDialog();
-});
-
-document.getElementById('backtest-run-btn')?.addEventListener('click', async () => {
-  const btn = document.getElementById('backtest-run-btn');
-  btn.disabled = true;
-  btn.textContent = '回测中...';
-
-  const strategy = document.getElementById('backtest-strategy-input').value;
-  const body = {
-    strategy: strategy || undefined,
-    start_date: document.getElementById('backtest-start').value,
-    end_date: document.getElementById('backtest-end').value,
-    stop_loss_pct: parseFloat(document.getElementById('backtest-stop-loss').value) / 100,
-    take_profit_pct: parseFloat(document.getElementById('backtest-take-profit').value) / 100,
-    max_hold_days: parseInt(document.getElementById('backtest-max-hold').value),
-    max_holdings: parseInt(document.getElementById('backtest-max-holdings').value),
-  };
-  // Pass captured filters for custom backtest
-  if (!strategy && backtestFilters) {
-    body.filters = backtestFilters;
-  }
-  const ma = parseInt(document.getElementById('backtest-ma').value);
-  if (ma > 0) body.ma_period = ma;
-  const trailing = parseInt(document.getElementById('backtest-trailing').value);
-  if (trailing > 0) body.trailing_pct = trailing / 100;
-
-  try {
-    const resp = await fetch('/api/run-backtest', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body),
-    });
-    const data = await resp.json();
-    if (data.ok) {
-      window.open(`/backtest.html?result=${encodeURIComponent(data.result_path)}`, '_blank');
-      closeBacktestDialog();
-    } else {
-      alert('回测失败: ' + (data.error || 'unknown'));
-    }
-  } catch (e) {
-    alert('回测请求失败: ' + e.message);
-  }
-  btn.disabled = false;
-  btn.textContent = '开始回测';
-});
 
 // ── Watchlist integration ───────────────────────────────────────────────
 

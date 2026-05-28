@@ -172,7 +172,7 @@ def _tail_lines(text: str | None, limit: int = DATA_UPDATE_OUTPUT_TAIL_LINES) ->
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_standard_launch", "rps_attack", "rps_pullback", "rps_first", "ma_cross", "first_board", "washout", "rps_climb", "blowup_stall"}:
+    if strategy not in {"rps_first", "ma_cross", "washout", "rps_climb", "blowup_stall", "blowup_break"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
@@ -601,22 +601,17 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_rps_history.py'), '--ndays', '120'],
         ),
         (
-            'rebuild_screener_standard_launch',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'rps_standard_launch', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_attack',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'rps_attack', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_pullback',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'rps_pullback', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+            'update_rps_current',
+            [TONGDAXIN_PYTHON, '-c',
+             'import json, sys;'
+             'from pathlib import Path;'
+             f'hist_path = Path(r\"{DERIVED_FINAL_DIR}/dataset_stock_rps_history.json\");'
+             f'curr_path = Path(r\"{DERIVED_FINAL_DIR}/dataset_stock_rps_current.json\");'
+             'all_rows = json.loads(hist_path.read_text(encoding=\"utf-8\"));'
+             'latest = max(r[\"trading_day\"] for r in all_rows if r.get(\"trading_day\"));'
+             'current = [r for r in all_rows if r.get(\"trading_day\") == latest];'
+             'curr_path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding=\"utf-8\");'
+             f'print(f\"RPS current updated to {{latest}} ({{len(current)}} rows)\")'],
         ),
         (
             'rebuild_screener_first',
@@ -628,12 +623,6 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             'rebuild_screener_ma_cross',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
              '--strategy', 'ma_cross', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_first_board',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'first_board', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
         (
@@ -652,6 +641,12 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             'rebuild_screener_blowup_stall',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
              '--strategy', 'blowup_stall', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_blowup_break',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'blowup_break', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
     ])
@@ -1742,9 +1737,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/rps-trading-days":
             self.handle_rps_trading_days()
             return
-        if parsed.path == "/api/run-backtest":
-            self.handle_run_backtest()
-            return
         if parsed.path == "/api/watchlist":
             self.handle_watchlist_get()
             return
@@ -1790,9 +1782,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path.startswith("/api/proxy-capital-flow"):
             self.handle_proxy_capital_flow(parsed.query)
-            return
-        if parsed.path == "/api/run-backtest":
-            self.handle_run_backtest()
             return
         if parsed.path == "/api/watchlist/add":
             self.handle_watchlist_add()
@@ -2074,7 +2063,42 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             as_of_date = params.get("as_of_date", "").strip()
             if not as_of_date:
                 ensure_stock_screener_strategy_dataset(params.get("strategy", ""))
-            self.respond_json(HTTPStatus.OK, build_stock_screener_response(params))
+            result = build_stock_screener_response(params)
+            # Augment with swing low price for current page rows
+            if result.get("rows"):
+                from mootdx.reader import Reader
+                reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
+                for row in result["rows"]:
+                    try:
+                        daily = reader.daily(symbol=row["symbol"])
+                        if daily is not None and not daily.empty and len(daily) >= 111:
+                            daily = daily.sort_index()
+                            lows = daily["low"].astype(float).tolist()
+                            closes = daily["close"].astype(float).tolist()
+                            n = len(lows)
+                            # Search last 90 bars for most recent swing low
+                            # (low < all 10 bars before AND < all 10 bars after)
+                            swing_idx = None
+                            search_end = n - 11  # need 10 bars after
+                            search_start = max(0, n - 90)
+                            for i in range(search_end - 1, search_start - 1, -1):
+                                lo = lows[i]
+                                before = lows[max(0, i - 10):i]
+                                after = lows[i + 1:i + 11]
+                                if all(lo < v for v in before) and all(lo < v for v in after):
+                                    swing_idx = i
+                                    break
+                            if swing_idx is not None:
+                                row["swing_low_price"] = round(closes[swing_idx], 2)
+                            else:
+                                # Fallback: lowest close in last 90 bars
+                                fb_start = max(0, n - 90)
+                                row["swing_low_price"] = round(min(closes[fb_start:]), 2)
+                        else:
+                            row["swing_low_price"] = None
+                    except Exception:
+                        row["swing_low_price"] = None
+            self.respond_json(HTTPStatus.OK, result)
         except Exception as exc:
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -2092,48 +2116,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "rps_trading_days_error", "message": str(exc)}},
             )
-
-    def handle_run_backtest(self) -> None:
-        """Run backtest script synchronously, return result path."""
-        import subprocess, uuid
-        try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            body = json.loads(raw.decode("utf-8"))
-        except Exception:
-            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON body"})
-            return
-        
-        result_id = uuid.uuid4().hex[:8]
-        output_path = PROJECT_ROOT / "data" / "derived" / "backtest" / f"bt_{result_id}.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        cmd = [
-            sys.executable, str(PROJECT_ROOT / "scripts" / "run_backtest.py"),
-            "--start", str(body.get("start_date", "")),
-            "--end", str(body.get("end_date", "")),
-            "--stop-loss", str(body.get("stop_loss_pct", -0.08)),
-            "--take-profit", str(body.get("take_profit_pct", 0.20)),
-            "--max-hold-days", str(body.get("max_hold_days", 20)),
-            "--max-holdings", str(body.get("max_holdings", 10)),
-            "--output", str(output_path),
-        ]
-        if body.get("strategy"):
-            cmd += ["--strategy", body["strategy"]]
-        if body.get("filters"):
-            cmd += ["--filters", json.dumps(body["filters"], separators=(",", ":"))]
-        if body.get("ma_period"):
-            cmd += ["--ma-period", str(body["ma_period"])]
-        if body.get("trailing_pct"):
-            cmd += ["--trailing-pct", str(body["trailing_pct"])]
-        
-        try:
-            subprocess.run(cmd, check=True, timeout=600, capture_output=True, text=True)
-            self.respond_json(HTTPStatus.OK, {"ok": True, "result_path": f"/data/derived/backtest/bt_{result_id}.json"})
-        except subprocess.TimeoutExpired:
-            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": "回测超时"})
-        except subprocess.CalledProcessError as e:
-            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": f"回测失败: {e.stderr[:200] if e.stderr else str(e)}"})
 
     # ── Watchlist handlers ───────────────────────────────────────────────
 

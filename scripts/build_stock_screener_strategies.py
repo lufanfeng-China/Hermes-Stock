@@ -18,43 +18,24 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.search.index import (
     DEFAULT_DATASET_DIR,
-    evaluate_rps_attack_signal,
-    evaluate_rps_pullback_signal,
-    evaluate_rps_standard_launch_signal,
     load_industry_valuation_rows,
     load_rps_rows,
 )
 
 DEFAULT_TDX_DIR = "/mnt/c/new_tdx64"
 DEFAULT_OUTPUT = DEFAULT_DATASET_DIR / "dataset_stock_screener_strategies_current.json"
-STRATEGY_STANDARD = "rps_standard_launch"
-STRATEGY_ATTACK = "rps_attack"
-STRATEGY_PULLBACK = "rps_pullback"
 STRATEGY_FIRST = "rps_first"
 STRATEGY_MA_CROSS = "ma_cross"
-STRATEGY_FIRST_BOARD = "first_board"
 STRATEGY_WASHOUT = "washout"
 STRATEGY_RPS_CLIMB = "rps_climb"
 STRATEGY_BLOWUP_STALL = "blowup_stall"
 STRATEGY_BLOWUP_BREAK = "blowup_break"
 STRATEGY_METADATA = {
-    STRATEGY_STANDARD: {
-        "label": "RPS标准",
-    },
-    STRATEGY_ATTACK: {
-        "label": "RPS进攻",
-    },
-    STRATEGY_PULLBACK: {
-        "label": "RPS回踩",
-    },
     STRATEGY_FIRST: {
         "label": "RPS首次",
     },
     STRATEGY_MA_CROSS: {
         "label": "均线选股",
-    },
-    STRATEGY_FIRST_BOARD: {
-        "label": "首板股池",
     },
     STRATEGY_WASHOUT: {
         "label": "涨停洗盘",
@@ -88,336 +69,6 @@ def _return_pct(closes: list[float], end_index: int, window: int) -> float | Non
     return (closes[end_index] - base) / base * 100.0
 
 
-def _rps_by_symbol(return_by_symbol: dict[str, float | None]) -> dict[str, float]:
-    valid = [(symbol, value) for symbol, value in return_by_symbol.items() if value is not None]
-    valid.sort(key=lambda item: (-float(item[1]), item[0]))
-    universe_size = len(valid)
-    if universe_size == 0:
-        return {}
-    return {
-        symbol: round(((universe_size - rank + 1) / universe_size) * 100.0, 2)
-        for rank, (symbol, _value) in enumerate(valid, start=1)
-    }
-
-
-def _latest_rps_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    for row in rps_rows:
-        rps20 = _coerce_float(row.get("rps_20"))
-        rps50 = _coerce_float(row.get("rps_50"))
-        rps120 = _coerce_float(row.get("rps_120"))
-        rps250 = _coerce_float(row.get("rps_250"))
-        if None in (rps20, rps50, rps120, rps250):
-            continue
-        rps_base = rps250 >= 80 and rps120 >= 85 and rps50 >= 88 and rps20 >= 92
-        rps_structure = rps20 > rps50 and rps50 >= rps120 - 3 and rps120 >= rps250 - 5
-        if rps_base and rps_structure:
-            candidates.append(row)
-    return candidates
-
-
-def _latest_rps_attack_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    for row in rps_rows:
-        rps20 = _coerce_float(row.get("rps_20"))
-        rps50 = _coerce_float(row.get("rps_50"))
-        rps120 = _coerce_float(row.get("rps_120"))
-        rps250 = _coerce_float(row.get("rps_250"))
-        if None in (rps20, rps50, rps120, rps250):
-            continue
-        rps_base = rps250 >= 75 and rps120 >= 80 and rps50 >= 82 and rps20 >= 88
-        rps_structure = rps20 > rps50 and rps120 >= rps250 - 8
-        if rps_base and rps_structure:
-            candidates.append(row)
-    return candidates
-
-
-def _build_signal_context(
-    rps_rows: list[dict[str, Any]],
-    *,
-    tdxdir: str,
-    candidate_symbols: set[str],
-) -> dict[str, dict[str, object]]:
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    context: dict[str, dict[str, object]] = {
-        "ref3_return20": {},
-        "ref5_return50": {},
-        "ref1_return20": {},
-        "ref2_return20": {},
-        "ref3_return50": {},
-        "candidate_bars": {},
-    }
-
-    for row in rps_rows:
-        symbol = str(row.get("symbol", "")).strip()
-        if not symbol:
-            continue
-        try:
-            daily = reader.daily(symbol=symbol)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        closes = [float(value) for value in daily["close"].astype(float).tolist()]
-        if len(closes) < 121:
-            continue
-        latest_index = len(closes) - 1
-        context["ref3_return20"][symbol] = _return_pct(closes, latest_index - 3, 20)
-        context["ref5_return50"][symbol] = _return_pct(closes, latest_index - 5, 50)
-        context["ref1_return20"][symbol] = _return_pct(closes, latest_index - 1, 20)
-        context["ref2_return20"][symbol] = _return_pct(closes, latest_index - 2, 20)
-        context["ref3_return50"][symbol] = _return_pct(closes, latest_index - 3, 50)
-
-        if symbol in candidate_symbols:
-            tail = daily.tail(270)
-            bars: list[dict[str, float]] = []
-            for _index, bar in tail.iterrows():
-                bars.append(
-                    {
-                        "open": float(bar["open"]),
-                        "close": float(bar["close"]),
-                        "high": float(bar["high"]),
-                        "low": float(bar["low"]),
-                        "volume": float(bar["volume"]),
-                    }
-                )
-            context["candidate_bars"][symbol] = bars
-    return context
-
-
-def build_rps_standard_launch_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    rps_rows = load_rps_rows()
-    candidates = _latest_rps_candidates(rps_rows)
-    candidate_symbols = {str(row.get("symbol", "")).strip() for row in candidates}
-    rps_by_symbol = {str(row.get("symbol", "")).strip(): row for row in rps_rows if str(row.get("symbol", "")).strip()}
-    signal_context = _build_signal_context(rps_rows, tdxdir=tdxdir, candidate_symbols=candidate_symbols)
-    ref3_rps20 = _rps_by_symbol(signal_context["ref3_return20"])
-    ref5_rps50 = _rps_by_symbol(signal_context["ref5_return50"])
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-
-    results: list[dict[str, Any]] = []
-    for row in candidates:
-        symbol = str(row.get("symbol", "")).strip()
-        latest_rps = rps_by_symbol.get(symbol) or {}
-        ref3_rps = {"rps_20": ref3_rps20.get(symbol)}
-        ref5_rps = {"rps_50": ref5_rps50.get(symbol)}
-        signal = evaluate_rps_standard_launch_signal(
-            latest_rps,
-            ref3_rps,
-            ref5_rps,
-            signal_context["candidate_bars"].get(symbol, []),
-        )
-        results.append(
-            {
-                "trading_day": row.get("trading_day"),
-                "market": str(row.get("market", "")).strip().lower(),
-                "symbol": symbol,
-                "strategy": STRATEGY_STANDARD,
-                "strategy_label": STRATEGY_METADATA[STRATEGY_STANDARD]["label"],
-                "passed": bool(signal.get("passed")),
-                "conditions": signal.get("conditions") or {},
-                "generated_at": generated_at,
-                "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
-            }
-        )
-    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
-    return results
-
-
-def build_rps_attack_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    rps_rows = load_rps_rows()
-    candidates = _latest_rps_attack_candidates(rps_rows)
-    candidate_symbols = {str(row.get("symbol", "")).strip() for row in candidates}
-    rps_by_symbol = {str(row.get("symbol", "")).strip(): row for row in rps_rows if str(row.get("symbol", "")).strip()}
-    signal_context = _build_signal_context(rps_rows, tdxdir=tdxdir, candidate_symbols=candidate_symbols)
-    ref1_rps20 = _rps_by_symbol(signal_context["ref1_return20"])
-    ref2_rps20 = _rps_by_symbol(signal_context["ref2_return20"])
-    ref3_rps50 = _rps_by_symbol(signal_context["ref3_return50"])
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-
-    results: list[dict[str, Any]] = []
-    for row in candidates:
-        symbol = str(row.get("symbol", "")).strip()
-        latest_rps = rps_by_symbol.get(symbol) or {}
-        signal = evaluate_rps_attack_signal(
-            latest_rps,
-            {"rps_20": ref1_rps20.get(symbol)},
-            {"rps_20": ref2_rps20.get(symbol)},
-            {"rps_50": ref3_rps50.get(symbol)},
-            signal_context["candidate_bars"].get(symbol, []),
-        )
-        results.append(
-            {
-                "trading_day": row.get("trading_day"),
-                "market": str(row.get("market", "")).strip().lower(),
-                "symbol": symbol,
-                "strategy": STRATEGY_ATTACK,
-                "strategy_label": STRATEGY_METADATA[STRATEGY_ATTACK]["label"],
-                "passed": bool(signal.get("passed")),
-                "conditions": signal.get("conditions") or {},
-                "generated_at": generated_at,
-                "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
-            }
-        )
-    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
-    return results
-
-
-def build_rps_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """RPS回踩：RPS20从50以下首次突破70，回踩期间(RPS20<70)RPS50≥70且RPS120/250≥75，过去5日未出现过。"""
-    import json as _json
-    rps_rows = load_rps_rows()
-
-    # Initial filter: today RPS20 > 70
-    candidates: list[dict[str, Any]] = []
-    for row in rps_rows:
-        rps20 = _coerce_float(row.get("rps_20"))
-        if rps20 is not None and rps20 > 70:
-            candidates.append(row)
-    if not candidates:
-        return []
-
-    # Load RPS history dataset
-    history_path = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.json"
-    if not history_path.exists():
-        return []
-    all_history = _json.loads(history_path.read_text(encoding="utf-8"))
-
-    # Build per-stock lookup: {(market, symbol): {trading_day: {rps_20, rps_50, rps_120, rps_250}}}
-    stock_history: dict[tuple[str, str], dict[str, dict[str, float | None]]] = {}
-    for h in all_history:
-        key = (str(h.get("market", "")).strip(), str(h.get("symbol", "")).strip())
-        if key not in stock_history:
-            stock_history[key] = {}
-        stock_history[key][str(h.get("trading_day", ""))] = {
-            "rps_20": h.get("rps_20"),
-            "rps_50": h.get("rps_50"),
-            "rps_120": h.get("rps_120"),
-            "rps_250": h.get("rps_250"),
-        }
-
-    # Get sorted trading days from any stock's history
-    sample_dates = sorted(next(iter(stock_history.values())).keys()) if stock_history else []
-    if not sample_dates:
-        return []
-
-    def _check_pullback(ordered: list, target_idx: int) -> tuple[bool, bool, int]:
-        """Check pullback condition for a given day index. Returns (passed, has_pullback, pullback_days).
-
-        The pullback is a continuous streak where RPS20 < 70.
-        Within this streak (or immediately before it), RPS20 must be < 50.
-        During the entire streak: RPS50 >= 70, RPS120 >= 75, RPS250 >= 75.
-        """
-        # Walk backwards from target_idx to find the pullback streak (RPS20 < 70)
-        # and check if RPS20 ever < 50 within or immediately before the streak
-        pullback_start = target_idx  # will be the index where RPS20 last went >= 70
-        found_low = False
-        pullback_ok = True
-        pullback_days = 0
-
-        for i in range(target_idx - 1, max(0, target_idx - 30) - 1, -1):
-            h = ordered[i][1]
-            r20 = _coerce_float(h.get("rps_20"))
-
-            if r20 is not None and r20 < 50:
-                found_low = True
-
-            if r20 is not None and r20 < 70:
-                # Inside pullback streak
-                pullback_days += 1
-                pullback_start = i
-                r50 = _coerce_float(h.get("rps_50"))
-                r120 = _coerce_float(h.get("rps_120"))
-                r250 = _coerce_float(h.get("rps_250"))
-                if (r50 is None or r50 < 70 or
-                    r120 is None or r120 < 75 or
-                    r250 is None or r250 < 75):
-                    pullback_ok = False
-                    break
-            else:
-                # RPS20 >= 70 — end of pullback streak
-                # If we haven't found a low < 50 yet, check if the day right before
-                # the streak had RPS20 < 50 (it would have been caught in the loop
-                # since this is the first day outside the streak)
-                break
-
-        has_pullback = pullback_days > 0
-        return pullback_ok and has_pullback and found_low, has_pullback, pullback_days
-
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    results: list[dict[str, Any]] = []
-
-    for row in candidates:
-        market_val = str(row.get("market", "")).strip().lower()
-        symbol_val = str(row.get("symbol", "")).strip()
-        key = (market_val, symbol_val)
-        hist = stock_history.get(key, {})
-        if not hist:
-            continue
-
-        today_str = sample_dates[-1]
-        ordered = sorted(
-            [(d, h) for d, h in hist.items() if d <= today_str],
-            key=lambda x: x[0],
-        )
-        if len(ordered) < 30:
-            continue
-
-        # Find today's index
-        today_idx = None
-        for i, (d, _h) in enumerate(ordered):
-            if d == today_str:
-                today_idx = i
-                break
-        if today_idx is None:
-            continue
-
-        # Check today's condition
-        today_passed, has_pullback, pullback_days = _check_pullback(ordered, today_idx)
-        if not today_passed:
-            continue
-
-        # "首次" check: was this condition met in the past 5 trading days?
-        ever_met = False
-        for day_offset in range(1, 6):
-            past_idx = today_idx - day_offset
-            if past_idx < 30:
-                continue
-            past_rps20 = _coerce_float(ordered[past_idx][1].get("rps_20"))
-            if past_rps20 is not None and past_rps20 > 70:
-                past_passed, _, _ = _check_pullback(ordered, past_idx)
-                if past_passed:
-                    ever_met = True
-                    break
-
-        is_first = not ever_met
-
-        conditions: dict[str, object] = {
-            "today_rps20_gt_70": True,
-            "found_low_below_50": True,
-            "pullback_ok": today_passed,
-            "pullback_day_count": pullback_days,
-            "has_pullback": has_pullback,
-            "first_time": is_first,
-            "ever_met_past_5_days": ever_met,
-        }
-
-        results.append({
-            "trading_day": row.get("trading_day"),
-            "market": market_val,
-            "symbol": symbol_val,
-            "strategy": STRATEGY_PULLBACK,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_PULLBACK]["label"],
-            "passed": is_first,
-            "conditions": conditions,
-            "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history",
-        })
-
-    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
-    return results
-
 
 def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Find stocks where 3 out of 4 RPS >= 90 and the remaining one >= 80."""
@@ -434,101 +85,6 @@ def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]
         if above_90 >= 3 and below_80 == 0:
             candidates.append(row)
     return candidates
-
-
-def _compute_past_days_rps(
-    reader: Reader,
-    rps_rows: list[dict[str, Any]],
-    ndays: int = 5,
-) -> list[dict[tuple[str, str], dict[str, float | None]]]:
-    """Compute cross-sectional RPS for the past N trading days for all stocks.
-
-    Returns a list of length ndays, where index 0 = yesterday (1 day ago),
-    index 1 = 2 days ago, etc.
-    Each element is {(market, symbol): {'rps_20': ..., 'rps_50': ..., 'rps_120': ..., 'rps_250': ...}}
-    """
-    close_history: dict[str, list[float]] = {}
-    for row in rps_rows:
-        market_val = str(row.get("market", "")).strip()
-        symbol_val = str(row.get("symbol", "")).strip()
-        if not market_val or not symbol_val:
-            continue
-        key = f"{market_val}:{symbol_val}"
-        try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        closes = daily.sort_index()["close"].astype(float).tolist()
-        if len(closes) >= 260 + ndays:
-            close_history[key] = closes
-
-    results: list[dict[tuple[str, str], dict[str, float | None]]] = []
-
-    for day_offset in range(1, ndays + 1):
-        rows_by_symbol: list[dict[str, Any]] = []
-        for key, closes in close_history.items():
-            market_val, symbol_val = key.split(":", 1)
-            idx = len(closes) - 1 - day_offset  # today-1=yesterday, today-2=2 days ago...
-            if idx < 250:
-                continue
-            ret20 = _return_pct(closes, idx, 20)
-            ret50 = _return_pct(closes, idx, 50)
-            ret120 = _return_pct(closes, idx, 120)
-            ret250 = _return_pct(closes, idx, 250)
-            if all(v is None for v in [ret20, ret50, ret120, ret250]):
-                continue
-            rows_by_symbol.append({
-                "market": market_val,
-                "symbol": symbol_val,
-                "return_20_pct": ret20,
-                "return_50_pct": ret50,
-                "return_120_pct": ret120,
-                "return_250_pct": ret250,
-            })
-
-        if not rows_by_symbol:
-            results.append({})
-            continue
-
-        universe_size = len(rows_by_symbol)
-
-        def _rank_rps(rows: list[dict[str, Any]], field: str) -> dict[tuple[str, str], float | None]:
-            sorted_rows = sorted(
-                rows,
-                key=lambda r: float(r[field]) if r[field] is not None else float("-inf"),
-                reverse=True,
-            )
-            result: dict[tuple[str, str], float | None] = {}
-            for rank, r in enumerate(sorted_rows, start=1):
-                value = r[field]
-                if value is None:
-                    result[(r["market"], r["symbol"])] = None
-                else:
-                    result[(r["market"], r["symbol"])] = round(
-                        (universe_size - rank + 1) / universe_size * 100.0, 2
-                    )
-            return result
-
-        rps20_map = _rank_rps(rows_by_symbol, "return_20_pct")
-        rps50_map = _rank_rps(rows_by_symbol, "return_50_pct")
-        rps120_map = _rank_rps(rows_by_symbol, "return_120_pct")
-        rps250_map = _rank_rps(rows_by_symbol, "return_250_pct")
-
-        day_result: dict[tuple[str, str], dict[str, float | None]] = {}
-        for row in rows_by_symbol:
-            key = (row["market"], row["symbol"])
-            day_result[key] = {
-                "rps_20": rps20_map.get(key),
-                "rps_50": rps50_map.get(key),
-                "rps_120": rps120_map.get(key),
-                "rps_250": rps250_map.get(key),
-            }
-        results.append(day_result)
-
-    return results
-
 
 def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
     """RPS首次：今天任意3个RPS≥90且余下1个≥80，且过去5个交易日从未满足此条件。"""
@@ -676,130 +232,6 @@ def build_ma_cross_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
     return results
-
-
-def build_first_board_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """首板股池：30日内有涨停; 周/月线处于底部; 回撤5%-20%; PE-TTM 0~50"""
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-
-    # Build PE-TTM lookup from relative valuation dataset
-    valuation_groups = load_industry_valuation_rows()
-    pe_ttm_map: dict[tuple[str, str], float] = {}
-    for group in valuation_groups:
-        for member in group.get("member_valuation_rows", []) or []:
-            market = str(member.get("market", "")).strip().lower()
-            symbol = str(member.get("symbol", "")).strip()
-            pe = _coerce_float(member.get("pe_ttm"))
-            if market and symbol and pe is not None:
-                pe_ttm_map[(market, symbol)] = pe
-
-    def _limit_up_threshold(market_str: str, symbol_str: str) -> float:
-        """Return limit-up gain threshold based on board (symbol prefix)."""
-        if symbol_str.startswith("688"):
-            return 19.5  # STAR / 科创板 (sh market)
-        if symbol_str.startswith(("300", "301")):
-            return 19.5  # ChiNext / 创业板 (sz market)
-        if market_str == "bj" or symbol_str.startswith("92"):
-            return 29.5  # BSE / 北交所
-        return 9.5  # 主板 (sh.60xxxx, sz.00xxxx)
-
-    results: list[dict[str, Any]] = []
-    for row in rps_rows:
-        market_val = str(row.get("market", "")).strip().lower()
-        symbol_val = str(row.get("symbol", "")).strip()
-        if not market_val or not symbol_val:
-            continue
-
-        try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        closes = daily["close"].astype(float).tolist()
-        highs = daily["high"].astype(float).tolist()
-        if len(closes) < 250:
-            continue
-
-        # Condition A: 30天内有过涨停
-        threshold = _limit_up_threshold(market_val, symbol_val)
-        lu_idx = -1
-        scan_start = max(0, len(closes) - 30)
-        for i in range(len(closes) - 1, scan_start - 1, -1):
-            if i == 0:
-                continue
-            c = closes[i]
-            h = highs[i]
-            prev_c = closes[i - 1]
-            if prev_c <= 0:
-                continue
-            gain_pct = (c - prev_c) / prev_c * 100.0
-            if gain_pct >= threshold and c >= h * 0.99:
-                lu_idx = i
-                break
-
-        if lu_idx < 0:
-            continue  # No limit-up in last 30 days
-
-        # Condition B: 距离上次涨停股价回撤5%-20%
-        limit_up_close = closes[lu_idx]
-        current_close = closes[-1]
-        if limit_up_close <= 0:
-            continue
-        pullback_pct = (limit_up_close - current_close) / limit_up_close * 100.0
-        if pullback_pct < 5.0 or pullback_pct > 20.0:
-            continue
-
-        # Condition C: 周线和月线在底部位置
-        max_100 = max(closes[-100:])
-        min_100 = min(closes[-100:])
-        if max_100 == min_100:
-            continue
-        week_position = (current_close - min_100) / (max_100 - min_100)
-        week_bottom = week_position < 0.30
-
-        max_250 = max(closes[-250:])
-        min_250 = min(closes[-250:])
-        if max_250 == min_250:
-            continue
-        month_position = (current_close - min_250) / (max_250 - min_250)
-        month_bottom = month_position < 0.30
-
-        if not week_bottom or not month_bottom:
-            continue
-
-        # Condition D: 市盈率TTM 0~50
-        pe_ttm = pe_ttm_map.get((market_val, symbol_val))
-        if pe_ttm is None or pe_ttm <= 0 or pe_ttm > 50:
-            continue
-
-        # All conditions passed
-        passed = True
-
-        results.append({
-            "trading_day": row.get("trading_day"),
-            "market": market_val,
-            "symbol": symbol_val,
-            "strategy": STRATEGY_FIRST_BOARD,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST_BOARD]["label"],
-            "passed": passed,
-            "conditions": {
-                "has_limit_up_30d": True,
-                "pullback_pct": round(pullback_pct, 2),
-                "week_bottom": week_bottom,
-                "month_bottom": month_bottom,
-                "pe_ttm": round(pe_ttm, 2),
-            },
-            "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+relative_valuation",
-        })
-
-    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
-    return results
-
 
 def build_washout_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
     """涨停洗盘：30日内有首板涨停; 涨停次日高开低走且量2-4倍; 最新价首次站上洗盘日开盘价"""
@@ -1281,7 +713,7 @@ def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build stock screener strategy datasets")
-    parser.add_argument("--strategy", default=STRATEGY_STANDARD, choices=sorted(STRATEGY_METADATA))
+    parser.add_argument("--strategy", default=STRATEGY_FIRST, choices=sorted(STRATEGY_METADATA))
     parser.add_argument("--tdxdir", default=DEFAULT_TDX_DIR)
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--trading-day", default=None, help="Build as of historical date (YYYY-MM-DD)")
@@ -1324,18 +756,10 @@ def main() -> None:
         Reader.factory = staticmethod(_patched_factory)
 
     try:
-        if args.strategy == STRATEGY_STANDARD:
-            rows = build_rps_standard_launch_rows(tdxdir=args.tdxdir)
-        elif args.strategy == STRATEGY_ATTACK:
-            rows = build_rps_attack_rows(tdxdir=args.tdxdir)
-        elif args.strategy == STRATEGY_PULLBACK:
-            rows = build_rps_pullback_rows(tdxdir=args.tdxdir)
-        elif args.strategy == STRATEGY_FIRST:
+        if args.strategy == STRATEGY_FIRST:
             rows = build_rps_first_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_MA_CROSS:
             rows = build_ma_cross_rows(tdxdir=args.tdxdir)
-        elif args.strategy == STRATEGY_FIRST_BOARD:
-            rows = build_first_board_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_WASHOUT:
             rows = build_washout_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_RPS_CLIMB:
