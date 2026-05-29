@@ -65,7 +65,14 @@
             </div>
           </div>
           <a id="tech-kline-link" class="tech-kline-link" href="#" hidden>📈 K线趋势图</a>
-          <div id="candle-patterns-row" class="candle-patterns-row" style="display:none"></div>
+          <div id="kronos-predict-section" class="kronos-predict-section" style="display:none; margin-top:12px; padding:10px; background:var(--bg-card); border-radius:6px; border:1px dashed var(--border-color);">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:13px; color:var(--text-muted);">🤖 AI预测</span>
+              <button id="kronos-predict-btn" class="sub-period-industry-average-btn" style="font-size:12px;">开始预测</button>
+              <span id="kronos-predict-status" style="font-size:12px; color:var(--text-muted);"></span>
+            </div>
+            <div id="kronos-predict-result" style="margin-top:8px; font-size:13px;"></div>
+          </div>
         </article>
         <article class="search-card stock-score-insight-card" id="insights-card">
           <div class="search-card-header">
@@ -579,6 +586,6 @@
     </div>
   </div>
 
-  <script type="module" src="/stock-score.js?v=20260523-kline"></script>
+  <script type="module" src="/stock-score.js?v=20260529-bars"></script>
 </body>
 </html>

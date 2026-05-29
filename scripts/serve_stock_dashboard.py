@@ -1793,6 +1793,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/watchlist/add":
             self.handle_watchlist_add()
             return
+        if parsed.path == "/api/kronos-predict":
+            self.handle_kronos_predict()
+            return
         if parsed.path == "/api/watchlist/remove":
             self.handle_watchlist_remove()
             return
@@ -2168,6 +2171,96 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "stock_screener_error", "message": str(exc)}},
             )
+
+    def handle_kronos_predict(self) -> None:
+        """On-demand Kronos prediction for a single stock. Body: {market, symbol}"""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            body = json.loads(raw.decode("utf-8"))
+        except Exception:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON"})
+            return
+
+        market = str(body.get("market", "")).strip().lower()
+        symbol = str(body.get("symbol", "")).strip()
+        if not market or not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "market and symbol required"})
+            return
+
+        try:
+            import sys as _sys
+            _sys.path.insert(0, "/home/lufanfeng/Kronos")
+            from model import Kronos, KronosTokenizer, KronosPredictor
+            from mootdx.reader import Reader
+            import pandas as pd
+
+            tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
+            model = Kronos.from_pretrained("NeoQuasar/Kronos-small")
+            predictor = KronosPredictor(model, tokenizer, max_context=400)
+
+            reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
+            daily = reader.daily(symbol=symbol)
+            if daily is None or daily.empty or len(daily) < 450:
+                self.respond_json(HTTPStatus.OK, {"ok": False, "error": "insufficient data"})
+                return
+
+            daily = daily.sort_index()
+            n = len(daily)
+            start = max(0, n - 400)
+            df = daily[["open", "high", "low", "close", "volume"]].iloc[start:].copy()
+            df["amount"] = (df["close"] * df["volume"] / 100).round(2)
+            x_ts = pd.Series(daily.index[start:], name="timestamps")
+            last_date = daily.index[-1]
+            y_dates = pd.date_range(start=last_date, periods=21, freq="B")[1:]
+            y_ts = pd.Series(y_dates, name="timestamps")
+
+            pred_df = predictor.predict(
+                df=df, x_timestamp=x_ts, y_timestamp=y_ts, pred_len=20,
+                T=1.0, top_p=0.9, sample_count=1, verbose=False,
+            )
+
+            last_close = float(df["close"].iloc[-1])
+            pred_5 = float(pred_df["close"].iloc[4]) if len(pred_df) > 4 else float(pred_df["close"].iloc[-1])
+            pred_20 = float(pred_df["close"].iloc[-1])
+            pct_5 = round((pred_5 / last_close - 1) * 100, 2)
+            pct_20 = round((pred_20 / last_close - 1) * 100, 2)
+            direction = "up" if pct_20 > 2 else ("down" if pct_20 < -2 else "flat")
+
+            pred_bars = []
+            for i in range(len(pred_df)):
+                pred_bars.append({
+                    "open": round(float(pred_df["open"].iloc[i]), 2),
+                    "high": round(float(pred_df["high"].iloc[i]), 2),
+                    "low": round(float(pred_df["low"].iloc[i]), 2),
+                    "close": round(float(pred_df["close"].iloc[i]), 2),
+                })
+
+            result = {
+                "market": market, "symbol": symbol,
+                "last_close": round(last_close, 2),
+                "pred_5d_pct": pct_5, "pred_20d_pct": pct_20,
+                "pred_direction": direction,
+                "pred_bars": pred_bars,
+            }
+
+            # Save to cache
+            kronos_path = DERIVED_FINAL_DIR / "dataset_kronos_prediction.json"
+            kronos_path.parent.mkdir(parents=True, exist_ok=True)
+            existing = {}
+            if kronos_path.exists():
+                try:
+                    existing = json.loads(kronos_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            key = f"{market}:{symbol}"
+            existing[key] = result
+            kronos_path.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            self.respond_json(HTTPStatus.OK, {"ok": True, **result})
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
+                              {"ok": False, "error": str(exc)})
 
     def handle_rps_trading_days(self) -> None:
         """Return sorted list of unique trading days from RPS history dataset."""

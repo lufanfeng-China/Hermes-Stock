@@ -301,14 +301,14 @@ function renderScreenerRows(rows) {
   tbody.innerHTML = rows.map((row, idx) => {
     const industryText = [row.industry_level_1, row.industry_level_2].filter(Boolean).join(' / ') || '—';
     const marketSymbol = `${String(row.market || '').toUpperCase()}:${row.symbol || ''}`;
-    return `<tr class="stock-screener-row" tabindex="0" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}">
+    return `<tr class="stock-screener-row" tabindex="0" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}" data-pred20d="${row.pred_20d_pct ?? ''}">
       <td class="stock-screener-check-col"><input type="checkbox" class="stock-screener-row-check" data-idx="${idx}"></td>
       <td><strong>${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
       <td class="num">${formatNumber(row.current_price, 2)}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
       <td>${trendSignal(row.tech_trend, row.tech_trend_label)}</td>
       <td class="num">${row.trend_duration || 1}天</td>
-      <td>${kronosSignal(row)}</td>
+      <td class="kronos-cell" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}">${kronosSignal(row)}</td>
       <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)} / ${formatNumber(row.rps_20, 0)}/${formatNumber(row.rps_50, 0)}/${formatNumber(row.rps_120, 0)}/${formatNumber(row.rps_250, 0)}</td>
       <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
       <td class="num">${formatRank(row.market_total_rank, row.market_total_universe_size)}</td>
@@ -369,6 +369,26 @@ async function loadScreenerKline(row) {
 
     klineChart.load(bars, rpsHistory, currentKlinePreset);
     if (selectedDate) klineChart.setMarkerDate(selectedDate);
+    // Kronos prediction bars overlay
+    const predPctStr = row?.dataset?.pred20d;
+    const predPct = predPctStr ? parseFloat(predPctStr) : 0;
+    if (predPct !== 0) {
+      const market = row?.dataset?.market;
+      const symbol = row?.dataset?.symbol;
+      const today = new Date().toISOString().slice(0, 10);
+      const cacheKey = `kronos_${market}_${symbol}_${today}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const pred = JSON.parse(cached);
+          if (pred.pred_bars && pred.pred_bars.length > 0) {
+            klineChart.setPrediction(pred.pred_bars, Math.round(predPct * 10) / 10);
+          }
+        } catch (e) { /* ignore */ }
+      }
+    } else {
+      klineChart.setPrediction(null, null);
+    }
     const stockName = bars[0]?.name || name || symbol;
     document.getElementById('stock-screener-kline-title').textContent = `${symbol} ${stockName}`;
     const range = klineChart.getVisibleRange();
@@ -777,6 +797,48 @@ async function addToWatchlist() {
 
 document.getElementById('wl-add-btn')?.addEventListener('click', addToWatchlist);
 document.getElementById('wl-add-btn-bottom')?.addEventListener('click', addToWatchlist);
+
+// ── Kronos on-demand prediction ──────────────────────────────────────
+
+document.getElementById('stock-screener-results-tbody').addEventListener('click', async (e) => {
+  const cell = e.target.closest('.kronos-cell');
+  if (!cell) return;
+  if (cell.textContent.trim() !== '—') return;  // already has prediction
+  const market = cell.dataset.market;
+  const symbol = cell.dataset.symbol;
+  if (!market || !symbol) return;
+
+  cell.textContent = '⏳';
+  cell.style.cursor = 'wait';
+  try {
+    const resp = await fetch('/api/kronos-predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ market, symbol }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const dir = data.pred_direction;
+      const p5 = data.pred_5d_pct;
+      const p20 = data.pred_20d_pct;
+      const icon = dir === 'up' ? '🟢' : dir === 'down' ? '🔴' : '⚪';
+      const label = dir === 'up' ? '多' : dir === 'down' ? '空' : '观';
+      const p5s = p5 != null ? `${p5 > 0 ? '+' : ''}${p5}%` : '—';
+      const p20s = p20 != null ? `${p20 > 0 ? '+' : ''}${p20}%` : '—';
+      cell.textContent = `${icon}${label} ${p5s}/${p20s}`;
+      // Cache full data for K-line overlay
+      const today = new Date().toISOString().slice(0, 10);
+      sessionStorage.setItem(`kronos_${market}_${symbol}_${today}`, JSON.stringify(data));
+      const row = cell.closest('.stock-screener-row');
+      if (row) row.dataset.pred20d = p20;
+    } else {
+      cell.textContent = '⚠️';
+    }
+  } catch (err) {
+    cell.textContent = '⚠️';
+  }
+  cell.style.cursor = '';
+});
 
 // Re-render current rows (to update watchlist highlight colors)
 function rerenderCurrentRows() {

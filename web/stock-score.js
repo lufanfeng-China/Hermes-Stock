@@ -2495,7 +2495,7 @@ function setTechConclusion(d) {
   if (detail) detail.textContent = buildConclusionDetail(d);
   if (card) card.style.borderLeft = `3px solid ${cc}`;
   showKlineLink();
-  loadCandlePatterns(d.symbol, d.market);
+  setupKronosPredict(d.symbol, d.market);
 }
 
 function resetTechConclusion() {
@@ -2510,35 +2510,85 @@ function resetTechConclusion() {
   if (detail) detail.textContent = '';
   if (card) card.style.borderLeft = '';
   hideKlineLink();
-  resetCandlePatterns();
+  resetKronosPredict();
 }
 
-async function loadCandlePatterns(symbol, market) {
-  const row = document.getElementById('candle-patterns-row');
-  if (!row) return;
-  try {
-    const resp = await fetch(`/api/stock-candle-patterns?symbol=${encodeURIComponent(symbol)}&limit=12`);
-    const data = await resp.json();
-    if (!data.ok || !data.patterns) { row.style.display = 'none'; return; }
-    const emoji = { bullish: '🟢', bearish: '🔴', neutral: '⚪' };
-    const chips = data.patterns.map((p, i) =>
-      `<span class="candle-pattern-chip ${p.direction}"><span class="candle-pattern-num">${i + 1}</span> ${emoji[p.direction] || ''} ${p.name}</span>`
-    );
-    // Arrange in 3 columns, 4 per column, newest first (1=top-left)
-    const cols = [[], [], []];
-    chips.forEach((chip, i) => cols[i % 3].push(chip));
-    row.innerHTML = cols.map(col =>
-      `<div class="candle-pattern-col">${col.join('<br>')}</div>`
-    ).join('');
-    row.style.display = 'flex';
-  } catch (e) {
-    row.style.display = 'none';
+// ── Kronos AI predict in tech-conclusion card ───────────────────────
+
+function setupKronosPredict(symbol, market) {
+  const section = document.getElementById('kronos-predict-section');
+  const btn = document.getElementById('kronos-predict-btn');
+  const status = document.getElementById('kronos-predict-status');
+  const result = document.getElementById('kronos-predict-result');
+  if (!section || !btn) return;
+
+  section.style.display = 'block';
+  btn.disabled = false;
+  btn.textContent = '开始预测';
+  status.textContent = '';
+  result.innerHTML = '';
+
+  // Check cache for same-day prediction
+  const today = new Date().toISOString().slice(0, 10);
+  const cacheKey = `kronos_${market}_${symbol}_${today}`;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const data = JSON.parse(cached);
+      showKronosResult(result, data);
+      btn.textContent = '重新预测';
+      return;
+    } catch (e) { /* ignore stale cache */ }
   }
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    status.textContent = '预测中...';
+    result.innerHTML = '';
+    try {
+      const resp = await fetch('/api/kronos-predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market, symbol }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        showKronosResult(result, data);
+        sessionStorage.setItem(cacheKey, JSON.stringify(data));
+        btn.textContent = '重新预测';
+        status.textContent = '';
+      } else {
+        result.innerHTML = `<span style="color:var(--text-muted)">⚠️ ${data.error || '预测失败'}</span>`;
+        status.textContent = '';
+      }
+    } catch (e) {
+      result.innerHTML = `<span style="color:var(--text-muted)">⚠️ 请求失败</span>`;
+      status.textContent = '';
+    }
+    btn.disabled = false;
+  };
 }
 
-function resetCandlePatterns() {
-  const row = document.getElementById('candle-patterns-row');
-  if (row) row.style.display = 'none';
+function showKronosResult(el, data) {
+  const dir = data.pred_direction;
+  const icon = dir === 'up' ? '🟢' : dir === 'down' ? '🔴' : '⚪';
+  const label = dir === 'up' ? '看多' : dir === 'down' ? '看空' : '观望';
+  const p5 = data.pred_5d_pct != null ? `${data.pred_5d_pct > 0 ? '+' : ''}${data.pred_5d_pct}%` : '—';
+  const p20 = data.pred_20d_pct != null ? `${data.pred_20d_pct > 0 ? '+' : ''}${data.pred_20d_pct}%` : '—';
+  el.innerHTML = `
+    <div style="display:flex; gap:16px; align-items:center;">
+      <span style="font-size:24px;">${icon}</span>
+      <div>
+        <div style="font-weight:bold;">${label}</div>
+        <div style="color:var(--text-muted); font-size:12px;">5日: ${p5} &nbsp; 20日: ${p20}</div>
+      </div>
+    </div>`;
+}
+
+function resetKronosPredict() {
+  const section = document.getElementById('kronos-predict-section');
+  if (section) section.style.display = 'none';
 }
 
 // ── K-line Chart Dialog ──────────────────────────────────────────────────────
@@ -2592,6 +2642,18 @@ async function openKlineDialog(market, symbol) {
       scoreKlineChart = new KlineChart(svg, { marginRight: 20 });
     }
     scoreKlineChart.load(bars, rpsHistory, 250);
+    // Kronos prediction bars overlay
+    const today = new Date().toISOString().slice(0, 10);
+    const cacheKey = `kronos_${market}_${symbol}_${today}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const pred = JSON.parse(cached);
+        if (pred.pred_bars && pred.pred_bars.length > 0) {
+          scoreKlineChart.setPrediction(pred.pred_bars, pred.pred_20d_pct != null ? Math.round(pred.pred_20d_pct * 10) / 10 : null);
+        }
+      } catch (e) { /* ignore */ }
+    }
     title.textContent = `${symbol} ${stockName}`;
   } catch (e) {
     console.error('Kline dialog error:', e);

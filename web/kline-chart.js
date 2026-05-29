@@ -52,6 +52,9 @@ export class KlineChart {
     this.dragStartWindowStart = 0;
     this.onViewportChange = null;
     this.markerDate = '';    // trading_day to mark on the chart
+    this.predictionClose = null;  // deprecated, use predictionBars
+    this.predictionPct = null;    // deprecated, use predictionBars
+    this.predictionBars = null;   // [{open, high, low, close}, ...] predicted bars
     this._init();
   }
 
@@ -571,6 +574,60 @@ export class KlineChart {
         cg.appendChild(poly);
       }
     }
+
+    // Prediction bars overlay: dashed candlesticks for next 20 days
+    if (this.predictionBars && this.predictionBars.length > 0 && bars.length > 0) {
+      const predColor = this.predictionPct > 0 ? this.cfg.upColor : this.cfg.downColor;
+      const predStartX = d.ml + bars.length * (barW + this.cfg.candleSpacing);
+      for (let pi = 0; pi < this.predictionBars.length; pi++) {
+        const pb = this.predictionBars[pi];
+        const px = predStartX + pi * (barW + this.cfg.candleSpacing);
+        const isUp = pb.close >= pb.open;
+        const color = isUp ? this.cfg.upColor : this.cfg.downColor;
+        const opacity = 0.5;
+
+        // Wick
+        const wick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        wick.setAttribute('x1', px + barW / 2);
+        wick.setAttribute('x2', px + barW / 2);
+        wick.setAttribute('y1', this._priceToY(pb.high));
+        wick.setAttribute('y2', this._priceToY(pb.low));
+        wick.setAttribute('stroke', color);
+        wick.setAttribute('stroke-width', '1');
+        wick.setAttribute('stroke-dasharray', '4,2');
+        wick.setAttribute('opacity', opacity);
+        cg.appendChild(wick);
+
+        // Body
+        const bodyY = this._priceToY(Math.max(pb.open, pb.close));
+        const bodyH = Math.max(1, Math.abs(this._priceToY(pb.open) - this._priceToY(pb.close)));
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', px);
+        rect.setAttribute('y', bodyY);
+        rect.setAttribute('width', barW);
+        rect.setAttribute('height', bodyH);
+        rect.setAttribute('fill', color);
+        rect.setAttribute('opacity', opacity);
+        rect.setAttribute('rx', '0.5');
+        rect.setAttribute('stroke-dasharray', '4,2');
+        rect.setAttribute('stroke', color);
+        rect.setAttribute('stroke-width', '0.5');
+        cg.appendChild(rect);
+
+        // Label on last bar
+        if (pi === this.predictionBars.length - 1 && this.predictionPct != null) {
+          const sign = this.predictionPct > 0 ? '+' : '';
+          const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          label.setAttribute('x', px + barW + 4);
+          label.setAttribute('y', bodyY + bodyH / 2 + 4);
+          label.setAttribute('fill', this.cfg.labelColor);
+          label.setAttribute('font-size', '11');
+          label.setAttribute('font-family', 'monospace');
+          label.textContent = `Ai ${sign}${this.predictionPct}%`;
+          cg.appendChild(label);
+        }
+      }
+    }
   }
 
   _renderVolume() {
@@ -987,6 +1044,18 @@ export class KlineChart {
 
   setMarkerDate(date) {
     this.markerDate = date;
+    this.render();
+  }
+
+  setPrediction(predBars, predPct) {
+    this.predictionBars = predBars;
+    this.predictionPct = predPct;
+    this.render();
+  }
+
+  setPredictionBars(predBars, pct) {
+    this.predictionBars = predBars;
+    this.predictionPct = pct;
     this.render();
   }
 }

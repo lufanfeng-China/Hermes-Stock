@@ -92,6 +92,17 @@ def _predict_stock(
 
     direction = "up" if pct_20 > 2 else ("down" if pct_20 < -2 else "flat")
 
+    # Save predicted OHLC bars for chart overlay
+    pred_bars = []
+    for i in range(len(pred_df)):
+        pred_bars.append({
+            "open": round(float(pred_df["open"].iloc[i]), 2),
+            "high": round(float(pred_df["high"].iloc[i]), 2),
+            "low": round(float(pred_df["low"].iloc[i]), 2),
+            "close": round(float(pred_df["close"].iloc[i]), 2),
+            "volume": round(float(pred_df.get("volume", pd.Series([0]*len(pred_df))).iloc[i]), 0),
+        })
+
     return {
         "market": market,
         "symbol": symbol,
@@ -99,6 +110,7 @@ def _predict_stock(
         "pred_5d_pct": pct_5,
         "pred_20d_pct": pct_20,
         "pred_direction": direction,
+        "pred_bars": pred_bars,
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
 
