@@ -2073,6 +2073,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         daily = reader.daily(symbol=row["symbol"])
                         if daily is not None and not daily.empty and len(daily) >= 111:
                             daily = daily.sort_index()
+                            # When historical date, truncate to as_of_date
+                            if as_of_date:
+                                daily = daily[daily.index <= as_of_date]
+                            if len(daily) < 111:
+                                row["swing_low_price"] = None
+                                continue
                             lows = daily["low"].astype(float).tolist()
                             closes = daily["close"].astype(float).tolist()
                             n = len(lows)
@@ -2098,6 +2104,42 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                             row["swing_low_price"] = None
                     except Exception:
                         row["swing_low_price"] = None
+            # Compute trend duration for current page rows
+            if result.get("rows"):
+                import glob, re
+                if as_of_date:
+                    # Load tech eval files with date <= as_of_date
+                    pattern = str(DERIVED_FINAL_DIR / "dataset_technical_eval_*.json")
+                    all_files = sorted(glob.glob(pattern), reverse=True)
+                    prev_tech_days = []
+                    for fp in all_files[:20]:
+                        m = re.search(r'(\d{4}-\d{2}-\d{2})', fp)
+                        if m and m.group(1) <= as_of_date:
+                            try:
+                                with open(fp) as f:
+                                    data = json.load(f)
+                                stocks = data.get("stocks", {}) if isinstance(data, dict) else {}
+                                prev_tech_days.append({s: {"trend": v.get("trend"), "trend_label": v.get("trend_label")}
+                                                       for s, v in stocks.items()})
+                            except Exception:
+                                prev_tech_days.append({})
+                else:
+                    prev_tech_days = _load_prev_tech_evals(max_days=20)
+                for row in result["rows"]:
+                    try:
+                        symbol = str(row.get("symbol", "")).zfill(6)
+                        current_trend = str(row.get("tech_trend") or "")
+                        duration = 1
+                        if current_trend:
+                            for day_data in prev_tech_days:
+                                prev = day_data.get(symbol)
+                                if prev and prev.get("trend") == current_trend:
+                                    duration += 1
+                                else:
+                                    break
+                        row["trend_duration"] = duration
+                    except Exception:
+                        row["trend_duration"] = 1
             self.respond_json(HTTPStatus.OK, result)
         except Exception as exc:
             self.respond_json(

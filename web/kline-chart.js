@@ -17,6 +17,7 @@ const DEFAULTS = {
   crosshairColor: '#3a3a4a',
   upColor: '#ef5350',
   downColor: '#26a69a',
+  markerColor: '#ffd54f',
   ma5Color: '#f7d06a',
   ma10Color: '#82b1ff',
   ma20Color: '#ef9a9a',
@@ -50,6 +51,7 @@ export class KlineChart {
     this.dragStartClientX = 0;
     this.dragStartWindowStart = 0;
     this.onViewportChange = null;
+    this.markerDate = '';    // trading_day to mark on the chart
     this._init();
   }
 
@@ -556,6 +558,18 @@ export class KlineChart {
       rect.setAttribute('fill', color);
       rect.setAttribute('rx', '0.5');
       cg.appendChild(rect);
+
+      // Marker for backtest date
+      if (this.markerDate && bar.trading_day === this.markerDate) {
+        const mx = x + barW / 2;
+        const my = this._priceToY(bar.low) + 10;
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', `${mx},${my} ${mx - 5},${my + 8} ${mx + 5},${my + 8}`);
+        poly.setAttribute('fill', this.cfg.markerColor);
+        poly.setAttribute('stroke', '#000');
+        poly.setAttribute('stroke-width', '0.5');
+        cg.appendChild(poly);
+      }
     }
   }
 
@@ -969,5 +983,10 @@ export class KlineChart {
     if (!this.bars.length) return { start: '', end: '' };
     const bars = this._visibleBars();
     return { start: bars[0]?.trading_day || '', end: bars[bars.length - 1]?.trading_day || '' };
+  }
+
+  setMarkerDate(date) {
+    this.markerDate = date;
+    this.render();
   }
 }

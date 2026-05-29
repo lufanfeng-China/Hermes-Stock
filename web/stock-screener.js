@@ -61,6 +61,18 @@ let calendarYear = 2026;
 let calendarMonth = 5;
 let selectedDate = '';
 
+// Trend signal light mapping
+const TREND_SIGNALS = {
+  strong_bullish: '🟢', bullish: '🟢',
+  recovering: '🟡', neutral: '⚪',
+  weak_bearish: '🟠', bearish: '🔴', strong_bearish: '🔴',
+};
+function trendSignal(trend, label) {
+  if (!trend) return '—';
+  const light = TREND_SIGNALS[trend] || '';
+  return `${light} ${escapeHtml(label || trend)}`;
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -265,13 +277,13 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="13" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="13" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row, idx) => {
@@ -282,6 +294,8 @@ function renderScreenerRows(rows) {
       <td><strong>${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
       <td class="num">${formatNumber(row.current_price, 2)}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
+      <td>${trendSignal(row.tech_trend, row.tech_trend_label)}</td>
+      <td class="num">${row.trend_duration || 1}天</td>
       <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)} / ${formatNumber(row.rps_20, 0)}/${formatNumber(row.rps_50, 0)}/${formatNumber(row.rps_120, 0)}/${formatNumber(row.rps_250, 0)}</td>
       <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
       <td class="num">${formatRank(row.market_total_rank, row.market_total_universe_size)}</td>
@@ -341,6 +355,7 @@ async function loadScreenerKline(row) {
     }
 
     klineChart.load(bars, rpsHistory, currentKlinePreset);
+    if (selectedDate) klineChart.setMarkerDate(selectedDate);
     const stockName = bars[0]?.name || name || symbol;
     document.getElementById('stock-screener-kline-title').textContent = `${symbol} ${stockName}`;
     const range = klineChart.getVisibleRange();
