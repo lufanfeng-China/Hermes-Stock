@@ -649,6 +649,13 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
              '--strategy', 'blowup_break', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
+        # Optional: Kronos AI prediction (CPU ~10s/stock, 5000 stocks ~14 hours)
+        # Uncomment to enable daily AI prediction rebuild:
+        # (
+        #     'rebuild_kronos_prediction',
+        #     [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/predict_kronos.py'),
+        #      '--tdxdir', TONGDAXIN_DIR],
+        # ),
     ])
     return commands
 
@@ -2140,6 +2147,21 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         row["trend_duration"] = duration
                     except Exception:
                         row["trend_duration"] = 1
+            # Augment with Kronos AI prediction
+            if result.get("rows"):
+                kronos_path = DERIVED_FINAL_DIR / "dataset_kronos_prediction.json"
+                if kronos_path.exists():
+                    try:
+                        kronos_data = json.loads(kronos_path.read_text(encoding="utf-8"))
+                        for row in result["rows"]:
+                            key = f"{row.get('market', '')}:{row.get('symbol', '')}"
+                            pred = kronos_data.get(key)
+                            if pred:
+                                row["pred_direction"] = pred.get("pred_direction")
+                                row["pred_5d_pct"] = pred.get("pred_5d_pct")
+                                row["pred_20d_pct"] = pred.get("pred_20d_pct")
+                    except Exception:
+                        pass
             self.respond_json(HTTPStatus.OK, result)
         except Exception as exc:
             self.respond_json(

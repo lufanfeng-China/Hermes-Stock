@@ -73,6 +73,18 @@ function trendSignal(trend, label) {
   return `${light} ${escapeHtml(label || trend)}`;
 }
 
+function kronosSignal(row) {
+  const dir = row.pred_direction;
+  const p5 = row.pred_5d_pct;
+  const p20 = row.pred_20d_pct;
+  if (!dir) return '—';
+  const icon = dir === 'up' ? '🟢' : dir === 'down' ? '🔴' : '⚪';
+  const label = dir === 'up' ? '多' : dir === 'down' ? '空' : '观';
+  const p5s = p5 != null ? `${p5 > 0 ? '+' : ''}${p5}%` : '—';
+  const p20s = p20 != null ? `${p20 > 0 ? '+' : ''}${p20}%` : '—';
+  return `${icon}${label} ${p5s}/${p20s}`;
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -234,7 +246,7 @@ function renderScreenerLoadingState() {
   currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
   countEl.textContent = '…';
   pageInfoEl.textContent = '正在筛选...';
-  tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
 }
 
 async function runScreener(page = 1) {
@@ -277,13 +289,13 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row, idx) => {
@@ -296,6 +308,7 @@ function renderScreenerRows(rows) {
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
       <td>${trendSignal(row.tech_trend, row.tech_trend_label)}</td>
       <td class="num">${row.trend_duration || 1}天</td>
+      <td>${kronosSignal(row)}</td>
       <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)} / ${formatNumber(row.rps_20, 0)}/${formatNumber(row.rps_50, 0)}/${formatNumber(row.rps_120, 0)}/${formatNumber(row.rps_250, 0)}</td>
       <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
       <td class="num">${formatRank(row.market_total_rank, row.market_total_universe_size)}</td>
