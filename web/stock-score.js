@@ -3767,3 +3767,21 @@ document.getElementById("wl-score-add-btn")?.addEventListener("click", async fun
   }
   this.disabled = false;
 });
+
+// ── Auto-load stock from URL params (cross-page deeplink) ────────────────
+
+(function () {
+  const params = new URLSearchParams(location.search);
+  const market = params.get("market");
+  const symbol = params.get("symbol");
+  if (market && symbol) {
+    const row = {
+      market: market,
+      symbol: symbol,
+      stock_name: params.get("name") || symbol,
+    };
+    // Fill input so subsequent searches work naturally
+    stockInputEl.value = `${row.stock_name} (${row.symbol})`;
+    doSearch(row);
+  }
+})();
