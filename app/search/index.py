@@ -163,6 +163,11 @@ def build_industry_lookup(
     return lookup
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONCEPT DOMAIN — concept index, search, list
+#  (Future: migrate to app/search/concept.py once shared utils extracted)
+# ═══════════════════════════════════════════════════════════════════════════
+
 def build_concept_index(
     concept_rows: list[dict[str, object]],
     securities: list[dict[str, str]],

@@ -186,14 +186,7 @@
       <p class="eyebrow">WATCHLIST</p>
       <h1>自选股 <span id="wl-count" class="count-badge" style="display:none">0</span></h1>
     </div>
-    <div class="topbar-actions">
-      <a href="/stock-score.html" class="nav-link">财务评分</a>
-      <a href="/stock-screener.html" class="nav-link">股票筛选</a>
-      <a href="/realtime-screener.html" class="nav-link">实时选股</a>
-      <a href="/rps-pool.html" class="nav-link">RPS</a>
-      <a href="/watchlist.html" class="nav-link active">自选股</a>
-      
-    </div>
+    <div class="topbar-actions" id="global-nav"></div>
   </header>
 
   <div id="wl-loading" class="wl-loading">加载中...</div>
@@ -250,6 +243,7 @@
     </div>
   </dialog>
 </main>
+<script src="/nav.js"></script>
 <script type="module" src="/watchlist.js?v=20260525-candle"></script>
 </body>
 </html>
