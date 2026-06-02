@@ -340,7 +340,13 @@ export class KlineChart {
     const d = this._getPlotDims();
     this.clipRect.setAttribute('x', d.ml);
     this.clipRect.setAttribute('y', d.mt);
-    this.clipRect.setAttribute('width', d.plotW);
+    // Extend width for prediction bars if present
+    let clipW = d.plotW;
+    if (this.predictionBars && this.predictionBars.length > 0) {
+      const barW = this._barWidth();
+      clipW += this.predictionBars.length * (barW + this.cfg.candleSpacing);
+    }
+    this.clipRect.setAttribute('width', clipW);
     // Extend clip to the bottom of the SVG so RPS area (which exceeds
     // totalChartH due to stacked sections with gaps) is not clipped.
     this.clipRect.setAttribute('height', d.h - d.mt + 1);
@@ -578,8 +584,9 @@ export class KlineChart {
     // Prediction bars overlay: dashed candlesticks for next 20 days
     if (this.predictionBars && this.predictionBars.length > 0 && bars.length > 0) {
       const predColor = this.predictionPct > 0 ? this.cfg.upColor : this.cfg.downColor;
+      const predCount = this.predictionBars.length;
       const predStartX = d.ml + bars.length * (barW + this.cfg.candleSpacing);
-      for (let pi = 0; pi < this.predictionBars.length; pi++) {
+      for (let pi = 0; pi < predCount; pi++) {
         const pb = this.predictionBars[pi];
         const px = predStartX + pi * (barW + this.cfg.candleSpacing);
         const isUp = pb.close >= pb.open;
@@ -1050,6 +1057,14 @@ export class KlineChart {
   setPrediction(predBars, predPct) {
     this.predictionBars = predBars;
     this.predictionPct = predPct;
+    // Extend right margin to show prediction bars to the right of last bar
+    if (predBars && predBars.length > 0) {
+      const barW = this._barWidth();
+      const extra = predBars.length * (barW + this.cfg.candleSpacing) + 60;
+      this.cfg.marginRight = DEFAULTS.marginRight + extra;
+    } else {
+      this.cfg.marginRight = DEFAULTS.marginRight;
+    }
     this.render();
   }
 

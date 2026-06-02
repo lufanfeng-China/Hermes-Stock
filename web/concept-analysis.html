@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>概念分析</title>
+  <link rel="stylesheet" href="/styles.css?v=20260529">
+  <style>
+    .ca-search-wrap { display:flex; gap:8px; margin-bottom:16px; }
+    .ca-search-wrap input { flex:1; padding:8px 12px; background:var(--bg-input); color:var(--text-main); border:1px solid var(--border-color); border-radius:4px; font-size:14px; }
+    .ca-search-btn { padding:8px 20px; background:var(--accent); color:#000; border:none; border-radius:4px; cursor:pointer; font-weight:600; }
+    .ca-search-btn:disabled { opacity:0.5; cursor:not-allowed; }
+    .ca-meta { color:var(--text-muted); font-size:13px; margin-bottom:12px; }
+    .ca-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .ca-table th { text-align:left; padding:6px 8px; color:var(--text-muted); border-bottom:1px solid var(--border-color); white-space:nowrap; }
+    .ca-table td { padding:6px 8px; border-bottom:1px solid var(--border-subtle); }
+    .ca-table tr:hover { background:var(--bg-hover); }
+    .ca-table .num { text-align:right; }
+    .match-high { color:#22c55e; font-weight:700; }
+    .match-mid { color:#f59e0b; font-weight:600; }
+    .match-low { color:#6b7280; }
+  </style>
+</head>
+<body class="bg-main">
+<main class="container mx-auto px-4 py-6" style="max-width:1300px">
+  <sectionheader>
+    <p>CONCEPT ANALYZER</p>
+    <h1>概念分析</h1>
+    <nav style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+      <a href="/" class="nav-link">财务评分</a>
+      <a href="/stock-screener.html" class="nav-link">股票筛选</a>
+      <a href="/realtime-screener.html" class="nav-link">实时选股</a>
+      <a href="/rps-pool.html" class="nav-link">RPS</a>
+      <a href="/watchlist.html" class="nav-link">自选股</a>
+      <span class="nav-link active">概念分析</span>
+    </nav>
+  </sectionheader>
+
+  <div class="ca-search-wrap" style="margin-top:20px">
+    <input id="ca-input" type="text" placeholder="输入概念名称，如：固态电池、低空经济、AI芯片..." autofocus>
+    <button id="ca-btn" class="ca-search-btn">搜索</button>
+  </div>
+
+  <div id="ca-meta" class="ca-meta"></div>
+  <div id="ca-results"></div>
+</main>
+<script src="/concept-analysis.js?v=20260529"></script>
+</body>
+</html>

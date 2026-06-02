@@ -183,12 +183,20 @@ def build_concept_index(
         key = (market, symbol)
         security = security_lookup.get(key, {})
         industry = industry_lookup.get(key, {})
+        concept_rank = _coerce_int(row.get("concept_rank_in_stock"))
+        # Count total concepts and keep the raw concept list for narrative generation
+        concept_list_raw = str(row.get("concept_list_raw", ""))
+        concept_total = len([c.strip() for c in concept_list_raw.split(",") if c.strip()]) if concept_list_raw else 0
+        concept_list = [c.strip() for c in concept_list_raw.split(",") if c.strip()] if concept_list_raw else []
         member = {
             "market": market,
             "symbol": symbol,
             "stock_name": str(row.get("stock_name") or industry.get("stock_name") or security.get("stock_name") or "").strip(),
             "industry_display": str(industry.get("industry_display", "")).strip(),
             "name_initials": str(security.get("name_initials", "")).strip(),
+            "concept_rank_in_stock": concept_rank if concept_rank else None,
+            "concept_total_count": concept_total,
+            "concept_list": concept_list,
         }
 
         concept = concept_map.setdefault(
@@ -213,6 +221,61 @@ def build_concept_index(
         concepts.append(concept)
     concepts.sort(key=lambda row: (-int(row["member_count"]), str(row["concept_name"])))
     return concepts
+
+
+def search_concept_stocks(query: str) -> dict[str, object]:
+    """Search concept by name (exact → partial → text). Returns matched stocks."""
+    from app.tdx.parsers import normalize_concept_name
+
+    concept_rows = load_concept_rows()
+    securities = load_security_rows()
+    industry_rows = load_industry_rows()
+    concept_index = build_concept_index(concept_rows, securities, industry_rows)
+
+    q = query.strip()
+    qn = normalize_concept_name(q)
+
+    # L1: exact match
+    for c in concept_index:
+        if normalize_concept_name(str(c.get("concept_name", ""))) == qn:
+            return {"matched": True, "concept": c, "method": "exact"}
+
+    # L1: partial match
+    partials = [c for c in concept_index if q in str(c.get("concept_name", "")) or qn in normalize_concept_name(str(c.get("concept_name", "")))]
+    if partials:
+        # Return largest concept
+        partials.sort(key=lambda c: -int(c.get("member_count", 0)))
+        return {"matched": True, "concept": partials[0], "method": "partial"}
+
+    # L2: text search in concept labels of each stock
+    q_lower = q.lower()
+    text_matches: dict[str, list[dict]] = {}
+    for row in concept_rows:
+        concept_list = str(row.get("concept_list_raw", "")).lower()
+        if q_lower in concept_list or any(q_lower in str(row.get(f, "")).lower() for f in ["concept_name", "stock_name"]):
+            key = f"{row.get('market', '')}:{row.get('symbol', '')}"
+            if key not in text_matches:
+                text_matches[key] = []
+            text_matches[key].append({
+                "market": str(row.get("market", "")).strip(),
+                "symbol": str(row.get("symbol", "")).strip(),
+                "stock_name": str(row.get("stock_name", "")).strip(),
+            })
+
+    # Build synthetic concept from text matches
+    if text_matches:
+        members = []
+        seen = set()
+        for key, entries in text_matches.items():
+            e = entries[0]
+            mk = (e["market"], e["symbol"])
+            if mk not in seen:
+                seen.add(mk)
+                members.append(e)
+        concepts_list = {"concept_id": f"search:{qn}", "concept_name": q, "member_count": len(members), "members": members}
+        return {"matched": False, "concept": concepts_list, "method": "text_search"}
+
+    return {"matched": False, "concept": None, "method": "not_found"}
 
 
 def build_stock_profile(
