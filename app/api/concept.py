@@ -260,3 +260,143 @@ def handle_concept_list(query: str, limit: int = 100) -> dict[str, Any]:
     search_query = params.get("q", [""])[0].strip()
     user_limit = int(params.get("limit", [str(limit)])[0]) if params.get("limit") else limit
     return concept_list_response(search_query, limit=min(user_limit, 200))
+
+
+def handle_concept_cross(query: str) -> dict[str, Any]:
+    """Handle /api/concept-cross — multi-concept intersection search."""
+    from urllib.parse import parse_qs
+
+    from app.search.index import (
+        _coerce_float,
+        _coerce_int,
+        _load_financial_snapshot,
+        load_industry_valuation_rows,
+        load_rps_rows,
+        search_concept_stocks,
+    )
+
+    params = {k: v[0] for k, v in parse_qs(query).items() if v}
+    q = str(params.get("q", "")).strip()
+    if not q:
+        return {"ok": False, "error": "q required", "status": HTTPStatus.BAD_REQUEST}
+
+    # Split comma-separated concepts, trim whitespace
+    queries = [c.strip() for c in q.split(",") if c.strip()]
+    if len(queries) < 2:
+        # Fallback to single-concept analysis
+        result = handle_concept_analysis(query)
+        result["cross"] = False
+        return result
+
+    # Search each concept
+    concept_results = []
+    concept_names = []
+    for cq in queries:
+        r = search_concept_stocks(cq)
+        if r.get("concept"):
+            concept_results.append(r)
+            concept_names.append(str(r["concept"].get("concept_name", cq)))
+
+    if not concept_results:
+        return {"ok": True, "cross": True, "concepts": [], "stocks": [], "method": "not_found"}
+
+    # Build member key sets for each concept
+    member_sets = []
+    for r in concept_results:
+        members = r["concept"].get("members", [])
+        keys = {f"{str(m.get('market','')).strip()}:{str(m.get('symbol','')).strip()}": m for m in members}
+        member_sets.append(keys)
+
+    # Intersection: stocks present in ALL concepts
+    intersected_keys = set(member_sets[0].keys())
+    for ms in member_sets[1:]:
+        intersected_keys &= set(ms.keys())
+
+    if not intersected_keys:
+        return {
+            "ok": True, "cross": True,
+            "concepts": [{"name": n, "member_count": len(ms)} for n, ms in zip(concept_names, member_sets)],
+            "intersection_count": 0, "stocks": [], "method": "cross",
+        }
+
+    # Load enrichment data once
+    rps_rows = load_rps_rows()
+    valuation_rows = load_industry_valuation_rows()
+    snapshot = _load_financial_snapshot() or {}
+    score_rows = snapshot.get("scores") or {}
+    tech_eval_rows = _load_tech_eval()
+
+    rps_lookup = {(str(r.get("market", "")).strip(), str(r.get("symbol", "")).strip()): r for r in rps_rows}
+    score_lookup = score_rows if isinstance(score_rows, dict) else {}
+
+    pe_lookup: dict[tuple[str, str], float | None] = {}
+    for vrow in valuation_rows:
+        for mv in (vrow.get("member_valuation_rows") or []):
+            mk = (str(mv.get("market", "")).strip(), str(mv.get("symbol", "")).strip())
+            if mk not in pe_lookup:
+                pe_lookup[mk] = _coerce_float(mv.get("pe_ttm"))
+
+    # Enrich intersection stocks
+    enriched = []
+    for key in intersected_keys:
+        # Take member data from first concept (richest)
+        m = member_sets[0].get(key, {})
+        if not m:
+            continue
+        market = str(m.get("market", "")).strip()
+        symbol = str(m.get("symbol", "")).strip()
+        rps = rps_lookup.get((market, symbol), {})
+        score = score_lookup.get(key, {}) if isinstance(score_lookup, dict) else {}
+        tech = tech_eval_rows.get(symbol, {}) if isinstance(tech_eval_rows, dict) else {}
+        pe = pe_lookup.get((market, symbol))
+
+        total_rps = sum(_coerce_float(rps.get(f"rps_{w}")) or 0 for w in (20, 50, 120, 250))
+
+        # Compute max match_pct across all matched concepts
+        industry = str(m.get("industry_display", ""))
+        concept_list_data = m.get("concept_list", [])
+        best_match = 0
+        for ci, c_name in enumerate(concept_names):
+            rank_i = member_sets[ci].get(key, {}).get("concept_rank_in_stock") if ci > 0 else m.get("concept_rank_in_stock")
+            total_i = member_sets[ci].get(key, {}).get("concept_total_count", 0) if ci > 0 else m.get("concept_total_count", 0)
+            if rank_i is not None and isinstance(rank_i, int) and rank_i >= 1 and total_i and total_i >= rank_i:
+                p = ((total_i - rank_i + 1) / total_i) * 100
+            else:
+                p = 40
+            im = _calc_industry_multiplier(c_name, industry) * 100
+            # Simplified density: just prominence + industry for cross mode
+            match_i = round(p * 0.25 + im * 0.75)
+            if match_i > best_match:
+                best_match = match_i
+
+        narrative = "、".join(concept_names) + f"，主营{industry.split('/')[-1].strip() if industry else '—'}"
+
+        enriched.append({
+            "market": market, "symbol": symbol,
+            "stock_name": str(m.get("stock_name", symbol)),
+            "industry_display": industry,
+            "current_price": _coerce_float(rps.get("current_price")),
+            "pe_ttm": pe,
+            "rps_20": _coerce_float(rps.get("rps_20")),
+            "rps_50": _coerce_float(rps.get("rps_50")),
+            "rps_120": _coerce_float(rps.get("rps_120")),
+            "rps_250": _coerce_float(rps.get("rps_250")),
+            "total_rps": round(total_rps, 0),
+            "market_total_rank": _coerce_int(score.get("market_total_rank")),
+            "tech_trend_label": tech.get("trend_label"),
+            "tech_trend": tech.get("trend"),
+            "match_pct": best_match,
+            "narrative": narrative,
+            "matched_concepts": concept_names,
+        })
+
+    enriched.sort(key=lambda s: s.get("match_pct") or 0, reverse=True)
+
+    return {
+        "ok": True,
+        "cross": True,
+        "concepts": [{"name": n, "member_count": len(ms)} for n, ms in zip(concept_names, member_sets)],
+        "intersection_count": len(enriched),
+        "method": "cross",
+        "stocks": enriched,
+    }

@@ -1748,6 +1748,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/concept-analysis":
             self.handle_concept_analysis(parsed.query)
             return
+        if parsed.path == "/api/concept-cross":
+            self.handle_concept_cross(parsed.query)
+            return
         if parsed.path == "/api/watchlist":
             self.handle_watchlist_get()
             return
@@ -2269,6 +2272,16 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         """Search concept and return enriched stock list. Delegated to app.api.concept."""
         try:
             from app.api.concept import handle_concept_analysis as _handle
+            result = _handle(query)
+            status = result.pop("status", HTTPStatus.OK)
+            self.respond_json(status, result)
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
+
+    def handle_concept_cross(self, query: str) -> None:
+        """Multi-concept intersection search. Delegated to app.api.concept."""
+        try:
+            from app.api.concept import handle_concept_cross as _handle
             result = _handle(query)
             status = result.pop("status", HTTPStatus.OK)
             self.respond_json(status, result)

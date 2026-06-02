@@ -246,7 +246,7 @@ function renderScreenerLoadingState() {
   currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
   countEl.textContent = '…';
   pageInfoEl.textContent = '正在筛选...';
-  tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
 }
 
 async function runScreener(page = 1) {
@@ -289,17 +289,17 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row, idx) => {
-    const industryText = [row.industry_level_1, row.industry_level_2].filter(Boolean).join(' / ') || '—';
+    const industryText = row.industry_level_2 || '—';
     const marketSymbol = `${String(row.market || '').toUpperCase()}:${row.symbol || ''}`;
     return `<tr class="stock-screener-row" tabindex="0" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}" data-pred20d="${row.pred_20d_pct ?? ''}">
       <td class="stock-screener-check-col"><input type="checkbox" class="stock-screener-row-check" data-idx="${idx}"></td>
@@ -311,9 +311,8 @@ function renderScreenerRows(rows) {
       <td class="kronos-cell" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}">${kronosSignal(row)}</td>
       <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)} / ${formatNumber(row.rps_20, 0)}/${formatNumber(row.rps_50, 0)}/${formatNumber(row.rps_120, 0)}/${formatNumber(row.rps_250, 0)}</td>
       <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
-      <td class="num">${formatRank(row.market_total_rank, row.market_total_universe_size)}</td>
-      <td class="num">${formatRank(row.industry_total_rank, row.industry_total_universe_size)}</td>
-      <td>${escapeHtml(row.valuation_band_label || '—')}</td>
+      <td class="num">${formatRank(row.market_total_rank)}</td>
+      <td class="num">${formatRank(row.industry_total_rank)}</td>
       <td class="num">${formatPercentile(row.primary_percentile)}</td>
       <td>${escapeHtml(row.industry_temperature_label || '—')}<span class="stock-screener-symbol">${escapeHtml(formatPercentile(row.industry_temperature_percentile_since_2022))}</span></td>
       <td>${escapeHtml(industryText)}</td>
