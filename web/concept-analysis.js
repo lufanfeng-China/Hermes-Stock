@@ -56,7 +56,7 @@ function scoreLink(s) {
 }
 
 function stockNameCell(s) {
-  return '<a href="' + scoreLink(s) + '" style="color:inherit;text-decoration:none"><strong>' + escapeHtml(s.stock_name) + '</strong></a><br><span class="ca-meta">' + s.market.toUpperCase() + ':' + s.symbol + '</span>';
+  return '<a href="' + scoreLink(s) + '" target="_blank" style="color:inherit;text-decoration:none"><strong>' + escapeHtml(s.stock_name) + '</strong></a><br><span class="ca-meta">' + s.market.toUpperCase() + ':' + s.symbol + '</span>';
 }
 
 function renderSingle(data) {
