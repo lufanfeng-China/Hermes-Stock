@@ -1873,6 +1873,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         # Add technical evaluation
         tech = tech_eval_rows.get(symbol) or {}
         for field in ("trend", "trend_label", "trend_prev", "trend_prev_label", "momentum", "momentum_label",
+                      "short_trend", "short_trend_label", "short_trend_prev", "short_trend_prev_label",
                       "volume_signal", "volume_label", "position", "position_label",
                       "buy_trigger", "buy_trigger_label", "conclusion", "conclusion_label",
                       "conclusion_color", "conclusion_reason", "entry_price", "stop_loss",
@@ -1917,6 +1918,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     # Technical evaluation text filters (value matching)
     tech_text_filters = {
         "tech_trend": "tech_trend",
+        "tech_short_trend": "tech_short_trend",
         "tech_momentum": "tech_momentum",
         "tech_volume": "tech_volume_signal",
         "tech_position": "tech_position",
@@ -1982,6 +1984,16 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             if _normalize_text(row.get("tech_trend")) == trend_switch_target
             and _normalize_text(row.get("tech_trend_prev")) != trend_switch_target
             and _normalize_text(row.get("tech_trend_prev")) != ""
+        ]
+
+    # Short trend switch filter
+    short_trend_switch_target = _normalize_text(params.get("short_trend_switch"))
+    if short_trend_switch_target:
+        filtered = [
+            row for row in filtered
+            if _normalize_text(row.get("tech_short_trend")) == short_trend_switch_target
+            and _normalize_text(row.get("tech_short_trend_prev")) != short_trend_switch_target
+            and _normalize_text(row.get("tech_short_trend_prev")) != ""
         ]
 
     for param_key, (field_name, bound) in numeric_field_filters.items():

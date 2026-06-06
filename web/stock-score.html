@@ -11,7 +11,13 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">LOCAL SCORE TERMINAL</p>
-        <h1>Six-Dimension Financial Score</h1>
+        <form class="search-form stock-score-search-form" onsubmit="return false;" style="margin:0;display:flex;align-items:center;gap:25px">
+          <div class="search-input-wrap">
+            <input type="text" id="stock-input" placeholder="600519 / sh:600519 / 贵州茅台" autocomplete="off" style="width:280px">
+            <div class="search-dropdown" id="stock-dropdown"></div>
+          </div>
+          <button id="wl-score-add-btn" class="nav-link" type="button" title="加入自选" style="display:none;padding:2px 8px;font-size:12px;white-space:nowrap">⭐ 加入自选</button>
+        </form>
       </div>
       <div id="stock-score-topbar-tools" class="stock-score-topbar-tools">
         <div id="stock-score-topbar-actions" class="topbar-actions">
@@ -23,32 +29,12 @@
           
           <button id="stock-score-data-update-btn" class="nav-link" type="button">数据更新</button>
         </div>
-        <div id="stock-score-data-update-info" class="profile-meta muted stock-score-data-update-info">最新更新：读取中...</div>
-        <button id="stock-score-data-update-retry-btn" class="nav-link stock-score-data-update-retry" type="button" hidden>重试失败项</button>
       </div>
     </header>
 
     <section class="search-grid stock-score-lead-grid">
       <div class="stock-score-top-row">
-        <article class="search-card stock-score-search-card">
-          <div class="search-card-header">
-            <div>
-              <p class="eyebrow">SCORE LOOKUP</p>
-              <h2><span id="hdr-name">—</span> <span id="hdr-symbol" class="stock-score-symbol">—</span> <button id="wl-score-add-btn" class="nav-link" type="button" title="加入自选" style="display:none;padding:2px 8px;font-size:12px">⭐ 加入自选</button></h2>
-            </div>
-          </div>
-          <form class="search-form stock-score-search-form" onsubmit="return false;">
-            <div class="search-input-wrap">
-              <input type="text" id="stock-input" placeholder="600519 / sh:600519 / 贵州茅台" autocomplete="off">
-              <div class="search-dropdown" id="stock-dropdown"></div>
-            </div>
-          </form>
-          <div id="stock-score-search-concepts" class="stock-score-search-hints" aria-label="概念摘要">
-            <span id="stock-score-search-concepts-label" class="stock-score-search-hint">核心概念</span>
-            <strong id="stock-score-search-concepts-value" class="stock-score-search-hint muted">暂无核心概念</strong>
-          </div>
-          <section id="loading-msg" class="status stock-score-status stock-score-search-status">输入股票代码查询财务评分</section>
-        </article>
+        <section id="loading-msg" class="status stock-score-status stock-score-search-status" style="display:none"></section>
         <article class="search-card stock-score-tech-conclusion-card" id="tech-conclusion-card">
           <div class="search-card-header">
             <div>
@@ -123,6 +109,7 @@
             <article class="metric-card stock-score-total-card" id="tech-trend-card">
               <p class="metric-label">趋势</p>
               <p id="tech-trend-value" class="metric-value">—</p>
+              <p id="tech-short-trend" class="metric-value">—</p>
               <p id="tech-trend-detail" class="metric-meta">查询股票后显示</p>
             </article>
             <article class="metric-card stock-score-total-card" id="tech-momentum-card">
@@ -586,6 +573,6 @@
     </div>
   </div>
 
-  <script type="module" src="/stock-score.js?v=20260529-bars5"></script>
+  <script type="module" src="/stock-score.js?v=20260604-fix"></script>
 </body>
 </html>

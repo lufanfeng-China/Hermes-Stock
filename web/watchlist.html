@@ -71,6 +71,19 @@
       font-size: 10px;
       color: var(--muted);
     }
+    .wl-name-cell {
+      cursor: pointer;
+    }
+    .wl-name-cell:hover .wl-stock-name {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+    .wl-price-cell {
+      cursor: pointer;
+    }
+    .wl-price-cell:hover {
+      color: var(--accent);
+    }
     .wl-score {
       font-weight: 600;
     }
@@ -217,6 +230,7 @@
           <th>行业</th>
           <th>温度</th>
           <th>趋势</th>
+          <th>短期趋势</th>
           <th>动向</th>
           <th>量价</th>
           <th>买入触发</th>
@@ -224,6 +238,7 @@
           <th class="num">5日</th>
           <th class="num">20日</th>
           <th class="num">延续</th>
+          <th class="num">短延续</th>
           <th>K线形态</th>
           <th>综合结论</th>
           <th>操作</th>
@@ -244,6 +259,6 @@
   </dialog>
 </main>
 <script src="/nav.js"></script>
-<script type="module" src="/watchlist.js?v=20260525-candle"></script>
+<script type="module" src="/watchlist.js?v=20260604-short"></script>
 </body>
 </html>

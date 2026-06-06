@@ -2,6 +2,8 @@
 import json
 import importlib
 
+from app.relative_valuation.service import build_relative_valuation_result
+
 def _industry_template_tags(ind1: str, ind2: str) -> set[str]:
     text = f"{ind1 or ''}/{ind2 or ''}"
     tags: set[str] = set()

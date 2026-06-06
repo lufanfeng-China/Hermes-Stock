@@ -1,4 +1,4 @@
-import { KlineChart } from './kline-chart.js?v=20260513-ma';
+import { KlineChart } from './kline-chart.js?v=20260604-ma';
 
 const PAGE_SIZE = 50;
 const STRATEGY_PRESETS = {
@@ -303,16 +303,21 @@ function renderScreenerRows(rows) {
     const marketSymbol = `${String(row.market || '').toUpperCase()}:${row.symbol || ''}`;
     return `<tr class="stock-screener-row" tabindex="0" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}" data-pred20d="${row.pred_20d_pct ?? ''}">
       <td class="stock-screener-check-col"><input type="checkbox" class="stock-screener-row-check" data-idx="${idx}"></td>
-      <td><strong>${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
+      <td><strong class="screener-name-link" style="cursor:pointer;color:var(--text)" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}">${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
       <td class="num">${formatNumber(row.current_price, 2)}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
       <td>${trendSignal(row.tech_trend, row.tech_trend_label)}</td>
-      <td class="num">${row.trend_duration || 1}天</td>
-      <td class="kronos-cell" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}">${kronosSignal(row)}</td>
+      <td>${trendSignal(row.tech_short_trend, row.tech_short_trend_label)}</td>
+      <td class="num">${row.short_trend_duration || 1}天</td>
       <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)} / ${formatNumber(row.rps_20, 0)}/${formatNumber(row.rps_50, 0)}/${formatNumber(row.rps_120, 0)}/${formatNumber(row.rps_250, 0)}</td>
       <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
-      <td class="num">${formatRank(row.market_total_rank)}</td>
-      <td class="num">${formatRank(row.industry_total_rank)}</td>
+      <td class="num">${(() => {
+        const p = row.current_price, sl = row.swing_low_price;
+        if (!p || !sl || sl <= 0) return '—';
+        const pct = ((p - sl) / sl * 100);
+        return (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+      })()}</td>
+      <td class="num">${formatRank(row.market_total_rank)} / ${formatRank(row.industry_total_rank)}</td>
       <td class="num">${formatPercentile(row.primary_percentile)}</td>
       <td>${escapeHtml(row.industry_temperature_label || '—')}<span class="stock-screener-symbol">${escapeHtml(formatPercentile(row.industry_temperature_percentile_since_2022))}</span></td>
       <td>${escapeHtml(industryText)}</td>
@@ -800,6 +805,17 @@ document.getElementById('wl-add-btn-bottom')?.addEventListener('click', addToWat
 // ── Kronos on-demand prediction ──────────────────────────────────────
 
 document.getElementById('stock-screener-results-tbody').addEventListener('click', async (e) => {
+  // Stock name link → open stock-score in new tab
+  const nameLink = e.target.closest('.screener-name-link');
+  if (nameLink) {
+    const market = nameLink.dataset.market;
+    const symbol = nameLink.dataset.symbol;
+    const name = nameLink.dataset.name;
+    const params = new URLSearchParams({ market, symbol, name });
+    window.open(`/stock-score.html?${params.toString()}`, '_blank');
+    return;
+  }
+
   const cell = e.target.closest('.kronos-cell');
   if (!cell) return;
   if (cell.textContent.trim() !== '—') return;  // already has prediction

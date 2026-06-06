@@ -18,10 +18,10 @@ const DEFAULTS = {
   upColor: '#ef5350',
   downColor: '#26a69a',
   markerColor: '#ffd54f',
-  ma5Color: '#f7d06a',
   ma10Color: '#82b1ff',
   ma20Color: '#ef9a9a',
   ma30Color: '#a5d6a7',
+  ma60Color: '#f7d06a',
   rps20Color: '#ce93d8',
   rps50Color: '#80cbc4',
   rps120Color: '#ffcc80',
@@ -43,7 +43,7 @@ export class KlineChart {
     this.bars = [];
     this.visible = { windowStart: 0, windowEnd: 0, visibleWindow: 60 };
     this.presets = [20, 60, 120, 250, -1];
-    this.maWindows = [5, 10, 20, 30];
+    this.maWindows = [10, 20, 30, 60];
     this.maSeries = {};
     this.rpsHistory = [];   // [{trading_day, rps_20, rps_50, rps_120, rps_250}, ...]
     this.hoveredIndex = null;
@@ -119,7 +119,7 @@ export class KlineChart {
     this.maGroup.setAttribute('clip-path', `url(#${this.clipId})`);
     this.svg.appendChild(this.maGroup);
 
-    const maColors = [this.cfg.ma5Color, this.cfg.ma10Color, this.cfg.ma20Color, this.cfg.ma30Color];
+    const maColors = [this.cfg.ma10Color, this.cfg.ma20Color, this.cfg.ma30Color, this.cfg.ma60Color];
     this.maLines = {};
     for (let i = 0; i < this.maWindows.length; i++) {
       const g = document.createElementNS(ns, 'g');
@@ -667,7 +667,7 @@ export class KlineChart {
   _renderMA() {
     const d = this._getPlotDims();
     const barW = this._barWidth();
-    const colors = [this.cfg.ma5Color, this.cfg.ma10Color];
+    const colors = [this.cfg.ma10Color, this.cfg.ma20Color, this.cfg.ma30Color, this.cfg.ma60Color];
 
     for (let mi = 0; mi < this.maWindows.length; mi++) {
       const w = this.maWindows[mi];
@@ -830,10 +830,10 @@ export class KlineChart {
     });
     // MA legend in price section
     const maItems = [
-      { label: 'MA5',  color: this.cfg.ma5Color },
       { label: 'MA10', color: this.cfg.ma10Color },
       { label: 'MA20', color: this.cfg.ma20Color },
       { label: 'MA30', color: this.cfg.ma30Color },
+      { label: 'MA60', color: this.cfg.ma60Color },
     ];
     const maX = d.ml + 4;
     maItems.forEach((item, idx) => {
@@ -905,10 +905,10 @@ export class KlineChart {
       `最低价: ${this._formatTooltipNumber(bar.low)}`,
       `收盘价: ${this._formatTooltipNumber(bar.close)}`,
       `成交量: ${this._formatTooltipVolume(bar.volume)}`,
-      `MA5:  ${this._formatTooltipNumber(maVals[5])}`,
       `MA10: ${this._formatTooltipNumber(maVals[10])}`,
       `MA20: ${this._formatTooltipNumber(maVals[20])}`,
       `MA30: ${this._formatTooltipNumber(maVals[30])}`,
+      `MA60: ${this._formatTooltipNumber(maVals[60])}`,
       `RPS20: ${this._formatTooltipNumber(rpsRow?.rps_20, 1)}`,
       `RPS50: ${this._formatTooltipNumber(rpsRow?.rps_50, 1)}`,
       `RPS120: ${this._formatTooltipNumber(rpsRow?.rps_120, 1)}`,

@@ -69,6 +69,49 @@ def _return_pct(closes: list[float], end_index: int, window: int) -> float | Non
     return (closes[end_index] - base) / base * 100.0
 
 
+def _compute_past_days_rps(reader, rps_rows, ndays=5):
+    """Compute cross-sectional RPS for the past N trading days.
+    
+    Uses the pre-computed RPS history dataset to look up RPS values for prior days.
+    Returns a list of dicts, one per past day (index 0 = yesterday).
+    Each dict maps (market, symbol) → {rps_20, rps_50, rps_120, rps_250}.
+    """
+    import json as _json
+    
+    history_path = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.json"
+    if not history_path.exists():
+        return []
+    
+    all_history = _json.loads(history_path.read_text(encoding="utf-8"))
+    
+    # Get unique trading days sorted
+    trading_days = sorted(set(str(h.get("trading_day", "")) for h in all_history if h.get("trading_day")))
+    if not trading_days:
+        return []
+    
+    # Build lookup: trading_day → {(market, symbol): {rps_20, rps_50, rps_120, rps_250}}
+    rps_by_day: dict[str, dict[tuple[str, str], dict[str, float | None]]] = {}
+    for h in all_history:
+        td = str(h.get("trading_day", ""))
+        if td not in rps_by_day:
+            rps_by_day[td] = {}
+        key = (str(h.get("market", "")).strip().lower(), str(h.get("symbol", "")).strip())
+        rps_by_day[td][key] = {
+            "rps_20": h.get("rps_20"),
+            "rps_50": h.get("rps_50"),
+            "rps_120": h.get("rps_120"),
+            "rps_250": h.get("rps_250"),
+        }
+    
+    # Latest day is index -1. Yesterday = -2, 2 days ago = -3, etc.
+    result = []
+    for i in range(2, min(2 + ndays, len(trading_days) + 1)):
+        td = trading_days[-i] if i <= len(trading_days) else None
+        if td and td in rps_by_day:
+            result.append(rps_by_day[td])
+    
+    return result
+
 
 def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Find stocks where 3 out of 4 RPS >= 90 and the remaining one >= 80."""

@@ -1195,8 +1195,7 @@ button:hover {
   cursor: pointer;
 }
 
-#stock-score-data-update-btn,
-.stock-score-data-update-retry {
+#stock-score-data-update-btn {
   width: 100%;
   min-width: 0;
   padding: 0;
@@ -2043,6 +2042,7 @@ button:hover {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  font-size: clamp(16px, 2.8vw, 26px);
 }
 
 .stock-score-total-card .max {

@@ -47,7 +47,8 @@ def _load_prev_tech_evals(max_days: int = 20) -> list[dict]:
             with open(fp) as f:
                 data = json.load(f)
             stocks = data.get("stocks", {}) if isinstance(data, dict) else {}
-            results.append({s: {"trend": v.get("trend"), "trend_label": v.get("trend_label")}
+            results.append({s: {"trend": v.get("trend"), "trend_label": v.get("trend_label"),
+                                  "short_trend": v.get("short_trend"), "short_trend_label": v.get("short_trend_label")}
                            for s, v in stocks.items()})
         except Exception:
             results.append({})

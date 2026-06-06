@@ -1,5 +1,5 @@
 // stock-score.js — Financial Score Viewer (dual radar: market + industry)
-import { KlineChart } from './kline-chart.js?v=20260513-ma';
+import { KlineChart } from './kline-chart.js?v=20260604-ma';
 
 const SUB_META = {
   roe_ex: { name: "扣非ROE", dim: "profitability", higherBetter: true, zeroPenalty: true, unit: "%", desc: "扣除非经常性损益ROE", formula: "扣除非经常性损益后的净利润 / 归属于母公司股东权益", meaning: "反映股东资本的核心回报效率" },
@@ -479,6 +479,7 @@ function renderSearchConceptSummary(profile) {
     .slice(0, 4)
     .join(" · ");
   const valueEl = document.getElementById("stock-score-search-concepts-value");
+  if (!valueEl) return;
   const hasText = Boolean(conceptText);
   valueEl.textContent = hasText ? conceptText : PROFILE_PLACEHOLDERS.concepts;
   valueEl.classList.toggle("muted", !hasText);
@@ -1479,8 +1480,10 @@ function renderScore(result) {
   document.getElementById("loading-msg").style.display = "none";
 
   // Header
-  document.getElementById("hdr-name").textContent = stock_name || "—";
-  document.getElementById("hdr-symbol").textContent = `${result.market}:${result.symbol}`;
+  const nameEl = document.getElementById("hdr-name");
+  const symbolEl = document.getElementById("hdr-symbol");
+  if (nameEl) nameEl.textContent = stock_name || "—";
+  if (symbolEl) symbolEl.textContent = `${result.market}:${result.symbol}`;
 
   // Show watchlist add button
   const wlBtn = document.getElementById("wl-score-add-btn");
@@ -1649,49 +1652,6 @@ async function fetchEastmoneyFlowProxy(symbol) {
   return payload.data || payload;
 }
 
-async function fetchDataUpdateStatus() {
-  const r = await fetch('/api/data-update-status');
-  const payload = await r.json();
-  if (!r.ok || !payload.ok) throw new Error(payload.error?.message || `HTTP ${r.status}`);
-  return payload;
-}
-
-async function fetchDataUpdateRun() {
-  const r = await fetch('/api/data-update-run', { method: 'POST' });
-  const payload = await r.json();
-  if (!r.ok || !payload.ok) {
-    const error = new Error(payload.error?.message || `HTTP ${r.status}`);
-    error.payload = payload;
-    throw error;
-  }
-  return payload;
-}
-
-async function fetchDataUpdateRetry() {
-  const r = await fetch('/api/data-update-retry', { method: 'POST' });
-  const payload = await r.json();
-  if (!r.ok || !payload.ok) {
-    const error = new Error(payload.error?.message || `HTTP ${r.status}`);
-    error.payload = payload;
-    throw error;
-  }
-  return payload;
-}
-
-function formatDataUpdateErrorMessage(error) {
-  const message = String(error?.message || '未知错误').split('\n').filter(Boolean)[0];
-  const details = error?.payload?.error || {};
-  const step = details.step_name ? `失败步骤：${details.step_name}` : '失败步骤：数据更新';
-  const returnCode = details.returncode != null ? `退出码：${details.returncode}` : '';
-  return [
-    '数据更新已停止或失败',
-    step,
-    returnCode,
-    message,
-    '详细行业构建进度已写入后台日志，不在首页展开，避免撑乱页面。',
-  ].filter(Boolean).join('\n');
-}
-
 function normalizeMarket(code) {
   if (!code) return null;
   const s = String(code).trim();
@@ -1711,10 +1671,8 @@ const industryPeerStatusEl = document.getElementById("industry-peer-status");
 const industryScorePeerDialogEl = document.getElementById("industry-score-peer-dialog");
 const industryScorePeerStatusEl = document.getElementById("industry-score-peer-status");
 const dataUpdateButtonEl = document.getElementById('stock-score-data-update-btn');
-const dataUpdateRetryButtonEl = document.getElementById('stock-score-data-update-retry-btn');
 const basicHelpTooltipEl = document.getElementById("basic-help-tooltip");
 const basicHelpTooltipTextEl = document.getElementById("basic-help-tooltip-text");
-let dataUpdatePollTimer = null;
 const searchState = {
   timer: null,
   requestId: 0,
@@ -1984,7 +1942,23 @@ function loadTechEvalSummary(market, symbol) {
       }
       d.market = market;
       d.symbol = symbol;
-      setTechCard('tech-trend-value', 'tech-trend-detail', 'tech-trend-card', d.trend, d.trend_label, d.trend_detail);
+      setTechCard('tech-trend-value', 'tech-trend-detail', 'tech-trend-card', d.trend, d.trend_label + '（长）', d.trend_detail);
+      // Make trend emoji smaller
+      const trendValueEl = document.getElementById('tech-trend-value');
+      if (trendValueEl) trendValueEl.innerHTML = trendValueEl.innerHTML.replace(/^[🟢🟡🔴⚪🔵]+\s*/, '<span style="font-size:0.85em">$&</span>');
+      // Short-term trend — same visual weight
+      const shortEl = document.getElementById('tech-short-trend');
+      if (shortEl) {
+        if (d.short_trend_label) {
+          const se = TECH_EMOJI[d.short_trend] || '';
+          shortEl.innerHTML = `<span style="font-size:0.85em">${se}</span> ${d.short_trend_label}（短）`;
+          shortEl.style.color = TECH_COLORS[d.short_trend] || 'var(--muted)';
+          shortEl.style.fontWeight = '600';
+          shortEl.hidden = false;
+        } else {
+          shortEl.hidden = true;
+        }
+      }
       setTechCard('tech-momentum-value', 'tech-momentum-detail', 'tech-momentum-card', d.momentum, d.momentum_label, d.momentum_detail);
       setTechCard('tech-volume-value', 'tech-volume-detail', 'tech-volume-card', d.volume_signal, d.volume_label, d.volume_detail);
       setTechCard('tech-position-value', 'tech-position-detail', 'tech-position-card', d.position, d.position_label, d.position_detail);
@@ -2830,93 +2804,6 @@ function renderRecentStockSearches() {
   stockDropdownEl.classList.add("visible");
 }
 
-function renderDataUpdateJobProgress(job) {
-  if (!job || job.status === 'idle') return '';
-  if (job.running || job.status === 'running') {
-    const progress = job.current_progress_text || '当前进度：正在更新数据...';
-    const step = job.current_step ? `当前步骤：${job.current_step}` : '';
-    return [progress, step].filter(Boolean).join('\n');
-  }
-  if (job.status === 'failed') {
-    return [
-      job.current_progress_text || '数据更新已停止或失败',
-      job.failed_step ? `失败步骤：${job.failed_step}` : '',
-      job.error || '',
-      '可点击“重试失败项”继续未完成的行业快照构建。',
-    ].filter(Boolean).join('\n');
-  }
-  if (job.status === 'succeeded') {
-    return job.current_progress_text || '数据更新完成';
-  }
-  return '';
-}
-
-function setDataUpdateButtonsForJob(job) {
-  const running = Boolean(job?.running || job?.status === 'running');
-  if (dataUpdateButtonEl) dataUpdateButtonEl.disabled = running;
-  if (dataUpdateRetryButtonEl) {
-    dataUpdateRetryButtonEl.hidden = !(job?.status === 'failed' && job?.can_retry_failed);
-    dataUpdateRetryButtonEl.disabled = running;
-  }
-}
-
-function stopDataUpdatePolling() {
-  if (dataUpdatePollTimer) {
-    window.clearInterval(dataUpdatePollTimer);
-    dataUpdatePollTimer = null;
-  }
-}
-
-function startDataUpdatePolling() {
-  stopDataUpdatePolling();
-  dataUpdatePollTimer = window.setInterval(() => {
-    refreshDataUpdateStatus().catch((error) => {
-      const infoEl = document.getElementById('stock-score-data-update-info');
-      if (infoEl) infoEl.textContent = `更新进度读取失败: ${error.message}`;
-    });
-  }, 2000);
-}
-
-function renderDataUpdateStatus(payload) {
-  const el = document.getElementById('stock-score-data-update-info');
-  if (!el) return;
-  const financial = payload?.financial_snapshot || {};
-  const industry = payload?.industry_valuation || {};
-  const latestUpdatedAt = payload?.latest_updated_at || financial.updated_at || industry.updated_at || '暂无';
-  const financialDate = financial.updated_at || '暂无';
-  const financialPeriod = financial.report_date || '未知期次';
-  const industryDate = industry.updated_at || '暂无';
-  const memberRowCount = industry.member_valuation_row_count;
-  const completeIndustryCount = industry.complete_member_valuation_industry_count;
-  const industryCount = industry.industry_count;
-  const memberCoverageText = memberRowCount != null
-    ? `member_valuation_rows：${memberRowCount} 行 · 覆盖 ${completeIndustryCount ?? 0}/${industryCount ?? '未知'} 个二级行业`
-    : 'member_valuation_rows：等待全量预计算';
-  const job = payload?.data_update_job || {};
-  const jobText = renderDataUpdateJobProgress(job);
-  setDataUpdateButtonsForJob(job);
-  if (job?.running || job?.status === 'running') {
-    startDataUpdatePolling();
-  } else {
-    stopDataUpdatePolling();
-  }
-  el.textContent = [
-    jobText,
-    `最新更新：${latestUpdatedAt}`,
-    `财务快照 ${financialPeriod} · ${financialDate}`,
-    `行业相对估值快照（含同业估值表） · ${industryDate}`,
-    memberCoverageText,
-    `member_valuation_rows 已预计算进 current 快照后，行业内估值位置弹窗可直接读取`,
-  ].filter(Boolean).join('\n');
-  el.classList.remove('muted');
-}
-
-async function refreshDataUpdateStatus() {
-  const payload = await fetchDataUpdateStatus();
-  renderDataUpdateStatus(payload);
-  return payload;
-}
-
 function rerenderCurrentSubdiagTable() {
   if (!searchState.currentStock?.scoreResult) return;
   renderSubTable(
@@ -3006,38 +2893,10 @@ async function loadSuggestions(query) {
   }
 }
 
-async function startDataUpdateRequest(fetcher, startingText) {
-  const infoEl = document.getElementById('stock-score-data-update-info');
-  if (infoEl) infoEl.textContent = startingText;
-  if (dataUpdateButtonEl) dataUpdateButtonEl.disabled = true;
-  if (dataUpdateRetryButtonEl) dataUpdateRetryButtonEl.disabled = true;
-  try {
-    const payload = await fetcher();
-    renderDataUpdateStatus(payload.data_update_status || payload);
-    startDataUpdatePolling();
-  } catch (error) {
-    if (infoEl) infoEl.textContent = formatDataUpdateErrorMessage(error);
-    if (dataUpdateButtonEl) dataUpdateButtonEl.disabled = false;
-    if (dataUpdateRetryButtonEl) dataUpdateRetryButtonEl.disabled = false;
-  }
-}
-
-document.getElementById('stock-score-data-update-btn').addEventListener('click', async () => {
-  await startDataUpdateRequest(fetchDataUpdateRun, [
-    '正在启动全量数据更新...',
-    '任务：更新财务时序 → 财务快照 → 行业相对估值快照（含同业估值表）',
-    '启动后将显示当前进度，例如：[24/127] 农用化工 正在构建...',
-  ].join('\n'));
+document.getElementById('stock-score-data-update-btn').addEventListener('click', () => {
+  window.location.href = '/data-update.html';
 });
 
-if (dataUpdateRetryButtonEl) {
-  dataUpdateRetryButtonEl.addEventListener('click', async () => {
-    await startDataUpdateRequest(fetchDataUpdateRetry, [
-      '正在重试失败项...',
-      '将复用已完成行业，只补跑未完整写入 member_valuation_rows 的行业快照。',
-    ].join('\n'));
-  });
-}
 stockInputEl.addEventListener("input", e => {
   const value = e.target.value;
   if (searchState.selectedStock) {
@@ -3691,8 +3550,6 @@ function handleIndustryTemperatureClick() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-document.getElementById("loading-msg").style.display = "block";
-document.getElementById("loading-msg").textContent = "输入股票代码查询财务评分";
 setScoreHeaderIntroVisible(true);
 resetScoreHeaderSummary();
 resetProfileSummary();
@@ -3701,10 +3558,6 @@ clearSubIndicatorTable();
 resetIndustryScorePeerDialogSummary();
 resetAiFinancialReport();
 updateAiReportButtons();
-refreshDataUpdateStatus().catch((error) => {
-  const infoEl = document.getElementById('stock-score-data-update-info');
-  if (infoEl) infoEl.textContent = `最新更新读取失败: ${error.message}`;
-});
 
 // ── 财务明细 toggle: 勾选时加载最近3年原始财报数据 ─────────────────────────
 financialDetailToggleEl?.addEventListener("change", async () => {

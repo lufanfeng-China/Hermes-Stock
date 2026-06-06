@@ -9,9 +9,11 @@ from app.pipeline.state import (
     DATA_UPDATE_LOCK, DATA_UPDATE_JOB_STATE, DATA_UPDATE_JOB_STATE_LOCK,
     DATA_UPDATE_OUTPUT_TAIL_LINES, _data_update_job_snapshot, _update_data_update_job_state,
     _append_data_update_job_output, _record_data_update_progress, _tail_lines,
-    DataUpdateStepError,
+    DataUpdateStepError, _format_timestamp,
 )
 from app.pipeline.commands import _data_update_commands, _latest_trading_day_for_refresh, clear_runtime_data_caches
+
+from app.data.rps_history import _load_rps_history_dataset
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
@@ -102,7 +104,6 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
     return {
         'ok': True,
         'steps': steps,
-        'data_update_status': load_data_update_status(),
     }
 
 
@@ -165,9 +166,7 @@ def start_data_update_job(retry_failed: bool = False) -> dict[str, object]:
     )
     thread = threading.Thread(target=_run_data_update_worker, kwargs={'retry_failed': retry_failed}, daemon=True)
     thread.start()
-    payload = load_data_update_status()
-    payload['started'] = True
-    return payload
+    return {'ok': True, 'started': True, 'data_update_job': _data_update_job_snapshot()}
 
 
 # Imported at bottom to avoid circular import

@@ -157,6 +157,68 @@ def classify_trend(closes, available_days):
     # neutral
     return "neutral", "震荡", f"均线缠绕无明确方向"
 
+
+# ── Short-term Trend (MA10/20/30/60) ──
+
+def classify_short_trend(closes, available_days):
+    """6-level short-term trend using MA10/20/30/60 for faster signal."""
+    if available_days < 30:
+        return "insufficient_data", "数据不足", "交易日不足30日"
+
+    ma10_arr = rolling_mean(closes, 10)
+    ma20_arr = rolling_mean(closes, 20)
+    ma30_arr = rolling_mean(closes, 30) if available_days >= 30 else None
+    ma60_arr = rolling_mean(closes, 60) if available_days >= 60 else None
+
+    ma10 = latest_non_null(ma10_arr)
+    ma20 = latest_non_null(ma20_arr)
+    ma30 = latest_non_null(ma30_arr) if ma30_arr else None
+    ma60 = latest_non_null(ma60_arr) if ma60_arr else None
+
+    if any(v is None for v in (ma10, ma20)):
+        return ("insufficient_data" if available_days < 30 else "neutral",
+                "数据不足" if available_days < 30 else "震荡", "MA计算数据不足")
+
+    close = closes[-1]
+
+    # Slopes
+    ma10_3ago = ma10_arr[-4] if len(ma10_arr) >= 4 and ma10_arr[-4] is not None else ma10
+    ma20_5ago = ma20_arr[-6] if len(ma20_arr) >= 6 and ma20_arr[-6] is not None else ma20
+    ma10_slope = safe_div(ma10 - ma10_3ago, ma10_3ago) if ma10_3ago else 0
+    ma20_slope = safe_div(ma20 - ma20_5ago, ma20_5ago) if ma20_5ago else 0
+    ma30_slope = None
+    if ma30_arr and len(ma30_arr) >= 11 and ma30_arr[-11] is not None and ma30:
+        ma30_slope = safe_div(ma30 - ma30_arr[-11], ma30_arr[-11])
+
+    # strong_bullish
+    if (ma60 is not None and ma30 is not None and
+        ma10 > ma20 > ma30 > ma60 and close > ma10 and
+        ma10_slope > 0 and ma20_slope > 0):
+        return "strong_bullish", "强多头", f"MA10({ma10:.1f})>MA20({ma20:.1f})>MA30({ma30:.1f})>MA60({ma60:.1f})"
+
+    # bullish
+    if ma30 is not None and ma10 > ma20 > ma30 and close > ma10 and ma10_slope > 0:
+        return "bullish", "多头", f"MA10({ma10:.1f})>MA20({ma20:.1f})>MA30({ma30:.1f}), close>{ma10:.1f}"
+
+    # recovering
+    if ma10 > ma20 and close > ma10:
+        slope_threshold = 0.01 if ma10 < 5 else (0.005 if ma10 <= 20 else 0.003)
+        if ma10_slope >= slope_threshold:
+            return "recovering", "修复中", f"MA10({ma10:.1f})>MA20({ma20:.1f}), close>{ma10:.1f}, MA10上行{ma10_slope*100:.1f}%"
+
+    # strong_bearish
+    if (ma60 is not None and ma30 is not None and
+        ma10 < ma20 < ma30 < ma60 and close < ma10 and ma10_slope < 0):
+        return "strong_bearish", "强空头", f"MA10<MA20<MA30<MA60, close<MA10"
+
+    # bearish
+    if ma30 is not None and ma10 < ma20 < ma30 and close < ma20:
+        return "bearish", "空头", f"MA10<MA20<MA30, close<MA20"
+
+    # neutral
+    return "neutral", "震荡", f"均线缠绕无明确方向"
+
+
 # ── Momentum ──
 
 def classify_momentum(rps20, rps50, rps120):
@@ -599,11 +661,19 @@ def main(trading_day: str | None = None):
             # Trend
             trend, trend_label, trend_detail = classify_trend(closes, available)
 
+            # Short-term trend (MA10/20/30/60)
+            short_trend, short_trend_label, short_trend_detail = classify_short_trend(closes, available)
+
             # Previous day's trend (for trend-switch filter)
             if available > 60:
                 prev_trend, prev_trend_label, _prev_detail = classify_trend(closes[:-1], available - 1)
             else:
                 prev_trend = prev_trend_label = ""
+            # Previous day's short trend
+            if available > 30:
+                prev_short_trend, prev_short_trend_label, _ = classify_short_trend(closes[:-1], available - 1)
+            else:
+                prev_short_trend = prev_short_trend_label = ""
             ma20_arr = rolling_mean(closes, 20)
 
             # Momentum (from RPS)
@@ -654,6 +724,11 @@ def main(trading_day: str | None = None):
                 "trend_detail": trend_detail,
                 "trend_prev": prev_trend,
                 "trend_prev_label": prev_trend_label,
+                "short_trend": short_trend,
+                "short_trend_label": short_trend_label,
+                "short_trend_detail": short_trend_detail,
+                "short_trend_prev": prev_short_trend,
+                "short_trend_prev_label": prev_short_trend_label,
                 "momentum": momentum,
                 "momentum_label": momentum_label,
                 "momentum_detail": momentum_detail,

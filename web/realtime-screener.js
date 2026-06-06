@@ -1,4 +1,4 @@
-import { KlineChart } from './kline-chart.js?v=20260513-ma';
+import { KlineChart } from './kline-chart.js?v=20260604-ma';
 
 /**
  * 方案配置 — 模块化条件系统

@@ -5,7 +5,9 @@ import json
 import os
 import re
 import sys
+import time
 import importlib
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -30,7 +32,7 @@ from app.pipeline.state import (
     _update_data_update_job_state, _append_data_update_job_output,
     _record_data_update_progress, DataUpdateStepError, _format_timestamp,
 )
-from app.pipeline.commands import ensure_stock_screener_strategy_dataset
+from app.pipeline.commands import ensure_stock_screener_strategy_dataset, _latest_trading_day_for_refresh
 from app.pipeline.runner import start_data_update_job, run_full_data_update
 from app.industry.templates import _industry_template_tags, _build_industry_valuation_percentile_payload
 
@@ -125,6 +127,20 @@ def load_data_update_status() -> dict[str, object]:
     }
 
 
+def _is_allowed_local_origin(origin: str | None, referer: str | None = None) -> bool:
+    candidates = [str(origin or '').strip(), str(referer or '').strip()]
+    for text in candidates:
+        if not text:
+            continue
+        try:
+            parsed = urlparse(text)
+        except Exception:
+            continue
+        hostname = (parsed.hostname or '').strip().lower()
+        if hostname in {'127.0.0.1', 'localhost'}:
+            return True
+    return False
+
 
 class StockDashboardHandler(BaseHTTPRequestHandler):
     server_version = "StockDashboard/0.1"
@@ -184,6 +200,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/data-update-status":
             self.handle_data_update_status(parsed.query)
+            return
+        if parsed.path == "/api/data-update-plan":
+            self.handle_data_update_plan()
             return
         if parsed.path == "/api/technical-eval":
             self.handle_technical_eval(parsed.query)
@@ -596,7 +615,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                                 with open(fp) as f:
                                     data = json.load(f)
                                 stocks = data.get("stocks", {}) if isinstance(data, dict) else {}
-                                prev_tech_days.append({s: {"trend": v.get("trend"), "trend_label": v.get("trend_label")}
+                                prev_tech_days.append({s: {"trend": v.get("trend"), "trend_label": v.get("trend_label"),
+                                                              "short_trend": v.get("short_trend"), "short_trend_label": v.get("short_trend_label")}
                                                        for s, v in stocks.items()})
                             except Exception:
                                 prev_tech_days.append({})
@@ -617,6 +637,19 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         row["trend_duration"] = duration
                     except Exception:
                         row["trend_duration"] = 1
+                    try:
+                        current_short = str(row.get("tech_short_trend") or "")
+                        short_dur = 1
+                        if current_short:
+                            for day_data in prev_tech_days:
+                                prev = day_data.get(symbol)
+                                if prev and prev.get("short_trend") == current_short:
+                                    short_dur += 1
+                                else:
+                                    break
+                        row["short_trend_duration"] = short_dur
+                    except Exception:
+                        row["short_trend_duration"] = 1
             # Augment with Kronos AI prediction
             if result.get("rows"):
                 kronos_path = DERIVED_FINAL_DIR / "dataset_kronos_prediction.json"
@@ -829,6 +862,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 for field in ("trend", "trend_label", "momentum", "momentum_label",
                               "volume_signal", "volume_label",
                               "buy_trigger", "buy_trigger_label",
+                              "short_trend", "short_trend_label",
+                              "short_trend_prev", "short_trend_prev_label",
                               "conclusion", "conclusion_label", "conclusion_color", "conclusion_reason"):
                     row[f"tech_{field}"] = tech.get(field)
 
@@ -878,6 +913,21 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                     row["trend_duration"] = duration
                 except Exception:
                     row["trend_duration"] = 1
+
+            # Short trend duration
+            if "_error" not in row:
+                try:
+                    current_short = row.get("tech_short_trend", "")
+                    short_dur = 1
+                    for day_data in prev_tech_days:
+                        prev = day_data.get(symbol.zfill(6))
+                        if prev and prev.get("short_trend") == current_short:
+                            short_dur += 1
+                        else:
+                            break
+                    row["short_trend_duration"] = short_dur
+                except Exception:
+                    row["short_trend_duration"] = 1
 
             stocks_out.append(row)
 
@@ -1111,6 +1161,61 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 {"ok": False, "error": {"code": "data_update_status_error", "message": str(exc)}},
             )
 
+    def handle_data_update_plan(self) -> None:
+        """Return data freshness + pending task list with descriptions."""
+        status = load_data_update_status()
+        job = _data_update_job_snapshot()
+        trading_day = _latest_trading_day_for_refresh()
+
+        # Task definitions with descriptions
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        tasks = []
+
+        if trading_day and trading_day != today_str:
+            tasks.append({
+                'id': 'archive_daily',
+                'name': '归档每日数据',
+                'desc': f'归档交易日 {trading_day} 的日线/分钟线/快照数据',
+            })
+        tasks.extend([
+            {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
+            {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
+            {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
+            {'id': 'build_rps_history', 'name': '构建 RPS 历史', 'desc': '计算全市场截面 RPS20/50/120/250，回溯 120 天'},
+            {'id': 'update_rps_current', 'name': '更新当前 RPS', 'desc': '从历史 RPS 提取最新交易日数据'},
+            {'id': 'rebuild_screener_rps_first', 'name': '重建 RPS首次 策略', 'desc': '重建 RPS首次进入前50 的选股策略结果'},
+            {'id': 'rebuild_screener_ma_cross', 'name': '重建 均线选股 策略', 'desc': '重建均线多头排列选股策略结果'},
+            {'id': 'rebuild_screener_washout', 'name': '重建 涨停洗盘 策略', 'desc': '重建涨停后缩量洗盘策略结果'},
+            {'id': 'rebuild_screener_rps_climb', 'name': '重建 RPS爬升 策略', 'desc': '重建 RPS 持续爬升策略结果'},
+            {'id': 'rebuild_screener_blowup_stall', 'name': '重建 爆量滞涨 策略', 'desc': '重建放量滞涨预警策略结果'},
+            {'id': 'rebuild_screener_blowup_break', 'name': '重建 爆量突破 策略', 'desc': '重建放量突破策略结果'},
+        ])
+
+        # Determine which tasks are completed (based on current data freshness)
+        snapshot_updated = status.get('financial_snapshot', {}).get('updated_at')
+
+        self.respond_json(HTTPStatus.OK, {
+            'ok': True,
+            'current_status': {
+                'financial_snapshot_updated': status.get('financial_snapshot', {}).get('updated_at'),
+                'financial_report_date': status.get('financial_snapshot', {}).get('report_date'),
+                'industry_valuation_updated': status.get('industry_valuation', {}).get('updated_at'),
+                'industry_count': status.get('industry_valuation', {}).get('industry_count'),
+                'latest_updated_at': status.get('latest_updated_at'),
+            },
+            'job': {
+                'status': job.get('status', 'idle'),
+                'running': job.get('running', False),
+                'current_step': job.get('current_step'),
+                'progress_index': job.get('progress_index'),
+                'progress_total': job.get('progress_total'),
+                'current_progress_text': job.get('current_progress_text', ''),
+                'error': job.get('error'),
+                'can_retry_failed': job.get('can_retry_failed', False),
+            },
+            'tasks': tasks,
+        })
+
     def handle_data_update_run(self) -> None:
         self._handle_data_update_start(retry_failed=False)
 
@@ -1213,17 +1318,25 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         })
 
     def _handle_data_update_start(self, retry_failed: bool = False) -> None:
-        if not _is_allowed_local_origin(self.headers.get('Origin'), self.headers.get('Referer')):
+        try:
+            if not _is_allowed_local_origin(self.headers.get('Origin'), self.headers.get('Referer')):
+                self.respond_json(
+                    HTTPStatus.FORBIDDEN,
+                    {"ok": False, "error": {"code": "forbidden_origin", "message": "仅允许本地页面触发数据更新"}},
+                )
+                return
+            payload = start_data_update_job(retry_failed=retry_failed)
+            if not payload.get('ok'):
+                self.respond_json(HTTPStatus.CONFLICT, payload)
+                return
+            self.respond_json(HTTPStatus.OK, payload)
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
             self.respond_json(
-                HTTPStatus.FORBIDDEN,
-                {"ok": False, "error": {"code": "forbidden_origin", "message": "仅允许本地页面触发数据更新"}},
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "update_error", "message": str(exc)}},
             )
-            return
-        payload = start_data_update_job(retry_failed=retry_failed)
-        if not payload.get('ok'):
-            self.respond_json(HTTPStatus.CONFLICT, payload)
-            return
-        self.respond_json(HTTPStatus.OK, payload)
 
     def handle_sync_to_tdx_block(self) -> None:
         """Sync screener result stocks to Tongdaxin custom block 'AIGC' (AI股池)."""

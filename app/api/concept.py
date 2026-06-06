@@ -138,6 +138,7 @@ def handle_concept_analysis(query: str) -> dict[str, Any]:
         _coerce_float,
         _coerce_int,
         _load_financial_snapshot,
+        _load_latest_daily_snapshot,
         load_industry_valuation_rows,
         load_rps_rows,
         search_concept_stocks,
@@ -164,6 +165,15 @@ def handle_concept_analysis(query: str) -> dict[str, Any]:
 
     rps_lookup = {(str(r.get("market", "")).strip(), str(r.get("symbol", "")).strip()): r for r in rps_rows}
     score_lookup = score_rows if isinstance(score_rows, dict) else {}
+
+    # Pre-compute market_total_rank by sorting all stocks by total_score (descending)
+    ranked_scores: list[tuple[float, str]] = []
+    for k, s in score_lookup.items():
+        ts = _coerce_float(s.get("total_score"))
+        if ts is not None:
+            ranked_scores.append((ts, k))
+    ranked_scores.sort(key=lambda x: (-x[0], x[1]))
+    rank_by_key: dict[str, int] = {k: i + 1 for i, (_, k) in enumerate(ranked_scores)}
 
     # Build PE lookup dict once (O(1) per stock)
     pe_lookup: dict[tuple[str, str], float | None] = {}
@@ -220,18 +230,22 @@ def handle_concept_analysis(query: str) -> dict[str, Any]:
 
         narrative = _generate_concept_narrative(concept_name, industry, concept_list_data, rank, total)
 
+        # Fetch current price from cached daily snapshot (local, fast)
+        daily = _load_latest_daily_snapshot(market, symbol)
+        cp = daily.get("latest_close")
+
         enriched.append({
             "market": market, "symbol": symbol,
             "stock_name": str(m.get("stock_name", symbol)),
             "industry_display": str(m.get("industry_display", "")),
-            "current_price": _coerce_float(rps.get("current_price")),
+            "current_price": cp,
             "pe_ttm": pe,
             "rps_20": _coerce_float(rps.get("rps_20")),
             "rps_50": _coerce_float(rps.get("rps_50")),
             "rps_120": _coerce_float(rps.get("rps_120")),
             "rps_250": _coerce_float(rps.get("rps_250")),
             "total_rps": round(total_rps, 0),
-            "market_total_rank": _coerce_int(score.get("market_total_rank")),
+            "market_total_rank": rank_by_key.get(key),
             "tech_trend_label": tech.get("trend_label"),
             "tech_trend": tech.get("trend"),
             "match_pct": match_pct,
@@ -270,6 +284,7 @@ def handle_concept_cross(query: str) -> dict[str, Any]:
         _coerce_float,
         _coerce_int,
         _load_financial_snapshot,
+        _load_latest_daily_snapshot,
         load_industry_valuation_rows,
         load_rps_rows,
         search_concept_stocks,
@@ -329,6 +344,15 @@ def handle_concept_cross(query: str) -> dict[str, Any]:
     rps_lookup = {(str(r.get("market", "")).strip(), str(r.get("symbol", "")).strip()): r for r in rps_rows}
     score_lookup = score_rows if isinstance(score_rows, dict) else {}
 
+    # Pre-compute market_total_rank
+    ranked_scores: list[tuple[float, str]] = []
+    for k, s in score_lookup.items():
+        ts = _coerce_float(s.get("total_score"))
+        if ts is not None:
+            ranked_scores.append((ts, k))
+    ranked_scores.sort(key=lambda x: (-x[0], x[1]))
+    rank_by_key: dict[str, int] = {k: i + 1 for i, (_, k) in enumerate(ranked_scores)}
+
     pe_lookup: dict[tuple[str, str], float | None] = {}
     for vrow in valuation_rows:
         for mv in (vrow.get("member_valuation_rows") or []):
@@ -371,18 +395,22 @@ def handle_concept_cross(query: str) -> dict[str, Any]:
 
         narrative = "、".join(concept_names) + f"，主营{industry.split('/')[-1].strip() if industry else '—'}"
 
+        # Fetch current price from cached daily snapshot (local, fast)
+        daily = _load_latest_daily_snapshot(market, symbol)
+        cp = daily.get("latest_close")
+
         enriched.append({
             "market": market, "symbol": symbol,
             "stock_name": str(m.get("stock_name", symbol)),
             "industry_display": industry,
-            "current_price": _coerce_float(rps.get("current_price")),
+            "current_price": cp,
             "pe_ttm": pe,
             "rps_20": _coerce_float(rps.get("rps_20")),
             "rps_50": _coerce_float(rps.get("rps_50")),
             "rps_120": _coerce_float(rps.get("rps_120")),
             "rps_250": _coerce_float(rps.get("rps_250")),
             "total_rps": round(total_rps, 0),
-            "market_total_rank": _coerce_int(score.get("market_total_rank")),
+            "market_total_rank": rank_by_key.get(key),
             "tech_trend_label": tech.get("trend_label"),
             "tech_trend": tech.get("trend"),
             "match_pct": best_match,

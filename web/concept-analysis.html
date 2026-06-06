@@ -4,40 +4,342 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>概念分析</title>
-  <link rel="stylesheet" href="/styles.css?v=20260529">
+  <link rel="stylesheet" href="/styles.css">
   <style>
-    .ca-search-wrap { display:flex; gap:8px; margin-bottom:16px; }
-    .ca-search-wrap input { flex:1; padding:8px 12px; background:var(--bg-input); color:var(--text-main); border:1px solid var(--border-color); border-radius:4px; font-size:14px; }
-    .ca-search-btn { padding:8px 20px; background:var(--accent); color:#000; border:none; border-radius:4px; cursor:pointer; font-weight:600; }
-    .ca-search-btn:disabled { opacity:0.5; cursor:not-allowed; }
-    .ca-meta { color:var(--text-muted); font-size:13px; margin-bottom:12px; }
-    .ca-table { width:100%; border-collapse:collapse; font-size:13px; }
-    .ca-table th { text-align:left; padding:6px 8px; color:var(--text-muted); border-bottom:1px solid var(--border-color); white-space:nowrap; }
-    .ca-table td { padding:6px 8px; border-bottom:1px solid var(--border-subtle); }
-    .ca-table tr:hover { background:var(--bg-hover); }
-    .ca-table .num { text-align:right; }
-    .match-high { color:#22c55e; font-weight:700; }
-    .match-mid { color:#f59e0b; font-weight:600; }
-    .match-low { color:#6b7280; }
+    .ca-shell { max-width: 1100px; margin: 0 auto; }
+
+    .ca-search-section {
+      margin: 24px 0 20px;
+    }
+    .ca-search-row {
+      display: flex;
+      gap: 0;
+      border: 1px solid rgba(124,224,195,0.18);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(124,224,195,0.03);
+      transition: border-color 0.2s;
+    }
+    .ca-search-row:focus-within {
+      border-color: rgba(124,224,195,0.40);
+    }
+    .ca-input {
+      flex: 1;
+      padding: 12px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+    .ca-input::placeholder { color: var(--muted); }
+    .ca-btn {
+      padding: 12px 28px;
+      background: rgba(124,224,195,0.12);
+      border: none;
+      border-left: 1px solid rgba(124,224,195,0.18);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .ca-btn:hover { background: rgba(124,224,195,0.20); }
+    .ca-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .ca-result-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(124,224,195,0.10);
+    }
+    .ca-concept-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ca-concept-name .tag {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-left: 8px;
+      padding: 2px 8px;
+      border: 1px solid rgba(124,224,195,0.15);
+      border-radius: 4px;
+    }
+    .ca-result-count {
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .ca-result-count strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .ca-table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(124,224,195,0.10);
+      border-radius: 10px;
+    }
+    .ca-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .ca-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .ca-table th {
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: rgba(7,16,24,0.98);
+      border-bottom: 1px solid rgba(124,224,195,0.14);
+      font-weight: 500;
+    }
+    .ca-table th.num { text-align: right; }
+    .ca-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(124,224,195,0.05);
+      color: var(--text);
+      vertical-align: middle;
+    }
+    .ca-table td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .ca-table tbody tr {
+      transition: background 0.10s;
+    }
+    .ca-table tbody tr:hover {
+      background: rgba(124,224,195,0.04);
+    }
+
+    .ca-stock-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ca-stock-name a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .ca-stock-name a:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+    .ca-stock-symbol {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .ca-match-badge {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .ca-match-high, td.ca-match-high { color: #22c55e; }
+    .ca-match-mid,  td.ca-match-mid  { color: #f59e0b; }
+    .ca-match-low,  td.ca-match-low  { color: var(--muted); }
+
+    .ca-empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--muted);
+    }
+    .ca-empty-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.5; }
+    .ca-loading {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .ca-error {
+      padding: 16px;
+      border: 1px solid rgba(255,107,107,0.15);
+      border-radius: 10px;
+      background: rgba(255,107,107,0.05);
+      color: var(--danger);
+      font-size: 13px;
+    }
+
+    .ca-narrative {
+      font-size: 11px;
+      color: var(--muted);
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ca-trend {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .ca-hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: -14px;
+      margin-bottom: 16px;
+      opacity: 0.7;
+    }
+    .ca-hint strong { color: var(--accent); font-weight: 500; }
   </style>
 </head>
-<body class="bg-main">
-<main class="container mx-auto px-4 py-6" style="max-width:1300px">
-  <sectionheader>
-    <p>CONCEPT ANALYZER</p>
-    <h1>概念分析</h1>
-    <div id="global-nav"></div>
-  </sectionheader>
+<body>
+<main class="app-shell ca-shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">CONCEPT ANALYZER</p>
+      <h1>概念分析</h1>
+    </div>
+    <div class="topbar-actions" id="global-nav"></div>
+  </header>
 
-  <div class="ca-search-wrap" style="margin-top:20px">
-    <input id="ca-input" type="text" placeholder="输入概念名称，如：固态电池、低空经济、AI芯片..." autofocus>
-    <button id="ca-btn" class="ca-search-btn">搜索</button>
+  <div class="ca-search-section">
+    <div class="ca-search-row">
+      <input id="ca-input" class="ca-input" type="text"
+        placeholder="单概念直接输入，如：固态电池 | 多概念用逗号分隔，如：固态电池,锂电池"
+        autofocus autocomplete="off">
+      <button id="ca-btn" class="ca-btn" type="button">搜索</button>
+    </div>
   </div>
 
-  <div id="ca-meta" class="ca-meta"></div>
+  <div class="ca-hint">多个概念用 <strong>英文逗号</strong> 或 <strong>中文逗号</strong> 分隔，查询它们的交集股票</div>
+
+  <div id="ca-result-header" class="ca-result-header" style="display:none"></div>
   <div id="ca-results"></div>
 </main>
+
 <script src="/nav.js"></script>
-<script src="/concept-analysis.js?v=20260529"></script>
+<script>
+const input = document.getElementById('ca-input');
+const btn = document.getElementById('ca-btn');
+const header = document.getElementById('ca-result-header');
+const results = document.getElementById('ca-results');
+
+const SIGNALS = {
+  strong_bullish: '\u{1F7E2}', bullish: '\u{1F7E2}',
+  recovering: '\u{1F7E1}', neutral: '\u26AA',
+  bearish: '\u{1F534}', strong_bearish: '\u{1F534}',
+};
+
+function esc(s) { return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+function isMulti(q) { return q.includes(',') || q.includes('\uFF0C'); }
+
+btn.addEventListener('click', search);
+input.addEventListener('keydown', function(e) { if (e.key === 'Enter') search(); });
+
+async function search() {
+  var q = input.value.trim();
+  if (!q) return;
+  btn.disabled = true;
+  btn.textContent = '搜索中...';
+  header.style.display = 'none';
+  results.innerHTML = '<div class="ca-loading">查询中...</div>';
+
+  var isCross = isMulti(q);
+  var endpoint = isCross ? '/api/concept-cross' : '/api/concept-analysis';
+
+  try {
+    var resp = await fetch(endpoint + '?q=' + encodeURIComponent(q));
+    var data = await resp.json();
+    if (!data.ok) {
+      results.innerHTML = '<div class="ca-error">' + esc(data.error || '查询失败') + '</div>';
+      return;
+    }
+    if (isCross && data.cross) renderCross(data, q);
+    else if (!isCross && data.concept_name) renderSingle(data);
+    else {
+      results.innerHTML = '<div class="ca-empty"><div class="ca-empty-icon">\u{1F50D}</div>未找到与"' + esc(q) + '"相关的概念</div>';
+      header.style.display = 'none';
+    }
+  } catch (e) {
+    results.innerHTML = '<div class="ca-error">请求失败: ' + esc(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '搜索';
+  }
+}
+
+function stockLink(s) {
+  var p = new URLSearchParams({ market: s.market, symbol: s.symbol, name: s.stock_name || s.symbol });
+  return '/stock-score.html?' + p.toString();
+}
+
+function stockNameCell(s) {
+  return '<div class="ca-stock-name"><a href="' + stockLink(s) + '" target="_blank">' + esc(s.stock_name) + '</a></div>' +
+    '<div class="ca-stock-symbol">' + s.market.toUpperCase() + ':' + s.symbol + '</div>';
+}
+
+function trendCell(s) {
+  var trend = s.tech_trend;
+  var light = SIGNALS[trend] || '';
+  return '<span class="ca-trend">' + light + ' ' + esc(s.tech_trend_label || '\u2014') + '</span>';
+}
+
+function fmtNum(v, d) { d = d || 0; return v != null ? Number(v).toFixed(d) : '\u2014'; }
+function fmtRank(r) { return r != null ? '#' + r : '\u2014'; }
+
+function stockRow(s, showHit) {
+  var pctClass = s.match_pct != null ? (s.match_pct >= 80 ? 'ca-match-high' : s.match_pct >= 50 ? 'ca-match-mid' : 'ca-match-low') : '';
+  var pctDisplay = s.match_pct != null ? s.match_pct + '%' : '\u2014';
+  var hitCol = showHit ? '<td style="font-size:11px;color:var(--muted)">' + esc((s.matched_concepts || []).join(', ')) + '</td>' : '';
+  return '<tr>' +
+    '<td>' + stockNameCell(s) + '</td>' +
+    '<td class="num ca-match-badge ' + pctClass + '">' + pctDisplay + '</td>' +
+    hitCol +
+    '<td class="num">' + fmtNum(s.current_price, 2) + '</td>' +
+    '<td class="num">' + fmtNum(s.pe_ttm, 1) + '</td>' +
+    '<td>' + trendCell(s) + '</td>' +
+    '<td class="num">' + fmtNum(s.rps_20) + '/' + fmtNum(s.rps_50) + '/' + fmtNum(s.rps_120) + '/' + fmtNum(s.rps_250) + '</td>' +
+    '<td class="num">' + fmtNum(s.total_rps) + '</td>' +
+    '<td class="num">' + fmtRank(s.market_total_rank) + '</td>' +
+    '<td>' + esc(s.industry_display || '\u2014') + '</td>' +
+    '<td><div class="ca-narrative" title="' + esc(s.narrative || '') + '">' + esc(s.narrative || '\u2014') + '</div></td>' +
+    '</tr>';
+}
+
+function renderSingle(data) {
+  var tag = data.matched ? '' : ' <span class="tag">关键词匹配</span>';
+  header.innerHTML = '<span class="ca-concept-name">' + esc(data.concept_name) + tag + '</span>' +
+    '<span class="ca-result-count">相关股票 <strong>' + data.stocks.length + '</strong> 只 \u00B7 ' + esc(data.method) + '</span>';
+  header.style.display = 'flex';
+  if (!data.stocks.length) { results.innerHTML = ''; return; }
+  var cols = ['股票', '契合度', '现价', 'PE', '趋势', 'RPS(20/50/120/250)', '总RPS', '全市场排名', '行业', '入选原因'];
+  results.innerHTML = buildTable(cols, data.stocks.map(function(s) { return stockRow(s, false); }));
+}
+
+function renderCross(data, q) {
+  var names = (data.concepts || []).map(function(c) { return c.name; }).join(' + ');
+  var counts = (data.concepts || []).map(function(c) { return c.name + '(' + c.member_count + ')'; }).join(' \u2229 ');
+  header.innerHTML = '<span class="ca-concept-name">' + esc(names) + '</span>' +
+    '<span class="ca-result-count">' + esc(counts) + ' \u2192 交集 <strong>' + data.intersection_count + '</strong> 只</span>';
+  header.style.display = 'flex';
+  if (!data.stocks.length) { results.innerHTML = '<div class="ca-empty">交集为空，没有同时属于这些概念的股票</div>'; return; }
+  var cols = ['股票', '契合度', '命中概念', '现价', 'PE', '趋势', 'RPS(20/50/120/250)', '总RPS', '全市场排名', '行业', '入选原因'];
+  results.innerHTML = buildTable(cols, data.stocks.map(function(s) { return stockRow(s, true); }));
+}
+
+function buildTable(cols, rows) {
+  var h = cols.map(function(c) {
+    var nc = (c === '契合度' || c === '现价' || c === 'PE' || c === 'RPS(20/50/120/250)' || c === '总RPS' || c === '全市场排名') ? ' class="num"' : '';
+    return '<th' + nc + '>' + c + '</th>';
+  }).join('');
+  return '<div class="ca-table-wrap"><table class="ca-table"><thead><tr>' + h + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
+}
+</script>
 </body>
 </html>

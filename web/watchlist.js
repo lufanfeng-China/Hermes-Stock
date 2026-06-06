@@ -1,5 +1,5 @@
 // watchlist.js — Watchlist table with K-line popup
-import { KlineChart } from './kline-chart.js?v=20260513-ma';
+import { KlineChart } from './kline-chart.js?v=20260604-ma';
 
 let watchlistData = [];
 
@@ -76,6 +76,20 @@ function renderTable(stocks) {
     const temp = fmtTemp(s);
 
     const trend = s.tech_trend_label || '—';
+    const shortTrend = s.tech_short_trend_label || '—';
+    const shortTrendSwitch = (() => {
+      const cur = s.tech_short_trend || '';
+      const prev = s.tech_short_trend_prev || '';
+      if (!cur) return '—';
+      if (!prev) return '—';
+      if (cur !== prev) {
+        const bullish = ['strong_bullish','bullish','recovering'];
+        if (bullish.includes(cur) && !bullish.includes(prev)) return '🟢 转多';
+        if (!bullish.includes(cur) && bullish.includes(prev)) return '🔴 转空';
+        return '↔ 切换';
+      }
+      return '—';
+    })();
     const momentum = s.tech_momentum_label || '—';
     const volume = s.tech_volume_label || '—';
     const buyTrigger = s.tech_buy_trigger_label ? '✅ ' + esc(s.tech_buy_trigger_label) : '❌ 未触发';
@@ -92,13 +106,14 @@ function renderTable(stocks) {
 
     return `<tr data-idx="${i}" data-market="${esc(s.market)}" data-symbol="${esc(s.symbol)}" data-name="${esc(name)}" tabindex="0">
       <td><input type="checkbox" class="wl-row-check" data-idx="${i}"></td>
-      <td><span class="wl-stock-name">${esc(name)}</span><br><span class="wl-stock-symbol">${esc(marketSymbol)}</span></td>
-      <td class="num">${price}</td>
+      <td class="wl-name-cell"><span class="wl-stock-name">${esc(name)}</span><br><span class="wl-stock-symbol">${esc(marketSymbol)}</span></td>
+      <td class="num wl-price-cell" title="点击查看K线">${price}</td>
       <td class="num"><span class="wl-score">${ms}</span> ${mr}</td>
       <td class="num"><span class="wl-score">${is_}</span> ${ir}</td>
       <td>${esc(ind)}</td>
       <td>${temp}</td>
       <td style="color:${trendColor(trend)}">${esc(trend)}</td>
+      <td style="color:${trendColor(shortTrend)}">${esc(shortTrend)}${shortTrendSwitch !== '—' ? ' ' + shortTrendSwitch : ''}</td>
       <td style="color:${trendColor(momentum)}">${esc(momentum)}</td>
       <td style="color:${trendColor(volume)}">${esc(volume)}</td>
       <td>${buyTrigger}</td>
@@ -106,6 +121,7 @@ function renderTable(stocks) {
       <td class="num" style="color:${pctColor(s.return_5_pct)}">${r5}</td>
       <td class="num" style="color:${pctColor(s.return_20_pct)}">${r20}</td>
       <td class="num">${dur}</td>
+      <td class="num">${s.short_trend_duration != null ? s.short_trend_duration + '天' : '—'}</td>
       <td>${patEmoji} ${esc(pat)}</td>
       <td style="color:${concColor};font-weight:600" title="${esc(s.tech_conclusion_reason || '')}">${esc(conclusion)}</td>
       <td><button class="wl-remove-btn" data-idx="${i}" type="button">✕</button></td>
@@ -147,17 +163,27 @@ function bindRowEvents() {
     });
   });
 
-  // Row click → K-line
-  document.querySelectorAll('#watchlist-table tbody tr').forEach(row => {
-    row.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
-      openKline(row.dataset.market, row.dataset.symbol, row.dataset.name);
+  // Name cell click → navigate to stock-score page with auto-load
+  document.querySelectorAll('.wl-name-cell').forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = cell.closest('tr');
+      if (!row) return;
+      const market = row.dataset.market;
+      const symbol = row.dataset.symbol;
+      const name = row.dataset.name;
+      const params = new URLSearchParams({ market, symbol, name });
+      window.location.href = `/stock-score.html?${params.toString()}`;
     });
-    row.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openKline(row.dataset.market, row.dataset.symbol, row.dataset.name);
-      }
+  });
+
+  // Price cell click → open K-line dialog
+  document.querySelectorAll('.wl-price-cell').forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = cell.closest('tr');
+      if (!row) return;
+      openKline(row.dataset.market, row.dataset.symbol, row.dataset.name);
     });
   });
 }
