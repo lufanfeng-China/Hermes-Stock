@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>瓶颈股发现 — Serenity 方法论</title>
   <link rel="stylesheet" href="/dark-terminal-table-styling.css">
+  <link rel="stylesheet" href="/styles.css">
   <style>
     :root {
       --bg: #0d1117;
@@ -296,6 +297,22 @@
     </div>
   </div>
 
+  <!-- K-line Chart Dialog -->
+  <div id="kline-chart-dialog" class="industry-score-peer-dialog" hidden aria-hidden="true">
+    <div class="kline-chart-dialog-card" role="dialog" aria-modal="true" aria-labelledby="kline-chart-title">
+      <div class="search-card-header">
+        <div>
+          <p class="eyebrow">K-LINE CHART</p>
+          <h2 id="kline-chart-title">K线趋势图</h2>
+        </div>
+        <button id="kline-chart-close" type="button" class="sub-period-industry-average-btn">关闭</button>
+      </div>
+      <div class="kline-chart-body">
+        <svg id="kline-chart-svg" class="kline-chart-svg" role="img" aria-label="K线趋势图"></svg>
+      </div>
+    </div>
+  </div>
+
   <!-- History Popup -->
   <div id="history-popup" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;">
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">
@@ -305,6 +322,6 @@
     </div>
   </div>
 
-  <script src="/bottleneck.js"></script>
+  <script type="module" src="/bottleneck.js"></script>
 </body>
 </html>

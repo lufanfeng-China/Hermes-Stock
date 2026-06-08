@@ -12,7 +12,12 @@
  *   - 保存报告: /api/bottleneck/save-report
  */
 
+import { KlineChart } from './kline-chart.js?v=20260604-ma';
+
 const API_BASE = '';
+
+// ── K-line chart singleton ──
+let scoreKlineChart = null;
 
 // ── 全局状态 ──
 let state = {
@@ -513,8 +518,19 @@ async function renderStep5() {
               return `
                 <tr>
                   <td style="font-weight:600;">${s.code}</td>
-                  <td>${s.name || '—'} ${s.concept_risk === 'high' ? '<span style="color:var(--red);font-size:10px;">⚠️概念股风险</span>' : s.concept_risk === 'medium' ? '<span style="color:var(--yellow);font-size:10px;">⚠️需验证</span>' : ''}</td>
-                  <td style="font-weight:600;">${closeVal}</td>
+                  <td>
+                    <a href="/stock-score.html?symbol=${s.code}&market=${s.market}" target="_blank"
+                       style="color:var(--accent2);text-decoration:none;cursor:pointer;"
+                       title="跳转财务评分页面">
+                      ${s.name || '—'}
+                    </a>
+                    ${s.concept_risk === 'high' ? '<span style="color:var(--red);font-size:10px;">⚠️概念股风险</span>' : s.concept_risk === 'medium' ? '<span style="color:var(--yellow);font-size:10px;">⚠️需验证</span>' : ''}
+                  </td>
+                  <td style="font-weight:600;cursor:pointer;color:var(--accent2);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;"
+                      onclick="openBottleneckKline('${s.market}','${s.code}')"
+                      title="点击查看 K 线图">
+                    ${closeVal}
+                  </td>
                   <td style="color:${chgColor(s.change_5d)};font-weight:600;">${chg5}</td>
                   <td style="color:${chgColor(s.change_20d)};font-weight:600;">${chg20}</td>
                   <td style="color:${chgColor(s.change_60d)};font-weight:600;">${chg60}</td>
@@ -675,8 +691,17 @@ async function renderStep7() {
               <tr>
                 <td>${idx < 3 ? '🥇🥈🥉'[idx] : idx+1}</td>
                 <td style="font-weight:600;"><a href="/stock-score.html?symbol=${s.code}&market=${s.market}" style="color:var(--accent2);" target="_blank">${s.code}</a></td>
-                <td>${s.name || '—'}</td>
-                <td style="font-weight:600;">${closeVal}</td>
+                <td>
+                  <a href="/stock-score.html?symbol=${s.code}&market=${s.market}" target="_blank"
+                     style="color:var(--accent2);text-decoration:none;" title="跳转财务评分页面">
+                    ${s.name || '—'}
+                  </a>
+                </td>
+                <td style="font-weight:600;cursor:pointer;color:var(--accent2);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;"
+                    onclick="openBottleneckKline('${s.market}','${s.code}')"
+                    title="点击查看 K 线图">
+                  ${closeVal}
+                </td>
                 <td style="color:${chgColor(s.change_5d)};font-weight:600;">${chg5}</td>
                 <td style="color:${chgColor(s.change_20d)};font-weight:600;">${chg20}</td>
                 <td style="color:${chgColor(s.change_60d)};font-weight:600;">${chg60}</td>
@@ -943,3 +968,72 @@ async function pollCustomStatus(sessionId) {
   };
   setTimeout(check, 3000);
 }
+
+// ── K-line Chart Dialog (shared with stock-score page) ──
+
+async function openBottleneckKline(market, symbol) {
+  const dialog = document.getElementById('kline-chart-dialog');
+  const title = document.getElementById('kline-chart-title');
+  const svg = document.getElementById('kline-chart-svg');
+  if (!dialog || !title || !svg) return;
+
+  dialog.hidden = false;
+  dialog.setAttribute('aria-hidden', 'false');
+  title.textContent = `${symbol} — 加载中…`;
+
+  try {
+    const [klineRes, rpsRes] = await Promise.all([
+      fetch(`/api/stock-kline?symbol=${encodeURIComponent(symbol)}&limit=300`),
+      fetch(`/api/stock-rps-history?symbol=${encodeURIComponent(symbol)}`),
+    ]);
+    const klineJson = await klineRes.json();
+    const rpsJson = await rpsRes.json();
+
+    if (!klineJson.ok) {
+      title.textContent = `${symbol} — 数据不可用`;
+      return;
+    }
+
+    const bars = klineJson.bars || [];
+    const rpsHistory = (rpsJson.history || []).map(h => ({
+      trading_day: h.trading_day,
+      rps_20: h.rps_20,
+      rps_50: h.rps_50,
+      rps_120: h.rps_120,
+      rps_250: h.rps_250,
+    }));
+
+    const stockName = bars[0]?.name || symbol;
+    if (!scoreKlineChart) {
+      scoreKlineChart = new KlineChart(svg, { marginRight: 20 });
+    }
+    scoreKlineChart.load(bars, rpsHistory, 250);
+    title.textContent = `${symbol} ${stockName}`;
+  } catch (e) {
+    console.error('Kline dialog error:', e);
+    title.textContent = `${symbol} — 加载失败`;
+  }
+}
+
+function closeBottleneckKline() {
+  const dialog = document.getElementById('kline-chart-dialog');
+  if (dialog) {
+    dialog.hidden = true;
+    dialog.setAttribute('aria-hidden', 'true');
+  }
+}
+
+// Bind events when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('kline-chart-close')?.addEventListener('click', closeBottleneckKline);
+  document.getElementById('kline-chart-dialog')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeBottleneckKline();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeBottleneckKline();
+  });
+});
+
+// Expose to global scope for onclick attributes
+window.openBottleneckKline = openBottleneckKline;
+window.closeBottleneckKline = closeBottleneckKline;
