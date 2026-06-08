@@ -40,7 +40,7 @@ from app.industry.templates import _industry_template_tags, _build_industry_valu
 from app.bottleneck import (
     step1_select_trend, step2_decompose_chain, step3_identify_bottlenecks,
     step4_map_stocks, step5_verify_stocks, step6_cross_verify, step7_full_auto,
-    save_report, list_reports, load_report, rerun_report,
+    save_report, list_reports, load_report, rerun_report, delete_report,
     check_custom_status,
 )
 
@@ -402,6 +402,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/bottleneck/rerun":
             self.handle_bottleneck_rerun(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/report/delete":
+            self.handle_bottleneck_delete_report(parsed.query)
             return
         if parsed.path == "/api/bottleneck/custom-status":
             self.handle_bottleneck_custom_status(parsed.query)
@@ -2184,6 +2187,15 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self._respond_bottleneck({"ok": False, "error": "缺少 filename 参数"})
             return
         result = rerun_report(filename)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_delete_report(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        filename = qs.get("filename", "")
+        if not filename:
+            self._respond_bottleneck({"ok": False, "error": "缺少 filename 参数"})
+            return
+        result = delete_report(filename)
         self._respond_bottleneck(result)
 
     def handle_bottleneck_custom_status(self, query: str) -> None:

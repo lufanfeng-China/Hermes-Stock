@@ -96,6 +96,7 @@ async function loadHistoryPopup() {
           <div style="display:flex;gap:6px;">
             <button class="btn" onclick="loadSavedReport('${r.filename}')">查看</button>
             <button class="btn btn-accent2" onclick="rerunReport('${r.filename}')">🔄 重跑</button>
+            <button class="btn" style="color:var(--red);" onclick="deleteReport('${r.filename}')">🗑 删除</button>
           </div>
         </div>
       `).join('');
@@ -152,6 +153,23 @@ async function rerunReport(filename) {
     }
   } catch (e) {
     alert('重新运行失败: ' + e.message);
+  }
+}
+
+async function deleteReport(filename) {
+  if (!confirm(`确定要删除此报告吗？\n${filename}\n此操作不可撤销。`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/bottleneck/report/delete?filename=${encodeURIComponent(filename)}`);
+    const data = await res.json();
+    if (data.ok) {
+      loadHistoryPopup();
+      loadHistory();
+      alert('已删除');
+    } else {
+      alert('删除失败: ' + (data.error || '未知错误'));
+    }
+  } catch (e) {
+    alert('删除失败: ' + e.message);
   }
 }
 
@@ -1050,6 +1068,7 @@ window.renderStep6 = renderStep6;
 window.renderStep7 = renderStep7;
 window.loadSavedReport = loadSavedReport;
 window.rerunReport = rerunReport;
+window.deleteReport = deleteReport;
 window.saveCurrentReport = saveCurrentReport;
 window.exportReport = exportReport;
 window.startAuto = startAuto;

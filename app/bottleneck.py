@@ -1094,3 +1094,12 @@ def rerun_report(filename):
         "created_at": save_result["created_at"],
         "results": results.get("results", {}),
     }
+
+
+def delete_report(filename):
+    """删除指定报告"""
+    fpath = os.path.join(REPORTS_DIR, filename)
+    if not os.path.exists(fpath):
+        return {"ok": False, "error": f"报告不存在: {filename}"}
+    os.remove(fpath)
+    return {"ok": True, "message": f"已删除: {filename}"}
