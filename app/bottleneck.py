@@ -121,27 +121,134 @@ def step1_select_trend(trend_id=None):
 
 def _ai_decompose_chain(custom_description: str) -> dict:
     """
-    使用 AI 实时拆解自定义趋势的产业链。
+    使用 LLM API 直接拆解自定义趋势的产业链。
+    调用 DeepSeek API（OpenAI 兼容），要求输出结构化 JSON。
     """
-    import subprocess
+    import json as _json
+    import urllib.request
+    import os
 
-    prompt = f"""分析「{custom_description}」的产业链，用中文逐层拆解 5-7 层。
+    # 读取 Hermes 配置获取 API 信息
+    try:
+        import yaml
+        cfg_path = os.path.expanduser("~/.hermes/config.yaml")
+        with open(cfg_path) as f:
+            cfg = yaml.safe_load(f)
+        model_cfg = cfg.get("model", {})
+        api_key = model_cfg.get("api_key", "")
+        base_url = model_cfg.get("base_url", "https://api.deepseek.com/v1")
+        model_name = model_cfg.get("default", "deepseek-v4-pro")
+    except Exception:
+        # fallback: try environment
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+        model_name = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
 
-每层格式：层级名称 | 作用 | 全球主要玩家（公司名） | 国内主要玩家（公司名或A股代码） | 供应商数量
+    if not api_key:
+        raise RuntimeError("未找到 DeepSeek API key（检查 ~/.hermes/config.yaml）")
 
-最后标注哪些层供应商 ≤2家（瓶颈层）。只输出层级列表。"""
+    # DeepSeek API 只认 deepseek-chat / deepseek-reasoner 两个模型名
+    # 如果配置文件里的模型名不是这两个，自动降级到 deepseek-chat
+    if model_name not in ("deepseek-chat", "deepseek-reasoner"):
+        model_name = "deepseek-chat"
 
-    cmd = [
-        "hermes", "chat", "-Q", "--ignore-rules", "--source", "tool",
-        "-q", prompt,
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "hermes command failed")
-    raw = result.stdout.strip()
-    if not raw or len(raw) <= 20:
-        raise RuntimeError("hermes returned empty or too-short response")
-    return _parse_text_to_chain(raw, custom_description)
+    system_prompt = """你是一个产业链分析专家。根据用户描述的趋势，你需要在脑海中搜索相关知识，然后直接输出产业链拆解结果。
+
+要求：
+1. 拆解 6-8 层，从终端需求/整机到最上游的材料/设备
+2. 每层给出：层级名称、作用(integrator/manufacturing/material/equipment/...)、全球主要玩家(公司名, ≤5家)、国内主要玩家(公司名或A股代码, ≤5家)、供应商数量(估算整数)
+3. 标注瓶颈层：supplier_count ≤2 → is_bottleneck=true, bottleneck_level="core", bottleneck_score=5；supplier_count=3 → is_bottleneck=true, bottleneck_level="secondary", bottleneck_score=3-4；supplier_count>3 → is_bottleneck=false
+4. 给每个瓶颈层写一句 bottleneck_reason（为什么被卡脖子）
+5. a_share_candidates 列出最有代表性的 A 股候选标的（每层 2-4 只），格式为 {"code":"6位代码","name":"公司名","mapping_reason":"简短理由"}
+
+只输出 JSON，不要 Markdown 代码块包裹。JSON 格式：
+{
+  "trend_name": "趋势名",
+  "anchor": "一句话逻辑锚点",
+  "description": "100-200字趋势描述",
+  "layers": [
+    {
+      "level": 0,
+      "name": "层级名称",
+      "role": "integrator",
+      "description": "该层描述",
+      "global_players": ["公司A", "公司B"],
+      "domestic_players": ["公司C 000001", "公司D 000002"],
+      "supplier_count": 5,
+      "is_bottleneck": false,
+      "bottleneck_level": "",
+      "bottleneck_score": 0,
+      "bottleneck_reason": "",
+      "skip_reason": "供应商≥3家，竞争充分",
+      "a_share_candidates": [
+        {"code": "000001", "name": "公司C", "mapping_reason": "龙头企业，市占率第一"}
+      ]
+    }
+  ]
+}"""
+
+    user_prompt = f"请拆解以下趋势的产业链：{custom_description}"
+
+    payload = _json.dumps({
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.3,
+        "max_tokens": 4096,
+        "response_format": {"type": "json_object"},
+    }, ensure_ascii=False).encode("utf-8")
+
+    url = base_url.rstrip("/") + "/chat/completions"
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            body = resp.read().decode("utf-8")
+    except Exception as e:
+        raise RuntimeError(f"API 调用失败: {e}")
+
+    resp_data = _json.loads(body)
+    content = resp_data["choices"][0]["message"]["content"]
+
+    # 清理可能的 Markdown 代码块包裹
+    content = content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+
+    chain = _json.loads(content)
+
+    # 校验并补全必要字段
+    layers = chain.get("layers", [])
+    for i, l in enumerate(layers):
+        l.setdefault("level", i)
+        l.setdefault("role", "")
+        l.setdefault("description", l.get("name", ""))
+        l.setdefault("global_players", [])
+        l.setdefault("domestic_players", [])
+        l.setdefault("supplier_count", 5)
+        l.setdefault("is_bottleneck", False)
+        l.setdefault("bottleneck_level", "")
+        l.setdefault("bottleneck_score", 0)
+        l.setdefault("bottleneck_reason", "")
+        l.setdefault("skip_reason", "")
+        l.setdefault("a_share_candidates", [])
+
+    return {
+        "trend_name": chain.get("trend_name", custom_description),
+        "anchor": chain.get("anchor", custom_description),
+        "description": chain.get("description", custom_description),
+        "layers": layers,
+    }
 
 
 def _search_web(query: str) -> list[dict]:

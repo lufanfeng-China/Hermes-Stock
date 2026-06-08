@@ -1,0 +1,951 @@
+{
+  "trend_id": "solid-state-battery",
+  "created_at": "2026-06-08 21:28:39",
+  "iso_timestamp": "2026-06-08T21:28:39.623629",
+  "timestamp_short": "20260608-212839",
+  "filename": "solid-state-battery_20260608-212839.json",
+  "steps": {
+    "step1": {
+      "ok": true,
+      "type": "detail",
+      "trend": {
+        "id": "solid-state-battery",
+        "name": "固态电池",
+        "description": "全固态电池被视为下一代电池终极方案——能量密度400-500Wh/kg（液态≤300）、本质安全（不燃）、支持快充。宁德时代/丰田/三星SDI/QS竞速2027-2030量产。2025年工信部60亿专项+标准体系建立，奇瑞/宝马路试。产业链核心瓶颈在材料端（硫化物电解质L2S、锂金属负极）和设备端（干法电极工艺），中国在材料供应和设备制造上有先发优势但关键前驱体仍受制于日韩。市场规模预计2030年全球500GWh。",
+        "anchor": "新能源车安全焦虑+低空经济/eVTOL高能量密度刚需 → 固态电池是唯一路线 → 材料+设备双重瓶颈锁定",
+        "layer_count": 7
+      }
+    },
+    "step2": {
+      "ok": true,
+      "type": "preset",
+      "trend_name": "固态电池",
+      "trend_id": "solid-state-battery",
+      "description": "全固态电池被视为下一代电池终极方案——能量密度400-500Wh/kg（液态≤300）、本质安全（不燃）、支持快充。宁德时代/丰田/三星SDI/QS竞速2027-2030量产。2025年工信部60亿专项+标准体系建立，奇瑞/宝马路试。产业链核心瓶颈在材料端（硫化物电解质L2S、锂金属负极）和设备端（干法电极工艺），中国在材料供应和设备制造上有先发优势但关键前驱体仍受制于日韩。市场规模预计2030年全球500GWh。",
+      "anchor": "新能源车安全焦虑+低空经济/eVTOL高能量密度刚需 → 固态电池是唯一路线 → 材料+设备双重瓶颈锁定",
+      "total_layers": 7,
+      "layers": [
+        {
+          "level": 0,
+          "name": "固态电池整线解决方案",
+          "role": "integrator",
+          "description": "提供从电极制备、电解质膜制备到组装、致密化、化成分容的全固态电池交钥匙整线。先导智能2025年交付全球首条车规级固态电池整线(宁德时代)，利元亨为广汽埃安开发全固态整线装备。",
+          "global_players": [
+            "先导智能(中国)",
+            "三菱重工(日本)",
+            "PNT(韩国)"
+          ],
+          "domestic_players": [
+            "先导智能 300450",
+            "利元亨 688499",
+            "赢合科技 300457"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "国内头部企业已交付整线，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300450",
+              "name": "先导智能",
+              "mapping_reason": "全球首条车规级固态电池整线交付宁德时代，叠片+等静压+复合系统全自研"
+            },
+            {
+              "code": "688499",
+              "name": "利元亨",
+              "mapping_reason": "干法涂布+辊压+热复合+叠片全套，广汽埃安联合开发固态整线"
+            },
+            {
+              "code": "300457",
+              "name": "赢合科技",
+              "mapping_reason": "湿法+干法双路线，2024年涂覆设备交付头部客户，2025H1批量交付中试线"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 干法电极工艺设备",
+          "role": "equipment",
+          "description": "干法电极是固态电池核心技术路线——省去NMP溶剂回收(降能耗70%)、避免硫化物电解质遇水分解、实现超薄电解质膜(<30μm)。关键设备包括：高精度辊压机(微米级精度)、干法成膜一体机、转印/复合设备。全球掌握干法电极成膜技术的设备商不超过3家，纳科诺尔+清研电子是国内唯一实现干法电极产线交付的联合体。",
+          "global_players": [
+            "纳科诺尔+清研电子(中国)",
+            "PNT(韩国)",
+            "Nagano Automation(日本)"
+          ],
+          "domestic_players": [
+            "纳科诺尔 832522",
+            "清研电子(未上市)",
+            "曼恩斯特 301325",
+            "璞泰来 603659"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球能交付完整干法电极产线的设备商仅3家。纳科诺尔国内锂电辊压市占率23.4%+清研电子合资建示范线，四/五/八/十辊设备全系列覆盖。曼恩斯特交付多款干法多辊成膜系统。璞泰来与Blue Solutions联合开发第四代干法方案。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "832522",
+              "name": "纳科诺尔",
+              "mapping_reason": "国内锂电辊压市占率第一23.4%，四辊/五辊/八辊/十辊干法成膜设备全系列，与清研电子合资建示范线"
+            },
+            {
+              "code": "301325",
+              "name": "曼恩斯特",
+              "mapping_reason": "湿法+干法双线，已交付干法多辊成膜系统+陶瓷双螺杆纤维化设备至客户现场"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "干法电极整线方案，锂带压延设备单双面覆锂，与Blue Solutions联合开发"
+            },
+            {
+              "code": "688559",
+              "name": "海目星",
+              "mapping_reason": "硫化物/氧化物双路线激光+涂布+辊压+叠片+致密化全环节"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)",
+          "role": "material",
+          "description": "硫化物是全固态电池最主流路线(丰田/宁德/SDI均采纳)，离子电导率可达10⁻²S/cm接近液态电解质。硫化锂(Li₂S)是合成Li₆PS₅Cl/Li₃PS₄等硫化物电解质的关键前驱体，占电解质成本70%+。全球高纯硫化锂(99.9%+)产能极度稀缺——日本三菱化学垄断、中国仅赣锋/天赐/有研粉材有中试线。每GWh固态电池约需500吨Li₂S，远期需求数十万吨级。",
+          "global_players": [
+            "三菱化学(日本)",
+            "赣锋锂业(中国)",
+            "天赐材料(中国)",
+            "Albemarle(美国)"
+          ],
+          "domestic_players": [
+            "赣锋锂业 002460",
+            "天赐材料 002709",
+            "有研粉材 688456",
+            "德方纳米 300769"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球高纯Li₂S成熟产能几乎被日本三菱化学垄断(唯一百吨级产线)。中国仅赣锋锂业2024年建成百吨级中试线，天赐材料规划500吨级。高技术壁垒(碳热还原/溶剂法)+长验证周期(≥2年)+巨大的需求缺口(GWh级对应万吨级需求)，典型「卡脖子」瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "国内唯一百吨级高纯Li₂S中试线(2024建成)，全球锂业龙头，纵向延伸至固态电解质/固态电池"
+            },
+            {
+              "code": "002709",
+              "name": "天赐材料",
+              "mapping_reason": "锂盐全球龙头LiPF₆市占率30%+，Li₂S中试中，规划500吨级产线"
+            },
+            {
+              "code": "688456",
+              "name": "有研粉材",
+              "mapping_reason": "电解铜粉龙头转型，电化学法制备高纯Li₂S中试，央企背景"
+            },
+            {
+              "code": "300769",
+              "name": "德方纳米",
+              "mapping_reason": "磷酸铁锂正极龙头，布局液相法制备Li₂S，纳电正极技术可复用"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 锂金属负极 / 超薄锂带",
+          "role": "material",
+          "description": "固态电池走向500Wh/kg必须用锂金属负极。超薄锂带(<20μm)是核心——太厚降低能量密度、太薄加工断裂。锂带压延精度需≤1μm且具备单双面覆锂能力。目前全球仅美国Livent、中国赣锋/天齐/宁德可批量供应电池级超薄锂带，璞泰来具备锂带压延设备能力。",
+          "global_players": [
+            "Livent(美国)",
+            "赣锋锂业(中国)",
+            "天齐锂业(中国)",
+            "Albemarle(美国)"
+          ],
+          "domestic_players": [
+            "赣锋锂业 002460",
+            "天齐锂业 002466",
+            "宁德时代 300750",
+            "璞泰来 603659"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "超薄锂带(<20μm)加工极难——氧化、粘连、精度三重挑战。全球真正能量产电池级超薄锂带的仅Livent+赣锋+天齐3家，璞泰来设备端形成闭环。日本/韩国车企严重依赖中国锂加工产能。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "全球唯一同时具备Li₂S前驱体+超薄锂带+固态电解质+固态电池产业链闭环的企业"
+            },
+            {
+              "code": "002466",
+              "name": "天齐锂业",
+              "mapping_reason": "SQM/Greenbushes股东，超薄锂带技术储备，锂资源端最强话语权"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "锂带压延设备龙头，单双面覆锂+干法成膜，设备端与材料端呼应"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "正极材料体系(高镍/富锂锰基)",
+          "role": "material",
+          "description": "固态电池正极从NCM811→NCM9系→富锂锰基(LRM)演进以提高电压匹配性(>4.5V)。富锂锰基理论容量>300mAh/g但循环稳定性差。国内当升科技/容百科技/巴莫科技均有布局，技术差距不大。",
+          "global_players": [
+            "当升科技(中国)",
+            "容百科技(中国)",
+            "住友金属(日本)",
+            "EcoPro(韩国)"
+          ],
+          "domestic_players": [
+            "当升科技 300073",
+            "容百科技 688005",
+            "长远锂科 688779",
+            "振华新材 688707"
+          ],
+          "supplier_count": 6,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "国内正极材料产能充裕，富锂锰基差距缩小中，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300073",
+              "name": "当升科技",
+              "mapping_reason": "固态正极双相复合，已向清陶/卫蓝批量送样"
+            },
+            {
+              "code": "688005",
+              "name": "容百科技",
+              "mapping_reason": "高镍/超高镍龙头，固态正极+钠电双路线"
+            },
+            {
+              "code": "300769",
+              "name": "德方纳米",
+              "mapping_reason": "磷酸铁锂龙头，布局液相法固态正极材料"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "等静压/致密化设备",
+          "role": "equipment",
+          "description": "固态电池的核心成型工艺——通过温等静压(WIP)或冷等静压(CIP)消除电解质层孔隙、实现固-固界面紧密接触，直接决定电池内阻和循环寿命。先导智能自研等静压设备、星云股份推出纳米级精度等静压检测系统。全球仅川崎重工、Quintus(瑞典)、先导3-4家企业能提供电池级等静压设备。",
+          "global_players": [
+            "Quintus Technologies(瑞典)",
+            "川崎重工(日本)",
+            "先导智能(中国)"
+          ],
+          "domestic_players": [
+            "先导智能 300450",
+            "星云股份 300648"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.5,
+          "bottleneck_reason": "",
+          "skip_reason": "先导智能已自研等静压设备并应用于全球首条整线，非卡脖子环节",
+          "a_share_candidates": [
+            {
+              "code": "300450",
+              "name": "先导智能",
+              "mapping_reason": "自研等静压+高效复合系统，打通全固态致密化工艺"
+            },
+            {
+              "code": "300648",
+              "name": "星云股份",
+              "mapping_reason": "等静压检测系统(纳米级精度)，高压化成设备龙头"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "关键辅材(铝塑膜/复合集流体/导电剂)",
+          "role": "material",
+          "description": "固态电池封装用软包铝塑膜要求更高阻隔性(水氧透过率<10⁻⁴)。复合集流体(PET铜箔/铝箔)提升安全性和能量密度。导电剂从碳黑→碳纳米管(CNT)→单壁CNT升级。国内企业部分自给，铝塑膜仍由DNP/昭和电工主导。",
+          "global_players": [
+            "DNP(日本铝塑膜)",
+            "昭和电工(日本铝塑膜)",
+            "天奈科技(中国CNT)",
+            "宝明科技(中国复合集流体)"
+          ],
+          "domestic_players": [
+            "天奈科技 688116",
+            "宝明科技 002992",
+            "紫江企业 600210",
+            "道氏技术 300409"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.5,
+          "bottleneck_reason": "",
+          "skip_reason": "辅材环节供应商分散，CNT/复合集流体国产替代进展快",
+          "a_share_candidates": [
+            {
+              "code": "688116",
+              "name": "天奈科技",
+              "mapping_reason": "碳纳米管导电剂龙头(市占率40%+)，单壁CNT全球首批量产"
+            },
+            {
+              "code": "600210",
+              "name": "紫江企业",
+              "mapping_reason": "国产铝塑膜龙头，软包封装渗透率提升受益"
+            },
+            {
+              "code": "002992",
+              "name": "宝明科技",
+              "mapping_reason": "PET复合铜箔龙头，固态电池安全+轻量化双受益"
+            }
+          ]
+        }
+      ]
+    },
+    "step3": {
+      "ok": true,
+      "trend_name": "固态电池",
+      "total_layers": 7,
+      "bottleneck_count": 3,
+      "all_layers": [
+        {
+          "level": 0,
+          "name": "固态电池整线解决方案",
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "skip_reason": "国内头部企业已交付整线，非供给瓶颈"
+        },
+        {
+          "level": 1,
+          "name": "🔴 干法电极工艺设备",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球能交付完整干法电极产线的设备商仅3家。纳科诺尔国内锂电辊压市占率23.4%+清研电子合资建示范线，四/五/八/十辊设备全系列覆盖。曼恩斯特交付多款干法多辊成膜系统。璞泰来与Blue Solutions联合开发第四代干法方案。",
+          "skip_reason": ""
+        },
+        {
+          "level": 2,
+          "name": "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球高纯Li₂S成熟产能几乎被日本三菱化学垄断(唯一百吨级产线)。中国仅赣锋锂业2024年建成百吨级中试线，天赐材料规划500吨级。高技术壁垒(碳热还原/溶剂法)+长验证周期(≥2年)+巨大的需求缺口(GWh级对应万吨级需求)，典型「卡脖子」瓶颈。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "🔴 锂金属负极 / 超薄锂带",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "超薄锂带(<20μm)加工极难——氧化、粘连、精度三重挑战。全球真正能量产电池级超薄锂带的仅Livent+赣锋+天齐3家，璞泰来设备端形成闭环。日本/韩国车企严重依赖中国锂加工产能。",
+          "skip_reason": ""
+        },
+        {
+          "level": 4,
+          "name": "正极材料体系(高镍/富锂锰基)",
+          "supplier_count": 6,
+          "is_bottleneck": false,
+          "skip_reason": "国内正极材料产能充裕，富锂锰基差距缩小中，非供给瓶颈"
+        },
+        {
+          "level": 5,
+          "name": "等静压/致密化设备",
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "skip_reason": "先导智能已自研等静压设备并应用于全球首条整线，非卡脖子环节"
+        },
+        {
+          "level": 6,
+          "name": "关键辅材(铝塑膜/复合集流体/导电剂)",
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "skip_reason": "辅材环节供应商分散，CNT/复合集流体国产替代进展快"
+        }
+      ],
+      "bottlenecks": [
+        {
+          "level": 2,
+          "name": "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球高纯Li₂S成熟产能几乎被日本三菱化学垄断(唯一百吨级产线)。中国仅赣锋锂业2024年建成百吨级中试线，天赐材料规划500吨级。高技术壁垒(碳热还原/溶剂法)+长验证周期(≥2年)+巨大的需求缺口(GWh级对应万吨级需求)，典型「卡脖子」瓶颈。",
+          "skip_reason": ""
+        },
+        {
+          "level": 1,
+          "name": "🔴 干法电极工艺设备",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球能交付完整干法电极产线的设备商仅3家。纳科诺尔国内锂电辊压市占率23.4%+清研电子合资建示范线，四/五/八/十辊设备全系列覆盖。曼恩斯特交付多款干法多辊成膜系统。璞泰来与Blue Solutions联合开发第四代干法方案。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "🔴 锂金属负极 / 超薄锂带",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "超薄锂带(<20μm)加工极难——氧化、粘连、精度三重挑战。全球真正能量产电池级超薄锂带的仅Livent+赣锋+天齐3家，璞泰来设备端形成闭环。日本/韩国车企严重依赖中国锂加工产能。",
+          "skip_reason": ""
+        }
+      ],
+      "summary": "在 7 层产业链中，识别出 3 个瓶颈层。按卡脖子程度排序，前三个最关键的瓶颈是：🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)、🔴 干法电极工艺设备、🔴 锂金属负极 / 超薄锂带。"
+    },
+    "step4": {
+      "ok": true,
+      "trend_name": "固态电池",
+      "mapped_layers": [
+        {
+          "level": 1,
+          "name": "🔴 干法电极工艺设备",
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球能交付完整干法电极产线的设备商仅3家。纳科诺尔国内锂电辊压市占率23.4%+清研电子合资建示范线，四/五/八/十辊设备全系列覆盖。曼恩斯特交付多款干法多辊成膜系统。璞泰来与Blue Solutions联合开发第四代干法方案。",
+          "show_all": true,
+          "total_stocks": 4,
+          "stocks": [
+            {
+              "code": "832522",
+              "name": "纳科诺尔",
+              "mapping_reason": "国内锂电辊压市占率第一23.4%，四辊/五辊/八辊/十辊干法成膜设备全系列，与清研电子合资建示范线"
+            },
+            {
+              "code": "301325",
+              "name": "曼恩斯特",
+              "mapping_reason": "湿法+干法双线，已交付干法多辊成膜系统+陶瓷双螺杆纤维化设备至客户现场"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "干法电极整线方案，锂带压延设备单双面覆锂，与Blue Solutions联合开发"
+            },
+            {
+              "code": "688559",
+              "name": "海目星",
+              "mapping_reason": "硫化物/氧化物双路线激光+涂布+辊压+叠片+致密化全环节"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 2,
+          "name": "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)",
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球高纯Li₂S成熟产能几乎被日本三菱化学垄断(唯一百吨级产线)。中国仅赣锋锂业2024年建成百吨级中试线，天赐材料规划500吨级。高技术壁垒(碳热还原/溶剂法)+长验证周期(≥2年)+巨大的需求缺口(GWh级对应万吨级需求)，典型「卡脖子」瓶颈。",
+          "show_all": true,
+          "total_stocks": 4,
+          "stocks": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "国内唯一百吨级高纯Li₂S中试线(2024建成)，全球锂业龙头，纵向延伸至固态电解质/固态电池"
+            },
+            {
+              "code": "002709",
+              "name": "天赐材料",
+              "mapping_reason": "锂盐全球龙头LiPF₆市占率30%+，Li₂S中试中，规划500吨级产线"
+            },
+            {
+              "code": "688456",
+              "name": "有研粉材",
+              "mapping_reason": "电解铜粉龙头转型，电化学法制备高纯Li₂S中试，央企背景"
+            },
+            {
+              "code": "300769",
+              "name": "德方纳米",
+              "mapping_reason": "磷酸铁锂正极龙头，布局液相法制备Li₂S，纳电正极技术可复用"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 3,
+          "name": "🔴 锂金属负极 / 超薄锂带",
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "超薄锂带(<20μm)加工极难——氧化、粘连、精度三重挑战。全球真正能量产电池级超薄锂带的仅Livent+赣锋+天齐3家，璞泰来设备端形成闭环。日本/韩国车企严重依赖中国锂加工产能。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "全球唯一同时具备Li₂S前驱体+超薄锂带+固态电解质+固态电池产业链闭环的企业"
+            },
+            {
+              "code": "002466",
+              "name": "天齐锂业",
+              "mapping_reason": "SQM/Greenbushes股东，超薄锂带技术储备，锂资源端最强话语权"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "锂带压延设备龙头，单双面覆锂+干法成膜，设备端与材料端呼应"
+            }
+          ],
+          "remaining": 0
+        }
+      ]
+    },
+    "step5": {
+      "ok": true,
+      "trend_name": "固态电池",
+      "total_verified": 9,
+      "stocks": [
+        {
+          "code": "002709",
+          "market": "sz",
+          "name": "天赐材料",
+          "layers": [
+            "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)"
+          ],
+          "total_score": 74.79,
+          "market_rank": 60,
+          "market_total": 5517,
+          "industry_rank": 2,
+          "industry_total": 88,
+          "ind1": "电力设备",
+          "ind2": "电池",
+          "close": 46.91,
+          "change_5d": -9.3,
+          "change_20d": -21.2,
+          "change_60d": 3.9,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 23.2,
+            "growth": 19.5,
+            "operating": 10.9,
+            "cashflow": 9.4,
+            "solvency": 7.1,
+            "asset_quality": 4.6
+          }
+        },
+        {
+          "code": "002466",
+          "market": "sz",
+          "name": "天齐锂业",
+          "layers": [
+            "🔴 锂金属负极 / 超薄锂带"
+          ],
+          "total_score": 68.39,
+          "market_rank": 258,
+          "market_total": 5517,
+          "industry_rank": 3,
+          "industry_total": 16,
+          "ind1": "有色",
+          "ind2": "能源金属",
+          "close": 56.2,
+          "change_5d": -9.6,
+          "change_20d": -27.4,
+          "change_60d": 4.4,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "行业(有色/能源金属)与技术趋势不直接匹配"
+          ],
+          "dim_scores": {
+            "profitability": 18.8,
+            "growth": 19.7,
+            "operating": 6.8,
+            "cashflow": 9.2,
+            "solvency": 7,
+            "asset_quality": 7
+          }
+        },
+        {
+          "code": "300769",
+          "market": "sz",
+          "name": "德方纳米",
+          "layers": [
+            "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)"
+          ],
+          "total_score": 64.89,
+          "market_rank": 474,
+          "market_total": 5517,
+          "industry_rank": 13,
+          "industry_total": 88,
+          "ind1": "电力设备",
+          "ind2": "电池",
+          "close": 59.6,
+          "change_5d": -8.9,
+          "change_20d": -25.8,
+          "change_60d": 39.8,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 15.4,
+            "growth": 19,
+            "operating": 13.1,
+            "cashflow": 10.3,
+            "solvency": 2.2,
+            "asset_quality": 4.8
+          }
+        },
+        {
+          "code": "603659",
+          "market": "sh",
+          "name": "璞泰来",
+          "layers": [
+            "🔴 干法电极工艺设备",
+            "🔴 锂金属负极 / 超薄锂带"
+          ],
+          "total_score": 64.07,
+          "market_rank": 546,
+          "market_total": 5517,
+          "industry_rank": 22,
+          "industry_total": 88,
+          "ind1": "电力设备",
+          "ind2": "电池",
+          "close": 26.95,
+          "change_5d": -12.2,
+          "change_20d": -20.1,
+          "change_60d": -5.3,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 20.4,
+            "growth": 15.7,
+            "operating": 5.2,
+            "cashflow": 13,
+            "solvency": 4.4,
+            "asset_quality": 5.4
+          }
+        },
+        {
+          "code": "688456",
+          "market": "sh",
+          "name": "有研粉材",
+          "layers": [
+            "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)"
+          ],
+          "total_score": 61.64,
+          "market_rank": 795,
+          "market_total": 5517,
+          "industry_rank": 17,
+          "industry_total": 60,
+          "ind1": "有色",
+          "ind2": "工业金属",
+          "close": 95.48,
+          "change_5d": 25.6,
+          "change_20d": 17.2,
+          "change_60d": 57.5,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "行业(有色/工业金属)与技术趋势不直接匹配"
+          ],
+          "dim_scores": {
+            "profitability": 11.2,
+            "growth": 18.5,
+            "operating": 11.7,
+            "cashflow": 10,
+            "solvency": 6,
+            "asset_quality": 4.3
+          }
+        },
+        {
+          "code": "002460",
+          "market": "sz",
+          "name": "赣锋锂业",
+          "layers": [
+            "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)",
+            "🔴 锂金属负极 / 超薄锂带"
+          ],
+          "total_score": 59.87,
+          "market_rank": 997,
+          "market_total": 5517,
+          "industry_rank": 12,
+          "industry_total": 16,
+          "ind1": "有色",
+          "ind2": "能源金属",
+          "close": 62.76,
+          "change_5d": -10.2,
+          "change_20d": -26.3,
+          "change_60d": -9.1,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "行业(有色/能源金属)与技术趋势不直接匹配"
+          ],
+          "dim_scores": {
+            "profitability": 16.4,
+            "growth": 19.6,
+            "operating": 4.7,
+            "cashflow": 11.4,
+            "solvency": 2.3,
+            "asset_quality": 5.5
+          }
+        },
+        {
+          "code": "688559",
+          "market": "sh",
+          "name": "海目星",
+          "layers": [
+            "🔴 干法电极工艺设备"
+          ],
+          "total_score": 52.13,
+          "market_rank": 2292,
+          "market_total": 5517,
+          "industry_rank": 29,
+          "industry_total": 68,
+          "ind1": "机械设备",
+          "ind2": "自动化设备",
+          "close": 67.16,
+          "change_5d": 9.8,
+          "change_20d": 1,
+          "change_60d": 16.2,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 8.1,
+            "growth": 18.1,
+            "operating": 5.1,
+            "cashflow": 15.5,
+            "solvency": 0.6,
+            "asset_quality": 4.8
+          }
+        },
+        {
+          "code": "301325",
+          "market": "sz",
+          "name": "曼恩斯特",
+          "layers": [
+            "🔴 干法电极工艺设备"
+          ],
+          "total_score": 34.56,
+          "market_rank": 5228,
+          "market_total": 5517,
+          "industry_rank": 203,
+          "industry_total": 212,
+          "ind1": "机械设备",
+          "ind2": "专用设备",
+          "close": 40.9,
+          "change_5d": -12.6,
+          "change_20d": -7.5,
+          "change_60d": -20.1,
+          "concept_risk": "high",
+          "risk_flags": [
+            "利润率极低(-60.1%)且评分不高",
+            "营收严重下滑(-84.4%)"
+          ],
+          "dim_scores": {
+            "profitability": 12.5,
+            "growth": 0.1,
+            "operating": 0.3,
+            "cashflow": 12.6,
+            "solvency": 4.2,
+            "asset_quality": 4.9
+          }
+        },
+        {
+          "code": "832522",
+          "market": "sz",
+          "name": "",
+          "layers": [
+            "🔴 干法电极工艺设备"
+          ],
+          "total_score": 0,
+          "market_rank": null,
+          "market_total": 5517,
+          "industry_rank": null,
+          "industry_total": null,
+          "ind1": null,
+          "ind2": null,
+          "close": null,
+          "change_5d": null,
+          "change_20d": null,
+          "change_60d": null,
+          "concept_risk": "high",
+          "risk_flags": [
+            "行业(None/None)与技术趋势不直接匹配",
+            "利润率极低(0.0%)且评分不高",
+            "总分过低(0)"
+          ],
+          "dim_scores": {
+            "profitability": 0,
+            "growth": 0,
+            "operating": 0,
+            "cashflow": 0,
+            "solvency": 0,
+            "asset_quality": 0
+          }
+        }
+      ]
+    },
+    "step6": {
+      "ok": true,
+      "trend_name": "固态电池",
+      "cross_checks": [
+        {
+          "level": 1,
+          "layer_name": "🔴 干法电极工艺设备",
+          "bottleneck_score": 4,
+          "global_monopoly": "纳科诺尔+清研电子(中国)",
+          "domestic_leader": "纳科诺尔",
+          "all_candidates": [
+            {
+              "code": "832522",
+              "name": "纳科诺尔",
+              "mapping_reason": "国内锂电辊压市占率第一23.4%，四辊/五辊/八辊/十辊干法成膜设备全系列，与清研电子合资建示范线"
+            },
+            {
+              "code": "301325",
+              "name": "曼恩斯特",
+              "mapping_reason": "湿法+干法双线，已交付干法多辊成膜系统+陶瓷双螺杆纤维化设备至客户现场"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "干法电极整线方案，锂带压延设备单双面覆锂，与Blue Solutions联合开发"
+            },
+            {
+              "code": "688559",
+              "name": "海目星",
+              "mapping_reason": "硫化物/氧化物双路线激光+涂布+辊压+叠片+致密化全环节"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（纳科诺尔+清研电子(中国)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "layer_name": "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)",
+          "bottleneck_score": 5,
+          "global_monopoly": "三菱化学(日本)",
+          "domestic_leader": "赣锋锂业",
+          "all_candidates": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "国内唯一百吨级高纯Li₂S中试线(2024建成)，全球锂业龙头，纵向延伸至固态电解质/固态电池"
+            },
+            {
+              "code": "002709",
+              "name": "天赐材料",
+              "mapping_reason": "锂盐全球龙头LiPF₆市占率30%+，Li₂S中试中，规划500吨级产线"
+            },
+            {
+              "code": "688456",
+              "name": "有研粉材",
+              "mapping_reason": "电解铜粉龙头转型，电化学法制备高纯Li₂S中试，央企背景"
+            },
+            {
+              "code": "300769",
+              "name": "德方纳米",
+              "mapping_reason": "磷酸铁锂正极龙头，布局液相法制备Li₂S，纳电正极技术可复用"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（三菱化学(日本)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "valuation_risk",
+              "question": "当前股价是否已经充分反映了「唯一国产替代者」的溢价？安全边际有多少？",
+              "trigger": "股价短期内大幅上涨，5年分位进入极高区间"
+            },
+            {
+              "type": "capacity_bottleneck",
+              "question": "国产龙头的产能是否足够承接爆发的需求？产能爬坡周期是多久？",
+              "trigger": "公司季报显示产能利用率接近上限但新产能尚未投产"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "layer_name": "🔴 锂金属负极 / 超薄锂带",
+          "bottleneck_score": 3.5,
+          "global_monopoly": "Livent(美国)",
+          "domestic_leader": "赣锋锂业",
+          "all_candidates": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "全球唯一同时具备Li₂S前驱体+超薄锂带+固态电解质+固态电池产业链闭环的企业"
+            },
+            {
+              "code": "002466",
+              "name": "天齐锂业",
+              "mapping_reason": "SQM/Greenbushes股东，超薄锂带技术储备，锂资源端最强话语权"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "锂带压延设备龙头，单双面覆锂+干法成膜，设备端与材料端呼应"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Livent(美国)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        }
+      ]
+    },
+    "step7": {
+      "timestamp": "2026/6/8 21:28:37",
+      "trend_name": "固态电池",
+      "bottleneck_count": 3,
+      "total_stocks": 9
+    }
+  }
+}
