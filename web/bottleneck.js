@@ -93,10 +93,10 @@ async function loadHistoryPopup() {
             <div style="font-weight:600;">${r.trend_name || r.trend_id}</div>
             <div style="font-size:12px;color:var(--text-muted);">${r.created_at} | ${r.filename}</div>
           </div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn" onclick="loadSavedReport('${r.filename}')">查看</button>
-            <button class="btn btn-accent2" onclick="rerunReport('${r.filename}')">🔄 重跑</button>
-            <button class="btn" style="color:var(--red);" onclick="deleteReport('${r.filename}')">🗑 删除</button>
+          <div style="display:flex;gap:6px;flex-wrap:nowrap;">
+            <button class="btn" style="white-space:nowrap;" onclick="loadSavedReport('${r.filename}')">查看</button>
+            <button class="btn btn-accent2" style="white-space:nowrap;" onclick="rerunReport('${r.filename}')">🔄 重跑</button>
+            <button class="btn" style="color:var(--red);white-space:nowrap;" onclick="deleteReport('${r.filename}')">🗑 删除</button>
           </div>
         </div>
       `).join('');
