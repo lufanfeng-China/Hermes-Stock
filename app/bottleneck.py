@@ -570,12 +570,23 @@ def step4_map_stocks(trend_id):
         candidates = layer.get("a_share_candidates", [])
         stock_list = _list_all_stocks_in_layer(layer)
 
-        # 添加股票名称
+        # 添加股票名称（兼容 dict 和 string 两种格式）
         stocks_with_names = []
-        for code in stock_list.get("stocks") or stock_list.get("preview", []):
+        for entry in stock_list.get("stocks") or stock_list.get("preview", []):
+            if isinstance(entry, dict):
+                code = entry.get("code", "")
+                name = entry.get("name", "")
+                mapping_reason = entry.get("mapping_reason", "")
+            else:
+                code = str(entry)
+                name = ""
+                mapping_reason = ""
+            if not code:
+                continue
             market = "sh" if code.startswith("6") else "sz"
-            name = _lookup_stock_name(market, code)
-            stocks_with_names.append({"code": code, "name": name})
+            if not name:
+                name = _lookup_stock_name(market, code)
+            stocks_with_names.append({"code": code, "name": name, "mapping_reason": mapping_reason})
 
         mapped_layers.append({
             "level": layer["level"],
@@ -618,7 +629,13 @@ def step5_verify_stocks(trend_id):
     for layer in trend["layers"]:
         if not layer.get("is_bottleneck"):
             continue
-        for code in layer.get("a_share_candidates", []):
+        for entry in layer.get("a_share_candidates", []):
+            if isinstance(entry, dict):
+                code = entry.get("code", "")
+                if not code:
+                    continue
+            else:
+                code = str(entry)
             if code not in all_candidates:
                 all_candidates[code] = {
                     "code": code,
@@ -744,7 +761,7 @@ def step6_cross_verify(trend_id):
             "layer_name": layer["name"],
             "bottleneck_score": layer.get("bottleneck_score", 0),
             "global_monopoly": layer.get("global_players", [])[0] if layer.get("global_players") else "",
-            "domestic_leader": candidates[0] if candidates else "",
+            "domestic_leader": (candidates[0].get("name", candidates[0].get("code", "")) if isinstance(candidates[0], dict) else str(candidates[0])) if candidates else "",
             "all_candidates": candidates,
             "key_risks": _generate_risk_checklist(layer, trend),
         }

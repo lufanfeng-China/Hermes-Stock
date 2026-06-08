@@ -872,7 +872,7 @@ async function pollCustomStatus(sessionId) {
           bottleneck_reason: l.bottleneck_reason || '',
           show_all: true,
           total_stocks: (l.a_share_candidates || []).length,
-          stocks: (l.a_share_candidates || []).map(c => ({ code: c, name: '' })),
+          stocks: (l.a_share_candidates || []).map(c => typeof c === 'object' ? { code: c.code, name: c.name || '' } : { code: c, name: '' }),
           remaining: 0,
         }));
         state.stepResults.step4 = { ok: true, trend_name: data.trend_name || '', mapped_layers: mappedLayers };
