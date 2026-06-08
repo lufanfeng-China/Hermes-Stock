@@ -1877,7 +1877,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
                       "volume_signal", "volume_label", "position", "position_label",
                       "buy_trigger", "buy_trigger_label", "conclusion", "conclusion_label",
                       "conclusion_color", "conclusion_reason", "entry_price", "stop_loss",
-                      "risk_pct"):
+                      "risk_pct", "golden_cross", "golden_cross_label", "macd_cross", "macd_cross_label"):
             row[f"tech_{field}"] = tech.get(field)
         for window in (20, 50, 120, 250):
             count_key = f"count_rps_{window}"
@@ -1924,6 +1924,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         "tech_position": "tech_position",
         "tech_conclusion": "tech_conclusion",
         "tech_buy_trigger": "tech_buy_trigger",
+        "golden_cross": "tech_golden_cross",
+        "macd_cross": "tech_macd_cross",
     }
 
     filtered = rows
@@ -1952,11 +1954,42 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             continue
         filtered = [row for row in filtered if _matches_keyword_filter(row.get(field_name), expected)]
 
-    # Apply technical evaluation text filters (support !prefix for "not")
+    # Apply technical evaluation text filters (support !prefix for "not", comma-separated for OR)
     for param_key, field_name in tech_text_filters.items():
         raw = _normalize_text(params.get(param_key))
         if not raw:
             continue
+
+        # Support comma-separated multi-select (OR logic)
+        raw_values = [v.strip() for v in raw.split(",") if v.strip()]
+        _negation_map = {
+            "bearish": {"bearish", "strong_bearish"},
+            "weak": {"weak"},
+            "divergence": {"divergence"},
+            "high": {"high", "overheated"},
+            "avoid": {"avoid"},
+        }
+        if len(raw_values) > 1:
+            # Multi-select OR: any match passes
+            if any(v.startswith("!") for v in raw_values):
+                exclude_set = set()
+                for v in raw_values:
+                    if v.startswith("!"):
+                        exclude_set |= _negation_map.get(v[1:], {v[1:]})
+                positives = [v for v in raw_values if not v.startswith("!")]
+                if positives:
+                    filtered = [row for row in filtered
+                        if not any(x.strip() in exclude_set for x in _normalize_text(row.get(field_name)).split(","))
+                        or any(v in [x.strip() for x in _normalize_text(row.get(field_name)).split(",")] for v in positives)]
+                else:
+                    filtered = [row for row in filtered
+                        if not any(x.strip() in exclude_set for x in _normalize_text(row.get(field_name)).split(","))]
+            else:
+                filtered = [row for row in filtered
+                    if any(v in [x.strip() for x in _normalize_text(row.get(field_name)).split(",")] for v in raw_values)]
+            continue
+
+        raw = raw_values[0]
         if raw.startswith("!"):
             # "not" filter: semantic exclusion (e.g. !bearish excludes bearish+strong_bearish)
             exclude_val = raw[1:]
@@ -1973,7 +2006,9 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             # "any" means any non-null value
             filtered = [row for row in filtered if row.get(field_name)]
         else:
-            filtered = [row for row in filtered if _normalize_text(row.get(field_name)) == raw]
+            # Single value: check if it matches the field (or any comma-separated part)
+            filtered = [row for row in filtered
+                if raw in [x.strip() for x in _normalize_text(row.get(field_name)).split(",")]]
 
 
     # Trend switch filter: today trend == target AND yesterday trend != target
@@ -2052,13 +2087,22 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             if not param_key.startswith(prefix):
                 continue
             suffix = param_key[len(prefix):]
-            if suffix not in {"20", "50", "120", "250"}:
+            if suffix not in {"20", "50", "120", "250", "total"}:
                 continue
-            field_name = f"{field_base}{suffix}"
-            if prefix.startswith("min_"):
-                filtered = [row for row in filtered if _passes_min_max(row.get(field_name), min_value=threshold)]
+            if suffix == "total":
+                # Sum all 4 RPS periods
+                def _rps_total(row):
+                    return sum(row.get(f"{field_base}{w}") or 0 for w in ("20","50","120","250"))
+                if prefix.startswith("min_"):
+                    filtered = [row for row in filtered if _rps_total(row) >= threshold]
+                else:
+                    filtered = [row for row in filtered if _rps_total(row) <= threshold]
             else:
-                filtered = [row for row in filtered if _passes_min_max(row.get(field_name), max_value=threshold)]
+                field_name = f"{field_base}{suffix}"
+                if prefix.startswith("min_"):
+                    filtered = [row for row in filtered if _passes_min_max(row.get(field_name), min_value=threshold)]
+                else:
+                    filtered = [row for row in filtered if _passes_min_max(row.get(field_name), max_value=threshold)]
             break
 
     filtered.sort(

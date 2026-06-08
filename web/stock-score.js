@@ -2469,6 +2469,8 @@ function setTechConclusion(d) {
   if (detail) detail.textContent = buildConclusionDetail(d);
   if (card) card.style.borderLeft = `3px solid ${cc}`;
   showKlineLink();
+  showIndicatorBtn();
+  setupIndicatorDialog(d);
   setupKronosPredict(d.symbol, d.market);
 }
 
@@ -2484,7 +2486,87 @@ function resetTechConclusion() {
   if (detail) detail.textContent = '';
   if (card) card.style.borderLeft = '';
   hideKlineLink();
+  hideIndicatorBtn();
   resetKronosPredict();
+}
+
+// ── Tech indicator dialog ──
+
+function showIndicatorBtn() {
+  const btn = document.getElementById('tech-indicator-btn');
+  if (btn) btn.style.display = '';
+}
+function hideIndicatorBtn() {
+  const btn = document.getElementById('tech-indicator-btn');
+  if (btn) btn.style.display = 'none';
+}
+
+function setupIndicatorDialog(d) {
+  const dialog = document.getElementById('tech-indicator-dialog');
+  const btn = document.getElementById('tech-indicator-btn');
+  const close = document.getElementById('tech-indicator-close');
+  if (!dialog || !btn) return;
+
+  const fill = () => {
+    const fmtSign = (v, labels) => {
+      const emoji = {green:'🟢', red:'🔴', yellow:'🟡', gray:'⚪'};
+      const label = (labels||{})[v] || v || '—';
+      const colorMap = {strong_bullish:'green', bullish:'green', recovering:'yellow',
+        neutral:'gray', bearish:'red', strong_bearish:'red',
+        super_strong:'green', strong:'green', startup:'green', weak:'red',
+        divergence:'red', shrink:'yellow', normal:'gray', breakout:'green',
+        low:'green', mid:'yellow', high:'red', overheated:'red'};
+      const c = colorMap[v] || 'gray';
+      return `<span style="color:var(--score-${c === 'green' ? 'green' : c === 'red' ? 'red' : c === 'yellow' ? 'yellow' : 'cyan'})">${emoji[c]||''} ${label}</span>`;
+    };
+
+    const trendLabels = {strong_bullish:'强多头', bullish:'多头', recovering:'修复中', neutral:'震荡', bearish:'空头', strong_bearish:'强空头'};
+    const momLabels = {super_strong:'超强', strong:'强势', startup:'启动', neutral:'中性', weak:'弱势'};
+    const volLabels = {normal:'正常', divergence:'量价背离', shrink:'缩量', breakout:'放量突破'};
+    const posLabels = {low:'低位', mid:'中位', high:'高位', overheated:'过热'};
+
+    setTi('ti-conclusion', `<strong>${d.conclusion_label||'—'}</strong> <span style="color:var(--muted);font-size:11px">${d.conclusion_reason||''}</span>`);
+    setTi('ti-short', `${fmtSign(d.short_trend, trendLabels)} <span style="color:var(--muted);font-size:10px">${d.short_trend_detail||''}</span>`);
+    setTi('ti-long', `${fmtSign(d.trend, trendLabels)} <span style="color:var(--muted);font-size:10px">${d.trend_detail||''}</span>`);
+    setTi('ti-momentum', `${fmtSign(d.momentum, momLabels)} <span style="color:var(--muted);font-size:10px">${d.momentum_detail||''}</span>`);
+    setTi('ti-volume', `${fmtSign(d.volume_signal, volLabels)} <span style="color:var(--muted);font-size:10px">${d.volume_detail||''}</span>`);
+    setTi('ti-position', `${fmtSign(d.position, posLabels)} <span style="color:var(--muted);font-size:10px">${d.position_detail||''}</span>`);
+
+    const triggers = d.buy_triggers || [];
+    setTi('ti-trigger', triggers.length ? triggers.map(t => `${t.label||t.type}`).join(', ') : '—');
+
+    // Rule explanation
+    const st = d.short_trend, t = d.trend;
+    let rule = '匹配规则: 默认「观望持有」';
+    if (d.one_word_limit_down) rule = '匹配规则: 一字跌停 → 强制回避';
+    else if (st === 'strong_bearish' && d.momentum === 'weak') rule = '匹配规则: 短期强空头 + 动量弱势 → 回避';
+    else if (d.volume_signal === 'divergence' && (st==='bearish'||st==='strong_bearish')) rule = '匹配规则: 量价背离 + 短期偏空 → 回避';
+    else if (d.conclusion === 'buy_confirmed') rule = '匹配规则: 买入触发确认 + 短期偏多 → 确认买入';
+    else if (d.conclusion === 'buy_watch') rule = '匹配规则: 买入触发 → 买点观察';
+    else if (st === 'strong_bullish' && (t==='bullish'||t==='strong_bullish')) rule = '匹配规则: 短期强多头 + 长期多头共振 → 短期强势';
+    else if (st === 'strong_bullish' && (t==='bearish'||t==='strong_bearish')) rule = '匹配规则: 短期强多头 + 长期偏空 → 短强长空';
+    else if (st === 'bullish' && !(t==='bearish'||t==='strong_bearish')) rule = '匹配规则: 短期偏多 + 长期未压制 → 短期偏多';
+    else if (st === 'bullish') rule = '匹配规则: 短期偏多 + 长期偏空 → 短线反弹';
+    else if (st === 'recovering') rule = '匹配规则: 短期修复中 → 关注转势';
+    else if (st === 'neutral' && !(t==='bearish'||t==='strong_bearish')) rule = '匹配规则: 短期横盘 + 长期不空 → 横盘偏多';
+    else if (st === 'neutral') rule = '匹配规则: 短期横盘 + 长期偏空 → 横盘偏空';
+    else if (st === 'bearish' && d.position === 'low') rule = '匹配规则: 短期偏空 + 低位 → 左侧观察';
+    else if (st === 'bearish') rule = '匹配规则: 短期偏空 → 回避';
+    else if (st === 'strong_bearish' && (t==='bullish'||t==='strong_bullish') && d.position==='low') rule = '匹配规则: 短期强空 + 长期偏多且低位 → 短空长多';
+    else if (st === 'strong_bearish') rule = '匹配规则: 短期强空头 → 回避';
+    else if (d.position === 'low') rule = '匹配规则: 历史低位 → 左侧观察';
+    else if (d.position === 'overheated') rule = '匹配规则: 位置过热 → 观望持有';
+    setTi('ti-rule', rule);
+  };
+
+  function setTi(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+
+  btn.onclick = () => { fill(); dialog.hidden = false; };
+  close.onclick = () => { dialog.hidden = true; };
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.hidden = true; });
 }
 
 // ── Kronos AI predict in tech-conclusion card ───────────────────────

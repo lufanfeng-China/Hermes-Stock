@@ -72,8 +72,7 @@ function renderTable(stocks) {
     const mr = fmtRank(s.market_total_rank, s.market_total_universe_size);
     const is_ = fmtScore(s.industry_total_score);
     const ir = fmtRank(s.industry_total_rank, s.industry_total_universe_size);
-    const ind = [s.industry_level_1, s.industry_level_2].filter(Boolean).join(' / ') || '—';
-    const temp = fmtTemp(s);
+    const ind = s.industry_level_2 || '—';
 
     const trend = s.tech_trend_label || '—';
     const shortTrend = s.tech_short_trend_label || '—';
@@ -97,32 +96,30 @@ function renderTable(stocks) {
     const concColor = s.tech_conclusion_color || trendColor(conclusion);
 
     const price = s.current_price != null ? Number(s.current_price).toFixed(2) : '—';
-    const r5 = fmtPct(s.return_5_pct);
+    const ma10d = s.ma10_dist_pct != null ? (s.ma10_dist_pct>=0?'+':'')+s.ma10_dist_pct.toFixed(1)+'%' : '—';
+    const ma10c = s.ma10_dist_pct != null ? pctColor(s.ma10_dist_pct) : 'var(--muted)';
+    const ret = s.return_since_add_pct != null ? fmtPct(s.return_since_add_pct) : '—';
+    const retColor = s.return_since_add_pct != null ? pctColor(s.return_since_add_pct) : 'var(--muted)';
+    const addedDate = (s.added_at || '').slice(0, 10) || '—';
     const r1 = fmtPct(s.return_1_pct);
-    const r20 = fmtPct(s.return_20_pct);
-    const dur = s.trend_duration != null ? String(s.trend_duration) + '天' : '—';
-    const pat = s.candle_pattern || '—';
-    const patEmoji = s.candle_pattern_dir === 'bullish' ? '🟢' : s.candle_pattern_dir === 'bearish' ? '🔴' : s.candle_pattern_dir === 'neutral' ? '⚪' : '';
 
     return `<tr data-idx="${i}" data-market="${esc(s.market)}" data-symbol="${esc(s.symbol)}" data-name="${esc(name)}" tabindex="0">
       <td><input type="checkbox" class="wl-row-check" data-idx="${i}"></td>
       <td class="wl-name-cell"><span class="wl-stock-name">${esc(name)}</span><br><span class="wl-stock-symbol">${esc(marketSymbol)}</span></td>
       <td class="num wl-price-cell" title="点击查看K线">${price}</td>
+      <td class="num" style="color:${ma10c}">${ma10d}</td>
+      <td class="num" style="color:${retColor}">${ret}</td>
+      <td>${addedDate}</td>
       <td class="num"><span class="wl-score">${ms}</span> ${mr}</td>
       <td class="num"><span class="wl-score">${is_}</span> ${ir}</td>
       <td>${esc(ind)}</td>
-      <td>${temp}</td>
       <td style="color:${trendColor(trend)}">${esc(trend)}</td>
       <td style="color:${trendColor(shortTrend)}">${esc(shortTrend)}${shortTrendSwitch !== '—' ? ' ' + shortTrendSwitch : ''}</td>
       <td style="color:${trendColor(momentum)}">${esc(momentum)}</td>
       <td style="color:${trendColor(volume)}">${esc(volume)}</td>
       <td>${buyTrigger}</td>
       <td class="num" style="color:${pctColor(s.return_1_pct)}">${r1}</td>
-      <td class="num" style="color:${pctColor(s.return_5_pct)}">${r5}</td>
-      <td class="num" style="color:${pctColor(s.return_20_pct)}">${r20}</td>
-      <td class="num">${dur}</td>
       <td class="num">${s.short_trend_duration != null ? s.short_trend_duration + '天' : '—'}</td>
-      <td>${patEmoji} ${esc(pat)}</td>
       <td style="color:${concColor};font-weight:600" title="${esc(s.tech_conclusion_reason || '')}">${esc(conclusion)}</td>
       <td><button class="wl-remove-btn" data-idx="${i}" type="button">✕</button></td>
     </tr>`;

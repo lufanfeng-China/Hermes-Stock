@@ -26,6 +26,7 @@
           <a href="/stock-screener.html" class="nav-link stock-score-topbar-action">股票筛选</a>
           <a href="/realtime-screener.html" class="nav-link stock-score-topbar-action">实时选股</a>
           <a href="/watchlist.html" class="nav-link stock-score-topbar-action">自选股</a>
+          <a href="/bottleneck.html" class="nav-link stock-score-topbar-action">瓶颈股发现</a>
           
           <button id="stock-score-data-update-btn" class="nav-link" type="button">数据更新</button>
         </div>
@@ -37,35 +38,27 @@
         <section id="loading-msg" class="status stock-score-status stock-score-search-status" style="display:none"></section>
         <article class="search-card stock-score-tech-conclusion-card" id="tech-conclusion-card">
           <div class="search-card-header">
-            <div>
-              <p class="eyebrow">TECH CONCLUSION</p>
-              <h2>技术综合结论</h2>
-            </div>
+            <h2>技术综合结论</h2>
           </div>
           <div class="tech-conclusion-body">
             <span id="tech-conclusion-icon" class="tech-conclusion-icon">—</span>
-            <div>
-              <div id="tech-conclusion-label" class="tech-conclusion-label">查询股票后显示</div>
-              <div id="tech-conclusion-reason" class="tech-conclusion-reason muted">基于趋势、动量、量价、位置的信号灯综合判断</div>
-              <div id="tech-conclusion-detail" class="tech-conclusion-detail muted"></div>
-            </div>
+            <div id="tech-conclusion-label" class="tech-conclusion-label">查询股票后显示</div>
+            <div id="tech-conclusion-reason" class="tech-conclusion-reason muted">基于趋势、动量、量价、位置的信号灯综合判断</div>
           </div>
-          <a id="tech-kline-link" class="tech-kline-link" href="#" hidden>📈 K线趋势图</a>
-          <div id="kronos-predict-section" class="kronos-predict-section" style="display:none; margin-top:12px; padding:10px; background:var(--bg-card); border-radius:6px; border:1px dashed var(--border-color);">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:13px; color:var(--text-muted);">🤖 AI预测</span>
-              <button id="kronos-predict-btn" class="sub-period-industry-average-btn" style="font-size:12px;">开始预测</button>
-              <span id="kronos-predict-status" style="font-size:12px; color:var(--text-muted);"></span>
+          <div class="tech-conclusion-actions">
+            <button id="tech-indicator-btn" class="tech-indicator-btn" type="button" style="display:none" title="查看判断依据">📋 指标说明</button>
+            <a id="tech-kline-link" class="tech-kline-link" href="#" hidden>📈 K线</a>
+            <div id="kronos-predict-section" class="kronos-predict-section" style="display:none">
+              <span class="kronos-predict-label">🤖 AI预测</span>
+              <button id="kronos-predict-btn" class="kronos-predict-btn">开始预测</button>
+              <span id="kronos-predict-status" class="kronos-predict-status"></span>
             </div>
-            <div id="kronos-predict-result" style="margin-top:8px; font-size:13px;"></div>
+            <div id="kronos-predict-result" class="kronos-predict-result"></div>
           </div>
         </article>
         <article class="search-card stock-score-insight-card" id="insights-card">
           <div class="search-card-header">
-            <div>
-              <p class="eyebrow">STOCK INSIGHTS</p>
-              <h2>综合洞察</h2>
-            </div>
+            <h2>综合洞察</h2>
           </div>
           <div class="insights-body" id="insights-body">
             <p class="muted">查询股票后显示综合洞察</p>
@@ -569,6 +562,49 @@
       </div>
       <div class="kline-chart-body">
         <svg id="kline-chart-svg" class="kline-chart-svg" role="img" aria-label="K线趋势图"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div id="tech-indicator-dialog" class="industry-score-peer-dialog" hidden aria-hidden="true">
+    <div class="tech-indicator-dialog-card" role="dialog" aria-modal="true" aria-labelledby="tech-indicator-title">
+      <div class="search-card-header">
+        <h2 id="tech-indicator-title">技术判断依据</h2>
+        <button id="tech-indicator-close" type="button" class="sub-period-industry-average-btn">关闭</button>
+      </div>
+      <div id="tech-indicator-body" class="tech-indicator-body">
+        <div class="tech-indicator-item">
+          <span class="tech-indicator-dim">最终结论</span>
+          <span id="ti-conclusion" class="tech-indicator-val"></span>
+        </div>
+        <div class="tech-indicator-item">
+          <span class="tech-indicator-dim">短期趋势 (MA10/20/30/60)</span>
+          <span id="ti-short" class="tech-indicator-val"></span>
+        </div>
+        <div class="tech-indicator-item">
+          <span class="tech-indicator-dim">长期趋势 (MA20/50/120/250)</span>
+          <span id="ti-long" class="tech-indicator-val"></span>
+        </div>
+        <div class="tech-indicator-item">
+          <span class="tech-indicator-dim">动量</span>
+          <span id="ti-momentum" class="tech-indicator-val"></span>
+        </div>
+        <div class="tech-indicator-item">
+          <span class="tech-indicator-dim">量价信号</span>
+          <span id="ti-volume" class="tech-indicator-val"></span>
+        </div>
+        <div class="tech-indicator-item">
+          <span class="tech-indicator-dim">位置</span>
+          <span id="ti-position" class="tech-indicator-val"></span>
+        </div>
+        <div class="tech-indicator-item">
+          <span class="tech-indicator-dim">买入触发</span>
+          <span id="ti-trigger" class="tech-indicator-val"></span>
+        </div>
+        <div class="tech-indicator-match">
+          <span class="tech-indicator-dim">匹配规则</span>
+          <span id="ti-rule" class="tech-indicator-val"></span>
+        </div>
       </div>
     </div>
   </div>

@@ -8,6 +8,7 @@
     { href: '/rps-pool.html', label: 'RPS' },
     { href: '/watchlist.html', label: '自选股' },
     { href: '/concept-analysis.html', label: '概念分析' },
+    { href: '/bottleneck.html', label: '瓶颈股发现' },
   ];
 
   const currentPath = location.pathname.replace(/\/$/, '') || '/';

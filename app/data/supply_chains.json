@@ -1,0 +1,3023 @@
+{
+  "trends": {
+    "ai-compute-localization": {
+      "id": "ai-compute-localization",
+      "name": "AI 算力国产化",
+      "description": "美国对华芯片禁令持续加码，国内互联网巨头数千亿资本开支转向国产AI芯片（华为昇腾/寒武纪），2026年国内AI芯片需求300-400万颗，国产自给率仅30%。从芯片设计到封装材料，整条产业链存在多处被海外垄断的「卡脖子」环节。",
+      "anchor": "美国芯片禁令不可逆 → 国产替代是唯一出路 → 需求确定性极高",
+      "layers": [
+        {
+          "level": 0,
+          "name": "AI 应用层",
+          "role": "大模型训练/推理，算力需求源头",
+          "description": "DeepSeek、豆包、Kimi、文心一言等大模型百花齐放，训练和推理端的算力需求持续井喷。2026年国内AI芯片市场规模近5000亿元。",
+          "global_players": [
+            "OpenAI",
+            "Google",
+            "Meta",
+            "Anthropic",
+            "Mistral",
+            "DeepSeek",
+            "字节跳动",
+            "百度",
+            "阿里",
+            "腾讯"
+          ],
+          "domestic_players": [
+            "DeepSeek",
+            "字节跳动",
+            "百度",
+            "阿里",
+            "腾讯",
+            "月之暗面",
+            "智谱AI",
+            "Minimax",
+            "科大讯飞",
+            "商汤科技"
+          ],
+          "supplier_count": 10,
+          "is_bottleneck": false,
+          "skip_reason": "竞争充分，所有人都在做，不构成稀缺性"
+        },
+        {
+          "level": 1,
+          "name": "AI 芯片设计",
+          "role": "把算法变成可流片的芯片设计",
+          "description": "华为昇腾910C/690是目前国产最强AI算力卡，FP16精度下可达900T算力。寒武纪690性能对标H100。但整体仍落后NVIDIA 1-2代。",
+          "global_players": [
+            "NVIDIA",
+            "AMD",
+            "Intel",
+            "Google(TPU)",
+            "Amazon(Trainium)"
+          ],
+          "domestic_players": [
+            "华为昇腾",
+            "寒武纪",
+            "海光信息",
+            "壁仞科技",
+            "摩尔线程",
+            "燧原科技",
+            "地平线",
+            "天数智芯"
+          ],
+          "supplier_count": 8,
+          "is_bottleneck": false,
+          "skip_reason": "国内玩家>5家，竞争激烈，且华为/寒武纪已被充分研究和定价。不是Serenity要找的紫苏叶。"
+        },
+        {
+          "level": 2,
+          "name": "芯片制造（晶圆代工）",
+          "role": "把设计图变成物理芯片",
+          "description": "国内先进制程仅中芯国际能做N+2/N+3（等效7nm）。产能严重受限，良率爬坡中。2026年扩产进度加快，总供给量预计翻倍。",
+          "global_players": [
+            "台积电",
+            "三星",
+            "Intel"
+          ],
+          "domestic_players": [
+            "中芯国际",
+            "华虹半导体"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_reason": "国内仅2家能做先进制程，但中芯国际市值已大（数千亿），不是Serenity要找的「小而美」瓶颈股。且制程突破是渐进式的，不存在突然爆发的供需缺口。",
+          "bottleneck_score": 3,
+          "a_share_candidates": [
+            "688981",
+            "688347"
+          ]
+        },
+        {
+          "level": 3,
+          "name": "先进封装（CoWoS/Cross-L）",
+          "role": "把AI芯片和HBM显存集成在一起的关键工艺",
+          "description": "台积电CoWoS产能被NVIDIA包圆，国内等效方案叫Cross-L。华为昇腾依赖通富微电/长电科技的先进封装产能。2025Q4 Cross-L有望进入批量供应。",
+          "global_players": [
+            "台积电(CoWoS)",
+            "三星(I-Cube)",
+            "Intel(EMIB)"
+          ],
+          "domestic_players": [
+            "通富微电",
+            "长电科技",
+            "永熙电子",
+            "华天科技"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "skip_reason": "国内4家在做，竞争多于Serenity标准（≤2家），不够稀缺"
+        },
+        {
+          "level": 4,
+          "name": "🔴 ABF 膜（封装核心绝缘薄膜）",
+          "role": "AI芯片先进封装不可替代的绝缘积层薄膜 —— 芯片内部的「钢筋骨架」",
+          "description": "ABF膜全称Ajinomoto Build-up Film，由日本味之素研发。它是高端AI芯片（华为昇腾、HBM显存）FC-BGA封装基板的核心材料。没有品质达标的ABF膜，芯片无法做多层精密布线——信号干扰、发热失控、短路全面爆发。普通消费级芯片可用传统树脂替代，但高端算力芯片只能用ABF膜，没有平替选项。",
+          "global_players": [
+            "日本味之素（Ajinomoto）—— 全球市场份额 90%+"
+          ],
+          "domestic_players": [
+            "华正新材(CBF膜) —— 唯一小批量进入华为昇腾供应链",
+            "生益科技(类ABF材料)",
+            "宏昌电子(ABF类膜通过封测厂验证)",
+            "天和防务(秦膜，华为份额小)"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_reason": "全球被日本味之素垄断90%+，国内仅华正新材CBF膜真正进入华为昇腾供应链并实现小批量供货。定价权、供货节奏全在日企手里。AI算力爆发 → 先进封装需求暴增 → ABF膜刚需爆炸式增长 → 供需缺口持续放大。这是典型的 '只有一艘船' → 国产替代是唯一出路。",
+          "bottleneck_score": 5,
+          "a_share_candidates": [
+            "603186",
+            "600183",
+            "603002",
+            "300397"
+          ]
+        },
+        {
+          "level": 5,
+          "name": "🔴 PCIe Switch 芯片（芯片互联）",
+          "role": "AI服务器内部CPU和GPU之间的高速数据交换「立交桥」",
+          "description": "AI服务器需要多颗GPU并行计算，PCIe Switch芯片是数据高速公路的核心枢纽。没有它，再强的芯片也只能单打独斗。国产化率几乎为零，2025下半年才有国产厂商开始批量供货。国内AI服务器市场约300亿美元。",
+          "global_players": [
+            "博通（Broadcom）—— 几乎垄断"
+          ],
+          "domestic_players": [
+            "速度科技（万通发展600246已收购62.7%）—— 国内PCIe 4.0/5.0 Switch唯一供应商"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_reason": "全球被博通一家掐死，国内仅速度科技能做。市场空间300亿美元，国产化率接近零。2025Q4起批量供货，2026年收入目标5亿元。",
+          "bottleneck_score": 5,
+          "a_share_candidates": [
+            "600246"
+          ]
+        },
+        {
+          "level": 6,
+          "name": "ABF 载板（封装基板）",
+          "role": "ABF膜的「下层建筑」—— 搭载芯片的精密线路板",
+          "description": "ABF载板是FC-BGA封装的基板本体，ABF膜是其中的绝缘材料。两者配合使用。全球主要由日本Ibiden、新光电气、韩国三星电机供应。国内兴森科技和深南电路在追赶。",
+          "global_players": [
+            "日本Ibiden",
+            "日本新光电气(Shinko)",
+            "韩国三星电机"
+          ],
+          "domestic_players": [
+            "兴森科技",
+            "深南电路",
+            "珠海越亚"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_reason": "国内2-3家能做，竞争格局尚可。兴森科技是华为昇腾ABF载板核心供应商，地位稳固。但全球有3家竞争对手，不如ABF膜那么稀缺。",
+          "bottleneck_score": 4,
+          "a_share_candidates": [
+            "002436",
+            "002916"
+          ]
+        },
+        {
+          "level": 7,
+          "name": "服务器 / 光模块 / 液冷",
+          "role": "AI算力的硬件基础设施",
+          "description": "AI服务器整机（工业富联/浪潮/中科曙光）、800G/1.6T光模块（中际旭创/新易盛）、液冷方案（英维克/高澜股份）。这些环节国产能力很强。",
+          "global_players": [
+            "多家"
+          ],
+          "domestic_players": [
+            "工业富联",
+            "浪潮信息",
+            "中科曙光",
+            "中际旭创",
+            "新易盛",
+            "天孚通信",
+            "英维克",
+            "高澜股份"
+          ],
+          "supplier_count": 8,
+          "is_bottleneck": false,
+          "skip_reason": "竞争充分，国产能力强，不构成稀缺性瓶颈"
+        }
+      ]
+    },
+    "humanoid-robot": {
+      "id": "humanoid-robot",
+      "name": "人形机器人量产",
+      "description": "人形机器人是具身智能终极形态——特斯拉Optimus Gen3预计2026年量产(内部先用→2027外销)，Figure AI/1X/宇树/智元/傅利叶/优必选竞速商业化。2030年全球人形机器人市场预计350亿美元，100万+台出货。每台人形机器人≈14个线性关节(行星滚柱丝杠)+28个旋转关节(谐波减速器+电机)+2只灵巧手+全身触觉/力觉感知。产业链核心瓶颈：行星滚柱丝杠(特斯拉自研+舍弗勒/日本THK垄断，国产恒立液压突破中)、谐波减速器(日本哈默纳科一支独大)、六维力传感器、灵巧手微型执行器。",
+      "anchor": "特斯拉Optimus树立人形机器人量产标准 → 200万台对应2800万个丝杠+5600万个减速器 → 丝杠/减速器/六维力/灵巧手四大瓶颈国内仅1-3家企业能突破",
+      "layers": [
+        {
+          "level": 0,
+          "name": "人形机器人整机集成",
+          "role": "integrator",
+          "description": "集成AI大脑+运动小脑+执行器+感知传感+电池动力。特斯拉(Optimus)/Figure AI(02)/宇树(G1/H1)/智元(远征)/优必选(Walker)形成中美双梯队。特斯拉垂直整合最深(自研执行器/灵巧手/FSD芯片)。中国在整机数量和应用场景上领先。",
+          "global_players": [
+            "特斯拉(美国)",
+            "Figure AI(美国)",
+            "宇树科技(中国)",
+            "智元机器人(中国)",
+            "优必选(中国)"
+          ],
+          "domestic_players": [
+            "优必选 9880.HK",
+            "埃斯顿 002747",
+            "拓斯达 300607",
+            "新松机器人 300024"
+          ],
+          "supplier_count": 8,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "中美10+整机企业竞争，量产拉开序幕，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "002747",
+              "name": "埃斯顿",
+              "mapping_reason": "国产工业机器人龙头，人形机器人关节模组拓展"
+            },
+            {
+              "code": "300024",
+              "name": "新松机器人",
+              "mapping_reason": "中国机器人国家队，优必选核心合作伙伴"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "关节执行器总成(旋转+线性)",
+          "role": "actuation",
+          "description": "特斯拉Optimus采用自研Rotary(谐波+力矩电机+双编码器+力矩传感器+交叉滚子轴承)和Linear(行星滚柱丝杠+力传感器)执行器。这一设计已成为行业标杆——线性执行器用于膝关节/髋关节提供高推力密度，旋转执行器用于肩/腕关节。国内仅恒立液压/鼎智科技/汇川技术形成执行器总成能力。",
+          "global_players": [
+            "特斯拉(美国自研)",
+            "THK(日本)",
+            "舍弗勒/Schaeffler(德国)",
+            "恒立液压(中国)"
+          ],
+          "domestic_players": [
+            "恒立液压 601100",
+            "鼎智科技 688377",
+            "汇川技术 300124"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.5,
+          "bottleneck_reason": "",
+          "skip_reason": "执行器总成有多家供应商可组合，非单点瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "601100",
+              "name": "恒立液压",
+              "mapping_reason": "液压件龙头切入丝杠，线性执行器总成能力，特斯拉Optimus潜在供应商"
+            },
+            {
+              "code": "688377",
+              "name": "鼎智科技",
+              "mapping_reason": "微型丝杠+电机+编码器一体化组件，执行器微型化领先"
+            },
+            {
+              "code": "300124",
+              "name": "汇川技术",
+              "mapping_reason": "伺服/电驱/控制器三合一体，旋转执行器总成能力"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 行星滚柱丝杠",
+          "role": "transmission",
+          "description": "行星滚柱丝杠是线性执行器核心传动件——将电机旋转运动转为高精度直线运动(推力>5000N、精度<0.01mm、寿命>10000h)。每台Optimus用14根丝杠，200万台对应2800万根——而全球年产能仅约100万根(主要由SKF/舍弗勒/THK供应)。特斯拉自研丝杠(已到Gen3)但仅自用。国内恒立液压2024年建成国内首条机器人行星滚柱丝杠产线(5万根/年→扩产50万根)，是唯一批产企业。鼎智科技/贝斯特/五洲新春处于研发→送样阶段。",
+          "global_players": [
+            "SKF(瑞典)",
+            "舍弗勒(德国)",
+            "THK(日本)",
+            "恒立液压(中国)",
+            "特斯拉(美国自研自用)"
+          ],
+          "domestic_players": [
+            "恒立液压 601100",
+            "鼎智科技 688377",
+            "贝斯特 300580",
+            "五洲新春 603667"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "全球能批量生产机器人级行星滚柱丝杠的仅SKF/舍弗勒/THK/恒立4家，且SKF/舍弗勒/THK主要面向机床/航空(对机器人订单响应极慢)。特斯拉自研自用不外卖。恒立液压是除特斯拉体系外唯一能供机器人丝杠的企业——5万根年产能 vs 远期2800万根需求，缺口>500倍。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "601100",
+              "name": "恒立液压",
+              "mapping_reason": "国内唯一批产机器人行星滚柱丝杠(2024建成首条产线，5万→50万根/年扩产)"
+            },
+            {
+              "code": "688377",
+              "name": "鼎智科技",
+              "mapping_reason": "微型行星滚柱丝杠+电机一体化，人形机器人微型关节领先"
+            },
+            {
+              "code": "300580",
+              "name": "贝斯特",
+              "mapping_reason": "精密丝杠/滚珠丝杠龙头，行星滚柱丝杠送样特斯拉/宇树"
+            },
+            {
+              "code": "603667",
+              "name": "五洲新春",
+              "mapping_reason": "轴承→丝杠延伸，行星滚柱丝杠研发中，精密制造基础扎实"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 谐波减速器",
+          "role": "transmission",
+          "description": "谐波减速器是旋转执行器核心——通过柔轮弹性变形实现高减速比(>50:1)、零背隙、高扭矩密度。每台Optimus用28个旋转关节(28个谐波减速器)，200万台=5600万个。日本哈默纳科全球市占率>70%，独家供应特斯拉Optimus。国内绿的谐波市占率>60%(国产份额)，但全球份额仅约15%——「国产替代中的二次替代」机会巨大。来福谐波/同川精密/大族谐波追赶中。",
+          "global_players": [
+            "哈默纳科/Harmonic Drive(日本70%+)",
+            "绿的谐波(中国15%)",
+            "来福谐波(中国)",
+            "日本新宝(日本)"
+          ],
+          "domestic_players": [
+            "绿的谐波 688017",
+            "来福谐波(未上市)",
+            "双环传动 002472"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "哈默纳科全球谐波减速器市占率>70%，独家供应特斯拉Optimus(优先级最高客户)。绿的谐波2024年产能约40万台/年 vs 远期5600万需求缺口>100倍。柔轮材料(特种合金钢)和热处理工艺均有极高技术壁垒，新进入者合格周期>5年。日本政府2024年暗示可能限制谐波减速器对华出口。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688017",
+              "name": "绿的谐波",
+              "mapping_reason": "国产谐波减速器绝对龙头(国内≥60%)，特斯拉Optimus送样中，2024扩产至60万台/年"
+            },
+            {
+              "code": "002472",
+              "name": "双环传动",
+              "mapping_reason": "RV减速器龙头(市占>40%)，谐波减速器新进入者，齿轮工艺降维打击"
+            },
+            {
+              "code": "301550",
+              "name": "斯菱股份",
+              "mapping_reason": "轴承+谐波减速器交叉领域，柔轮材料加工工艺独特"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 六维力/力矩传感器",
+          "role": "sensing",
+          "description": "六维力传感器是机器人力控的核心——同时测量Fx/Fy/Fz/Mx/My/Mz六个分量，安装于手腕/脚踝关节实现柔顺控制。全球高端六维力传感器被ATI Industrial(美)/OnRobot(丹麦)双寡头垄断(单价>1万美元)。国内宇立仪器(未上市)为全球第三家能量产者(已供Figure AI)，柯力传感/坤维科技/蓝点触控追赶中。每台人形机器人需4-6个六维力传感器。",
+          "global_players": [
+            "ATI Industrial(美国)",
+            "OnRobot(丹麦)",
+            "宇立仪器(中国)",
+            "柯力传感(中国)"
+          ],
+          "domestic_players": [
+            "柯力传感 603662",
+            "八方股份 603489"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4.0,
+          "bottleneck_reason": "全球可批量供应六维力传感器的仅ATI/OnRobot/宇立3家(宇立2024年产能~2万只/年)。百万台人形机器人对应400-600万只需求。国产宇立/柯力已突破但一致性/温度漂移/寿命距ATI仍有3-5年差距。技术壁垒：应变片粘贴工艺+解耦算法+温度补偿三座大山。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "力传感器龙头，六维力传感器研发成功送样机器人客户，应变片自制(壁垒最高环节)"
+            },
+            {
+              "code": "603489",
+              "name": "八方股份",
+              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力"
+            },
+            {
+              "code": "300114",
+              "name": "中航电测",
+              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "🔴 灵巧手（空心杯电机+微型丝杠+触觉）",
+          "role": "end-effector",
+          "description": "灵巧手是人形机器人从'能走'到'能干活'的质变节点。每只灵巧手需6个微型空心杯电机(驱动5指)、6根微型丝杠/腱绳、指尖MEMS触觉传感器三维集成。全球仅Maxon(瑞士)/Faulhaber(德国)能批量供应机器人级微型空心杯电机(直径<13mm、功率密度>10W/cm³)。国内鸣志电器/鼎智科技处于送样验证阶段。每台人形机器人=2只灵巧手，百万台=200万只。",
+          "global_players": [
+            "Maxon Motor(瑞士)",
+            "Faulhaber(德国)",
+            "鸣志电器(中国)",
+            "鼎智科技(中国)"
+          ],
+          "domestic_players": [
+            "鸣志电器 603728",
+            "鼎智科技 688377",
+            "兆威机电 003021"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "微型空心杯电机(ϕ<13mm)全球仅Maxon/Faulhaber两家可批量供应(百年瑞士/德国精密制造壁垒)。鸣志电器/鼎智科技突破中但功率密度/寿命差距30-50%。微型丝杠+触觉传感器更是全球供应链空白(特斯拉自研)，是整机放量的隐性瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603728",
+              "name": "鸣志电器",
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，机器人灵巧手电机送样特斯拉/宇树"
+            },
+            {
+              "code": "688377",
+              "name": "鼎智科技",
+              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整"
+            },
+            {
+              "code": "003021",
+              "name": "兆威机电",
+              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商"
+            },
+            {
+              "code": "300580",
+              "name": "贝斯特",
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "空心杯电机/无框力矩电机",
+          "role": "motor",
+          "description": "旋转执行器用无框力矩电机(高扭矩密度+薄型)，灵巧手用微型空心杯电机(低惯量+快速响应)。国内步科股份/伟创电气无框力矩电机已批量供应工业机器人，向人形机器人拓展。电机层国产替代进展最快——差距从10年缩小至3年。",
+          "global_players": [
+            "Kollmorgen(美国)",
+            "Parker(美国)",
+            "步科股份(中国)",
+            "Maxon(瑞士空心杯)"
+          ],
+          "domestic_players": [
+            "步科股份 688160",
+            "伟创电气 688698",
+            "禾川科技 688320"
+          ],
+          "supplier_count": 6,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.0,
+          "bottleneck_reason": "",
+          "skip_reason": "电机层供应商充分，国内企业技术追赶快，非瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688160",
+              "name": "步科股份",
+              "mapping_reason": "无框力矩电机龙头，人形机器人低压伺服先驱，头部客户验证中"
+            },
+            {
+              "code": "688698",
+              "name": "伟创电气",
+              "mapping_reason": "无框力矩电机2024发布，人形机器人旋转关节电机新进入者"
+            },
+            {
+              "code": "688320",
+              "name": "禾川科技",
+              "mapping_reason": "伺服电机+控制器一体化，人形机器人关节电机拓展"
+            }
+          ]
+        },
+        {
+          "level": 7,
+          "name": "🔴 磁编码器/关节角度传感器",
+          "role": "sensing",
+          "description": "每个旋转/线性执行器需≥1个编码器实时反馈角度/位置——人形机器人整机需40-60个编码器。高端磁编码器(>24位分辨率+<0.01°精度)全球由海德汉(德)/雷尼绍(英)/iC-Haus(德)垄断，单价$50-200。每百万台人形机器人=4000-6000万个编码器——这是容易被忽视的精密传感器瓶颈。国内仅汇川技术/奥普特/禾川科技有编码器自研能力，精度高端的差距1-2个数量级。",
+          "global_players": [
+            "海德汉/Heidenhain(德国)",
+            "雷尼绍/Renishaw(英国)",
+            "iC-Haus(德国芯片)",
+            "汇川技术(中国)"
+          ],
+          "domestic_players": [
+            "汇川技术 300124",
+            "禾川科技 688320"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.0,
+          "bottleneck_reason": "高端磁编码器全球仅海德汉/雷尼绍/iC-Haus 3家可供应>24位分辨率产品。人形机器人放量后编码器需求量暴增至亿级——海德汉/雷尼绍主要面向CNC/半导体(对机器人批量订单响应极慢)。国内汇川/禾川仅有中端编码器(<18位)，精度差一个数量级。是容易被忽视的'隐性瓶颈'。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300124",
+              "name": "汇川技术",
+              "mapping_reason": "伺服电机+编码器一体化，磁编码器自研(18-22位分辨率)"
+            },
+            {
+              "code": "688320",
+              "name": "禾川科技",
+              "mapping_reason": "编码器自研能力，运动控制完整方案商"
+            }
+          ]
+        }
+      ]
+    },
+    "advanced-packaging": {
+      "id": "advanced-packaging",
+      "name": "先进封装国产化",
+      "description": "先进封装(CoWoS/3D IC/Chiplet)是突破摩尔定律的核心路径——将多颗芯片在封装内像搭积木一样堆叠互连。台积电CoWoS是英伟达H100/B200的专属封装(单片3-5万美元)，2025年产能扩至6万片/月仍供不应求。三星X-Cube/Intel EMIB/长电科技XDFOI追赶中。关键卡脖子环节：ABF膜(日本味之素100%垄断)、ABF载板(日系三强+台湾欣兴)、硅桥/中介层、混合键合设备、临时键合材料。中国先进封装产值全球占比约15%，但在ABF膜/TSV设备/混合键合三大核心环节完全受制。",
+      "anchor": "AI芯片需求(英伟达H200/B200) → CoWoS先进封装是产能瓶颈 → ABF膜+ABF载板+键合材料已被日本独家垄断 → 国产替代刚起步,替代周期>10年",
+      "layers": [
+        {
+          "level": 0,
+          "name": "先进封装工艺（CoWoS/3D IC/Chiplet/混合键合）",
+          "role": "fabrication",
+          "description": "台积电CoWoS垄断AI GPU先进封装(英伟达/AMD/博通全部依赖)，单片面积>3000mm²、中介层>4层硅。三星I-Cube/X-Cube、Intel EMIB 2.5/3.5D跟进。国内长电科技XDFOI(2025年2.5D量产)、通富微电/华天科技对标Fan-Out/FCBGA。差距：台积电已量产3D SoIC(混合键合)，国内2.5D刚起步。",
+          "global_players": [
+            "台积电(台湾)",
+            "三星(韩国)",
+            "Intel(美国)",
+            "长电科技(中国)"
+          ],
+          "domestic_players": [
+            "长电科技 600584",
+            "通富微电 002156",
+            "华天科技 002185"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "国内OSAT三强(长电/通富/华天)具备2.5D能力，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "600584",
+              "name": "长电科技",
+              "mapping_reason": "国内先进封装绝对龙头，XDFOI 2.5D Chiplet平台量产"
+            },
+            {
+              "code": "002156",
+              "name": "通富微电",
+              "mapping_reason": "AMD先进封装核心供应商，FCBGA+2.5D路线"
+            },
+            {
+              "code": "002185",
+              "name": "华天科技",
+              "mapping_reason": "国内第三大OSAT，Fan-Out+Chiplet布局中"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 ABF 膜（Ajinomoto Build-up Film, 积层绝缘薄膜）",
+          "role": "material",
+          "description": "ABF膜是FC-BGA基板的核心绝缘层材料——用于AI GPU/CPU/FPGA先进封装载板(每片H100的CoWoS封装消耗约1张ABF载板、含3-5层ABF膜)。日本味之素(味精公司！)100%垄断全球ABF膜市场——年产能约5亿平方英寸，2025年扩至7亿但仍严重供不应求。ABF膜技术壁垒：高Tg(>200°C)+低CTE(与硅匹配)+低介电常数+超平坦表面粗糙度——味之素从1970s开始研发、1996年推出ABF，50年技术壁垒+专利壁垒无人可破。中国无任何替代方案。",
+          "global_players": [
+            "味之素/Ajinomoto(日本) 100%垄断"
+          ],
+          "domestic_players": [
+            "无(国产替代完全空白)"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "味之素100%全球垄断，50年技术+专利壁垒。AI GPU/B200/ASIC全部依赖ABF膜。2025年供需缺口约20-30%，持续到至少2028年。中国无任何替代——哪怕最简单的ABF膜替代也需10年研发+3年验证，是先进封装链条中最无可替代的单点瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603650",
+              "name": "彤程新材",
+              "mapping_reason": "半导体光刻胶+封装材料平台，ABF膜替代研发最接近的国内标的"
+            },
+            {
+              "code": "002409",
+              "name": "雅克科技",
+              "mapping_reason": "前驱体+特种气体+封装材料，绝缘薄膜材料技术储备"
+            },
+            {
+              "code": "300346",
+              "name": "南大光电",
+              "mapping_reason": "前驱体+光刻胶，薄膜沉积材料技术可迁移"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 ABF 载板（FC-BGA基板）",
+          "role": "substrate",
+          "description": "FC-BGA基板是AI芯片的「地基」——比传统PCB精度高1000倍(线宽/线距<10μm)，需多层(10-20层)ABF膜堆叠激光钻孔。全球FC-BGA载板产能由日系三强(揖斐电Ibiden/新光电气/京瓷)+台湾欣兴主导(合计>80%)。国内仅兴森科技/深南电路/珠海越亚有ABF载板布局，但均处于初期(样件验证阶段)，距量产3-5年。目前国内AI芯片(寒武纪/海光)所用ABF载板100%从日本进口。",
+          "global_players": [
+            "揖斐电/Ibiden(日本)",
+            "新光电气/Shinko(日本)",
+            "欣兴/Unimicron(台湾)",
+            "兴森科技(中国)"
+          ],
+          "domestic_players": [
+            "兴森科技 002436",
+            "深南电路 002916",
+            "中京电子 002579"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "FC-BGA载板全球>80%产能集中在日系三强+台湾欣兴。国内兴森/深南/珠海越亚仍处样件阶段(距量产3-5年)。AI芯片100%依赖进口ABF载板。且ABF载板制造依赖ABF膜(100%味之素)→双重日本垄断，替代难度极高。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002436",
+              "name": "兴森科技",
+              "mapping_reason": "国内ABF载板最领先，FC-BGA基板小批量送样，广州基地2025年投产"
+            },
+            {
+              "code": "002916",
+              "name": "深南电路",
+              "mapping_reason": "国内PCB龙头，FC-BGA基板技术上探，广州基地建设中"
+            },
+            {
+              "code": "002579",
+              "name": "中京电子",
+              "mapping_reason": "FC-BGA封装基板新进入者，IC载板产线建设"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 硅中介层/TSV Interposer",
+          "role": "interposer",
+          "description": "硅中介层(Interposer)是CoWoS先进封装核心——GPU+HBM通过硅中介层的TSV(硅通孔)实现超高密度互连(>10000路/mm²)。台积电CoWoS-S使用4-6层硅中介层。全球能制造多层TSV硅中介层的仅台积电(自用)/三星(自用)/联电/格罗方德4家。国内中芯国际/华虹半导体有TSV技术储备但尚无先进封装中介层量产。",
+          "global_players": [
+            "台积电(台湾自用)",
+            "三星(韩国自用)",
+            "联电(台湾)",
+            "格罗方德(美国)"
+          ],
+          "domestic_players": [
+            "中芯国际 688981",
+            "华虹半导体 688347"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "多层TSV硅中介层技术被台积电/三星/联电/格罗方德4家垄断(其中前2家仅自用)。国内中芯国际/华虹有TSV技术(用于CIS/ MEMS)但先进封装级中介层(>4层)为零。产能缺口巨大——一张CoWoS中介层=一片12英寸晶圆的光刻+刻蚀+TSV+CMP全流程。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688981",
+              "name": "中芯国际",
+              "mapping_reason": "国内唯一有TSV量产经验的代工厂(CIS/BSI)，中介层技术储备最强"
+            },
+            {
+              "code": "002371",
+              "name": "北方华创",
+              "mapping_reason": "TSV深硅刻蚀设备供应商，Bosch工艺深孔刻蚀+薄膜沉积，中介层制造核心设备"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 混合键合(Hybrid Bonding)设备",
+          "role": "equipment",
+          "description": "混合键合是3D IC(芯片面对面堆叠、间距<10μm)的核心技术——同时键合Cu-Cu和SiO₂-SiO₂实现超高密度互连。台积电SoIC已量产3D混合键合(AMD MI300X/苹果M系列采用)。全球混合键合设备由奥地利EV Group(EVG)+日本TEL/东京精密三分天下(合计>90%)。国内无任何企业能量产混合键合设备——北方华创/中微/拓荆有键合设备但在混合键合领域为零。",
+          "global_players": [
+            "EV Group/EVG(奥地利)",
+            "TEL/东京电子(日本)",
+            "东京精密(日本)"
+          ],
+          "domestic_players": [
+            "拓荆科技 688072",
+            "北方华创 002371"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "混合键合设备全球>90%集中在EVG(奥地利)+TEL(日本)手中。Cu-Cu混合键合需原子级平面度(CMP后表面粗糙度<0.3nm)+<200°C低温退火+对位精度<0.5μm三大苛求。国内键合设备(常规Cu pillar)刚起步，混合键合完全空白。3D IC是封装终极方向，混合键合是核心装备——卡脖子程度不低于EUV光刻机。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688072",
+              "name": "拓荆科技",
+              "mapping_reason": "国内键合设备龙头(薄膜沉积→键合延伸)，混合键合研发中"
+            },
+            {
+              "code": "002371",
+              "name": "北方华创",
+              "mapping_reason": "多品类半导体设备平台，键合+刻蚀+薄膜综合能力"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "临时键合/解键合(TBDB)材料",
+          "role": "material",
+          "description": "3D IC工艺中晶圆需临时键合到载体(Carrier)进行减薄→TSV→重新布线→解键合。临时键合材料(胶+释放层)需耐高温>350°C+耐化学品+易解键合(激光/热滑移/机械)三重矛盾要求。全球由Brewer Science(美)/3M(美)/东京应化(日)三巨头垄断。国内上海新阳/晶瑞电材/飞凯材料有晶圆键合胶研发但距量产2-3年。",
+          "global_players": [
+            "Brewer Science(美国)",
+            "3M(美国)",
+            "东京应化/TOK(日本)"
+          ],
+          "domestic_players": [
+            "上海新阳 300236",
+            "晶瑞电材 300655",
+            "飞凯材料 300398"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.0,
+          "bottleneck_reason": "临时键合材料全球被Brewer/3M/TOK三家垄断——高技术壁垒(耐高温+易解键合需高分子材料+激光响应双重优化)+客户验证周期>3年。国内新阳/晶瑞处于产品研发阶段，国产替代至少需2-3年验证。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300236",
+              "name": "上海新阳",
+              "mapping_reason": "半导体电镀液+清洗液龙头，临时键合胶开发中，TSV电镀铜工艺配套"
+            },
+            {
+              "code": "300655",
+              "name": "晶瑞电材",
+              "mapping_reason": "半导体光刻胶+电子化学品平台，晶圆键合胶研发中"
+            },
+            {
+              "code": "300398",
+              "name": "飞凯材料",
+              "mapping_reason": "紫外固化材料龙头，临时键合UV光响应材料技术储备"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "HBM (高带宽内存)",
+          "role": "component",
+          "description": "HBM是AI GPU的「贴身内存」——通过TSV堆叠8-12层DRAM芯片，带宽>1TB/s。H200用HBM3e(141GB)、B200用HBM3e 192GB(12层)。全球HBM市场由SK海力士(50%+)+三星(40%)+美光(10%)三分天下。国内HBM完全空白——长鑫存储DRAM(19nm)→HBM至少需5-8年。HBM已是CoWoS封装的核心瓶颈之一(CoWoS产能+ HBM产能双重挤出效应)。",
+          "global_players": [
+            "SK海力士(韩国50%+)",
+            "三星(韩国40%)",
+            "美光(美国10%)"
+          ],
+          "domestic_players": [
+            "长鑫存储(未上市)",
+            "通富微电 002156"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "HBM全球仅SK海力士+三星+美光三家供应，且产能80%被英伟达包圆至2026年。中国HBM为零——长鑫存储HBM2E样品预计2026年(落后2代)。HBM制造需要TSV堆叠+ TC-NCF/MR-MUF先进填充+混合键合→技术要求高于CoWoS封装本身。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002156",
+              "name": "通富微电",
+              "mapping_reason": "国内HBM封装唯一标的，已为国际客户提供HBM2E封装，与长鑫合作HBM国产化"
+            },
+            {
+              "code": "603986",
+              "name": "兆易创新",
+              "mapping_reason": "NOR Flash/DRAM龙头，与长鑫合作DRAM→长期HBM"
+            },
+            {
+              "code": "688525",
+              "name": "佰维存储",
+              "mapping_reason": "存储模组龙头，HBM模组封装/测试拓展"
+            }
+          ]
+        }
+      ]
+    },
+    "space-computing": {
+      "id": "space-computing",
+      "name": "太空算力",
+      "description": "2025年太空算力赛道正式爆发。北京规划700-800公里晨昏轨道千兆瓦级太空数据中心，「三体计算星座」首批12颗AI卫星组网成功。地面数据中心面临能耗+散热双重瓶颈，太空天然优势(-269°C宇宙冷却场+太阳能零碳供电)使其成为算力新边疆。2030年全球市场突破500亿美元。",
+      "anchor": "地面数据中心能耗极限 → 太空天然冷却场 → 算力上星不可逆 → 星座组网2025-2030爆发期",
+      "layers": [
+        {
+          "level": 0,
+          "name": "太空算力应用层",
+          "role": "天基AI推理、遥感实时处理、星上数据压缩",
+          "description": "卫星从数据采集器升级为在轨计算节点，遥感响应速度从小时级缩至秒级。",
+          "global_players": [
+            "Google(Suncatcher)",
+            "SpaceX(Starlink)",
+            "Amazon(Kuiper)"
+          ],
+          "domestic_players": [
+            "中科星图",
+            "航天宏图",
+            "开普云"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "skip_reason": "应用层玩家众多，不构成稀缺性瓶颈",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "688568",
+            "688066",
+            "688228",
+            "300036",
+            "301236"
+          ]
+        },
+        {
+          "level": 1,
+          "name": "星座运营/组网调度",
+          "role": "数千颗算力卫星组网、调度、天地协同",
+          "description": "「三体计算星座」首批12颗已入轨，目标2800颗。",
+          "global_players": [
+            "SpaceX(Starlink)",
+            "OneWeb",
+            "Amazon Kuiper"
+          ],
+          "domestic_players": [
+            "中国星网",
+            "国星宇航",
+            "中科曙光"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "skip_reason": "星座运营竞争较充分",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "601698",
+            "603019"
+          ]
+        },
+        {
+          "level": 2,
+          "name": "卫星制造/总装",
+          "role": "算力卫星的设计、制造、总装集成",
+          "description": "中国卫星独家承担「三体计算星座」组网任务，年产能突破1000颗。",
+          "global_players": [
+            "SpaceX",
+            "Airbus Defence",
+            "Thales Alenia"
+          ],
+          "domestic_players": [
+            "中国卫星",
+            "航天电子"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "skip_reason": "国内卫星+航天电子双龙头，全球3家以上",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "600118",
+            "600879"
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 抗辐射FPGA/专用芯片",
+          "role": "太空环境下保障芯片不被宇宙射线打翻的「护身符」",
+          "description": "太空中充满高能粒子，普通芯片几分钟就被辐射打翻。抗辐射芯片需要特殊工艺(SOI/外延)和冗余设计。复旦微电是国内唯一能批量生产宇航级抗辐射FPGA的企业。全球仅Microchip、Xilinx/AMD、复旦微电三家能量产。认证周期长达3-5年。",
+          "global_players": [
+            "Microchip(美国)",
+            "Xilinx/AMD(美国)",
+            "复旦微电(中国)"
+          ],
+          "domestic_players": [
+            "复旦微电(唯一国产批量供应)",
+            "北京君正(低轨卫星SoC)",
+            "臻镭科技(卫星通信芯片)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅3家能量产宇航级抗辐射FPGA，国内仅复旦微电一家。2800颗星座=数万颗芯片需求。认证周期3-5年，新进入者几乎不可能在窗口期内赶上。",
+          "a_share_candidates": [
+            "688385",
+            "300223",
+            "688270"
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 星间激光通信终端",
+          "role": "卫星间的「光纤」——星间高速数据传输核心设备",
+          "description": "算力星座数千颗卫星需实时交换数据，星间激光通信是唯一可行方案。100Gbps是入门门槛。光迅科技是全球唯二能批量生产100Gbps星间激光通信模块的企业(另一家是日本NEC)，国内唯一通过宇航级认证。",
+          "global_players": [
+            "光迅科技(中国)",
+            "日本NEC"
+          ],
+          "domestic_players": [
+            "光迅科技(国内唯一宇航认证)",
+            "普天科技(微波备份)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅2家供应商。每颗算力卫星需多个激光终端。光迅科技国内独家宇航认证，星座组网无法绕过。NEC产能有限优先供应日本/欧洲。",
+          "a_share_candidates": [
+            "002281",
+            "002544",
+            "002792",
+            "300762"
+          ]
+        },
+        {
+          "level": 5,
+          "name": "星载AI芯片/计算模块",
+          "role": "卫星的「大脑」——在轨AI推理核心硬件",
+          "description": "航天电子星载计算机市占率超90%，单星算力744 TOPS。寒武纪MLU370-X8是国内唯一通过航天级认证的高算力AI芯片。欧比特玉龙810芯片专为小卫星设计，算力12TOPS功耗仅2W。",
+          "global_players": [
+            "NVIDIA(H100太空验证)",
+            "Google(Trillium TPU)"
+          ],
+          "domestic_players": [
+            "航天电子(>90%市占率)",
+            "寒武纪(唯一航天认证AI芯片)",
+            "欧比特(玉龙810)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "skip_reason": "国内3家供应商各占细分赛道，竞争格局合理但非垄断",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "688256",
+            "600879",
+            "300053"
+          ]
+        },
+        {
+          "level": 6,
+          "name": "太空级太阳能电池",
+          "role": "卫星的「发电厂」——在太空中提供持续电力",
+          "description": "太空数据中心功耗远高于传统卫星(数kW级)。砷化镓(GaAs)电池效率28-31%。乾照光电航天级砷化镓电池效率31%(行业第一)，低轨卫星能源系统市占率超60%，已通过SpaceX星链认证。",
+          "global_players": [
+            "Spectrolab(美国Boeing)",
+            "Azur Space(德国)",
+            "乾照光电(中国)"
+          ],
+          "domestic_players": [
+            "乾照光电(>60%市占率)",
+            "航天电子(钙钛矿)",
+            "上海港湾(钙钛矿)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "国内乾照光电占主导(>60%)，但全球有3家供应商。太空算力卫星功耗数倍于传统卫星，高效电池需求将暴增。乾照光电已通过SpaceX认证，产能是关键。",
+          "a_share_candidates": [
+            "300102",
+            "600879",
+            "605598"
+          ]
+        },
+        {
+          "level": 7,
+          "name": "卫星用高可靠元器件(MLCC等)",
+          "role": "卫星电子系统的「细胞」——高可靠被动元器件",
+          "description": "宇航级MLCC比消费级贵100倍以上，单颗卫星需数千颗。鸿远电子卫星用MLCC市占率超50%。认证周期2-3年。",
+          "global_players": [
+            "鸿远电子(中国)",
+            "日本村田",
+            "日本TDK"
+          ],
+          "domestic_players": [
+            "鸿远电子(>50%市占率)",
+            "火炬电子"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "国内鸿远电子市占率>50%，日系厂商仍供高端线。宇航级认证周期2-3年，国产替代确定性强但需时间。",
+          "a_share_candidates": [
+            "603267",
+            "603678"
+          ]
+        },
+        {
+          "level": 8,
+          "name": "发射服务/可重复使用火箭",
+          "role": "将算力卫星批量送入轨道的运载工具",
+          "description": "大规模星座需低成本高频次发射。SpaceX猎鹰9号单次可发射60颗。国内长征系列+商业火箭追赶中。",
+          "global_players": [
+            "SpaceX(Falcon 9)",
+            "ULA",
+            "Arianespace"
+          ],
+          "domestic_players": [
+            "航天科技(长征)",
+            "蓝箭航天",
+            "星河动力"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "skip_reason": "发射服务竞争充分，国内外多家供应商",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "600879",
+            "603698"
+          ]
+        }
+      ]
+    },
+    "nuclear-fusion": {
+      "id": "nuclear-fusion",
+      "name": "可控核聚变",
+      "description": "可控核聚变被誉为人类终极能源。2025年进入加速期：EAST实现1亿度运行1066秒，BEST紧凑型聚变堆启动建设，CFETR进入工程设计阶段，HH-70全球首台全高温超导托卡马克发运。全球资本涌入：ITER投资超220亿欧元，中国CFETR投资超500亿元。磁体系统占托卡马克成本28-50%，是最核心的单一环节。产业链覆盖超导材料、磁体系统、偏滤器、第一壁、真空室、包层模块等高壁垒环节。",
+      "anchor": "能源需求无限增长 → 聚变是唯一终极解 → 高温超导突破使小型化成为可能 → 2030年代示范堆发电",
+      "layers": [
+        {
+          "level": 0,
+          "name": "聚变堆运营/发电",
+          "role": "最终目标——聚变电站发电并网",
+          "description": "CFETR(中国聚变工程实验堆)预计2030年代建成，示范发电。中国核电是A股唯一直接持股聚变运营平台的上市公司(持股中国聚变能源7.1%)。",
+          "global_players": [
+            "ITER(国际合作)",
+            "SPARC(美国CFS)",
+            "STEP(英国)"
+          ],
+          "domestic_players": [
+            "中国核电(唯一A股运营平台)",
+            "CFETR(国家项目)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "skip_reason": "运营端尚早，且非Serenity要找的瓶颈",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "601985"
+          ]
+        },
+        {
+          "level": 1,
+          "name": "托卡马克装置总装",
+          "role": "聚变堆的核心——环形磁约束装置的整体设计与集成",
+          "description": "托卡马克是当前主流技术路线。ITER由35国合作，中国承担9%部件制造。国内三大路线：中科院等离子体所(EAST/CFETR)、上海能量奇点(HH-70高温超导)、核西物院(中国环流三号)。",
+          "global_players": [
+            "ITER Organization",
+            "CFS/SPARC(美国)",
+            "Tokamak Energy(英国)"
+          ],
+          "domestic_players": [
+            "中科院等离子体所",
+            "上海电气(HH-70主机)",
+            "能量奇点(未上市)"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "skip_reason": "多家参与，不构成单一瓶颈",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "601727",
+            "600363"
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 超导磁体系统",
+          "role": "托卡马克的「心脏」——用零电阻超强磁场约束上亿度等离子体",
+          "description": "磁体系统占托卡马克成本28-50%(高温超导方案更高)，是绝对最大单一成本项。ITER使用低温超导(Nb₃Sn+NbTi)，CFETR和BEST开始采用高温超导(YBCO)。磁体需要在-269°C下产生数万高斯的强磁场。加工精度要求微米级，绕制工艺极其复杂。",
+          "global_players": [
+            "西部超导(中国Nb₃Sn龙头)",
+            "ASG Superconductors(意大利)",
+            "Oxford Instruments(英国)"
+          ],
+          "domestic_players": [
+            "西部超导(CFETR/BEST主要供方)",
+            "联创光电(HH-70磁体)",
+            "永鼎股份(YBCO带材)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅2-3家能批量供应聚变级超导线材。西部超导CFETR 1.8亿Nb₃Sn订单、2025年聚变收入6亿(+140%)。ITER用低温超导线材几乎被西部超导和ASG两家垄断。高温超导YBCO带材仅永鼎通过ITER认证。磁体技术壁垒极高——从材料到绕制到测试，全链条需要10年以上积累。",
+          "a_share_candidates": [
+            "688122",
+            "600363",
+            "600105"
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 高温超导带材(YBCO/REBCO)",
+          "role": "下一代紧凑型聚变堆的关键——让磁体更小更强的材料突破",
+          "description": "YBCO(钇钡铜氧)二代高温超导带材是实现紧凑型、低成本托卡马克的核心。传统Nb₃Sn低温超导需要液氦冷却(-269°C)，而YBCO在液氮温度(-196°C)就能工作，大幅降低制冷成本和装置体积。全球仅少数几家企业能量产。永鼎股份是中国唯一通过ITER认证的YBCO带材供应商。",
+          "global_players": [
+            "SuperPower(美国Furukawa)",
+            "SuperOx(俄罗斯/日本)",
+            "永鼎股份(中国)",
+            "上海超导(未上市)"
+          ],
+          "domestic_players": [
+            "永鼎股份(唯一ITER认证)",
+            "上海超导(未上市)",
+            "西部超导(Bi-2223/MgB₂)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅4-5家能量产二代高温超导带材，中国仅永鼎通过ITER认证。SPARC、BEST、HH-70等新一代紧凑型聚变堆全部基于高温超导，需求将爆炸式增长。带材制备工艺极端复杂(多层薄膜沉积+纳米级缺陷控制)，扩产周期2-3年。",
+          "a_share_candidates": [
+            "600105",
+            "688122"
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 偏滤器/第一壁组件",
+          "role": "直接面对上亿度等离子体的「盔甲」——承受极端热流和粒子轰击",
+          "description": "偏滤器直接接触亿度等离子体，承受10-20MW/m²的热流密度，超过航天飞机再入大气层的热负荷。钨被认为是未来第一壁的最佳材料(高熔点、低溅射)。偏滤器由钨面向等离子体材料+铜合金热沉组成。ITER偏滤器由54个模块组成，每个重8吨。",
+          "global_players": [
+            "安泰科技(中国,ITER份额80%+)",
+            "Plansee(奥地利)"
+          ],
+          "domestic_players": [
+            "安泰科技(ITER份额80%+)",
+            "国光电气(偏滤器+第一壁)",
+            "章源钨业(钨铜模块)",
+            "楚江新材(焊接工艺)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅安泰科技和奥地利Plansee两家能生产ITER级偏滤器。安泰科技ITER份额超过80%，9月交付全球最大单体钨铜偏滤器(直径4.2m)。钨铜冶金结合工艺全球仅少数掌握。CFETR/BEST/SPARC每个聚变堆都需要偏滤器，2030年代市场规模将达峰值。",
+          "a_share_candidates": [
+            "000969",
+            "002378",
+            "002171"
+          ]
+        },
+        {
+          "level": 5,
+          "name": "真空室/杜瓦",
+          "role": "等离子体的「密封舱」——超高真空环形不锈钢容器",
+          "description": "真空室是距堆芯最近的大环形密封件，需维持10⁻⁵~10⁻⁷Pa超高真空，同时承受自重和复杂电磁力。ITER真空室由9扇D形不锈钢部件拼成，焊缝超过1000米，公差要求<1mm。制造难度极大。",
+          "global_players": [
+            "合锻智能(中国BEST)",
+            "MAN Energy(德国)",
+            "Walter Tosto(意大利)"
+          ],
+          "domestic_players": [
+            "合锻智能(BEST真空室)",
+            "上海电气(HH-70真空室)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "全球约3家供应商，国内合锻智能独家承担BEST真空室制造。但真空室是非标大型焊接结构件，技术和产能壁垒相对磁体/偏滤器较低。",
+          "a_share_candidates": [
+            "601727"
+          ]
+        },
+        {
+          "level": 6,
+          "name": "包层/氚增殖模块",
+          "role": "聚变堆的「产氚工厂」——用锂与中子反应生成燃料氚",
+          "description": "氘氚聚变需要氚作为燃料，但自然界几乎没有天然氚。必须在包层中用含锂材料与聚变中子反应在线产氚。包层同时承担能量转换(70-80%聚变能量通过中子沉积在包层中)、辐射屏蔽功能。全球仅ITER在开展包层模块测试。",
+          "global_players": [
+            "国光电气(中国ITER包层)",
+            "F4E(欧洲聚变)",
+            "JA-DEMO(日本)"
+          ],
+          "domestic_players": [
+            "国光电气(ITER第一壁/屏蔽模块)",
+            "应流股份"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "包层技术尚在研发阶段(ITER TBM测试中)，商业化供应格局未定型。但国光电气是全球首台ITER包层大型真空高温氦检漏设备制造者，先发优势明显。",
+          "a_share_candidates": [
+            "688776",
+            "603308"
+          ]
+        },
+        {
+          "level": 7,
+          "name": "辅助系统(加热/低温/电源)",
+          "role": "聚变堆运转的支撑系统——射频加热、低温制冷、脉冲电源",
+          "description": "辅助系统包含：离子回旋/电子回旋加热系统(将等离子体加热到上亿度)、低温系统(液氦制冷到-269°C)、脉冲电源系统(为磁体供电)。占托卡马克总成本约20-30%。",
+          "global_players": [
+            "英杰电气(中国)",
+            "Air Liquide(法国)",
+            "Siemens(德国)"
+          ],
+          "domestic_players": [
+            "英杰电气(脉冲电源)",
+            "纽威股份(低温阀门)",
+            "东方电气"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "skip_reason": "辅助系统供应商较多，竞争较充分",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "002270",
+            "603699",
+            "600875"
+          ]
+        }
+      ]
+    },
+    "lithography-machine": {
+      "id": "lithography-machine",
+      "name": "国产光刻机",
+      "description": "EUV光刻机是半导体制造皇冠上的明珠——ASML垄断100% EUV市场(189台/年,单价4亿美元)。美国对华禁运EUV+ArFi光刻机，国产光刻机(上海微电子)当前处于90nm→28nm突破阶段，距先进制程仍有10-15年差距。核心瓶颈逐层拆解：光源系统(CO₂激光+锡等离子体,仅Cymer/Gigaphoton)、光学系统(蔡司反射镜,原子级面型精度<0.1nm)、双工台(磁悬浮工件台,精度<2nm)、浸液系统(ArF浸没式)。中国在光刻机零部件/材料层全面受制，但多个子环节开始国产突破——长春光机所EUV光源、国望光学投影物镜、华卓精科双工台。",
+      "anchor": "美国对华EUV/ArFi光刻机禁运是芯片卡脖子根源 → 国产光刻机是「硬骨头中的硬骨头」→ 五层瓶颈(光源+物镜+工件台+光刻胶+气体/材料)仅有0-3家国内企业能突破",
+      "layers": [
+        {
+          "level": 0,
+          "name": "光刻机整机集成",
+          "role": "integrator",
+          "description": "全球仅ASML(荷兰EUV/ArFi/ArF/KrF/i-line全栈)、Nikon(日本ArF/KrF/i-line)、Canon(日本i-line)、上海微电子(中国90nm→28nm)四家整机企业。ASML 100%垄断EUV，90%+ ArFi。上海微电子(SSX600系列)90nm DUV已量产，28nm浸没式预计2026-2027年交付。整机集成=光源+物镜+工件台+框架+控制软件的超级系统工程。",
+          "global_players": [
+            "ASML(荷兰100%EUV)",
+            "Nikon(日本)",
+            "Canon(日本)",
+            "上海微电子(中国)"
+          ],
+          "domestic_players": [
+            "上海微电子(未上市)"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "全球仅4家整机企业，EUV仅ASML一家。上海微电子28nm浸没式尚未量产(2026-2027目标)。中国90nm以上光刻机100%依赖ASML/Nikon/Canon二手翻新机。整机系统集成壁垒极高——需同时搞定光源+物镜+工件台三大子系统。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "600895",
+              "name": "张江高科",
+              "mapping_reason": "上海微电子主要股东(间接)，张江科学城半导体产业集群"
+            },
+            {
+              "code": "688981",
+              "name": "中芯国际",
+              "mapping_reason": "光刻机最大用户，国产光刻机验证合作方"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 光源系统(EUV等离子体光源)",
+          "role": "source",
+          "description": "EUV光源是全球最复杂的工业光源——CO₂激光轰击锡液滴→产生13.5nm EUV等离子体→多层膜收集镜反射→250W稳定输出。全球仅Cymer(美国ASML子公司)+Gigaphoton(日本)两家能供应EUV光源（Cymer为主力）。国内哈工大/长春光机所2024年突破锡等离子体EUV光源(实验级<1W)，距250W量产光源仍有10年+差距。DUV光源(KrF 248nm/ArF 193nm)由Cymer+Gigaphoton垄断，国内科益虹源(国科精密子公司)ArF光源突破中。",
+          "global_players": [
+            "Cymer/ASML(美国100% EUV)",
+            "Gigaphoton(日本)",
+            "科益虹源(中国)"
+          ],
+          "domestic_players": [
+            "科益虹源(未上市)",
+            "福晶科技 002222"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "EUV光源全球仅Cymer(ASML)+Gigaphoton两家可供应，Cymer 100%供应ASML。250W EUV光源需CO₂激光器(MW级)+锡液滴发生器(5万滴/秒)+多层膜收集镜(40-50层Mo/Si原子级镀膜)+碎屑缓解——每一项单独就是世界级难题。国产差距>10年。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002222",
+              "name": "福晶科技",
+              "mapping_reason": "非线性光学晶体全球龙头(市占>80%)，DUV/EUV光源倍频晶体核心供应商"
+            },
+            {
+              "code": "688195",
+              "name": "腾景科技",
+              "mapping_reason": "精密光学元件，光刻机光源光学模组/衍射光栅"
+            },
+            {
+              "code": "688010",
+              "name": "福光股份",
+              "mapping_reason": "特种光学镜头，光刻机照明系统光学元件"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 光学系统/投影物镜",
+          "role": "optics",
+          "description": "投影物镜是光刻机「眼睛」——将掩模图形4倍缩小投影到晶圆，波前误差<1nm RMS、畸变<1nm。蔡司(德国)独家供应ASML的EUV投影物镜（0.33→0.55 NA），每个物镜含20-30片非球面反射镜，面型精度<0.1nm RMS(原子层级)。国内国望光学(北京)、中科院长春光机所2025年实现28nm DUV投影物镜交付，距EUV级仍差2代(28nm→7nm→EUV)。",
+          "global_players": [
+            "Zeiss/蔡司(德国100% EUV)",
+            "Nikon(日本ArF)",
+            "国望光学(中国28nm)"
+          ],
+          "domestic_players": [
+            "国望光学(未上市)",
+            "奥普光电 002338"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "EUV投影物镜全球仅蔡司一家（ASML独家）。0.1nm面型精度=把德国面积磨到±1mm平整度。蔡司为ASML研发EUV物镜累计投入>50亿欧元+30年光学积淀。国内国望光学28nm DUV物镜刚交付(2025)，EUV物镜尚处理论设计阶段。光学加工(磁流变抛光+离子束修形)+镀膜+装调三大工艺均被蔡司封锁。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002338",
+              "name": "奥普光电",
+              "mapping_reason": "长春光机所上市平台，光刻机物镜系统精密光学元件供应商"
+            },
+            {
+              "code": "300331",
+              "name": "苏大维格",
+              "mapping_reason": "微纳光学制造龙头，光刻机掩模对准/衍射光学元件"
+            },
+            {
+              "code": "300456",
+              "name": "赛微电子",
+              "mapping_reason": "MEMS微镜/微纳加工，光刻机光学MEMS器件"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 精密工件台(双工台)",
+          "role": "stage",
+          "description": "工件台是光刻机「双脚」——承载晶圆以>500mm/s速度运动，定位精度<2nm、同步精度<1nm。ASML独家采用磁悬浮平面电机+双工台(一个曝光、一个测量)实现>300wph产出。国内华卓精科(清华团队)2021年交付首台国产双工台(90nm级)，28nm双工台2025年交付上海微电子。全球仅ASML(自研自用)+华卓精科(中国)有双工台能力。",
+          "global_players": [
+            "ASML(荷兰自研自用)",
+            "华卓精科(中国)",
+            "Nikon(日本)"
+          ],
+          "domestic_players": [
+            "华卓精科(未上市)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "双工台全球仅ASML(自研)+华卓精科可实现。华卓精科28nm双工台2025年交付——国产化从0到1但离ASML 3nm级仍差3代。磁悬浮平面电机+激光干涉仪测量+纳米级控制三者构成极高壁垒，全球供应链极窄。但双工台是国内光刻机环节国产化率最高的子系统。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002338",
+              "name": "奥普光电",
+              "mapping_reason": "长春光机所平台，光刻机精密测量/干涉仪"
+            },
+            {
+              "code": "300124",
+              "name": "汇川技术",
+              "mapping_reason": "伺服/直线电机龙头，光刻机磁悬浮工件台驱动电机"
+            },
+            {
+              "code": "300567",
+              "name": "精测电子",
+              "mapping_reason": "半导体检测龙头，光刻机套刻精度/对准测量"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "精密零部件(真空腔体/气体系统/框架)",
+          "role": "components",
+          "description": "EUV光刻机含10万+个精密零部件，核心包括：真空腔体(超高真空<10⁻⁷Pa)、气体供给系统、精密框架(热膨胀<0.1nm/°C)。ASML 90%零部件来自供应商(全球5000+供应商)，其中真空腔体来自VDL(荷兰)/Pfeiffer(德国)等。国内富创精密/新莱应材/英杰电气向ASML供应非核心零部件，核心零部件(如EUV真空腔体)仍依赖进口。",
+          "global_players": [
+            "VDL(荷兰)",
+            "Pfeiffer(德国)",
+            "富创精密(中国)",
+            "新莱应材(中国)"
+          ],
+          "domestic_players": [
+            "富创精密 688409",
+            "新莱应材 300260",
+            "英杰电气 300820",
+            "江丰电子 300666"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.0,
+          "bottleneck_reason": "",
+          "skip_reason": "精密零部件供应商分散，国内已有ASML认证企业(富创/新莱)，非核心瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688409",
+              "name": "富创精密",
+              "mapping_reason": "国内唯一进入ASML供应链(精密零部件)，金属/非金属零部件精密加工"
+            },
+            {
+              "code": "300260",
+              "name": "新莱应材",
+              "mapping_reason": "超高洁净管阀龙头，光刻机气体/真空系统管路，ASML间接供应商"
+            },
+            {
+              "code": "300666",
+              "name": "江丰电子",
+              "mapping_reason": "溅射靶材龙头，光刻机镜片镀膜靶材"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "🔴 光刻胶(ArF/KrF/EUV)",
+          "role": "material",
+          "description": "光刻胶是光刻工艺的「墨水」——通过光化学反应将掩模图形转移到晶圆。EUV光刻胶(分辨率<13nm、灵敏度>20mJ/cm²)全球仅JSR(日)/TOK(日)/信越化学(日)/DuPont(美)四家供应。ArF浸没式光刻胶日系市占率>95%。国内彤程新材(ArF已通过中芯验证)、南大光电(ArF研发中)、晶瑞电材(i-line/KrF)。差距：EUV光刻胶国内完全空白，ArF仅彤程新材一家刚验证(未量产)。",
+          "global_players": [
+            "JSR(日本)",
+            "TOK/东京应化(日本)",
+            "信越化学(日本)",
+            "DuPont(美国)"
+          ],
+          "domestic_players": [
+            "彤程新材 603650",
+            "南大光电 300346",
+            "晶瑞电材 300655",
+            "上海新阳 300236"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4.0,
+          "bottleneck_reason": "EUV光刻胶全球仅4家(日系3家+DuPont)。ArF浸没式光刻胶日系>95%垄断。国内彤程新材ArF刚通过中芯验证(2025)但距量产12-18个月。EUV光刻胶国内完全空白(且无EUV光刻机验证条件——死循环)。光刻胶是消耗品(每片晶圆$5-10)，随chip产能扩张需求量持续增长。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603650",
+              "name": "彤程新材",
+              "mapping_reason": "国内光刻胶龙头，ArF浸没式光刻胶通过中芯国际验证(2025)，唯一接近量产的国产ArF光刻胶"
+            },
+            {
+              "code": "300346",
+              "name": "南大光电",
+              "mapping_reason": "ArF光刻胶研发中(国家02专项)，前驱体+光刻胶双材料平台"
+            },
+            {
+              "code": "300655",
+              "name": "晶瑞电材",
+              "mapping_reason": "i-line/KrF光刻胶量产，ArF光刻胶中试"
+            },
+            {
+              "code": "300236",
+              "name": "上海新阳",
+              "mapping_reason": "KrF厚膜光刻胶量产，ArF干法光刻胶研发中"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "光刻特种气体/化学试剂",
+          "role": "material",
+          "description": "DUV光刻需ArF(氟化氩)/KrF(氟化氪)激光气体(纯度>99.999%)，EUV需高纯氢气/氦气缓冲气体。国内华特气体/凯美特气/金宏气体在DUV激光气体领域取得突破——华特气体已供应ASML认证的氟氖混合气。高纯化学品(TMAH显影液/稀释剂/去胶液)国产化率较高。",
+          "global_players": [
+            "Linde(德国)",
+            "Air Liquide(法国)",
+            "大阳日酸(日本)",
+            "华特气体(中国)"
+          ],
+          "domestic_players": [
+            "华特气体 688268",
+            "金宏气体 688106",
+            "雅克科技 002409"
+          ],
+          "supplier_count": 6,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.0,
+          "bottleneck_reason": "",
+          "skip_reason": "国产DUV光刻气已取得突破(华特气体ASML认证)，供应商多元，非瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688268",
+              "name": "华特气体",
+              "mapping_reason": "国内唯一通过ASML认证的光刻气供应商(氟氖混合气)，KrF/ArF激光气国产化先锋"
+            },
+            {
+              "code": "002409",
+              "name": "雅克科技",
+              "mapping_reason": "前驱体+SOD旋涂介质+特种气体，光刻材料综合平台"
+            }
+          ]
+        }
+      ]
+    },
+    "solid-state-battery": {
+      "id": "solid-state-battery",
+      "name": "固态电池",
+      "description": "全固态电池被视为下一代电池终极方案——能量密度400-500Wh/kg（液态≤300）、本质安全（不燃）、支持快充。宁德时代/丰田/三星SDI/QS竞速2027-2030量产。2025年工信部60亿专项+标准体系建立，奇瑞/宝马路试。产业链核心瓶颈在材料端（硫化物电解质L2S、锂金属负极）和设备端（干法电极工艺），中国在材料供应和设备制造上有先发优势但关键前驱体仍受制于日韩。市场规模预计2030年全球500GWh。",
+      "anchor": "新能源车安全焦虑+低空经济/eVTOL高能量密度刚需 → 固态电池是唯一路线 → 材料+设备双重瓶颈锁定",
+      "layers": [
+        {
+          "level": 0,
+          "name": "固态电池整线解决方案",
+          "role": "integrator",
+          "description": "提供从电极制备、电解质膜制备到组装、致密化、化成分容的全固态电池交钥匙整线。先导智能2025年交付全球首条车规级固态电池整线(宁德时代)，利元亨为广汽埃安开发全固态整线装备。",
+          "global_players": [
+            "先导智能(中国)",
+            "三菱重工(日本)",
+            "PNT(韩国)"
+          ],
+          "domestic_players": [
+            "先导智能 300450",
+            "利元亨 688499",
+            "赢合科技 300457"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "国内头部企业已交付整线，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300450",
+              "name": "先导智能",
+              "mapping_reason": "全球首条车规级固态电池整线交付宁德时代，叠片+等静压+复合系统全自研"
+            },
+            {
+              "code": "688499",
+              "name": "利元亨",
+              "mapping_reason": "干法涂布+辊压+热复合+叠片全套，广汽埃安联合开发固态整线"
+            },
+            {
+              "code": "300457",
+              "name": "赢合科技",
+              "mapping_reason": "湿法+干法双路线，2024年涂覆设备交付头部客户，2025H1批量交付中试线"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 干法电极工艺设备",
+          "role": "equipment",
+          "description": "干法电极是固态电池核心技术路线——省去NMP溶剂回收(降能耗70%)、避免硫化物电解质遇水分解、实现超薄电解质膜(<30μm)。关键设备包括：高精度辊压机(微米级精度)、干法成膜一体机、转印/复合设备。全球掌握干法电极成膜技术的设备商不超过3家，纳科诺尔+清研电子是国内唯一实现干法电极产线交付的联合体。",
+          "global_players": [
+            "纳科诺尔+清研电子(中国)",
+            "PNT(韩国)",
+            "Nagano Automation(日本)"
+          ],
+          "domestic_players": [
+            "纳科诺尔 832522",
+            "清研电子(未上市)",
+            "曼恩斯特 301325",
+            "璞泰来 603659"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4.0,
+          "bottleneck_reason": "全球能交付完整干法电极产线的设备商仅3家。纳科诺尔国内锂电辊压市占率23.4%+清研电子合资建示范线，四/五/八/十辊设备全系列覆盖。曼恩斯特交付多款干法多辊成膜系统。璞泰来与Blue Solutions联合开发第四代干法方案。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "832522",
+              "name": "纳科诺尔",
+              "mapping_reason": "国内锂电辊压市占率第一23.4%，四辊/五辊/八辊/十辊干法成膜设备全系列，与清研电子合资建示范线"
+            },
+            {
+              "code": "301325",
+              "name": "曼恩斯特",
+              "mapping_reason": "湿法+干法双线，已交付干法多辊成膜系统+陶瓷双螺杆纤维化设备至客户现场"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "干法电极整线方案，锂带压延设备单双面覆锂，与Blue Solutions联合开发"
+            },
+            {
+              "code": "688559",
+              "name": "海目星",
+              "mapping_reason": "硫化物/氧化物双路线激光+涂布+辊压+叠片+致密化全环节"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 硫化物电解质前驱体 — 硫化锂(Li₂S)",
+          "role": "material",
+          "description": "硫化物是全固态电池最主流路线(丰田/宁德/SDI均采纳)，离子电导率可达10⁻²S/cm接近液态电解质。硫化锂(Li₂S)是合成Li₆PS₅Cl/Li₃PS₄等硫化物电解质的关键前驱体，占电解质成本70%+。全球高纯硫化锂(99.9%+)产能极度稀缺——日本三菱化学垄断、中国仅赣锋/天赐/有研粉材有中试线。每GWh固态电池约需500吨Li₂S，远期需求数十万吨级。",
+          "global_players": [
+            "三菱化学(日本)",
+            "赣锋锂业(中国)",
+            "天赐材料(中国)",
+            "Albemarle(美国)"
+          ],
+          "domestic_players": [
+            "赣锋锂业 002460",
+            "天赐材料 002709",
+            "有研粉材 688456",
+            "德方纳米 300769"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "全球高纯Li₂S成熟产能几乎被日本三菱化学垄断(唯一百吨级产线)。中国仅赣锋锂业2024年建成百吨级中试线，天赐材料规划500吨级。高技术壁垒(碳热还原/溶剂法)+长验证周期(≥2年)+巨大的需求缺口(GWh级对应万吨级需求)，典型「卡脖子」瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "国内唯一百吨级高纯Li₂S中试线(2024建成)，全球锂业龙头，纵向延伸至固态电解质/固态电池"
+            },
+            {
+              "code": "002709",
+              "name": "天赐材料",
+              "mapping_reason": "锂盐全球龙头LiPF₆市占率30%+，Li₂S中试中，规划500吨级产线"
+            },
+            {
+              "code": "688456",
+              "name": "有研粉材",
+              "mapping_reason": "电解铜粉龙头转型，电化学法制备高纯Li₂S中试，央企背景"
+            },
+            {
+              "code": "300769",
+              "name": "德方纳米",
+              "mapping_reason": "磷酸铁锂正极龙头，布局液相法制备Li₂S，纳电正极技术可复用"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 锂金属负极 / 超薄锂带",
+          "role": "material",
+          "description": "固态电池走向500Wh/kg必须用锂金属负极。超薄锂带(<20μm)是核心——太厚降低能量密度、太薄加工断裂。锂带压延精度需≤1μm且具备单双面覆锂能力。目前全球仅美国Livent、中国赣锋/天齐/宁德可批量供应电池级超薄锂带，璞泰来具备锂带压延设备能力。",
+          "global_players": [
+            "Livent(美国)",
+            "赣锋锂业(中国)",
+            "天齐锂业(中国)",
+            "Albemarle(美国)"
+          ],
+          "domestic_players": [
+            "赣锋锂业 002460",
+            "天齐锂业 002466",
+            "宁德时代 300750",
+            "璞泰来 603659"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "超薄锂带(<20μm)加工极难——氧化、粘连、精度三重挑战。全球真正能量产电池级超薄锂带的仅Livent+赣锋+天齐3家，璞泰来设备端形成闭环。日本/韩国车企严重依赖中国锂加工产能。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002460",
+              "name": "赣锋锂业",
+              "mapping_reason": "全球唯一同时具备Li₂S前驱体+超薄锂带+固态电解质+固态电池产业链闭环的企业"
+            },
+            {
+              "code": "002466",
+              "name": "天齐锂业",
+              "mapping_reason": "SQM/Greenbushes股东，超薄锂带技术储备，锂资源端最强话语权"
+            },
+            {
+              "code": "603659",
+              "name": "璞泰来",
+              "mapping_reason": "锂带压延设备龙头，单双面覆锂+干法成膜，设备端与材料端呼应"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "正极材料体系(高镍/富锂锰基)",
+          "role": "material",
+          "description": "固态电池正极从NCM811→NCM9系→富锂锰基(LRM)演进以提高电压匹配性(>4.5V)。富锂锰基理论容量>300mAh/g但循环稳定性差。国内当升科技/容百科技/巴莫科技均有布局，技术差距不大。",
+          "global_players": [
+            "当升科技(中国)",
+            "容百科技(中国)",
+            "住友金属(日本)",
+            "EcoPro(韩国)"
+          ],
+          "domestic_players": [
+            "当升科技 300073",
+            "容百科技 688005",
+            "长远锂科 688779",
+            "振华新材 688707"
+          ],
+          "supplier_count": 6,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "国内正极材料产能充裕，富锂锰基差距缩小中，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300073",
+              "name": "当升科技",
+              "mapping_reason": "固态正极双相复合，已向清陶/卫蓝批量送样"
+            },
+            {
+              "code": "688005",
+              "name": "容百科技",
+              "mapping_reason": "高镍/超高镍龙头，固态正极+钠电双路线"
+            },
+            {
+              "code": "300769",
+              "name": "德方纳米",
+              "mapping_reason": "磷酸铁锂龙头，布局液相法固态正极材料"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "等静压/致密化设备",
+          "role": "equipment",
+          "description": "固态电池的核心成型工艺——通过温等静压(WIP)或冷等静压(CIP)消除电解质层孔隙、实现固-固界面紧密接触，直接决定电池内阻和循环寿命。先导智能自研等静压设备、星云股份推出纳米级精度等静压检测系统。全球仅川崎重工、Quintus(瑞典)、先导3-4家企业能提供电池级等静压设备。",
+          "global_players": [
+            "Quintus Technologies(瑞典)",
+            "川崎重工(日本)",
+            "先导智能(中国)"
+          ],
+          "domestic_players": [
+            "先导智能 300450",
+            "星云股份 300648"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.5,
+          "bottleneck_reason": "",
+          "skip_reason": "先导智能已自研等静压设备并应用于全球首条整线，非卡脖子环节",
+          "a_share_candidates": [
+            {
+              "code": "300450",
+              "name": "先导智能",
+              "mapping_reason": "自研等静压+高效复合系统，打通全固态致密化工艺"
+            },
+            {
+              "code": "300648",
+              "name": "星云股份",
+              "mapping_reason": "等静压检测系统(纳米级精度)，高压化成设备龙头"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "关键辅材(铝塑膜/复合集流体/导电剂)",
+          "role": "material",
+          "description": "固态电池封装用软包铝塑膜要求更高阻隔性(水氧透过率<10⁻⁴)。复合集流体(PET铜箔/铝箔)提升安全性和能量密度。导电剂从碳黑→碳纳米管(CNT)→单壁CNT升级。国内企业部分自给，铝塑膜仍由DNP/昭和电工主导。",
+          "global_players": [
+            "DNP(日本铝塑膜)",
+            "昭和电工(日本铝塑膜)",
+            "天奈科技(中国CNT)",
+            "宝明科技(中国复合集流体)"
+          ],
+          "domestic_players": [
+            "天奈科技 688116",
+            "宝明科技 002992",
+            "紫江企业 600210",
+            "道氏技术 300409"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.5,
+          "bottleneck_reason": "",
+          "skip_reason": "辅材环节供应商分散，CNT/复合集流体国产替代进展快",
+          "a_share_candidates": [
+            {
+              "code": "688116",
+              "name": "天奈科技",
+              "mapping_reason": "碳纳米管导电剂龙头(市占率40%+)，单壁CNT全球首批量产"
+            },
+            {
+              "code": "600210",
+              "name": "紫江企业",
+              "mapping_reason": "国产铝塑膜龙头，软包封装渗透率提升受益"
+            },
+            {
+              "code": "002992",
+              "name": "宝明科技",
+              "mapping_reason": "PET复合铜箔龙头，固态电池安全+轻量化双受益"
+            }
+          ]
+        }
+      ]
+    },
+    "commercial-space": {
+      "id": "commercial-space",
+      "name": "商业航天 / 卫星互联网",
+      "description": "低轨卫星互联网(LEO Broadband)是国家战略级数字主权基础设施——SpaceX Starlink已发射7000+颗卫星、用户400万+、2025年营收破百亿美元。中国版星网计划2025年首发试验星、2026-2030年进入稠密部署期(预计>12000颗)，千亿级市场启动。G60星座/鸿鹄星座/银河航天并进。核心瓶颈在卫星批量制造能力(传统宇航一颗一年→日产1-2颗)、星间激光通信终端、火箭可回收/一箭多星组批发射能力。",
+      "anchor": "俄乌战争验证星链军事价值 → 中国版星链列为国家战略 → 卫星批产+火箭可回收是中国必须突破的双重瓶颈",
+      "layers": [
+        {
+          "level": 0,
+          "name": "低轨卫星星座运营",
+          "role": "operator",
+          "description": "负责卫星星座设计、组网、运营和频谱协调。SpaceX Starlink独占Ku/Ka/E频段最优频谱。国内中国星网集团统筹GW星座(12992颗)，上海垣信G60星座、银河航天Mini Spider并行。地面终端/相控阵天线也是运营级瓶颈。",
+          "global_players": [
+            "SpaceX(美国)",
+            "中国星网(中国)",
+            "OneWeb/Eutelsat(欧洲)",
+            "上海垣信(中国)"
+          ],
+          "domestic_players": [
+            "中国卫星 600118",
+            "上海沪工 603131",
+            "航天科技 000901"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "星座运营者分散(全球5+系统)，中国有独立星座能力，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "600118",
+              "name": "中国卫星",
+              "mapping_reason": "航天五院上市平台，小卫星制造龙头，星网/鸿雁星座核心供应商"
+            },
+            {
+              "code": "603131",
+              "name": "上海沪工",
+              "mapping_reason": "民营航天制造+地面站，星网第一批供应商"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 卫星批量制造与AIT(总装集成测试)",
+          "role": "manufacturing",
+          "description": "传统宇航卫星年产1-2颗的手工作坊模式完全不适用于12000+颗的低轨星座——必须实现脉动生产线日产1-2颗。Starlink已在Redmond工厂实现日产6颗。国内中国卫星/银河航天/长光卫星处于从手工→脉动生产线转型早期，合资格批量卫星产线极度稀缺——全国能稳定日产1颗卫星的产线不超过3条。",
+          "global_players": [
+            "SpaceX(美国日产6颗)",
+            "中国卫星(中国)",
+            "银河航天(中国)",
+            "Airbus D&S(欧洲)"
+          ],
+          "domestic_players": [
+            "中国卫星 600118",
+            "长光卫星(未上市)",
+            "银河航天(未上市)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "国内能进行小卫星批产(≥年产200颗)的产线几乎等于零——中国卫星/银河航天仍处于示范线→脉动生产线爬坡阶段。Starlink一条产线日产6颗 vs 国内全行业年产可能不足100颗。批产能力缺口>100倍，是星网部署的第一瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "600118",
+              "name": "中国卫星",
+              "mapping_reason": "航天五院小卫星平台核心上市载体，天津脉动生产线建设中"
+            },
+            {
+              "code": "688270",
+              "name": "臻镭科技",
+              "mapping_reason": "宇航级SIP微系统/射频前端，卫星批产电子化关键供应商"
+            },
+            {
+              "code": "688143",
+              "name": "长盈通",
+              "mapping_reason": "特种光纤陀螺，卫星姿态控制核心器件，星链单颗卫星用3-4个"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 星间激光通信终端",
+          "role": "payload",
+          "description": "低轨卫星间需激光通信实现空间组网(无需地面站接力)——每条激光链路速率≥100Gbps、捕获跟踪瞄准(ATP)精度微弧级。Starlink已装备星间激光(Gen2)，4000+颗星在轨组网。国内仅中科院上海光机所/长春光机所/航天五院掌握核心技术，商用级星间激光终端供给极端稀缺——全国年产能可能不足100台。每颗卫星需2-4台激光终端，12000颗星对应24000-48000台，产能缺口>100倍。",
+          "global_players": [
+            "SpaceX(美国自研)",
+            "TESAT(德国)",
+            "Mynaric(德国)",
+            "中科院上光所(中国)"
+          ],
+          "domestic_players": [
+            "中科院上光所(未上市)",
+            "航天五院(未上市)",
+            "光迅科技 002281"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "星间激光终端技术复杂度极高(ATP精跟踪+100Gbps相干通信+太空热控)。全球成熟供应链仅SpaceX(自用)/TESAT(ESA)/Mynaric(商业市场)三家，国内基本为实验室阶段+手工作坊。产能缺口100倍，且核心器件(窄线宽激光器/精跟踪QPD)全球供应链极窄。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002281",
+              "name": "光迅科技",
+              "mapping_reason": "光模块+激光器龙头，窄线宽激光器可应用于星间激光通信光源"
+            },
+            {
+              "code": "688498",
+              "name": "源杰科技",
+              "mapping_reason": "高端激光器芯片，1550nm窄线宽DFB激光器可用于相干光通信"
+            },
+            {
+              "code": "688205",
+              "name": "德科立",
+              "mapping_reason": "相干光模块+EDFA光放大，长距光通信技术可迁移至星间链路"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "星载相控阵天线/TR组件",
+          "role": "payload",
+          "description": "通信卫星载荷核心——相控阵天线实现多波束覆盖地面(单星可覆盖百万平方公里)。GaN(氮化镓)TR组件是相控阵核心：功率密度、效率、散热三重优化。国内铖昌科技/国博电子/雷电微力为星载TR组件主要供应商，产能处于快速爬坡期。",
+          "global_players": [
+            "铖昌科技(中国)",
+            "国博电子(中国)",
+            "Qorvo(美国)",
+            "Mitsubishi Electric(日本)"
+          ],
+          "domestic_players": [
+            "铖昌科技 001270",
+            "国博电子 688375",
+            "雷电微力 301050"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.0,
+          "bottleneck_reason": "",
+          "skip_reason": "国内TR组件产业链相对成熟(军用雷达技术外溢)，铖昌/国博/雷电微力产能充足，可支撑12000颗卫星需求",
+          "a_share_candidates": [
+            {
+              "code": "001270",
+              "name": "铖昌科技",
+              "mapping_reason": "星载相控阵TR芯片龙头，低轨卫星通信TR芯片市占率>50%"
+            },
+            {
+              "code": "688375",
+              "name": "国博电子",
+              "mapping_reason": "宇航级TR组件顶级供应商，星网核心配套"
+            },
+            {
+              "code": "301050",
+              "name": "雷电微力",
+              "mapping_reason": "毫米波相控阵天线，星载/弹载通信双场景"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 火箭可回收及一箭多星发射能力",
+          "role": "launch",
+          "description": "低轨星座部署成本必须靠火箭可回收+一箭多星(≥60颗/次)拉低。SpaceX猎鹰9一箭60星+火箭一级10+次复用，单星发射成本<50万美元。国内目前仅航天科技/航天科工/蓝箭航天/星河动力有液体火箭能力，可回收技术(VTVL)仍处于试验阶段——星际荣耀双曲线二号2023年完成千米级回收试验但距轨道级回收(猎鹰9级别)仍有5-8年差距。",
+          "global_players": [
+            "SpaceX(美国)",
+            "航天科技/CALT(中国)",
+            "蓝箭航天(中国)",
+            "Rocket Lab(新西兰)"
+          ],
+          "domestic_players": [
+            "航天动力 600343",
+            "航天电子 600879",
+            "斯瑞新材 688102"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4.0,
+          "bottleneck_reason": "全球真正实现轨道级火箭可回收的企业仅SpaceX一家。国内液体火箭+可回收技术离商业化仍有5-8年。一箭多星(60+)能力仅航天科技实践成功。没有低成本发射，12000颗星网的部署节奏将严重拖慢——这是运力瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "600343",
+              "name": "航天动力",
+              "mapping_reason": "液体火箭发动机核心供应商，航天六院上市平台，可回收技术需大推力变推力发动机"
+            },
+            {
+              "code": "600879",
+              "name": "航天电子",
+              "mapping_reason": "火箭电子/惯导/MEMS传感器，一箭多星分离系统"
+            },
+            {
+              "code": "688102",
+              "name": "斯瑞新材",
+              "mapping_reason": "铜合金推力室内壁龙头，液体火箭发动机关键耐热材料"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "卫星用抗辐射电子元器件",
+          "role": "component",
+          "description": "低轨卫星面临范艾伦辐射带+太阳质子事件，电子元器件需抗总剂量辐射(>100krad)和单粒子效应。宇航级FPGA/SRAM/DC-DC/MLCC是卫星电子系统基石。国内航天九院772所/771所主导，部分仍依赖Actel/Microsemi(美)FPGA。但低轨辐射环境较GEO温和(1/10剂量)，可用COTS+防护替代部分宇航级器件。",
+          "global_players": [
+            "Microchip/Microsemi(美国)",
+            "Xilinx(美国)",
+            "航天九院772所(中国)",
+            "北京微电子所(中国)"
+          ],
+          "domestic_players": [
+            "紫光国微 002049",
+            "振华科技 000733",
+            "航天电器 002025"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.5,
+          "bottleneck_reason": "",
+          "skip_reason": "低轨辐射环境允许COTS+防护替代，国内宇航级器件体系完整(航天九院+中国电科)，非硬性瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "002049",
+              "name": "紫光国微",
+              "mapping_reason": "特种FPGA/SRAM龙头，宇航级芯片主要供应商"
+            },
+            {
+              "code": "000733",
+              "name": "振华科技",
+              "mapping_reason": "军用电子元器件平台，宇航级MLCC/电阻/电感齐全"
+            },
+            {
+              "code": "002025",
+              "name": "航天电器",
+              "mapping_reason": "宇航级连接器/继电器龙头，星载互联必需品"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "卫星用高效太阳能电池及电源系统",
+          "role": "component",
+          "description": "卫星电源系统(太阳能电池阵+锂离子蓄电池组)提供在轨长期(>5年)电力。高效砷化镓(GaAs)三结电池转换效率>30%是主力——SpaceX采用自家太阳城电池。国内中电科18所/上海空间电源研究所主导，汉能(已退市)/乾照光电有GaAs外延片能力但均面向地面市场。",
+          "global_players": [
+            "Spectrolab/Boeing(美国)",
+            "Azur Space(德国)",
+            "中电科18所(中国)"
+          ],
+          "domestic_players": [
+            "乾照光电 300102",
+            "海目星 688559"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.0,
+          "bottleneck_reason": "",
+          "skip_reason": "国内空间电源体系完整(中电科18所/811所)，GaAs外延片技术成熟，非瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300102",
+              "name": "乾照光电",
+              "mapping_reason": "GaAs外延片龙头，空间级三结太阳能电池外延片供应商"
+            },
+            {
+              "code": "300750",
+              "name": "宁德时代",
+              "mapping_reason": "锂离子蓄电池龙头，空间级电池组拓展"
+            }
+          ]
+        }
+      ]
+    },
+    "low-altitude-economy": {
+      "id": "low-altitude-economy",
+      "name": "低空经济 / eVTOL",
+      "description": "低空经济是中国2024年写入政府工作报告的新质生产力一号工程——涵盖eVTOL(电动垂直起降飞行器)、无人机物流、城市空中交通(UAM)。亿航智能EH216-S已获全球首张适航证(2023.10)，峰飞航空V2000CG获货运适航证(2024.3)。2030年中国低空经济规模预计超2万亿。核心瓶颈在高能量密度电池、高功率密度电机电驱、航空级适航认证——三者构成「不可能三角」。",
+      "anchor": "交通立体化是大城市唯一出路 → eVTOL/UAM是确定性产业趋势 → 电机/电池/适航认证三重瓶颈必须突破",
+      "layers": [
+        {
+          "level": 0,
+          "name": "eVTOL整机/主机厂",
+          "role": "integrator",
+          "description": "eVTOL整机集成空气动力学+电推进+飞控+航电+适航取证。全球Joby(美)/Archer(美)/Lilium(德)/亿航(中)/峰飞(中)/沃飞(中)竞速适航取证。亿航EH216-S全球首张标准适航证具有先发优势。中国在适航政策层面领先欧美2-3年。",
+          "global_players": [
+            "亿航智能(中国)",
+            "峰飞航空(中国)",
+            "Joby(美国)",
+            "Archer(美国)",
+            "Lilium(德国)"
+          ],
+          "domestic_players": [
+            "亿航智能(美股 EH)",
+            "万丰奥威 002085",
+            "中直股份 600038",
+            "纵横股份 688070"
+          ],
+          "supplier_count": 6,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_reason": "",
+          "skip_reason": "全球10+主机厂竞争，中国领先适航取证，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "002085",
+              "name": "万丰奥威",
+              "mapping_reason": "收购钻石飞机，eVTOL/eCTOL整机转型，通航制造底蕴深厚"
+            },
+            {
+              "code": "600038",
+              "name": "中直股份",
+              "mapping_reason": "直升机龙头，旋翼→倾转旋翼eVTOL技术迁移路径清晰"
+            },
+            {
+              "code": "688070",
+              "name": "纵横股份",
+              "mapping_reason": "工业无人机龙头，eVTOL技术同源(电推进+飞控)"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 高能量密度固态/半固态电池",
+          "role": "energy",
+          "description": "eVTOL对电池要求远超新能源车——能量密度>400Wh/kg(车用250)、放电倍率>5C、循环寿命>2000次。是固态电池的第一波爆发场景。亿航EH216-S目前使用普通锂电池续航仅25分钟/30km，固态电池可提升至60分钟/100km并大幅提升经济性。全球能够供应航空级高能量密度电池的企业极少——宁德时代凝聚态电池(500Wh/kg)2023年发布、国轩高科半固态、清陶能源半固态。",
+          "global_players": [
+            "宁德时代(中国)",
+            "QuantumScape(美国)",
+            "丰田(日本)",
+            "三星SDI(韩国)"
+          ],
+          "domestic_players": [
+            "宁德时代 300750",
+            "国轩高科 002074",
+            "孚能科技 688567"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "eVTOL需要>400Wh/kg电池(当前的1.6倍)——全球能量产的仅宁德时代凝聚态电池(发布未量产)、QuantumScape(试验线)。这个指标是eVTOL经济性从'不能飞'到'能赚钱'的分水岭——航程短(<30km)时Uber模式毫无经济意义。技术+产能双重瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300750",
+              "name": "宁德时代",
+              "mapping_reason": "凝聚态电池500Wh/kg，航空级电池最领先，亿航核心供应商"
+            },
+            {
+              "code": "002074",
+              "name": "国轩高科",
+              "mapping_reason": "半固态电池360Wh/kg，航空电池布局中"
+            },
+            {
+              "code": "688567",
+              "name": "孚能科技",
+              "mapping_reason": "eVTOL电池全球先发，已获海外eVTOL客户定点"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 高功率密度电机与电驱动系统",
+          "role": "propulsion",
+          "description": "eVTOL/无人机推进电机需极高功率密度(>5kW/kg)、超高可靠性(>10000h无故障)、低噪声。相比工业电机(0.3-1kW/kg)和新能源车电机(2-3kW/kg)，航空电机技术难度指数级上升。全球航空电机的「独角兽企业」极稀缺——罗罗(英国)/赛峰(法国)百亿级投入，国内仅卧龙电驱/汇川技术/中航工业有航空电机布局，其中卧龙电驱已量产航空电机(为Volocopter/EHang供货)。",
+          "global_players": [
+            "Rolls-Royce(英国)",
+            "Safran(法国)",
+            "卧龙电驱(中国)",
+            "Parker Aerospace(美国)"
+          ],
+          "domestic_players": [
+            "卧龙电驱 600580",
+            "汇川技术 300124"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "航空级高功率密度电机(>5kW/kg)全球仅罗罗/赛峰/卧龙3家可批量供应。新能源车电机(2-3kW/kg)远不能满足eVTOL需求。卧龙电驱是中国唯一获得海外eVTOL主机厂(Volocopter/EHang)认证的航空电机供应商，壁垒极高。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "600580",
+              "name": "卧龙电驱",
+              "mapping_reason": "全球首家中/欧双认证航空电机供应商，Volocopter+EHang核心供应商，功率密度>5kW/kg"
+            },
+            {
+              "code": "300124",
+              "name": "汇川技术",
+              "mapping_reason": "工业伺服/电驱龙头，航空电机拓展中，技术基础最强"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 航空级碳纤维复合材料",
+          "role": "material",
+          "description": "eVTOL机身重量每降低1kg对应增加续航约0.3km，轻量化是航程的核心约束。航空级碳纤维复合材料(T800/T1000级，拉伸强度>5.5GPa)是eVTOL机身主流材料。全球仅日本东丽(Toray，全球碳纤维市占率40%+)、美国Hexcel、日本帝人/三菱化学可量产T1000级碳纤维。国内光威复材/中复神鹰T800级已量产、T1000级研发中。",
+          "global_players": [
+            "东丽/Toray(日本40%+)",
+            "Hexcel(美国)",
+            "光威复材(中国)",
+            "中复神鹰(中国)"
+          ],
+          "domestic_players": [
+            "光威复材 300699",
+            "中复神鹰 688295",
+            "中简科技 300777"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "T800+级航空碳纤维全球主要产能由日本东丽控制(40%+份额)，且日本政府2024年对华碳纤维扩大出口管制范围。国内光威/中复神鹰/中简科技T800已量产但产能严重不足(T1000尚在研发)。eVTOL大规模部署将大幅增加碳纤维需求，供给端潜在紧张。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300699",
+              "name": "光威复材",
+              "mapping_reason": "航空碳纤维龙头，T800H已批量供应航空级，T1000级研发中"
+            },
+            {
+              "code": "688295",
+              "name": "中复神鹰",
+              "mapping_reason": "千吨级干喷湿纺T800碳纤维，成本优势显著"
+            },
+            {
+              "code": "300777",
+              "name": "中简科技",
+              "mapping_reason": "ZT7/T700碳纤维专精，航空航天领域绑定紧密"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "飞控系统/导航/低空智联网",
+          "role": "avionics",
+          "description": "eVTOL须满足民航级适航标准(DO-178C/DO-254)，飞控系统冗余度需≥3。低空智联网(5G-A/通感一体化)提供300m以下空域感知、通信、导航监管——中国移动/华为2024年发布通感一体方案但尚处试点阶段。航空级飞控由霍尼韦尔/柯林斯/泰雷兹三巨头垄断，国内中航工业618所/航天九院布局中。",
+          "global_players": [
+            "Honeywell(美国)",
+            "Collins Aerospace(美国)",
+            "Thales(法国)",
+            "中航工业618所(中国)"
+          ],
+          "domestic_players": [
+            "中航机载 600372",
+            "航天电子 600879",
+            "四创电子 600990"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.5,
+          "bottleneck_reason": "",
+          "skip_reason": "国内军用飞控技术可迁移(618所/航天九院)，低空智联网由华为/中国移动主导非单点瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "600372",
+              "name": "中航机载",
+              "mapping_reason": "航空机载系统平台，飞控/导航/大气数据系统集成能力最强"
+            },
+            {
+              "code": "600879",
+              "name": "航天电子",
+              "mapping_reason": "惯导/MEMS传感器，低空eVTOL导航核心器件供应"
+            },
+            {
+              "code": "600990",
+              "name": "四创电子",
+              "mapping_reason": "低空监视雷达+空管系统，低空智联网核心基础设施"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "eVTOL适航取证服务",
+          "role": "certification",
+          "description": "eVTOL从首飞到商业运营至少需3-5年适航取证周期——TC(型号合格证)→PC(生产许可证)→AC(单机适航证)。亿航EH216-S从申请到获证耗时3.5年、投入超10亿元。全球仅亿航一家获标准适航证，中国民航局(CAAC)在eVTOL适航标准制定上领先FAA/EASA。适航取证是行业「过滤器」——能通过的企业寥寥无几。",
+          "global_players": [
+            "CAAC(中国取证)",
+            "FAA(美国取证)",
+            "EASA(欧洲取证)"
+          ],
+          "domestic_players": [
+            "广电计量 002967",
+            "西测测试 301306"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.0,
+          "bottleneck_reason": "",
+          "skip_reason": "适航取证是时间+资金门槛而非供给瓶颈，3家局方均可进行，CAAC效率最高",
+          "a_share_candidates": [
+            {
+              "code": "002967",
+              "name": "广电计量",
+              "mapping_reason": "航空计量/检测龙头，eVTOL电磁兼容/环境可靠性测试"
+            },
+            {
+              "code": "301306",
+              "name": "西测测试",
+              "mapping_reason": "军工/航空环境与可靠性测试，eVTOL适航验证产业链"
+            }
+          ]
+        }
+      ]
+    },
+    "quantum-computing": {
+      "id": "quantum-computing",
+      "name": "量子计算",
+      "description": "量子计算是颠覆性算力革命——破解RSA加密、加速药物研发/材料模拟、优化物流金融。超导路线当前最成熟(Google/IBM/中国科大)，拓扑路线(微软)2025年重大突破。全球量子计算市场2035年预计达850亿美元。核心瓶颈在硬件层——稀释制冷机(10mK极低温)、超导量子芯片(约瑟夫森结良率)、量子测控系统(任意波形发生器)——三者国产化率均低于20%，且受瓦森纳协定限制出口。",
+      "anchor": "AI算力瓶颈→量子计算成为下一代算力制高点→超导硬件链条被美日垄断→国产替代刚需且紧迫",
+      "layers": [
+        {
+          "level": 0,
+          "name": "量子计算整机系统",
+          "role": "integrator",
+          "description": "集成量子芯片+低温系统+测控系统+软件栈。超导路线：Google Willow(105比特)、IBM(1000+比特)、中国科大祖冲之号(176比特)。2025年微软拓扑量子比特Majorana 1芯片重大突破。国内本源量子、国盾量子、玻色量子多路线并行。",
+          "global_players": [
+            "Google(美国)",
+            "IBM(美国)",
+            "微软(美国)",
+            "本源量子(中国)",
+            "国盾量子(中国)"
+          ],
+          "domestic_players": [
+            "本源量子(未上市)",
+            "国盾量子 688027",
+            "玻色量子(未上市)"
+          ],
+          "supplier_count": 6,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "中/美/欧均有整机能力，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688027",
+              "name": "国盾量子",
+              "mapping_reason": "量子通信+量子计算双龙头，参与祖冲之号，量子随机数发生器商用化"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 稀释制冷机 (<10mK)",
+          "role": "equipment",
+          "description": "超导量子芯片运行需极低温(<10mK，比太空冷100倍)。稀释制冷机是全球最稀缺的量子硬件——Oxford Instruments(英国)/Bluefors(芬兰)两大巨头垄断全球90%+市场，单台售价300-500万元，交期12-18个月，且受瓦森纳协定限制出口中国。国内中科院理化所(中船鹏力)、本源量子、国盾量子处于样机/小批量阶段。每扩展100+比特需多台稀释制冷机，是量子计算扩规模的第一物理瓶颈。",
+          "global_players": [
+            "Bluefors(芬兰)",
+            "Oxford Instruments(英国)",
+            "中船鹏力(中国)",
+            "本源量子(中国)"
+          ],
+          "domestic_players": [
+            "中船鹏力(未上市)",
+            "国盾量子 688027"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "全球仅Bluefors+Oxford两家能稳定供应10mK级稀释制冷机(合计90%+市场份额)，且受瓦森纳协定对华禁运。国内中船鹏力2023年突破10mK无液氦稀释制冷机但尚无大规模量产——供给几乎为0。单台300-500万元+12-18个月交期+每扩展100比特需2-4台，是最直接的物理瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688027",
+              "name": "国盾量子",
+              "mapping_reason": "稀释制冷机在研，量子计算基础设施最全的A股标的"
+            },
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头，低温光学/量子光源上游"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 超导量子芯片制造",
+          "role": "fabrication",
+          "description": "超导量子芯片核心是约瑟夫森结(Al/Al₂O₃/Al三层结构)——结的均匀性和相干时间(T1/T2)直接决定量子比特质量和纠错开销。全球仅Google/Santa Barbara、IBM/Yorktown、MIT/林肯实验室、中国科大/本源量子具备稳定制备能力。制造需专用超导芯片产线(EBL电子束光刻+双角度蒸镀+氧化控制)，与标准CMOS产线不兼容。国产替代几乎空白——本源量子/量旋科技处于研发阶段，尚无商用级超导量子芯片代工厂。",
+          "global_players": [
+            "Google(美国)",
+            "IBM(美国)",
+            "中国科大(中国)",
+            "本源量子(中国)"
+          ],
+          "domestic_players": [
+            "本源量子(未上市)",
+            "量旋科技(未上市)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "约瑟夫森结良率对量子比特保真度影响极大。全球仅4-5家实验室能制备可接受良率的超导量子芯片，且均为自用封闭生态。中国除了中国科大/本源量子外几乎无替代来源。专用超导芯片产线(EBL+双角度蒸镀)与CMOS不兼容，无法借力成熟半导体供应链，是技术壁垒最高的瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688396",
+              "name": "华润微",
+              "mapping_reason": "国内少数具备超导薄膜工艺的代工厂，MEMS/NEMS微纳加工经验可迁移"
+            },
+            {
+              "code": "688012",
+              "name": "中微公司",
+              "mapping_reason": "刻蚀设备龙头，EBL配套刻蚀对约瑟夫森结制备有潜在助力"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 量子测控系统(任意波形发生器AWG)",
+          "role": "equipment",
+          "description": "控制超导量子比特需高频任意波形发生器(AWG)、微波源、数字化仪等精密仪器——每个比特对应2-4路独立AWG通道(操控+读出)，128比特需512通道。全球仅Keysight(美国)/Tektronix(美国)/Zurich Instruments(瑞士)三家能供应量子级高频AWG(>1GHz带宽+>2GS/s采样)，同样受瓦森纳协定对华禁运。国内电子测量仪器厂商普源精电/鼎阳科技向射频/微波进军，但量子级AWG精度尚缺2个数量级。",
+          "global_players": [
+            "Keysight/是德科技(美国)",
+            "Tektronix(美国)",
+            "Zurich Instruments(瑞士)"
+          ],
+          "domestic_players": [
+            "普源精电 688337",
+            "鼎阳科技 688112",
+            "坤恒顺维 688283"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4.0,
+          "bottleneck_reason": "全球量子级AWG被Keysight/Tektronix/Zurich三家垄断。单通道价格数万美元+512通道对应数百万美元测控成本+对华禁运限制。国内普源精电高端AWG(5GHz带宽)2024年发布但量子级相位噪声/通道同步距国际差1-2个数量级，短期难以替代。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688337",
+              "name": "普源精电",
+              "mapping_reason": "国内电子测量仪器龙头，5GHz带宽AWG 2024年发布，最接近量子测控的国内厂商"
+            },
+            {
+              "code": "688112",
+              "name": "鼎阳科技",
+              "mapping_reason": "示波器/信号发生器国产替代先锋，射频微波产品线扩展中"
+            },
+            {
+              "code": "688283",
+              "name": "坤恒顺维",
+              "mapping_reason": "射频仿真/信道模拟器龙头，微波测量技术可迁移至量子测控"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "低温微波器件/量子放大器",
+          "role": "component",
+          "description": "量子比特读出信号极弱(单光子级)，需低噪声放大器(LNA, <2K噪声温度)和约瑟夫森参量放大器(JPA)在mK温区工作。全球仅Low Noise Factory(瑞典)/Caltech/JPL可提供量子级低温LNA。国内紫光国微/电科芯片有射频前端能力但低温领域几乎为零。",
+          "global_players": [
+            "Low Noise Factory(瑞典)",
+            "Caltech/JPL(美国)",
+            "NIST(美国)"
+          ],
+          "domestic_players": [
+            "紫光国微 002049",
+            "电科芯片 600877"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.0,
+          "bottleneck_reason": "",
+          "skip_reason": "低温微波器件属于非常狭窄的利基市场，对华限制较松(非瓦森纳管制核心)，且量子计算规模不够大时LNA需求量极小",
+          "a_share_candidates": [
+            {
+              "code": "002049",
+              "name": "紫光国微",
+              "mapping_reason": "特种集成电路龙头，射频前端+ADC/DAC能力可延伸至量子读出"
+            },
+            {
+              "code": "600877",
+              "name": "电科芯片",
+              "mapping_reason": "中国电科旗下射频芯片平台，有低温电子学研发潜力"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "超导量子芯片材料(约瑟夫森结/Al₂O₃/Si衬底)",
+          "role": "material",
+          "description": "超导量子芯片需超高纯铝(99.9999%+)、蓝宝石/高阻硅衬底、超导线材。约瑟夫森结的Al₂O₃隧穿层需原子级控制(1-2nm)。高纯度铝目前主要来自日本(UACJ/住友化学)，国产替代新疆众和/常铝在努力但纯度差1-2个9。",
+          "global_players": [
+            "UACJ(日本超高纯铝)",
+            "住友化学(日本Al₂O₃)",
+            "CoorsTek(美国衬底)"
+          ],
+          "domestic_players": [
+            "新疆众和 600888",
+            "天通股份 600330"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.5,
+          "bottleneck_reason": "",
+          "skip_reason": "材料需求量极小(单颗芯片用铝<1g)，实验室级即可满足，非产业瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "600888",
+              "name": "新疆众和",
+              "mapping_reason": "国内最大高纯铝供应商(99.999%)，6N高纯铝研发中"
+            },
+            {
+              "code": "600330",
+              "name": "天通股份",
+              "mapping_reason": "蓝宝石衬底龙头，量子芯片用高阻硅衬底产能"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "量子纠错与操控软件",
+          "role": "software",
+          "description": "物理量子比特→逻辑量子比特需纠错编码(Surface Code等)，千比特级纠错是实用量子计算的最后一道关。Google Willow 2024年实现below-threshold纠错。底层操控软件(量子汇编/校准)由本源QPanda/IBM Qiskit主导。误差抑制和错误缓解是当前重点。",
+          "global_players": [
+            "IBM Qiskit(美国)",
+            "Google Cirq(美国)",
+            "本源QPanda(中国)"
+          ],
+          "domestic_players": [
+            "本源量子(未上市)",
+            "国盾量子 688027"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.0,
+          "bottleneck_reason": "",
+          "skip_reason": "软件栈开源/半开源生态成熟，中美差距相对较小，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688027",
+              "name": "国盾量子",
+              "mapping_reason": "量子操控+随机数软件栈，量子加密商业应用领跑"
+            }
+          ]
+        }
+      ]
+    },
+    "physical-ai": {
+      "id": "physical-ai",
+      "name": "物理AI (Physical AI)",
+      "description": "物理AI是AI从「数字世界」跃入「物理世界」的范式革命——让机器人/自动驾驶/智能制造真正理解和预测物理规律(重力/摩擦/碰撞/流体)。NVIDIA CEO黄仁勋在GTC 2025将物理AI定义为「AI的下一波浪潮」，推出Cosmos/Isaac/Omniverse三大物理AI平台。核心引擎是可微分物理仿真+世界模型+Sim-to-Real迁移+机器人具身智能。物理AI的瓶颈在于——物理仿真引擎需要同时满足精度(对应实物误差<1%)和实时性(<10ms)，需要专门硬件(高性能GPU+专用传感器)。全球仅NVIDIA/Google DeepMind/特斯拉构建了完整栈。",
+      "anchor": "AI从数字走向物理是不可逆的产业方向 → NVIDIA Omniverse/Cosmos树立物理AI标准 → 高端仿真硬件+灵巧手+磁编码器被美国/欧洲垄断 → 国产物理AI基础设施必须突破",
+      "layers": [
+        {
+          "level": 0,
+          "name": "物理AI平台/世界模型",
+          "role": "software",
+          "description": "物理AI的核心软件栈——包括可微分物理仿真引擎(NVIDIA Isaac Sim、MuJoCo、Bullet)、世界模型(World Model，预测未来的视觉-物理状态)、Sim-to-Real迁移框架。NVIDIA Omniverse+Isaac是目前工业标准，涵盖机器人/自动驾驶/数字孪生三大场景。国内华为(昇思MindSpore Robotics)/百度(飞桨)有类似布局但差距2-3年。",
+          "global_players": [
+            "NVIDIA Omniverse(美国)",
+            "Google DeepMind(美国)",
+            "特斯拉(美国)",
+            "华为(中国)"
+          ],
+          "domestic_players": [
+            "华为(未上市)",
+            "中科创达 300496",
+            "海康机器人(未上市)"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_reason": "",
+          "skip_reason": "开源引擎(MuJoCo/Bullet/Isaac Gym)可用，华为/百度跟进，非单一瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300496",
+              "name": "中科创达",
+              "mapping_reason": "机器人中间件+数字孪生平台，NVIDIA Omniverse中国生态伙伴"
+            },
+            {
+              "code": "688023",
+              "name": "奥比中光",
+              "mapping_reason": "3D视觉传感器+深度相机，物理AI感知硬件层关键输入"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 机器人灵巧手/末端执行器",
+          "role": "hardware",
+          "description": "物理AI在机器人领域的终极执行器——灵巧手需模拟人类手指21个自由度、力控精度<0.1N、触觉分辨率<1mm。全球仅Shadow Robot(英国)/特斯拉Optimus Gen3(美国)/因时机器人(中国)/宇树科技(中国)布局。国内因时机器人/钧舵机器人处于量产阶段但仍以工业夹爪为主，真灵巧手(仿人5指)量产能力极为有限。每只Optimus用2只灵巧手，百万台人形机器人对应200万只灵巧手的巨大缺口。",
+          "global_players": [
+            "Shadow Robot(英国)",
+            "特斯拉(美国)",
+            "因时机器人(中国)",
+            "宇树科技(中国)"
+          ],
+          "domestic_players": [
+            "因时机器人(未上市)",
+            "拓斯达 300607",
+            "鸣志电器 603728"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "仿人灵巧手(5指+力控+触觉)全球能工程化量产的仅Shadow/特斯拉/因时3家。微型空心杯电机+微型丝杠+MEMS触觉传感器三者均面临产能瓶颈。人形机器人放量后灵巧手将是产业链最大缺口之一。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300607",
+              "name": "拓斯达",
+              "mapping_reason": "工业机器人+末端执行器龙头，灵巧手关节模组拓展"
+            },
+            {
+              "code": "603728",
+              "name": "鸣志电器",
+              "mapping_reason": "微型空心杯电机龙头，灵巧手驱动电机核心供应商"
+            },
+            {
+              "code": "300580",
+              "name": "贝斯特",
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零部件"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 3D视觉/触觉/力觉传感器",
+          "role": "sensing",
+          "description": "物理AI需要「多模态感知」——3D视觉(结构光/ToF/LiDAR)提供三维空间理解、触觉(GelSight/磁触觉)提供材质/压力感知、六维力/力矩传感器提供交互力反馈。全球六维力传感器由ATI(美)/OnRobot(丹麦)垄断高端市场(单价>1万美元)，国内宇立仪器/坤维科技/蓝点触控突破中。3D视觉由英特尔RealSense/奥比中光/图漾科技竞争。",
+          "global_players": [
+            "ATI Industrial(美国)",
+            "OnRobot(丹麦)",
+            "Intel RealSense(美国)",
+            "奥比中光(中国)"
+          ],
+          "domestic_players": [
+            "奥比中光 688023",
+            "柯力传感 603662",
+            "八方股份 603489",
+            "睿创微纳 688002"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.0,
+          "bottleneck_reason": "高端六维力传感器(精度<0.1%FS、耦合误差<1%)被ATI/OnRobot双寡头垄断。国内宇立/坤维突破但产品一致性/寿命距国际差距3-5年。MEMS触觉传感器(GelSight类)全球仅MIT/Stanford/日本XELA掌握核心工艺，国内几乎空白。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688023",
+              "name": "奥比中光",
+              "mapping_reason": "3D视觉传感器龙头，结构光/ToF双路线，机器人+物理AI感知核心"
+            },
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "称重/力传感器龙头，六维力/力矩传感器研发中，应变片技术基础扎实"
+            },
+            {
+              "code": "688002",
+              "name": "睿创微纳",
+              "mapping_reason": "非制冷红外/MEMS传感器龙头，热成像+多光谱感知"
+            },
+            {
+              "code": "002273",
+              "name": "水晶光电",
+              "mapping_reason": "光学元件龙头，3D结构光DOE/扩散片，深度相机核心光学器件"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 物理AI训练/推理算力(GPU/H100/B200)",
+          "role": "compute",
+          "description": "物理AI仿真需大规模并行计算——训练一个物理世界基础模型(World Model)需要数千张H100/B200 GPU连续训练数月。NVIDIA Blackwell B200和Rubin平台是核心硬件。但GPU供应商高度集中：NVIDIA一家占AI GPU 90%+、对华禁运H100/B200，国内华为昇腾910B/寒武纪思元590性能差距2-3倍。",
+          "global_players": [
+            "NVIDIA(美国90%+)",
+            "华为昇腾(中国)",
+            "AMD(美国)",
+            "寒武纪(中国)"
+          ],
+          "domestic_players": [
+            "寒武纪 688256",
+            "海光信息 688041",
+            "景嘉微 300474"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "物理AI大模型训练需要H100/B200级GPU(对华禁运)。国内昇腾910B性能约为H100的30-40%，且产能严重不足。GPU瓶颈是整个AI领域(包括物理AI)的全局性供给瓶颈，短期(2024-2027)无解。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "国产AI训练芯片龙头，思元590对物理AI仿真有一定适配潜力"
+            },
+            {
+              "code": "688041",
+              "name": "海光信息",
+              "mapping_reason": "深算系列DCU，类CUDA生态，物理仿真GPU替代路径"
+            },
+            {
+              "code": "300474",
+              "name": "景嘉微",
+              "mapping_reason": "国产GPU龙头，图形渲染+通用计算双路线"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "机器人执行器总成(无框力矩电机+编码器+减速器)",
+          "role": "actuation",
+          "description": "物理AI的「肌肉」——旋转关节(无框力矩电机+谐波减速器+双编码器)、直线关节(行星滚柱丝杠+力传感器)。全球无框力矩电机由Kollmorgen(美)/Parker(美)/Aerotech(美)寡头垄断。国内步科股份/伟创电气突破中。编码器精度(>24位分辨率)是定位精度的基础——海德汉(德)/雷尼绍(英)垄断高端编码器市场，国内仅汇川/禾川/奥普特布局。",
+          "global_players": [
+            "Kollmorgen(美国)",
+            "海德汉/Heidenhain(德国)",
+            "雷尼绍/Renishaw(英国)",
+            "绿的谐波(中国)"
+          ],
+          "domestic_players": [
+            "绿的谐波 688017",
+            "步科股份 688160",
+            "伟创电气 688698",
+            "奥普特 688686"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.0,
+          "bottleneck_reason": "",
+          "skip_reason": "电机+减速器国内已有绿的谐波/步科等批量供应，编码器虽高端被垄断但中端国产已可替代，非核心瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688017",
+              "name": "绿的谐波",
+              "mapping_reason": "谐波减速器国内龙头(市占率>60%)，人形机器人旋转关节核心"
+            },
+            {
+              "code": "688160",
+              "name": "步科股份",
+              "mapping_reason": "无框力矩电机龙头，机器人低压伺服先驱，人形机器人电机核心供应商"
+            },
+            {
+              "code": "688686",
+              "name": "奥普特",
+              "mapping_reason": "机器视觉龙头，3D视觉+深度学习缺陷检测，物理AI质检场景核心"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "🔵 物理AI数据合成/Sim-to-Real",
+          "role": "data",
+          "description": "物理AI面临「数据饥饿」——真实世界物理交互数据采集成本极高、安全风险大、耗时漫长。Sim-to-Real数据合成技术在仿真环境中生成百万级物理交互数据(RGB/深度/触觉/力)并迁移到现实。NVIDIA Cosmos是首个物理AI世界模型数据合成平台。国内智源研究院/上海AI实验室有类似布局，但完整合成→训练→验证闭环尚未形成。",
+          "global_players": [
+            "NVIDIA Cosmos(美国)",
+            "Google Genie(美国)",
+            "智源研究院(中国)"
+          ],
+          "domestic_players": [
+            "无直接上市标的"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.0,
+          "bottleneck_reason": "",
+          "skip_reason": "数据合成为纯软件层，开源模型(Genie/UniSim)可用，非供给瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300496",
+              "name": "中科创达",
+              "mapping_reason": "数字孪生+机器人仿真平台，Sim-to-Real数据流闭环"
+            },
+            {
+              "code": "688031",
+              "name": "星环科技",
+              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键"
+            }
+          ]
+        }
+      ]
+    },
+    "innovative-drugs": {
+      "id": "innovative-drugs",
+      "name": "创新药",
+      "description": "中国创新药进入黄金时代：2025前三季度出海交易103项，披露金额超920亿美元(+77% YoY)。百济神州BTK全球销售超百亿，康方生物PD-1/VEGF双抗114亿美元出海。首版创新药商保目录落地，商保支付比例有望从8%升至44%。ADC(全球在研300+)、双抗、GLP-1(2030年>1000亿美元)、CGT(细胞基因治疗)、小核酸、多肽等多技术路线并行。产业链瓶颈在CXO产能(尤其是ADC/CGT/oligo CDMO)、上游关键材料(培养基/色谱填料)、高端设备(一次性生物反应器)。本链经多角度搜索和交叉验证，覆盖从药物发现到商业化的全流程瓶颈。",
+      "anchor": "全球药企专利悬崖 → 创新药需求爆发 → MNC药企外包中国CXO → 中国药企全球BD出海 → 医保支付改革破局 → 上游材料和设备国产替代加速",
+      "layers": [
+        {
+          "level": 0,
+          "name": "创新药研发/Biotech",
+          "role": "最终产品——从靶点发现到新药上市",
+          "description": "百济神州BTK抑制剂泽布替尼全球销售超百亿元(首个国产十亿美元分子)。康方生物PD-1/VEGF双抗全球授权114亿美元。科伦博泰ADC出海授权默沙东。2025年国产创新药出海交易超920亿美元，头部企业集中盈亏平衡。",
+          "global_players": [
+            "Pfizer",
+            "Roche",
+            "Novartis",
+            "Merck",
+            "AstraZeneca",
+            "BMS"
+          ],
+          "domestic_players": [
+            "百济神州(首款十亿美元)",
+            "康方生物(双抗)",
+            "科伦博泰(ADC出海)",
+            "荣昌生物",
+            "信达生物",
+            "传奇生物(CAR-T)"
+          ],
+          "supplier_count": 15,
+          "is_bottleneck": false,
+          "skip_reason": "创新药管线全球/国内均>100家，不构成单一瓶颈。且多数Biotech未在A股上市。",
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "a_share_candidates": [
+            "688235",
+            "688180"
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 CXO(CRO/CDMO)一体化服务",
+          "role": "创新药的「卖铲人」——研发外包+定制生产",
+          "description": "CXO是创新药产业链中确定性最高的环节：不论哪个药企的新药成功，都需要CXO服务。全球CXO市场超1000亿美元。药明系(药明康德+药明生物+药明合联)是全球前十大CXO中唯一的中国企业。美国《生物安全法案》试图压制药明系但未通过，反而凸显其不可替代性。",
+          "global_players": [
+            "IQVIA(美国，全球最大CRO)",
+            "Lonza(瑞士，CDMO龙头)",
+            "药明系(中国，全球TOP10唯一中企)",
+            "Catalent(美国)"
+          ],
+          "domestic_players": [
+            "药明康德(一体化CXO龙头)",
+            "药明生物(大分子CDMO全球TOP3)",
+            "康龙化成(CRO+CDMO)",
+            "凯莱英(小分子CDMO)",
+            "泰格医药(临床CRO龙头)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球前十大CXO中仅药明系一家中国企业，且美国《生物安全法案》反证其不可替代性。CXO产能建设周期3-5年，全球新产能严重不足。中国CXO具有成本优势(人力成本为欧美1/3)和工程师红利，是全球药企外包首选。任何创新药爆发，CXO是最确定受益方。",
+          "a_share_candidates": [
+            "603259",
+            "300759",
+            "002821",
+            "300347"
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 ADC(抗体偶联药物)CDMO",
+          "role": "ADC的「定制工厂」——全球最紧缺的CDMO细分赛道",
+          "description": "ADC=抗体(大分子)+连接子+毒素(小分子)+偶联技术，生产复杂度远超传统单抗。全球在研ADC超300个，2023-2025年ADC出海交易占创新药出海总额60%+。药明合联是全球ADC CDMO绝对龙头(市占率>30%)，订单排至2027年。全球仅药明合联和Lonza两家能提供ADC一站式(抗体+毒素+偶联)CDMO。",
+          "global_players": [
+            "药明合联(中国，全球ADC CDMO龙头)",
+            "Lonza(瑞士)"
+          ],
+          "domestic_players": [
+            "药明合联(全球ADC CDMO龙头)",
+            "东曜药业(ADC CDMO)",
+            "皓元医药(ADC毒素/连接子供应商)",
+            "博腾股份(ADC CDMO布局)"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅药明合联和Lonza两家能提供ADC一站式CDMO。药明合联全球市占率>30%，订单排至2027年。ADC赛道爆发(全球在研300+个)但CDMO产能极度紧缺。ADC偶联技术know-how壁垒极高，新进入者需要3-5年积累。",
+          "a_share_candidates": [
+            "688131",
+            "688026",
+            "300363"
+          ]
+        },
+        {
+          "level": 3,
+          "name": "GLP-1/多肽 CDMO",
+          "role": "减肥药热潮的供应链——全球最紧缺的产能之一",
+          "description": "司美格鲁肽(诺和诺德)2024年销售超200亿美元，替尔泊肽(礼来)超100亿美元。2030年GLP-1全球市场预计超1000亿美元。多肽合成需固相合成+色谱纯化，产能建设周期2-3年。诺和诺德和礼来已宣布数百亿美元扩产计划。中国多肽CDMO受益于全球产能转移。",
+          "global_players": [
+            "Bachem(瑞士，全球多肽CDMO龙头)",
+            "PolyPeptide(瑞典)",
+            "CordenPharma(瑞士)"
+          ],
+          "domestic_players": [
+            "诺泰生物(多肽CDMO——司美格鲁肽中间体)",
+            "圣诺生物(多肽CDMO)",
+            "翰宇药业(多肽API+制剂)",
+            "奥锐特(多肽/寡核苷酸CDMO)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球多肽CDMO产能极度紧缺，Bachem产能已预订至2027年。中国诺泰生物/圣诺生物承接全球GLP-1产能转移。但多肽原料药(API)端竞争格局较分散(>10家)，仅CDMO端有壁垒。",
+          "a_share_candidates": [
+            "688076",
+            "300199",
+            "688302"
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 CGT(细胞基因治疗)CDMO",
+          "role": "下一代制药的「芯片厂」——病毒载体和细胞制备",
+          "description": "CGT=细胞治疗(CAR-T等)+基因治疗。全球已上市10+款CAR-T产品。CGT CDMO的核心是病毒载体(AAV/慢病毒/逆转录病毒)的GMP生产——全球产能极度紧缺，等待时间12-18个月。病毒载体生产成本占CGT药物总成本40-60%，且技术壁垒极高(需要Biosafety Level 2+)。",
+          "global_players": [
+            "Catalent(美国)",
+            "Lonza(瑞士)",
+            "Thermo Fisher(美国)",
+            "Oxford Biomedica(英国)"
+          ],
+          "domestic_players": [
+            "和元生物(AAV/慢病毒CDMO)",
+            "金斯瑞生物/传奇生物(CAR-T)",
+            "博腾生物(CGT CDMO)",
+            "康希诺(病毒载体平台)"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "全球CGT CDMO产能严重短缺(等待12-18个月)。国内和元生物是唯一专注CGT CDMO的A股公司。但CGT商业化速度慢于ADC和GLP-1，需求爆发时间不确定。",
+          "a_share_candidates": [
+            "688238",
+            "688185",
+            "688363"
+          ]
+        },
+        {
+          "level": 5,
+          "name": "🔴 上游关键材料(培养基/色谱填料)",
+          "role": "生物制药的「柴米油盐」——每天生产都在消耗的必需品",
+          "description": "细胞培养基(让细胞在反应器中生长)和色谱填料(纯化抗体/蛋白)是生物制药的两大核心耗材。全球培养基市场被Thermo Fisher(Gibco品牌)、Merck、Danaher(Cytiva/HyClone)三家垄断80%+。色谱填料被Cytiva(GE)、Tosoh、Merck三家垄断90%+。国产替代刚起步。",
+          "global_players": [
+            "Thermo Fisher(Gibco)",
+            "Danaher/Cytiva(HyClone)",
+            "Merck/Sigma"
+          ],
+          "domestic_players": [
+            "奥浦迈(培养基——国产唯一规模化)",
+            "纳微科技(色谱填料——国产唯一纳米微球)",
+            "百普赛斯(重组蛋白)",
+            "义翘神州(重组蛋白)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球培养基被3家垄断(80%+市场份额)，色谱填料被3家垄断(90%+)。奥浦迈是国内唯一实现培养基规模化生产的上市公司。纳微科技是国内唯一突破纳米微球色谱填料并进入抗体生产供应链的上市公司。这两项是创新药上游最核心的「卡脖子」材料。",
+          "a_share_candidates": [
+            "688293",
+            "688690",
+            "301080",
+            "301047"
+          ]
+        },
+        {
+          "level": 6,
+          "name": "小核酸/寡核苷酸 CDMO",
+          "role": "下一代爆款药物的「定制工厂」——ASO/siRNA药物",
+          "description": "小核酸药物(ASO/siRNA)是继小分子和抗体后的第三代药物技术。诺华Inclisiran(降胆固醇siRNA)年销超30亿美元。小核酸合成难度远高于普通化学药(需要20+步固相合成+硫代修饰)，全球仅少数CDMO能承接。2025年被视为小核酸产业化元年。",
+          "global_players": [
+            "Nitto Denko(日本)",
+            "Agilent(美国)",
+            "Danaher/Cytiva"
+          ],
+          "domestic_players": [
+            "药明康德(合全药业，布局小核酸CDMO)",
+            "瑞博生物(未上市，国内小核酸龙头)",
+            "圣诺医药(未上市)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "小核酸CDMO全球产能稀缺，但处于产业化早期(2025年才进入爆发前夜)。国内小核酸CDMO企业几乎都未在A股独立上市。药明康德合全药业已布局，但占比小。未来2-3年可能是关键布局窗口。",
+          "a_share_candidates": [
+            "603259",
+            "688076"
+          ]
+        }
+      ]
+    }
+  }
+}

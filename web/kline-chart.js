@@ -6,9 +6,9 @@
 
 const DEFAULTS = {
   priceHeightRatio: 0.55,
-  volumeHeightRatio: 0.22,
-  rpsHeightRatio: 0.28,
-  gapRatio: 0.05,
+  volumeHeightRatio: 0.15,
+  rpsHeightRatio: 0.22,
+  gapRatio: 0.04,
   marginTop: 16,
   marginBottom: 48,
   marginLeft: 8,

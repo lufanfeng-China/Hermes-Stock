@@ -36,6 +36,14 @@ from app.pipeline.commands import ensure_stock_screener_strategy_dataset, _lates
 from app.pipeline.runner import start_data_update_job, run_full_data_update
 from app.industry.templates import _industry_template_tags, _build_industry_valuation_percentile_payload
 
+# Bottleneck discovery module
+from app.bottleneck import (
+    step1_select_trend, step2_decompose_chain, step3_identify_bottlenecks,
+    step4_map_stocks, step5_verify_stocks, step6_cross_verify, step7_full_auto,
+    save_report, list_reports, load_report, rerun_report,
+    check_custom_status,
+)
+
 # Additional imports from original
 from app.search.index import (
     build_stock_screener_response,
@@ -142,6 +150,130 @@ def _is_allowed_local_origin(origin: str | None, referer: str | None = None) -> 
     return False
 
 
+def _recompute_conclusion_v2(entry: dict) -> None:
+    """Recompute conclusion using short_trend as primary, trend as modifier."""
+    st = entry.get("short_trend", "")
+    t  = entry.get("trend", "")
+    mo = entry.get("momentum", "")
+    vs = entry.get("volume_signal", "")
+    pos = entry.get("position", "")
+    bt = entry.get("buy_triggers") or []
+    owd = entry.get("one_word_limit_down", False)
+    rd  = entry.get("recently_limit_down", False)
+
+    ST_BULL = st in ("strong_bullish", "bullish")
+    ST_BEAR = st in ("strong_bearish", "bearish")
+    T_BULL  = t in ("strong_bullish", "bullish")
+    T_BEAR  = t in ("strong_bearish", "bearish")
+    T_STRONG_BEAR = t == "strong_bearish"
+
+    LABELS = {"strong_bullish":"强多头","bullish":"多头","recovering":"修复中","neutral":"震荡",
+              "bearish":"空头","strong_bearish":"强空头"}
+    sl = LABELS.get(st, st)
+    tl = LABELS.get(t, t)
+
+    confirmed = [tr for tr in bt if tr.get("strength") == "confirmed"]
+    watch_triggers = [tr for tr in bt if tr.get("strength") == "watch"]
+    has_buy = len(confirmed) > 0
+    has_watch = len(watch_triggers) > 0
+
+    if st == "insufficient_data":
+        entry.update(conclusion="insufficient_data", conclusion_label="数据不足", conclusion_color="gray", conclusion_reason="交易日不足60日")
+        return
+    if owd:
+        entry.update(conclusion="avoid", conclusion_label="回避", conclusion_color="red", conclusion_reason="一字跌停")
+        return
+    if st == "strong_bearish" and mo == "weak":
+        entry.update(conclusion="avoid", conclusion_label="回避", conclusion_color="red", conclusion_reason=f"短期{sl}+动量弱势")
+        return
+    if vs == "divergence" and ST_BEAR:
+        entry.update(conclusion="avoid", conclusion_label="回避", conclusion_color="red", conclusion_reason=f"短期{sl}+量价背离")
+        return
+    if has_buy:
+        best = confirmed[0]
+        if ST_BULL and not T_BEAR and mo != "weak" and vs != "divergence" and pos != "overheated":
+            if not (rd or owd) and best.get("risk_pct", 0) <= 0.08:
+                entry.update(conclusion="buy_confirmed", conclusion_label="确认买入", conclusion_color="green",
+                             conclusion_reason=f"短期{sl}+{best.get('label','买入信号')}")
+                return
+        entry.update(conclusion="buy_watch", conclusion_label="买点观察", conclusion_color="yellow",
+                     conclusion_reason=f"有{best.get('label','信号')}但条件不完全确认")
+        return
+    if has_watch:
+        entry.update(conclusion="buy_watch", conclusion_label="买点观察", conclusion_color="yellow",
+                     conclusion_reason=watch_triggers[0].get("detail",""))
+        return
+    # bullish
+    if st == "strong_bullish" and T_BULL:
+        if vs != "divergence" and pos != "overheated":
+            entry.update(conclusion="bullish_strong", conclusion_label="短期强势", conclusion_color="green",
+                         conclusion_reason=f"短期{sl}+长期{tl}共振")
+        else:
+            entry.update(conclusion="hold_watch", conclusion_label="观望持有", conclusion_color="yellow",
+                         conclusion_reason=f"短期强势但{pos}过高")
+        return
+    if st == "strong_bullish" and T_BEAR:
+        entry.update(conclusion="short_up_long_down", conclusion_label="短强长空", conclusion_color="yellow",
+                     conclusion_reason=f"短期{sl}但长期{t}压制")
+        return
+    if st == "bullish" and T_BULL:
+        entry.update(conclusion="bullish", conclusion_label="短期偏多", conclusion_color="green",
+                     conclusion_reason=f"短期{sl}+长期{tl}配合")
+        return
+    if st == "bullish" and T_BEAR:
+        entry.update(conclusion="short_up_long_down", conclusion_label="短线反弹", conclusion_color="yellow",
+                     conclusion_reason=f"短期偏多但长期{tl}，谨慎追高")
+        return
+    if st == "recovering" and not T_STRONG_BEAR:
+        entry.update(conclusion="recovering", conclusion_label="修复中", conclusion_color="yellow",
+                     conclusion_reason=f"短期{sl}，关注能否转势")
+        return
+    if st == "recovering" and T_STRONG_BEAR:
+        entry.update(conclusion="hold_watch", conclusion_label="观望持有", conclusion_color="yellow",
+                     conclusion_reason="短期修复但长期强空压制")
+        return
+    # neutral
+    if st == "neutral" and T_BULL:
+        entry.update(conclusion="neutral_bullish", conclusion_label="横盘偏多", conclusion_color="yellow",
+                     conclusion_reason=f"短期横盘，长期{tl}偏多")
+        return
+    if st == "neutral" and T_BEAR:
+        entry.update(conclusion="neutral_bearish", conclusion_label="横盘偏空", conclusion_color="yellow",
+                     conclusion_reason=f"短期横盘，长期{tl}偏空")
+        return
+    # bearish
+    if ST_BEAR and vs == "divergence":
+        entry.update(conclusion="avoid", conclusion_label="回避", conclusion_color="red",
+                     conclusion_reason=f"短期{sl}+量价背离")
+        return
+    if st == "bearish":
+        if pos == "low" and not T_STRONG_BEAR:
+            entry.update(conclusion="left_observe", conclusion_label="左侧观察", conclusion_color="yellow",
+                         conclusion_reason=f"短期偏空但历史低位")
+        else:
+            entry.update(conclusion="avoid", conclusion_label="回避", conclusion_color="red",
+                         conclusion_reason=f"短期{sl}，回避")
+        return
+    if st == "strong_bearish":
+        if T_BULL and pos == "low":
+            entry.update(conclusion="short_down_long_up", conclusion_label="短空长多", conclusion_color="yellow",
+                         conclusion_reason=f"短期{sl}但长期{tl}+低位")
+        else:
+            entry.update(conclusion="avoid", conclusion_label="回避", conclusion_color="red",
+                         conclusion_reason=f"短期{sl}，回避")
+        return
+    if pos == "low" and not ST_BEAR:
+        entry.update(conclusion="left_observe", conclusion_label="左侧观察", conclusion_color="yellow",
+                     conclusion_reason="历史低位，等趋势反转")
+        return
+    if pos == "overheated":
+        entry.update(conclusion="hold_watch", conclusion_label="观望持有", conclusion_color="yellow",
+                     conclusion_reason="位置过热")
+        return
+    entry.update(conclusion="hold_watch", conclusion_label="观望持有", conclusion_color="yellow",
+                 conclusion_reason="信号不明确，观望")
+
+
 class StockDashboardHandler(BaseHTTPRequestHandler):
     server_version = "StockDashboard/0.1"
 
@@ -240,6 +372,41 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
             return
+        # ── Bottleneck Discovery ──
+        if parsed.path == "/api/bottleneck/step1":
+            self.handle_bottleneck_step1(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/step2":
+            self.handle_bottleneck_step2(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/step3":
+            self.handle_bottleneck_step3(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/step4":
+            self.handle_bottleneck_step4(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/step5":
+            self.handle_bottleneck_step5(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/step6":
+            self.handle_bottleneck_step6(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/auto":
+            self.handle_bottleneck_auto(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/reports":
+            self.handle_bottleneck_list_reports(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/report":
+            self.handle_bottleneck_load_report(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/rerun":
+            self.handle_bottleneck_rerun(parsed.query)
+            return
+        if parsed.path == "/api/bottleneck/custom-status":
+            self.handle_bottleneck_custom_status(parsed.query)
+            return
+        # ── End Bottleneck ──
         if parsed.path.startswith("/api/proxy-capital-flow"):
             self.handle_proxy_capital_flow(parsed.query)
             return
@@ -259,8 +426,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/data-update-retry":
             self.handle_data_update_retry()
             return
+        # ── End Bottleneck ──
         if parsed.path == "/api/save-capital-flow":
             self.handle_save_capital_flow()
+            return
+        if parsed.path == "/api/bottleneck/save-report":
+            self.handle_bottleneck_save_report(parsed.query)
             return
         if parsed.path == "/api/seed-flow-cache":
             self.handle_seed_flow_cache()
@@ -574,6 +745,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                                 daily = daily[daily.index <= as_of_date]
                             if len(daily) < 111:
                                 row["swing_low_price"] = None
+                                row["ma10_dist_pct"] = None
                                 continue
                             lows = daily["low"].astype(float).tolist()
                             closes = daily["close"].astype(float).tolist()
@@ -596,8 +768,15 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                                 # Fallback: lowest close in last 90 bars
                                 fb_start = max(0, n - 90)
                                 row["swing_low_price"] = round(min(closes[fb_start:]), 2)
+                            # MA10 distance: (close - MA10) / MA10 * 100
+                            if n >= 10:
+                                ma10 = sum(closes[-10:]) / 10
+                                row["ma10_dist_pct"] = round((closes[-1] - ma10) / ma10 * 100, 2) if ma10 != 0 else None
+                            else:
+                                row["ma10_dist_pct"] = None
                         else:
                             row["swing_low_price"] = None
+                            row["ma10_dist_pct"] = None
                     except Exception:
                         row["swing_low_price"] = None
             # Compute trend duration for current page rows
@@ -825,6 +1004,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 "market": market,
                 "symbol": symbol,
                 "added_at": entry.get("added_at", ""),
+                "add_price": entry.get("add_price"),
             }
 
             # Score data
@@ -885,6 +1065,13 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         row["return_1_pct"] = round((closes[-1] / closes[-2] - 1) * 100, 2)
                         row["return_5_pct"] = round((closes[-1] / closes[-6] - 1) * 100, 2)
                         row["return_20_pct"] = round((closes[-1] / closes[-21] - 1) * 100, 2)
+                        # Return since added
+                        add_price = row.get("add_price")
+                        if add_price and add_price > 0:
+                            row["return_since_add_pct"] = round((closes[-1] / add_price - 1) * 100, 2)
+                        # MA10 distance
+                        ma10 = sum(closes[-10:]) / 10
+                        row["ma10_dist_pct"] = round((closes[-1] - ma10) / ma10 * 100, 2) if ma10 != 0 else None
 
                         # Candlestick pattern detection
                         try:
@@ -954,6 +1141,14 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         skipped = 0
         now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
+        # Try to get current prices for new additions
+        from mootdx.reader import Reader
+        reader = None
+        try:
+            reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
+        except Exception:
+            pass
+
         for s in incoming:
             key = (str(s.get("market", "")), str(s.get("symbol", "")))
             if not key[0] or not key[1]:
@@ -961,7 +1156,18 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             if key in existing:
                 skipped += 1
                 continue
-            wl["stocks"].append({"market": key[0], "symbol": key[1], "added_at": now})
+            entry = {"market": key[0], "symbol": key[1], "added_at": now}
+            # Record add_price from TDX
+            if reader:
+                try:
+                    daily = reader.daily(symbol=key[1])
+                    if daily is not None and not daily.empty and len(daily) >= 1:
+                        daily = daily.sort_index()
+                        closes = daily["close"].astype(float).tolist()
+                        entry["add_price"] = round(closes[-1], 2)
+                except Exception:
+                    pass
+            wl["stocks"].append(entry)
             existing.add(key)
             added += 1
 
@@ -1860,6 +2066,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             entry["market"] = market
             entry["data_date"] = raw.get("data_date", "")
 
+            # Recompute conclusion with short_trend as primary
+            _recompute_conclusion_v2(entry)
+
             self.respond_json(HTTPStatus.OK, {"ok": True, **entry})
 
         except Exception as exc:
@@ -1900,6 +2109,103 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if value not in (20, 50, 120, 250):
             raise ValueError("window must be 20, 50, 120 or 250")
         return value
+
+    # ── Bottleneck Discovery Handlers ─────────────────────────
+
+    def _respond_bottleneck(self, data: dict) -> None:
+        """Helper: respond with bottleneck data as JSON."""
+        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def handle_bottleneck_step1(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        trend_id = qs.get("trend_id")
+        result = step1_select_trend(trend_id)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_step2(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        trend_id = qs.get("trend_id", "")
+        custom_desc = qs.get("custom_description", "")
+        result = step2_decompose_chain(trend_id, custom_desc)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_step3(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        trend_id = qs.get("trend_id", "")
+        result = step3_identify_bottlenecks(trend_id)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_step4(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        trend_id = qs.get("trend_id", "")
+        result = step4_map_stocks(trend_id)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_step5(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        trend_id = qs.get("trend_id", "")
+        result = step5_verify_stocks(trend_id)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_step6(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        trend_id = qs.get("trend_id", "")
+        result = step6_cross_verify(trend_id)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_auto(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        trend_id = qs.get("trend_id", "")
+        if not trend_id:
+            self._respond_bottleneck({"ok": False, "error": "缺少 trend_id 参数"})
+            return
+        result = step7_full_auto(trend_id)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_list_reports(self, _query: str) -> None:
+        result = list_reports()
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_load_report(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        filename = qs.get("filename", "")
+        result = load_report(filename)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_rerun(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        filename = qs.get("filename", "")
+        if not filename:
+            self._respond_bottleneck({"ok": False, "error": "缺少 filename 参数"})
+            return
+        result = rerun_report(filename)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_custom_status(self, query: str) -> None:
+        qs = {k: v[0] for k, v in parse_qs(query).items()}
+        session_id = qs.get("session_id", "")
+        result = check_custom_status(session_id)
+        self._respond_bottleneck(result)
+
+    def handle_bottleneck_save_report(self, _query: str) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(content_len).decode("utf-8")
+        try:
+            body = json.loads(raw)
+        except json.JSONDecodeError:
+            self._respond_bottleneck({"ok": False, "error": "Invalid JSON"})
+            return
+        trend_id = body.get("trend_id", "")
+        step_results = body.get("step_results", {})
+        result = save_report(trend_id, step_results)
+        self._respond_bottleneck(result)
+
+    # ── End Bottleneck Handlers ──────────────────────────────
 
     def respond_json(self, status: HTTPStatus, payload: dict[str, object]) -> bool:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

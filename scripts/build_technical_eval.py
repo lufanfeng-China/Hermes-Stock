@@ -309,6 +309,87 @@ def classify_position(price_pct_data, closes, available_days):
     if dist > -0.10: return "high", "高位", f"距250日高点{dist*100:.0f}%"
     return "mid", "中位", f"距250日高点{dist*100:.0f}%"
 
+# ── Golden Cross (均线上穿) ──
+
+def detect_golden_crosses(closes, available):
+    """Detect if any fast MA crossed above slow MA today.
+    
+    Returns (comma_separated_crosses, label, detail).
+    """
+    pairs = [
+        ("5/10", 5, 10),
+        ("10/20", 10, 20),
+        ("5/20", 5, 20),
+        ("20/60", 20, 60),
+        ("5/60", 5, 60),
+    ]
+    crosses = []
+    cross_labels = []
+    cross_details = []
+
+    if available < 61:
+        return "", "", ""
+
+    for code, fast_n, slow_n in pairs:
+        if available < slow_n + 1:
+            continue
+        today_fast = sum(closes[-fast_n:]) / fast_n
+        today_slow = sum(closes[-slow_n:]) / slow_n
+        yesterday_fast = sum(closes[-fast_n-1:-1]) / fast_n
+        yesterday_slow = sum(closes[-slow_n-1:-1]) / slow_n
+        if today_fast > today_slow and yesterday_fast <= yesterday_slow:
+            crosses.append(code)
+            cross_labels.append(f"MA{fast_n}上穿MA{slow_n}")
+            cross_details.append(
+                f"MA{fast_n}({today_fast:.2f})>MA{slow_n}({today_slow:.2f})"
+            )
+
+    if not crosses:
+        return "", "", ""
+    return ",".join(crosses), ",".join(cross_labels), "; ".join(cross_details)
+
+
+# ── MACD Golden Cross ──
+
+def detect_macd_cross(closes, available):
+    """Detect MACD(12,26,9) golden cross.
+    
+    Returns (signal, label, detail).
+    signal: "zero_below" / "zero_above" / ""
+    """
+    if available < 35:
+        return "", "", ""
+
+    def ema(series, period):
+        alpha = 2.0 / (period + 1)
+        result = [series[0]]
+        for i in range(1, len(series)):
+            result.append(alpha * series[i] + (1 - alpha) * result[-1])
+        return result
+
+    ema12 = ema(closes, 12)
+    ema26 = ema(closes, 26)
+    dif = [ema12[i] - ema26[i] for i in range(len(closes))]
+    dea = ema(dif, 9)
+
+    if len(dif) < 2 or len(dea) < 2:
+        return "", "", ""
+
+    today_dif = dif[-1]
+    today_dea = dea[-1]
+    yesterday_dif = dif[-2]
+    yesterday_dea = dea[-2]
+
+    if not (today_dif > today_dea and yesterday_dif <= yesterday_dea):
+        return "", "", ""
+
+    macd_bar = 2.0 * (today_dif - today_dea)
+
+    if today_dif < 0 and today_dea < 0:
+        return "zero_below", "零轴下金叉", f"DIF({today_dif:.3f})<0, DEA({today_dea:.3f})<0"
+    else:
+        return "zero_above", "零轴上金叉", f"DIF({today_dif:.3f})>0, DEA({today_dea:.3f})>0"
+
 # ── Buy triggers ──
 
 def evaluate_buy_triggers(trend, trend_label, momentum, momentum_label,
@@ -459,57 +540,90 @@ def evaluate_buy_triggers(trend, trend_label, momentum, momentum_label,
 
 # ── Conclusion ──
 
-def decide_conclusion(trend, momentum, volume_signal, position,
+def decide_conclusion(short_trend, trend, momentum, volume_signal, position,
                       buy_triggers, one_word_limit_down, recently_limit_down):
-    """Decision tree for composite conclusion."""
+    """Decision tree — primary: short_trend (MA10/20/30/60), modifier: trend (MA20/50/120/250)."""
 
     # Best buy trigger
     confirmed = [t for t in buy_triggers if t["strength"] == "confirmed"]
     watch_triggers = [t for t in buy_triggers if t["strength"] == "watch"]
     has_buy = len(confirmed) > 0
     has_watch = len(watch_triggers) > 0
-    has_any_trigger = has_buy or has_watch
+
+    # ── Trend helpers ──
+    ST_BULL = short_trend in ("strong_bullish", "bullish")
+    ST_BEAR = short_trend in ("strong_bearish", "bearish")
+    T_BULL  = trend in ("strong_bullish", "bullish")
+    T_BEAR  = trend in ("strong_bearish", "bearish")
+    T_STRONG_BEAR = trend == "strong_bearish"
+
+    long_label = {"strong_bullish":"强多头","bullish":"多头","recovering":"修复中","neutral":"震荡",
+                  "bearish":"空头","strong_bearish":"强空头"}.get(trend, trend)
+    short_label = {"strong_bullish":"强多头","bullish":"多头","recovering":"修复中","neutral":"震荡",
+                   "bearish":"空头","strong_bearish":"强空头"}.get(short_trend, short_trend)
 
     # Step 0: insufficient data
-    if trend == "insufficient_data":
-        return "insufficient_data", "数据不足", "gray", "交易日不足60日，数据不足以判断"
+    if short_trend == "insufficient_data":
+        return "insufficient_data", "数据不足", "gray", "交易日不足60日"
 
     # Step 1: forced avoid
-    if (trend == "strong_bearish" and momentum == "weak") or one_word_limit_down:
-        return "avoid", "回避", "red", "强空头+弱势或一字跌停"
-    if volume_signal == "divergence" and trend in ("bearish", "strong_bearish"):
-        return "avoid", "回避", "red", "量价背离且趋势偏空"
+    if one_word_limit_down:
+        return "avoid", "回避", "red", "一字跌停，强制回避"
+    if short_trend == "strong_bearish" and momentum == "weak":
+        return "avoid", "回避", "red", f"短期{short_label} + 动量弱势"
+    if volume_signal == "divergence" and ST_BEAR:
+        return "avoid", "回避", "red", f"短期{short_label} + 量价背离"
 
-    # Step 2: confirmed buy
+    # Step 2: buy triggers
     if has_buy:
         best = confirmed[0]
-        if trend in ("bullish", "strong_bullish"):
+        if ST_BULL and not T_BEAR:
             if momentum != "weak" and volume_signal != "divergence" and position != "overheated":
                 if not recently_limit_down and best.get("risk_pct", 0) <= 0.08:
-                    return "buy_confirmed", "确认买入", "green", best["detail"]
-        # downgrade to buy_watch
+                    return "buy_confirmed", "确认买入", "green", f"短期{short_label} + {best['label']}"
         return "buy_watch", "买点观察", "yellow", f"有{best['label']}但条件不完全确认"
-
     if has_watch:
         return "buy_watch", "买点观察", "yellow", watch_triggers[0]["detail"]
 
-    # Step 3: wait for buy
-    if trend in ("bullish", "strong_bullish") and momentum in ("super_strong", "strong", "startup"):
+    # Step 3: short-term bullish scenarios
+    if short_trend == "strong_bullish" and T_BULL:
         if volume_signal != "divergence" and position != "overheated":
-            return "wait_buy", "等待买点", "yellow", "趋势和动量都好，等待触发买入信号"
+            return "bullish_strong", "短期强势", "green", f"短期{short_label} + 长期{long_label}共振"
+        return "hold_watch", "观望持有", "yellow", f"短期强势但{position}过高"
+    if short_trend == "strong_bullish" and T_BEAR:
+        return "short_up_long_down", "短强长空", "yellow", f"短期{short_label}但长期{trend}压制"
+    if short_trend == "bullish" and T_BULL:
+        return "bullish", "短期偏多", "green", f"短期{short_label} + 长期{trend}配合"
+    if short_trend == "bullish" and T_BEAR:
+        return "short_up_long_down", "短线反弹", "yellow", f"短期偏多但长期{trend}，谨慎追高"
+    if short_trend == "recovering" and not T_STRONG_BEAR:
+        return "recovering", "修复中", "yellow", f"短期{short_label}，关注能否转势"
+    if short_trend == "recovering" and T_STRONG_BEAR:
+        return "hold_watch", "观望持有", "yellow", f"短期修复但长期强空压制"
 
-    if trend in ("bullish", "strong_bullish") and momentum in ("super_strong", "strong") and position == "high":
-        return "wait_pullback", "等待回踩", "yellow", "强势股处于高位，等待缩量回踩均线"
+    # Step 4: neutral
+    if short_trend == "neutral" and T_BULL:
+        return "neutral_bullish", "横盘偏多", "yellow", f"短期横盘，长期{trend}偏多"
+    if short_trend == "neutral" and T_BEAR:
+        return "neutral_bearish", "横盘偏空", "yellow", f"短期横盘，长期{trend}偏空"
 
-    # Step 4: left observe
-    if position == "low" and trend not in ("strong_bearish",) and volume_signal != "divergence":
-        return "left_observe", "左侧观察", "yellow", "历史低位，可加自选等趋势反转信号"
+    # Step 5: short-term bearish
+    if ST_BEAR and volume_signal == "divergence":
+        return "avoid", "回避", "red", f"短期{short_label}+量价背离"
+    if short_trend == "bearish":
+        if position == "low" and not T_STRONG_BEAR:
+            return "left_observe", "左侧观察", "yellow", f"短期偏空但历史低位，等反转"
+        return "avoid", "回避", "red", f"短期{short_label}，回避"
+    if short_trend == "strong_bearish":
+        if T_BULL and position == "low":
+            return "short_down_long_up", "短空长多", "yellow", f"短期{short_label}但长期{trend}+低位"
+        return "avoid", "回避", "red", f"短期{short_label}，回避"
 
-    # Step 5: hold watch (default)
+    # Step 6: position-based
+    if position == "low" and not ST_BEAR:
+        return "left_observe", "左侧观察", "yellow", "历史低位，等趋势反转"
     if position == "overheated":
-        return "hold_watch", "观望持有", "yellow", "位置过热，观望"
-    if trend in ("bearish", "strong_bearish"):
-        return "avoid", "回避", "red", "趋势偏弱，建议回避"
+        return "hold_watch", "观望持有", "yellow", "位置过热"
 
     return "hold_watch", "观望持有", "yellow", "信号不明确，观望"
 
@@ -693,6 +807,11 @@ def main(trading_day: str | None = None):
                 pct_data.get(symbol), closes, available
             )
 
+            # Golden Cross
+            golden_cross, golden_cross_label, golden_cross_detail = detect_golden_crosses(closes, available)
+            # MACD Cross
+            macd_cross, macd_cross_label, macd_cross_detail = detect_macd_cross(closes, available)
+
             # Buy triggers
             triggers = evaluate_buy_triggers(
                 trend, trend_label, momentum, momentum_label,
@@ -704,7 +823,7 @@ def main(trading_day: str | None = None):
 
             # Conclusion
             conclusion, conclusion_label, conclusion_color, conclusion_reason = decide_conclusion(
-                trend, momentum, vol_signal, position,
+                short_trend, trend, momentum, vol_signal, position,
                 triggers, one_word_down, recent_down
             )
 
@@ -738,6 +857,12 @@ def main(trading_day: str | None = None):
                 "position": position,
                 "position_label": position_label,
                 "position_detail": position_detail,
+                "golden_cross": golden_cross,
+                "golden_cross_label": golden_cross_label,
+                "golden_cross_detail": golden_cross_detail,
+                "macd_cross": macd_cross,
+                "macd_cross_label": macd_cross_label,
+                "macd_cross_detail": macd_cross_detail,
                 "atr14": round(atr_val, 2) if atr_val else None,
                 "atr14_pct": round(atr_pct, 4) if atr_pct else None,
                 "buy_triggers": triggers,

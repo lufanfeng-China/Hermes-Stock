@@ -1250,77 +1250,243 @@ button:hover {
   width: 350px;
   min-width: 350px;
   flex-shrink: 0;
-  padding: 16px 18px 14px;
+  padding: 16px 20px 16px;
   height: 400px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Tech conclusion body ── */
+.tech-conclusion-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.tech-conclusion-icon {
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.tech-conclusion-label {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.tech-conclusion-reason {
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 6px;
+  max-width: 280px;
+  color: var(--muted);
+}
+
+.tech-conclusion-detail {
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 4px;
+  max-width: 280px;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* ── Actions row ── */
+.tech-conclusion-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(124,224,195,0.08);
+  min-height: 30px;
+  flex-wrap: wrap;
+}
+
+.tech-kline-link {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 3px 10px;
+  border: 1px solid rgba(124,224,195,0.18);
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.tech-kline-link:hover { background: rgba(124,224,195,0.06); }
+
+.kronos-predict-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kronos-predict-label { font-size: 11px; color: var(--muted); }
+.kronos-predict-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: rgba(124,224,195,0.08);
+  border: 1px solid rgba(124,224,195,0.18);
+  border-radius: 5px;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.kronos-predict-btn:hover { background: rgba(124,224,195,0.15); }
+.kronos-predict-status { font-size: 10px; color: var(--muted); }
+.kronos-predict-result {
+  flex-basis: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  padding: 6px 10px;
+  background: rgba(124,224,195,0.03);
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+/* ── Tech indicator button ── */
+.tech-indicator-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: rgba(124,224,195,0.08);
+  border: 1px solid rgba(124,224,195,0.18);
+  border-radius: 5px;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tech-indicator-btn:hover { background: rgba(124,224,195,0.15); }
+
+/* ── Tech indicator dialog ── */
+.tech-indicator-dialog-card {
+  max-width: 480px;
+  padding: 24px 28px 28px;
+}
+
+.tech-indicator-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.tech-indicator-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(124,224,195,0.02);
+  border: 1px solid rgba(124,224,195,0.06);
+}
+
+.tech-indicator-dim {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tech-indicator-val {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tech-indicator-match {
+  margin-top: 4px;
+  padding: 12px 14px;
+  background: rgba(124,224,195,0.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .stock-score-insight-card {
   min-width: 280px;
   flex: 1 1 auto;
-  padding: 16px 18px 14px;
+  padding: 16px 20px 14px;
   height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Insights layout ── */
+.insights-body {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.5;
   overflow-y: auto;
 }
 
-/* ── Insights table layout ── */
-.insights-body {
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 .insight-section {
-  margin-bottom: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(124,224,195,0.06);
 }
-
 .insight-section:last-child {
   margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .insight-summary {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text);
-  margin: 0 0 10px;
-  padding: 6px 8px;
-  background: rgba(124, 224, 195, 0.04);
-  border-left: 2px solid var(--accent);
-  border-radius: 2px;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  background: rgba(124, 224, 195, 0.03);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
 }
 
 .insight-section-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   color: var(--text);
+  letter-spacing: 0.01em;
 }
 
 .insight-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 11px;
   table-layout: fixed;
 }
 
 .insight-table th {
   text-align: left;
-  padding: 2px 6px 3px;
+  padding: 3px 6px 4px;
   font-weight: 500;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(124,224,195,0.08);
 }
 
 .insight-table th:first-child { width: 14%; }
-.insight-table th:nth-child(2) { width: 24%; }
-.insight-table th:last-child { width: 62%; }
+.insight-table th:nth-child(2) { width: 22%; }
+.insight-table th:last-child { width: 64%; }
 
 .insight-table td {
-  padding: 2px 6px;
+  padding: 3px 6px;
   vertical-align: top;
   color: var(--text);
+  border-bottom: 1px solid rgba(124,224,195,0.03);
 }
+.insight-table tr:last-child td { border-bottom: none; }
 
 .insight-table .insight-dim {
   color: var(--muted);
@@ -1329,6 +1495,8 @@ button:hover {
 
 .insight-table .insight-data {
   font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .insight-table .insight-eval {
@@ -1336,59 +1504,15 @@ button:hover {
 }
 
 .insight-strengths .insight-table th {
-  border-bottom-color: rgba(0, 230, 118, 0.3);
+  border-bottom-color: rgba(34,197,94,0.20);
 }
 
 .insight-risks .insight-table th {
-  border-bottom-color: rgba(255, 82, 82, 0.3);
+  border-bottom-color: rgba(239,68,68,0.20);
 }
 
-.tech-conclusion-body {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 0 4px;
-}
-
-.tech-conclusion-icon {
-  font-size: 36px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.tech-conclusion-label {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.3;
-  margin-bottom: 2px;
-}
-
-.tech-conclusion-reason {
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.tech-conclusion-detail {
-  font-size: 11px;
-  line-height: 1.45;
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px dashed var(--border);
-}
-
-.tech-kline-link {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-  text-decoration: none;
-  padding: 4px 0 0;
-  margin-top: 2px;
-  border-top: 1px solid var(--border);
-  transition: color 0.15s;
-}
-
-.tech-kline-link:hover {
-  color: var(--green);
+.insight-neutral .insight-table th {
+  border-bottom-color: rgba(245,158,11,0.20);
 }
 
 /* ── Candle patterns row ─────────────────────────────────────────────── */
@@ -2030,33 +2154,55 @@ button:hover {
 }
 
 .stock-score-total-card {
-  min-height: 116px;
-  padding: 12px 14px;
-  background:
-    radial-gradient(circle at top right, rgba(82, 179, 255, 0.12), transparent 40%),
-    linear-gradient(180deg, rgba(16, 31, 45, 0.96), rgba(10, 20, 29, 0.96));
+  min-height: 100px;
+  padding: 16px;
+  border: 1px solid rgba(124,224,195,0.10);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(124,224,195,0.03), rgba(124,224,195,0.01));
+  display: flex;
+  flex-direction: column;
+}
+
+.stock-score-total-card .metric-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
 }
 
 .stock-score-total-card .metric-value {
-  margin-top: 8px;
+  margin-top: 0;
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: clamp(16px, 2.8vw, 26px);
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: var(--text);
 }
 
 .stock-score-total-card .max {
-  font-size: 16px;
+  font-size: 14px;
   color: var(--muted);
 }
 
 .stock-score-total-card .metric-meta {
-  margin-top: 6px;
-  line-height: 1.5;
+  margin-top: 4px;
+  line-height: 1.4;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Rank line (first meta) gets accent color to match V2 */
+.stock-score-total-card .metric-meta:first-of-type {
+  color: var(--accent);
+  font-size: 12px;
 }
 
 .stock-score-total-card-industry .metric-value {
-  color: #ffb36b;
+  color: var(--accent);
 }
 
 .stock-score-status {
@@ -3042,6 +3188,21 @@ button:hover {
 
 /* ── RPS group: 4-column ── */
 .filter-rps { grid-template-columns: repeat(4, 1fr); }
+.rps-total-row {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid rgba(124,224,195,0.06);
+}
+.rps-total-row .filter-label {
+  font-weight: 600;
+  color: var(--accent);
+}
+.rps-total-row input {
+  width: 80px;
+}
 
 /* ── Tech signals: 3-column ── */
 .filter-tech-signals { grid-template-columns: repeat(3, 1fr); }
@@ -3935,4 +4096,42 @@ button:hover {
 
 .stock-screener-row.wl-highlighted:hover {
   background: rgba(124, 224, 195, 0.14) !important;
+}
+#stock-screener-preset-select,
+#stock-screener-preset-select option {
+  color: var(--text) !important;
+  background: var(--bg-main) !important;
+}
+
+.preset-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.preset-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  min-width: 160px;
+  margin-top: 4px;
+  padding: 4px;
+  background: #0a141d;
+  border: 1px solid rgba(124,224,195,0.25);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.9);
+}
+.preset-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.preset-menu-item:hover {
+  background: rgba(124,224,195,0.10);
 }

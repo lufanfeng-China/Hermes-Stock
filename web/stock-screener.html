@@ -68,6 +68,12 @@
         <button type="button" class="nav-link" data-strategy="blowup_stall">爆量滞涨</button>
         <button type="button" class="nav-link" data-strategy="blowup_break">爆量突破</button>
         <button id="stock-screener-sync-tdx-btn" class="nav-link" type="button" style="margin-left:16px">同步到AI股池</button>
+        <button id="stock-screener-save-preset-btn" class="nav-link" type="button" style="margin-left:auto">💾 保存方案</button>
+        <div id="stock-screener-preset-dropdown" class="preset-dropdown" style="display:none">
+          <button id="stock-screener-preset-toggle" class="nav-link" type="button">已存方案 ▾</button>
+          <div id="stock-screener-preset-menu" class="preset-menu" hidden></div>
+        </div>
+        <button id="stock-screener-delete-preset-btn" class="nav-link" type="button" style="display:none;color:#ef4444" title="删除当前方案">✕</button>
       </div>
       <p id="stock-screener-strategy-desc" class="search-meta stock-screener-strategy-desc"></p>
 
@@ -94,6 +100,10 @@
         <!-- ── RPS 动量 ── -->
         <fieldset class="filter-group filter-rps">
           <legend>RPS 动量</legend>
+          <div class="filter-row rps-total-row">
+            <label class="filter-label">个股RPS总分 ≥</label><input name="min_rps_total" type="number" step="0.1" placeholder="如 350">
+            <label class="filter-label">行业RPS总分 ≥</label><input name="min_industry_rps_total" type="number" step="0.1" placeholder="如 250">
+          </div>
           <div class="filter-row"><label>个股 RPS20 ≥</label><input name="min_rps_20" type="number" step="0.1"></div>
           <div class="filter-row"><label>个股 RPS50 ≥</label><input name="min_rps_50" type="number" step="0.1"></div>
           <div class="filter-row"><label>个股 RPS120 ≥</label><input name="min_rps_120" type="number" step="0.1"></div>
@@ -116,11 +126,13 @@
         <!-- ── 技术面（信号灯） ── -->
         <fieldset class="filter-group filter-tech-signals">
           <legend>技术面（信号灯）</legend>
-          <div class="filter-row"><label>趋势切换</label><select name="trend_switch"><option value="">不限</option><option value="recovering">🟡 刚变修复中</option><option value="bullish">🟢 刚变多头</option><option value="strong_bullish">🟢 刚变强多头</option></select></div>
-          <div class="filter-row"><label>趋势</label><select name="tech_trend"><option value="">不限</option><option value="strong_bullish">🟢 强多头</option><option value="bullish">🟢 多头</option><option value="recovering">🟡 修复中</option><option value="!bearish">🟢🟡 非空头</option></select></div>
-          <div class="filter-row"><label>短期趋势切换</label><select name="short_trend_switch"><option value="">不限</option><option value="recovering">🟡 刚变修复中</option><option value="bullish">🟢 刚变多头</option><option value="strong_bullish">🟢 刚变强多头</option></select></div>
-          <div class="filter-row"><label>短期趋势</label><select name="tech_short_trend"><option value="">不限</option><option value="strong_bullish">🟢 强多头</option><option value="bullish">🟢 多头</option><option value="recovering">🟡 修复中</option><option value="!bearish">🟢🟡 非空头</option></select></div>
-          <div class="filter-row"><label>动量</label><select name="tech_momentum"><option value="">不限</option><option value="super_strong">🟢 极强</option><option value="strong">🟢 强势</option><option value="startup">🟢 启动</option><option value="!weak">🟢🟡 非弱势</option></select></div>
+          <div class="filter-row"><label>趋势切换</label><select name="trend_switch" multiple><option value="recovering">🟡 刚变修复中</option><option value="bullish">🟢 刚变多头</option><option value="strong_bullish">🟢 刚变强多头</option></select></div>
+          <div class="filter-row"><label>趋势</label><select name="tech_trend" multiple><option value="strong_bullish">🟢 强多头</option><option value="bullish">🟢 多头</option><option value="recovering">🟡 修复中</option><option value="neutral">⚪ 震荡</option><option value="bearish">🔴 空头</option><option value="strong_bearish">🔴 强空头</option></select></div>
+          <div class="filter-row"><label>短期趋势切换</label><select name="short_trend_switch" multiple><option value="recovering">🟡 刚变修复中</option><option value="bullish">🟢 刚变多头</option><option value="strong_bullish">🟢 刚变强多头</option></select></div>
+          <div class="filter-row"><label>短期趋势</label><select name="tech_short_trend" multiple><option value="strong_bullish">🟢 强多头</option><option value="bullish">🟢 多头</option><option value="recovering">🟡 修复中</option><option value="neutral">⚪ 震荡</option><option value="bearish">🔴 空头</option><option value="strong_bearish">🔴 强空头</option></select></div>
+          <div class="filter-row"><label>动量</label><select name="tech_momentum" multiple><option value="super_strong">🟢 极强</option><option value="strong">🟢 强势</option><option value="startup">🟢 启动</option><option value="neutral">⚪ 中性</option><option value="weak">🔴 弱势</option></select></div>
+          <div class="filter-row"><label>均线上穿</label><select name="golden_cross" multiple><option value="5/10">MA5上穿MA10</option><option value="10/20">MA10上穿MA20</option><option value="5/20">MA5上穿MA20</option><option value="20/60">MA20上穿MA60</option><option value="5/60">MA5上穿MA60</option></select></div>
+          <div class="filter-row"><label>MACD金叉</label><select name="macd_cross" multiple><option value="zero_below">🔴 零轴下金叉</option><option value="zero_above">🟢 零轴上金叉</option></select></div>
           <div class="filter-row"><label>量能</label><select name="tech_volume"><option value="">不限</option><option value="bullish">🟢 放量配合</option><option value="!divergence">🟢🟡 非背离</option></select></div>
           <div class="filter-row"><label>位置</label><select name="tech_position"><option value="">不限</option><option value="low">🟢 低位</option><option value="!high">🟢🟡 非高位</option><option value="mid">🟡 中位</option></select></div>
           <div class="filter-row"><label>综合</label><select name="tech_conclusion"><option value="">不限</option><option value="buy_confirmed">🟢 确认买入</option><option value="buy_watch">🟡 买点观察</option><option value="wait_buy">🟡 等待买点</option><option value="left_observe">🟡 左侧观察</option><option value="!avoid">🟢🟡 非回避</option></select></div>
@@ -178,15 +190,16 @@
               <th></th>
               <th>股票名称</th>
               <th>现价</th>
+              <th>10MA距离</th>
               <th>PE-TTM</th>
               <th>趋势</th>
               <th>短期趋势</th>
               <th>短延续</th>
-              <th>RPS(20/50/120/250)</th>
+              <th>RPS</th>
               <th>前低股价</th>
               <th>前低位置</th>
               <th>排名(全/二级)</th>
-              <th>行业估值</th>
+              <th>估值位置</th>
               <th>行业温度</th>
               <th>行业维度</th>
               <th>行业分数</th>

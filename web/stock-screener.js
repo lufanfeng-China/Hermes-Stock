@@ -124,29 +124,23 @@ function collectMultiSelectValues(selectEl) {
 function buildParams(page = currentPage) {
   const params = new URLSearchParams();
   const data = new FormData(form);
+  // Collect multi-select values before single values overwrite them
+  const multiSelectNames = ['industry_temperature_label','tech_trend','tech_short_trend','tech_momentum','trend_switch','short_trend_switch',
+    'golden_cross','macd_cross','valuation_band','industry_level_1','industry_level_2'];
+  const multiValues = {};
   for (const [key, value] of data.entries()) {
-    if (key === 'industry_temperature_label' && temperatureSelectEl?.multiple) {
+    const text = String(value || '').trim();
+    if (!text) continue;
+    if (multiSelectNames.includes(key)) {
+      if (!multiValues[key]) multiValues[key] = [];
+      multiValues[key].push(text);
       continue;
     }
-    const text = String(value || '').trim();
-    if (text) params.set(key, text);
+    params.set(key, text);
   }
-  const temperatureLabels = collectMultiSelectValues(temperatureSelectEl);
-  if (temperatureLabels.length) {
-    params.set('industry_temperature_label', temperatureLabels.join(','));
-  }
-  const valuationBandEl = document.getElementById('stock-screener-valuation-band');
-  const valuationBands = collectMultiSelectValues(valuationBandEl);
-  if (valuationBands.length) {
-    params.set('valuation_band', valuationBands.join(','));
-  }
-  const level1Values = collectMultiSelectValues(level1El);
-  if (level1Values.length) {
-    params.set('industry_level_1', level1Values.join(','));
-  }
-  const level2Values = collectMultiSelectValues(level2El);
-  if (level2Values.length) {
-    params.set('industry_level_2', level2Values.join(','));
+  // Set multi-select as comma-separated
+  for (const [key, vals] of Object.entries(multiValues)) {
+    if (vals.length) params.set(key, vals.join(','));
   }
   const asOfDate = asOfDateInput?.value?.trim();
   if (asOfDate) params.set('as_of_date', asOfDate);
@@ -305,11 +299,12 @@ function renderScreenerRows(rows) {
       <td class="stock-screener-check-col"><input type="checkbox" class="stock-screener-row-check" data-idx="${idx}"></td>
       <td><strong class="screener-name-link" style="cursor:pointer;color:var(--text)" data-market="${escapeHtml(row.market)}" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}">${escapeHtml(row.stock_name || row.symbol)}</strong><span class="stock-screener-symbol">${escapeHtml(marketSymbol)}</span></td>
       <td class="num">${formatNumber(row.current_price, 2)}</td>
+      <td class="num" style="color:${(row.ma10_dist_pct||0)>=0?'var(--up)':'var(--down)'}">${row.ma10_dist_pct != null ? (row.ma10_dist_pct>=0?'+':'')+row.ma10_dist_pct.toFixed(1)+'%' : '-'}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
       <td>${trendSignal(row.tech_trend, row.tech_trend_label)}</td>
       <td>${trendSignal(row.tech_short_trend, row.tech_short_trend_label)}</td>
       <td class="num">${row.short_trend_duration || 1}天</td>
-      <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)} / ${formatNumber(row.rps_20, 0)}/${formatNumber(row.rps_50, 0)}/${formatNumber(row.rps_120, 0)}/${formatNumber(row.rps_250, 0)}</td>
+      <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)}</td>
       <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
       <td class="num">${(() => {
         const p = row.current_price, sl = row.swing_low_price;
@@ -875,3 +870,125 @@ loadWatchlistSet().then(() => {
   rerenderCurrentRows();
   updateWatchlistToolbar();
 });
+
+// ── Filter presets ──────────────────────────────────────────────────────
+const PRESETS_KEY = 'stock_screener_presets';
+const btnSave = document.getElementById('stock-screener-save-preset-btn');
+const ddWrap = document.getElementById('stock-screener-preset-dropdown');
+const ddBtnt = document.getElementById('stock-screener-preset-toggle');
+const ddMenu = document.getElementById('stock-screener-preset-menu');
+const btnDelete = document.getElementById('stock-screener-delete-preset-btn');
+let ddSelectedIdx = -1;
+
+function loadPresets() {
+  try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+function savePresets(presets) {
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  refreshPresetUI();
+}
+function collectCurrentFilters() {
+  const p = {};
+  const multiNames = ['industry_temperature_label','tech_trend','tech_short_trend','tech_momentum','trend_switch','short_trend_switch','golden_cross','macd_cross','valuation_band','industry_level_1','industry_level_2'];
+  new FormData(form).forEach((v, k) => {
+    const t = String(v||'').trim();
+    if (!t || k === 'strategy') return;
+    if (multiNames.includes(k)) {
+      if (!p[k]) p[k] = [];
+      p[k].push(t);
+    } else {
+      p[k] = t;
+    }
+  });
+  // Convert multi-value arrays to comma-separated strings
+  for (const k of multiNames) {
+    if (Array.isArray(p[k]) && p[k].length) p[k] = p[k].join(',');
+    else if (Array.isArray(p[k])) delete p[k];
+  }
+  return JSON.stringify(p);
+}
+function applyPreset(presetJson) {
+  try {
+    const p = JSON.parse(presetJson);
+    // Reset form first
+    form.reset();
+    document.getElementById('stock-screener-temperature')?.querySelectorAll('option').forEach(o => o.selected = false);
+    document.getElementById('stock-screener-valuation-band')?.querySelectorAll('option').forEach(o => o.selected = false);
+    level1El?.querySelectorAll('option').forEach(o => o.selected = false);
+    level2El?.querySelectorAll('option').forEach(o => o.selected = false);
+    // Apply values
+    for (const [k, v] of Object.entries(p)) {
+      const el = form.elements[k];
+      if (!el) continue;
+      if (el.multiple) {
+        const vals = v.split(',');
+        for (const opt of el.options) { opt.selected = vals.includes(opt.value); }
+      } else {
+        el.value = v;
+      }
+    }
+    currentPage = 1;
+    fetchAndRender();
+  } catch (e) { console.error('Failed to apply preset', e); }
+}
+function refreshPresetUI() {
+  const presets = loadPresets();
+  const hasAny = presets.length > 0;
+  ddWrap.style.display = hasAny ? '' : 'none';
+  btnDelete.style.display = hasAny ? '' : 'none';
+  if (!hasAny) { ddSelectedIdx = -1; return; }
+
+  ddBtnt.textContent = ddSelectedIdx >= 0 && ddSelectedIdx < presets.length
+    ? presets[ddSelectedIdx].name + ' ▾'
+    : '已存方案 ▾';
+
+  ddMenu.innerHTML = presets.map((p, i) =>
+    '<button class="preset-menu-item' + (i === ddSelectedIdx ? ' selected' : '') + '" data-idx="' + i + '">' +
+    escHtml(p.name) + '</button>'
+  ).join('');
+}
+
+function escHtml(s) { return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+btnSave?.addEventListener('click', () => {
+  const name = prompt('方案名称（如：高RPS低估值）：');
+  if (!name || !name.trim()) return;
+  const presets = loadPresets();
+  presets.push({ name: name.trim(), filters: collectCurrentFilters(), savedAt: new Date().toISOString() });
+  savePresets(presets);
+  ddSelectedIdx = presets.length - 1;
+  alert('方案已保存：' + name);
+});
+
+ddBtnt?.addEventListener('click', () => {
+  ddMenu.hidden = !ddMenu.hidden;
+});
+
+ddMenu?.addEventListener('click', (e) => {
+  const item = e.target.closest('.preset-menu-item');
+  if (!item) return;
+  const idx = parseInt(item.dataset.idx);
+  if (isNaN(idx)) return;
+  ddSelectedIdx = idx;
+  const presets = loadPresets();
+  if (presets[idx]) applyPreset(presets[idx].filters);
+  ddMenu.hidden = true;
+  refreshPresetUI();
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#stock-screener-preset-dropdown')) ddMenu.hidden = true;
+});
+
+btnDelete?.addEventListener('click', () => {
+  if (ddSelectedIdx < 0) return;
+  const presets = loadPresets();
+  const name = presets[ddSelectedIdx].name;
+  if (!confirm('删除方案「' + name + '」？')) return;
+  presets.splice(ddSelectedIdx, 1);
+  ddSelectedIdx = -1;
+  savePresets(presets);
+});
+
+refreshPresetUI();
