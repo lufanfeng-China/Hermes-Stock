@@ -1034,6 +1034,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Expose to global scope for onclick attributes
+// Expose to global scope for onclick attributes (ES modules don't auto-expose)
 window.openBottleneckKline = openBottleneckKline;
 window.closeBottleneckKline = closeBottleneckKline;
+window.selectTrend = selectTrend;
+window.executeStep1 = executeStep1;
+window.navigateStep = navigateStep;
+window.markStepComplete = markStepComplete;
+window.renderStep1 = renderStep1;
+window.renderStep2 = renderStep2;
+window.renderStep3 = renderStep3;
+window.renderStep4 = renderStep4;
+window.renderStep5 = renderStep5;
+window.renderStep6 = renderStep6;
+window.renderStep7 = renderStep7;
+window.loadSavedReport = loadSavedReport;
+window.rerunReport = rerunReport;
+window.saveCurrentReport = saveCurrentReport;
+window.exportReport = exportReport;
+window.startAuto = startAuto;
+window.toggleHistory = toggleHistory;
