@@ -21,7 +21,7 @@ DEFAULT_SYMBOL = "601600"
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_first", "ma_cross", "washout", "rps_climb", "blowup_stall", "blowup_break"}:
+    if strategy not in {"rps_first", "ma_cross", "washout", "rps_climb", "blowup_stall", "blowup_break", "ma_pullback"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
