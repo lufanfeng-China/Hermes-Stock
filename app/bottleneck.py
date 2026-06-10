@@ -684,16 +684,18 @@ def step4_map_stocks(trend_id):
                 code = entry.get("code", "")
                 name = entry.get("name", "")
                 mapping_reason = entry.get("mapping_reason", "")
+                match_level = entry.get("match_level", "")
             else:
                 code = str(entry)
                 name = ""
                 mapping_reason = ""
+                match_level = ""
             if not code:
                 continue
             market = "sh" if code.startswith("6") else "sz"
             if not name:
                 name = _lookup_stock_name(market, code)
-            stocks_with_names.append({"code": code, "name": name, "mapping_reason": mapping_reason})
+            stocks_with_names.append({"code": code, "name": name, "mapping_reason": mapping_reason, "match_level": match_level})
 
         mapped_layers.append({
             "level": layer["level"],

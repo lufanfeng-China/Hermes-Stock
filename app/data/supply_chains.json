@@ -239,12 +239,14 @@
             {
               "code": "002747",
               "name": "埃斯顿",
-              "mapping_reason": "国产工业机器人龙头，人形机器人关节模组拓展"
+              "mapping_reason": "国产工业机器人龙头，人形机器人关节模组拓展",
+              "match_level": "high"
             },
             {
               "code": "300024",
               "name": "新松机器人",
-              "mapping_reason": "中国机器人国家队，优必选核心合作伙伴"
+              "mapping_reason": "中国机器人国家队，优必选核心合作伙伴",
+              "match_level": "medium"
             }
           ]
         },
@@ -274,17 +276,20 @@
             {
               "code": "601100",
               "name": "恒立液压",
-              "mapping_reason": "液压件龙头切入丝杠+电机+编码器一体化总成，特斯拉Optimus潜在供应商"
+              "mapping_reason": "液压件龙头切入丝杠+电机+编码器一体化总成，特斯拉Optimus潜在供应商",
+              "match_level": "high"
             },
             {
               "code": "688377",
               "name": "鼎智科技",
-              "mapping_reason": "微型丝杠+电机+编码器一体化组件，执行器微型化领先"
+              "mapping_reason": "微型丝杠+电机+编码器一体化组件，执行器微型化领先",
+              "match_level": "medium"
             },
             {
               "code": "300124",
               "name": "汇川技术",
-              "mapping_reason": "伺服/电驱/控制器三合一体，旋转执行器总成能力"
+              "mapping_reason": "伺服/电驱/控制器三合一体，旋转执行器总成能力",
+              "match_level": "general"
             }
           ]
         },
@@ -316,22 +321,26 @@
             {
               "code": "601100",
               "name": "恒立液压",
-              "mapping_reason": "国内唯一批产机器人行星滚柱丝杠(2024投产，5万→50万根/年扩产)，特斯拉送样中"
+              "mapping_reason": "国内唯一批产机器人行星滚柱丝杠(2024投产，5万→50万根/年扩产)，特斯拉送样中",
+              "match_level": "high"
             },
             {
               "code": "688377",
               "name": "鼎智科技",
-              "mapping_reason": "微型行星滚柱丝杠+电机一体化，人形机器人微型关节领先"
+              "mapping_reason": "微型行星滚柱丝杠+电机一体化，人形机器人微型关节领先",
+              "match_level": "medium"
             },
             {
               "code": "300580",
               "name": "贝斯特",
-              "mapping_reason": "精密丝杠/滚珠丝杠龙头，行星滚柱丝杠送样特斯拉/宇树"
+              "mapping_reason": "精密丝杠/滚珠丝杠龙头，行星滚柱丝杠送样特斯拉/宇树",
+              "match_level": "high"
             },
             {
               "code": "603667",
               "name": "五洲新春",
-              "mapping_reason": "轴承→丝杠延伸，行星滚柱丝杠研发中，精密制造基础扎实"
+              "mapping_reason": "轴承→丝杠延伸，行星滚柱丝杠研发中，精密制造基础扎实",
+              "match_level": "general"
             }
           ]
         },
@@ -361,17 +370,20 @@
             {
               "code": "688017",
               "name": "绿的谐波",
-              "mapping_reason": "国产谐波减速器绝对龙头(国内≥60%)，特斯拉Optimus送样中，2025扩产至60万台/年"
+              "mapping_reason": "国产谐波减速器绝对龙头(国内≥60%)，特斯拉Optimus送样中，2025扩产至60万台/年",
+              "match_level": "high"
             },
             {
               "code": "002472",
               "name": "双环传动",
-              "mapping_reason": "RV减速器龙头(市占>40%)，谐波减速器新进入者，齿轮工艺降维打击"
+              "mapping_reason": "RV减速器龙头(市占>40%)，谐波减速器新进入者，齿轮工艺降维打击",
+              "match_level": "high"
             },
             {
               "code": "301550",
               "name": "斯菱股份",
-              "mapping_reason": "轴承+谐波减速器交叉领域，柔轮材料加工工艺独特"
+              "mapping_reason": "轴承+谐波减速器交叉领域，柔轮材料加工工艺独特",
+              "match_level": "general"
             }
           ]
         },
@@ -401,17 +413,20 @@
             {
               "code": "603662",
               "name": "柯力传感",
-              "mapping_reason": "A股唯一自制应变片力传感器企业，六维力研发成功送样机器人客户"
+              "mapping_reason": "A股唯一自制应变片力传感器企业，六维力研发成功送样机器人客户",
+              "match_level": "high"
             },
             {
               "code": "603489",
               "name": "八方股份",
-              "mapping_reason": "力矩传感器龙头，力矩检测技术可迁移至六维力"
+              "mapping_reason": "力矩传感器龙头，力矩检测技术可迁移至六维力",
+              "match_level": "high"
             },
             {
               "code": "300114",
               "name": "中航电测",
-              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中"
+              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中",
+              "match_level": "general"
             }
           ]
         },
@@ -441,22 +456,26 @@
             {
               "code": "603728",
               "name": "鸣志电器",
-              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树"
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树",
+              "match_level": "medium"
             },
             {
               "code": "688377",
               "name": "鼎智科技",
-              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整"
+              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整",
+              "match_level": "medium"
             },
             {
               "code": "003021",
               "name": "兆威机电",
-              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商"
+              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商",
+              "match_level": "high"
             },
             {
               "code": "300580",
               "name": "贝斯特",
-              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件"
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件",
+              "match_level": "medium"
             }
           ]
         },
@@ -486,17 +505,20 @@
             {
               "code": "688160",
               "name": "步科股份",
-              "mapping_reason": "无框力矩电机龙头，人形机器人低压伺服先驱，头部客户验证中"
+              "mapping_reason": "无框力矩电机龙头，人形机器人低压伺服先驱，头部客户验证中",
+              "match_level": "high"
             },
             {
               "code": "688698",
               "name": "伟创电气",
-              "mapping_reason": "无框力矩电机2024发布，人形机器人旋转关节电机新进入者"
+              "mapping_reason": "无框力矩电机2024发布，人形机器人旋转关节电机新进入者",
+              "match_level": "general"
             },
             {
               "code": "688320",
               "name": "禾川科技",
-              "mapping_reason": "伺服电机+控制器一体化，人形机器人关节电机拓展"
+              "mapping_reason": "伺服电机+控制器一体化，人形机器人关节电机拓展",
+              "match_level": "general"
             }
           ]
         },
@@ -525,12 +547,14 @@
             {
               "code": "300124",
               "name": "汇川技术",
-              "mapping_reason": "伺服电机+编码器一体化，磁编码器自研(18-22位分辨率)"
+              "mapping_reason": "伺服电机+编码器一体化，磁编码器自研(18-22位分辨率)",
+              "match_level": "medium"
             },
             {
               "code": "688320",
               "name": "禾川科技",
-              "mapping_reason": "编码器自研能力，运动控制完整方案商"
+              "mapping_reason": "编码器自研能力，运动控制完整方案商",
+              "match_level": "medium"
             }
           ]
         },
@@ -560,12 +584,14 @@
             {
               "code": "000708",
               "name": "中信特钢",
-              "mapping_reason": "国内最大特钢企业，轴承钢产能领先，SiMn牌号研发中"
+              "mapping_reason": "国内最大特钢企业，轴承钢产能领先，SiMn牌号研发中",
+              "match_level": "high"
             },
             {
               "code": "600399",
               "name": "抚顺特钢",
-              "mapping_reason": "高温合金/特钢龙头，军用轴承钢技术可迁移至机器人领域"
+              "mapping_reason": "高温合金/特钢龙头，军用轴承钢技术可迁移至机器人领域",
+              "match_level": "high"
             }
           ]
         }
@@ -603,17 +629,20 @@
             {
               "code": "600584",
               "name": "长电科技",
-              "mapping_reason": "国内先进封装绝对龙头，XDFOI 2.5D Chiplet平台量产"
+              "mapping_reason": "国内先进封装绝对龙头，XDFOI 2.5D Chiplet平台量产",
+              "match_level": "high"
             },
             {
               "code": "002156",
               "name": "通富微电",
-              "mapping_reason": "AMD先进封装核心供应商，FCBGA+2.5D路线"
+              "mapping_reason": "AMD先进封装核心供应商，FCBGA+2.5D路线",
+              "match_level": "high"
             },
             {
               "code": "002185",
               "name": "华天科技",
-              "mapping_reason": "国内第三大OSAT，Fan-Out+Chiplet布局中"
+              "mapping_reason": "国内第三大OSAT，Fan-Out+Chiplet布局中",
+              "match_level": "general"
             }
           ]
         },
@@ -638,17 +667,20 @@
             {
               "code": "603650",
               "name": "彤程新材",
-              "mapping_reason": "半导体光刻胶+封装材料平台，ABF膜替代研发最接近的国内标的"
+              "mapping_reason": "半导体光刻胶+封装材料平台，ABF膜替代研发最接近的国内标的",
+              "match_level": "general"
             },
             {
               "code": "002409",
               "name": "雅克科技",
-              "mapping_reason": "前驱体+特种气体+封装材料，绝缘薄膜材料技术储备"
+              "mapping_reason": "前驱体+特种气体+封装材料，绝缘薄膜材料技术储备",
+              "match_level": "general"
             },
             {
               "code": "300346",
               "name": "南大光电",
-              "mapping_reason": "前驱体+光刻胶，薄膜沉积材料技术可迁移"
+              "mapping_reason": "前驱体+光刻胶，薄膜沉积材料技术可迁移",
+              "match_level": "general"
             }
           ]
         },
@@ -678,17 +710,20 @@
             {
               "code": "002436",
               "name": "兴森科技",
-              "mapping_reason": "国内ABF载板最领先，FC-BGA基板小批量送样，广州基地2025年投产"
+              "mapping_reason": "国内ABF载板最领先，FC-BGA基板小批量送样，广州基地2025年投产",
+              "match_level": "medium"
             },
             {
               "code": "002916",
               "name": "深南电路",
-              "mapping_reason": "国内PCB龙头，FC-BGA基板技术上探，广州基地建设中"
+              "mapping_reason": "国内PCB龙头，FC-BGA基板技术上探，广州基地建设中",
+              "match_level": "high"
             },
             {
               "code": "002579",
               "name": "中京电子",
-              "mapping_reason": "FC-BGA封装基板新进入者，IC载板产线建设"
+              "mapping_reason": "FC-BGA封装基板新进入者，IC载板产线建设",
+              "match_level": "general"
             }
           ]
         },
@@ -717,12 +752,14 @@
             {
               "code": "688981",
               "name": "中芯国际",
-              "mapping_reason": "国内唯一有TSV量产经验的代工厂(CIS/BSI)，中介层技术储备最强"
+              "mapping_reason": "国内唯一有TSV量产经验的代工厂(CIS/BSI)，中介层技术储备最强",
+              "match_level": "high"
             },
             {
               "code": "002371",
               "name": "北方华创",
-              "mapping_reason": "TSV深硅刻蚀设备供应商，Bosch工艺深孔刻蚀+薄膜沉积，中介层制造核心设备"
+              "mapping_reason": "TSV深硅刻蚀设备供应商，Bosch工艺深孔刻蚀+薄膜沉积，中介层制造核心设备",
+              "match_level": "medium"
             }
           ]
         },
@@ -750,12 +787,14 @@
             {
               "code": "688072",
               "name": "拓荆科技",
-              "mapping_reason": "国内键合设备龙头(薄膜沉积→键合延伸)，混合键合研发中"
+              "mapping_reason": "国内键合设备龙头(薄膜沉积→键合延伸)，混合键合研发中",
+              "match_level": "high"
             },
             {
               "code": "002371",
               "name": "北方华创",
-              "mapping_reason": "多品类半导体设备平台，键合+刻蚀+薄膜综合能力"
+              "mapping_reason": "多品类半导体设备平台，键合+刻蚀+薄膜综合能力",
+              "match_level": "medium"
             }
           ]
         },
@@ -784,17 +823,20 @@
             {
               "code": "300236",
               "name": "上海新阳",
-              "mapping_reason": "半导体电镀液+清洗液龙头，临时键合胶开发中，TSV电镀铜工艺配套"
+              "mapping_reason": "半导体电镀液+清洗液龙头，临时键合胶开发中，TSV电镀铜工艺配套",
+              "match_level": "high"
             },
             {
               "code": "300655",
               "name": "晶瑞电材",
-              "mapping_reason": "半导体光刻胶+电子化学品平台，晶圆键合胶研发中"
+              "mapping_reason": "半导体光刻胶+电子化学品平台，晶圆键合胶研发中",
+              "match_level": "general"
             },
             {
               "code": "300398",
               "name": "飞凯材料",
-              "mapping_reason": "紫外固化材料龙头，临时键合UV光响应材料技术储备"
+              "mapping_reason": "紫外固化材料龙头，临时键合UV光响应材料技术储备",
+              "match_level": "high"
             }
           ]
         },
@@ -822,17 +864,20 @@
             {
               "code": "002156",
               "name": "通富微电",
-              "mapping_reason": "国内HBM封装唯一标的，已为国际客户提供HBM2E封装，与长鑫合作HBM国产化"
+              "mapping_reason": "国内HBM封装唯一标的，已为国际客户提供HBM2E封装，与长鑫合作HBM国产化",
+              "match_level": "high"
             },
             {
               "code": "603986",
               "name": "兆易创新",
-              "mapping_reason": "NOR Flash/DRAM龙头，与长鑫合作DRAM→长期HBM"
+              "mapping_reason": "NOR Flash/DRAM龙头，与长鑫合作DRAM→长期HBM",
+              "match_level": "high"
             },
             {
               "code": "688525",
               "name": "佰维存储",
-              "mapping_reason": "存储模组龙头，HBM模组封装/测试拓展"
+              "mapping_reason": "存储模组龙头，HBM模组封装/测试拓展",
+              "match_level": "high"
             }
           ]
         }
@@ -1319,12 +1364,14 @@
             {
               "code": "600895",
               "name": "张江高科",
-              "mapping_reason": "上海微电子主要股东(间接)，张江科学城半导体产业集群"
+              "mapping_reason": "上海微电子主要股东(间接)，张江科学城半导体产业集群",
+              "match_level": "medium"
             },
             {
               "code": "688981",
               "name": "中芯国际",
-              "mapping_reason": "光刻机最大用户，国产光刻机验证合作方"
+              "mapping_reason": "光刻机最大用户，国产光刻机验证合作方",
+              "match_level": "general"
             }
           ]
         },
@@ -1352,17 +1399,20 @@
             {
               "code": "002222",
               "name": "福晶科技",
-              "mapping_reason": "非线性光学晶体全球龙头(市占>80%)，DUV/EUV光源倍频晶体核心供应商"
+              "mapping_reason": "非线性光学晶体全球龙头(市占>80%)，DUV/EUV光源倍频晶体核心供应商",
+              "match_level": "high"
             },
             {
               "code": "688195",
               "name": "腾景科技",
-              "mapping_reason": "精密光学元件，光刻机光源光学模组/衍射光栅"
+              "mapping_reason": "精密光学元件，光刻机光源光学模组/衍射光栅",
+              "match_level": "medium"
             },
             {
               "code": "688010",
               "name": "福光股份",
-              "mapping_reason": "特种光学镜头，光刻机照明系统光学元件"
+              "mapping_reason": "特种光学镜头，光刻机照明系统光学元件",
+              "match_level": "general"
             }
           ]
         },
@@ -1390,17 +1440,20 @@
             {
               "code": "002338",
               "name": "奥普光电",
-              "mapping_reason": "长春光机所上市平台，光刻机物镜系统精密光学元件供应商"
+              "mapping_reason": "长春光机所上市平台，光刻机物镜系统精密光学元件供应商",
+              "match_level": "medium"
             },
             {
               "code": "300331",
               "name": "苏大维格",
-              "mapping_reason": "微纳光学制造龙头，光刻机掩模对准/衍射光学元件"
+              "mapping_reason": "微纳光学制造龙头，光刻机掩模对准/衍射光学元件",
+              "match_level": "high"
             },
             {
               "code": "300456",
               "name": "赛微电子",
-              "mapping_reason": "MEMS微镜/微纳加工，光刻机光学MEMS器件"
+              "mapping_reason": "MEMS微镜/微纳加工，光刻机光学MEMS器件",
+              "match_level": "general"
             }
           ]
         },
@@ -1427,17 +1480,20 @@
             {
               "code": "002338",
               "name": "奥普光电",
-              "mapping_reason": "长春光机所平台，光刻机精密测量/干涉仪"
+              "mapping_reason": "长春光机所平台，光刻机精密测量/干涉仪",
+              "match_level": "medium"
             },
             {
               "code": "300124",
               "name": "汇川技术",
-              "mapping_reason": "伺服/直线电机龙头，光刻机磁悬浮工件台驱动电机"
+              "mapping_reason": "伺服/直线电机龙头，光刻机磁悬浮工件台驱动电机",
+              "match_level": "high"
             },
             {
               "code": "300567",
               "name": "精测电子",
-              "mapping_reason": "半导体检测龙头，光刻机套刻精度/对准测量"
+              "mapping_reason": "半导体检测龙头，光刻机套刻精度/对准测量",
+              "match_level": "high"
             }
           ]
         },
@@ -1468,17 +1524,20 @@
             {
               "code": "688409",
               "name": "富创精密",
-              "mapping_reason": "国内唯一进入ASML供应链(精密零部件)，金属/非金属零部件精密加工"
+              "mapping_reason": "国内唯一进入ASML供应链(精密零部件)，金属/非金属零部件精密加工",
+              "match_level": "high"
             },
             {
               "code": "300260",
               "name": "新莱应材",
-              "mapping_reason": "超高洁净管阀龙头，光刻机气体/真空系统管路，ASML间接供应商"
+              "mapping_reason": "超高洁净管阀龙头，光刻机气体/真空系统管路，ASML间接供应商",
+              "match_level": "high"
             },
             {
               "code": "300666",
               "name": "江丰电子",
-              "mapping_reason": "溅射靶材龙头，光刻机镜片镀膜靶材"
+              "mapping_reason": "溅射靶材龙头，光刻机镜片镀膜靶材",
+              "match_level": "high"
             }
           ]
         },
@@ -1509,22 +1568,26 @@
             {
               "code": "603650",
               "name": "彤程新材",
-              "mapping_reason": "国内光刻胶龙头，ArF浸没式光刻胶通过中芯国际验证(2025)，唯一接近量产的国产ArF光刻胶"
+              "mapping_reason": "国内光刻胶龙头，ArF浸没式光刻胶通过中芯国际验证(2025)，唯一接近量产的国产ArF光刻胶",
+              "match_level": "high"
             },
             {
               "code": "300346",
               "name": "南大光电",
-              "mapping_reason": "ArF光刻胶研发中(国家02专项)，前驱体+光刻胶双材料平台"
+              "mapping_reason": "ArF光刻胶研发中(国家02专项)，前驱体+光刻胶双材料平台",
+              "match_level": "general"
             },
             {
               "code": "300655",
               "name": "晶瑞电材",
-              "mapping_reason": "i-line/KrF光刻胶量产，ArF光刻胶中试"
+              "mapping_reason": "i-line/KrF光刻胶量产，ArF光刻胶中试",
+              "match_level": "medium"
             },
             {
               "code": "300236",
               "name": "上海新阳",
-              "mapping_reason": "KrF厚膜光刻胶量产，ArF干法光刻胶研发中"
+              "mapping_reason": "KrF厚膜光刻胶量产，ArF干法光刻胶研发中",
+              "match_level": "medium"
             }
           ]
         },
@@ -1554,12 +1617,14 @@
             {
               "code": "688268",
               "name": "华特气体",
-              "mapping_reason": "国内唯一通过ASML认证的光刻气供应商(氟氖混合气)，KrF/ArF激光气国产化先锋"
+              "mapping_reason": "国内唯一通过ASML认证的光刻气供应商(氟氖混合气)，KrF/ArF激光气国产化先锋",
+              "match_level": "high"
             },
             {
               "code": "002409",
               "name": "雅克科技",
-              "mapping_reason": "前驱体+SOD旋涂介质+特种气体，光刻材料综合平台"
+              "mapping_reason": "前驱体+SOD旋涂介质+特种气体，光刻材料综合平台",
+              "match_level": "medium"
             }
           ]
         }
@@ -1596,17 +1661,20 @@
             {
               "code": "300450",
               "name": "先导智能",
-              "mapping_reason": "全球首条车规级固态电池整线交付宁德时代，叠片+等静压+复合系统全自研"
+              "mapping_reason": "全球首条车规级固态电池整线交付宁德时代，叠片+等静压+复合系统全自研",
+              "match_level": "high"
             },
             {
               "code": "688499",
               "name": "利元亨",
-              "mapping_reason": "干法涂布+辊压+热复合+叠片全套，广汽埃安联合开发固态整线"
+              "mapping_reason": "干法涂布+辊压+热复合+叠片全套，广汽埃安联合开发固态整线",
+              "match_level": "medium"
             },
             {
               "code": "300457",
               "name": "赢合科技",
-              "mapping_reason": "湿法+干法双路线，2024年涂覆设备交付头部客户，2025H1批量交付中试线"
+              "mapping_reason": "湿法+干法双路线，2024年涂覆设备交付头部客户，2025H1批量交付中试线",
+              "match_level": "medium"
             }
           ]
         },
@@ -1636,22 +1704,26 @@
             {
               "code": "832522",
               "name": "纳科诺尔",
-              "mapping_reason": "国内锂电辊压市占率第一23.4%，四辊/五辊/八辊/十辊干法成膜设备全系列，与清研电子合资建示范线"
+              "mapping_reason": "国内锂电辊压市占率第一23.4%，四辊/五辊/八辊/十辊干法成膜设备全系列，与清研电子合资建示范线",
+              "match_level": "high"
             },
             {
               "code": "301325",
               "name": "曼恩斯特",
-              "mapping_reason": "湿法+干法双线，已交付干法多辊成膜系统+陶瓷双螺杆纤维化设备至客户现场"
+              "mapping_reason": "湿法+干法双线，已交付干法多辊成膜系统+陶瓷双螺杆纤维化设备至客户现场",
+              "match_level": "medium"
             },
             {
               "code": "603659",
               "name": "璞泰来",
-              "mapping_reason": "干法电极整线方案，锂带压延设备单双面覆锂，与Blue Solutions联合开发"
+              "mapping_reason": "干法电极整线方案，锂带压延设备单双面覆锂，与Blue Solutions联合开发",
+              "match_level": "medium"
             },
             {
               "code": "688559",
               "name": "海目星",
-              "mapping_reason": "硫化物/氧化物双路线激光+涂布+辊压+叠片+致密化全环节"
+              "mapping_reason": "硫化物/氧化物双路线激光+涂布+辊压+叠片+致密化全环节",
+              "match_level": "general"
             }
           ]
         },
@@ -1682,22 +1754,26 @@
             {
               "code": "002460",
               "name": "赣锋锂业",
-              "mapping_reason": "国内唯一百吨级高纯Li₂S中试线(2024建成)，全球锂业龙头，纵向延伸至固态电解质/固态电池"
+              "mapping_reason": "国内唯一百吨级高纯Li₂S中试线(2024建成)，全球锂业龙头，纵向延伸至固态电解质/固态电池",
+              "match_level": "high"
             },
             {
               "code": "002709",
               "name": "天赐材料",
-              "mapping_reason": "锂盐全球龙头LiPF₆市占率30%+，Li₂S中试中，规划500吨级产线"
+              "mapping_reason": "锂盐全球龙头LiPF₆市占率30%+，Li₂S中试中，规划500吨级产线",
+              "match_level": "high"
             },
             {
               "code": "688456",
               "name": "有研粉材",
-              "mapping_reason": "电解铜粉龙头转型，电化学法制备高纯Li₂S中试，央企背景"
+              "mapping_reason": "电解铜粉龙头转型，电化学法制备高纯Li₂S中试，央企背景",
+              "match_level": "high"
             },
             {
               "code": "300769",
               "name": "德方纳米",
-              "mapping_reason": "磷酸铁锂正极龙头，布局液相法制备Li₂S，纳电正极技术可复用"
+              "mapping_reason": "磷酸铁锂正极龙头，布局液相法制备Li₂S，纳电正极技术可复用",
+              "match_level": "high"
             }
           ]
         },
@@ -1728,17 +1804,20 @@
             {
               "code": "002460",
               "name": "赣锋锂业",
-              "mapping_reason": "全球唯一同时具备Li₂S前驱体+超薄锂带+固态电解质+固态电池产业链闭环的企业"
+              "mapping_reason": "全球唯一同时具备Li₂S前驱体+超薄锂带+固态电解质+固态电池产业链闭环的企业",
+              "match_level": "high"
             },
             {
               "code": "002466",
               "name": "天齐锂业",
-              "mapping_reason": "SQM/Greenbushes股东，超薄锂带技术储备，锂资源端最强话语权"
+              "mapping_reason": "SQM/Greenbushes股东，超薄锂带技术储备，锂资源端最强话语权",
+              "match_level": "high"
             },
             {
               "code": "603659",
               "name": "璞泰来",
-              "mapping_reason": "锂带压延设备龙头，单双面覆锂+干法成膜，设备端与材料端呼应"
+              "mapping_reason": "锂带压延设备龙头，单双面覆锂+干法成膜，设备端与材料端呼应",
+              "match_level": "high"
             }
           ]
         },
@@ -1769,17 +1848,20 @@
             {
               "code": "300073",
               "name": "当升科技",
-              "mapping_reason": "固态正极双相复合，已向清陶/卫蓝批量送样"
+              "mapping_reason": "固态正极双相复合，已向清陶/卫蓝批量送样",
+              "match_level": "medium"
             },
             {
               "code": "688005",
               "name": "容百科技",
-              "mapping_reason": "高镍/超高镍龙头，固态正极+钠电双路线"
+              "mapping_reason": "高镍/超高镍龙头，固态正极+钠电双路线",
+              "match_level": "high"
             },
             {
               "code": "300769",
               "name": "德方纳米",
-              "mapping_reason": "磷酸铁锂龙头，布局液相法固态正极材料"
+              "mapping_reason": "磷酸铁锂龙头，布局液相法固态正极材料",
+              "match_level": "high"
             }
           ]
         },
@@ -1807,12 +1889,14 @@
             {
               "code": "300450",
               "name": "先导智能",
-              "mapping_reason": "自研等静压+高效复合系统，打通全固态致密化工艺"
+              "mapping_reason": "自研等静压+高效复合系统，打通全固态致密化工艺",
+              "match_level": "medium"
             },
             {
               "code": "300648",
               "name": "星云股份",
-              "mapping_reason": "等静压检测系统(纳米级精度)，高压化成设备龙头"
+              "mapping_reason": "等静压检测系统(纳米级精度)，高压化成设备龙头",
+              "match_level": "high"
             }
           ]
         },
@@ -1843,17 +1927,20 @@
             {
               "code": "688116",
               "name": "天奈科技",
-              "mapping_reason": "碳纳米管导电剂龙头(市占率40%+)，单壁CNT全球首批量产"
+              "mapping_reason": "碳纳米管导电剂龙头(市占率40%+)，单壁CNT全球首批量产",
+              "match_level": "high"
             },
             {
               "code": "600210",
               "name": "紫江企业",
-              "mapping_reason": "国产铝塑膜龙头，软包封装渗透率提升受益"
+              "mapping_reason": "国产铝塑膜龙头，软包封装渗透率提升受益",
+              "match_level": "high"
             },
             {
               "code": "002992",
               "name": "宝明科技",
-              "mapping_reason": "PET复合铜箔龙头，固态电池安全+轻量化双受益"
+              "mapping_reason": "PET复合铜箔龙头，固态电池安全+轻量化双受益",
+              "match_level": "high"
             }
           ]
         }
@@ -1891,12 +1978,14 @@
             {
               "code": "600118",
               "name": "中国卫星",
-              "mapping_reason": "航天五院上市平台，小卫星制造龙头，星网/鸿雁星座核心供应商"
+              "mapping_reason": "航天五院上市平台，小卫星制造龙头，星网/鸿雁星座核心供应商",
+              "match_level": "high"
             },
             {
               "code": "603131",
               "name": "上海沪工",
-              "mapping_reason": "民营航天制造+地面站，星网第一批供应商"
+              "mapping_reason": "民营航天制造+地面站，星网第一批供应商",
+              "match_level": "medium"
             }
           ]
         },
@@ -1926,17 +2015,20 @@
             {
               "code": "600118",
               "name": "中国卫星",
-              "mapping_reason": "航天五院小卫星平台核心上市载体，天津脉动生产线建设中"
+              "mapping_reason": "航天五院小卫星平台核心上市载体，天津脉动生产线建设中",
+              "match_level": "medium"
             },
             {
               "code": "688270",
               "name": "臻镭科技",
-              "mapping_reason": "宇航级SIP微系统/射频前端，卫星批产电子化关键供应商"
+              "mapping_reason": "宇航级SIP微系统/射频前端，卫星批产电子化关键供应商",
+              "match_level": "medium"
             },
             {
               "code": "688143",
               "name": "长盈通",
-              "mapping_reason": "特种光纤陀螺，卫星姿态控制核心器件，星链单颗卫星用3-4个"
+              "mapping_reason": "特种光纤陀螺，卫星姿态控制核心器件，星链单颗卫星用3-4个",
+              "match_level": "medium"
             }
           ]
         },
@@ -1966,17 +2058,20 @@
             {
               "code": "002281",
               "name": "光迅科技",
-              "mapping_reason": "光模块+激光器龙头，窄线宽激光器可应用于星间激光通信光源"
+              "mapping_reason": "光模块+激光器龙头，窄线宽激光器可应用于星间激光通信光源",
+              "match_level": "high"
             },
             {
               "code": "688498",
               "name": "源杰科技",
-              "mapping_reason": "高端激光器芯片，1550nm窄线宽DFB激光器可用于相干光通信"
+              "mapping_reason": "高端激光器芯片，1550nm窄线宽DFB激光器可用于相干光通信",
+              "match_level": "medium"
             },
             {
               "code": "688205",
               "name": "德科立",
-              "mapping_reason": "相干光模块+EDFA光放大，长距光通信技术可迁移至星间链路"
+              "mapping_reason": "相干光模块+EDFA光放大，长距光通信技术可迁移至星间链路",
+              "match_level": "general"
             }
           ]
         },
@@ -2006,17 +2101,20 @@
             {
               "code": "001270",
               "name": "铖昌科技",
-              "mapping_reason": "星载相控阵TR芯片龙头，低轨卫星通信TR芯片市占率>50%"
+              "mapping_reason": "星载相控阵TR芯片龙头，低轨卫星通信TR芯片市占率>50%",
+              "match_level": "high"
             },
             {
               "code": "688375",
               "name": "国博电子",
-              "mapping_reason": "宇航级TR组件顶级供应商，星网核心配套"
+              "mapping_reason": "宇航级TR组件顶级供应商，星网核心配套",
+              "match_level": "medium"
             },
             {
               "code": "301050",
               "name": "雷电微力",
-              "mapping_reason": "毫米波相控阵天线，星载/弹载通信双场景"
+              "mapping_reason": "毫米波相控阵天线，星载/弹载通信双场景",
+              "match_level": "general"
             }
           ]
         },
@@ -2046,17 +2144,20 @@
             {
               "code": "600343",
               "name": "航天动力",
-              "mapping_reason": "液体火箭发动机核心供应商，航天六院上市平台，可回收技术需大推力变推力发动机"
+              "mapping_reason": "液体火箭发动机核心供应商，航天六院上市平台，可回收技术需大推力变推力发动机",
+              "match_level": "high"
             },
             {
               "code": "600879",
               "name": "航天电子",
-              "mapping_reason": "火箭电子/惯导/MEMS传感器，一箭多星分离系统"
+              "mapping_reason": "火箭电子/惯导/MEMS传感器，一箭多星分离系统",
+              "match_level": "medium"
             },
             {
               "code": "688102",
               "name": "斯瑞新材",
-              "mapping_reason": "铜合金推力室内壁龙头，液体火箭发动机关键耐热材料"
+              "mapping_reason": "铜合金推力室内壁龙头，液体火箭发动机关键耐热材料",
+              "match_level": "high"
             }
           ]
         },
@@ -2086,17 +2187,20 @@
             {
               "code": "002049",
               "name": "紫光国微",
-              "mapping_reason": "特种FPGA/SRAM龙头，宇航级芯片主要供应商"
+              "mapping_reason": "特种FPGA/SRAM龙头，宇航级芯片主要供应商",
+              "match_level": "high"
             },
             {
               "code": "000733",
               "name": "振华科技",
-              "mapping_reason": "军用电子元器件平台，宇航级MLCC/电阻/电感齐全"
+              "mapping_reason": "军用电子元器件平台，宇航级MLCC/电阻/电感齐全",
+              "match_level": "medium"
             },
             {
               "code": "002025",
               "name": "航天电器",
-              "mapping_reason": "宇航级连接器/继电器龙头，星载互联必需品"
+              "mapping_reason": "宇航级连接器/继电器龙头，星载互联必需品",
+              "match_level": "high"
             }
           ]
         },
@@ -2124,12 +2228,14 @@
             {
               "code": "300102",
               "name": "乾照光电",
-              "mapping_reason": "GaAs外延片龙头，空间级三结太阳能电池外延片供应商"
+              "mapping_reason": "GaAs外延片龙头，空间级三结太阳能电池外延片供应商",
+              "match_level": "high"
             },
             {
               "code": "300750",
               "name": "宁德时代",
-              "mapping_reason": "锂离子蓄电池龙头，空间级电池组拓展"
+              "mapping_reason": "锂离子蓄电池龙头，空间级电池组拓展",
+              "match_level": "high"
             }
           ]
         }
@@ -2168,17 +2274,20 @@
             {
               "code": "002085",
               "name": "万丰奥威",
-              "mapping_reason": "收购钻石飞机，eVTOL/eCTOL整机转型，通航制造底蕴深厚"
+              "mapping_reason": "收购钻石飞机，eVTOL/eCTOL整机转型，通航制造底蕴深厚",
+              "match_level": "medium"
             },
             {
               "code": "600038",
               "name": "中直股份",
-              "mapping_reason": "直升机龙头，旋翼→倾转旋翼eVTOL技术迁移路径清晰"
+              "mapping_reason": "直升机龙头，旋翼→倾转旋翼eVTOL技术迁移路径清晰",
+              "match_level": "high"
             },
             {
               "code": "688070",
               "name": "纵横股份",
-              "mapping_reason": "工业无人机龙头，eVTOL技术同源(电推进+飞控)"
+              "mapping_reason": "工业无人机龙头，eVTOL技术同源(电推进+飞控)",
+              "match_level": "high"
             }
           ]
         },
@@ -2208,17 +2317,20 @@
             {
               "code": "300750",
               "name": "宁德时代",
-              "mapping_reason": "凝聚态电池500Wh/kg，航空级电池最领先，亿航核心供应商"
+              "mapping_reason": "凝聚态电池500Wh/kg，航空级电池最领先，亿航核心供应商",
+              "match_level": "high"
             },
             {
               "code": "002074",
               "name": "国轩高科",
-              "mapping_reason": "半固态电池360Wh/kg，航空电池布局中"
+              "mapping_reason": "半固态电池360Wh/kg，航空电池布局中",
+              "match_level": "general"
             },
             {
               "code": "688567",
               "name": "孚能科技",
-              "mapping_reason": "eVTOL电池全球先发，已获海外eVTOL客户定点"
+              "mapping_reason": "eVTOL电池全球先发，已获海外eVTOL客户定点",
+              "match_level": "medium"
             }
           ]
         },
@@ -2247,12 +2359,14 @@
             {
               "code": "600580",
               "name": "卧龙电驱",
-              "mapping_reason": "全球首家中/欧双认证航空电机供应商，Volocopter+EHang核心供应商，功率密度>5kW/kg"
+              "mapping_reason": "全球首家中/欧双认证航空电机供应商，Volocopter+EHang核心供应商，功率密度>5kW/kg",
+              "match_level": "high"
             },
             {
               "code": "300124",
               "name": "汇川技术",
-              "mapping_reason": "工业伺服/电驱龙头，航空电机拓展中，技术基础最强"
+              "mapping_reason": "工业伺服/电驱龙头，航空电机拓展中，技术基础最强",
+              "match_level": "high"
             }
           ]
         },
@@ -2282,17 +2396,20 @@
             {
               "code": "300699",
               "name": "光威复材",
-              "mapping_reason": "航空碳纤维龙头，T800H已批量供应航空级，T1000级研发中"
+              "mapping_reason": "航空碳纤维龙头，T800H已批量供应航空级，T1000级研发中",
+              "match_level": "high"
             },
             {
               "code": "688295",
               "name": "中复神鹰",
-              "mapping_reason": "千吨级干喷湿纺T800碳纤维，成本优势显著"
+              "mapping_reason": "千吨级干喷湿纺T800碳纤维，成本优势显著",
+              "match_level": "medium"
             },
             {
               "code": "300777",
               "name": "中简科技",
-              "mapping_reason": "ZT7/T700碳纤维专精，航空航天领域绑定紧密"
+              "mapping_reason": "ZT7/T700碳纤维专精，航空航天领域绑定紧密",
+              "match_level": "general"
             }
           ]
         },
@@ -2322,17 +2439,20 @@
             {
               "code": "600372",
               "name": "中航机载",
-              "mapping_reason": "航空机载系统平台，飞控/导航/大气数据系统集成能力最强"
+              "mapping_reason": "航空机载系统平台，飞控/导航/大气数据系统集成能力最强",
+              "match_level": "medium"
             },
             {
               "code": "600879",
               "name": "航天电子",
-              "mapping_reason": "惯导/MEMS传感器，低空eVTOL导航核心器件供应"
+              "mapping_reason": "惯导/MEMS传感器，低空eVTOL导航核心器件供应",
+              "match_level": "medium"
             },
             {
               "code": "600990",
               "name": "四创电子",
-              "mapping_reason": "低空监视雷达+空管系统，低空智联网核心基础设施"
+              "mapping_reason": "低空监视雷达+空管系统，低空智联网核心基础设施",
+              "match_level": "medium"
             }
           ]
         },
@@ -2360,12 +2480,14 @@
             {
               "code": "002967",
               "name": "广电计量",
-              "mapping_reason": "航空计量/检测龙头，eVTOL电磁兼容/环境可靠性测试"
+              "mapping_reason": "航空计量/检测龙头，eVTOL电磁兼容/环境可靠性测试",
+              "match_level": "high"
             },
             {
               "code": "301306",
               "name": "西测测试",
-              "mapping_reason": "军工/航空环境与可靠性测试，eVTOL适航验证产业链"
+              "mapping_reason": "军工/航空环境与可靠性测试，eVTOL适航验证产业链",
+              "match_level": "general"
             }
           ]
         }
@@ -2404,7 +2526,8 @@
             {
               "code": "688027",
               "name": "国盾量子",
-              "mapping_reason": "量子通信+量子计算双龙头，参与祖冲之号，量子随机数发生器商用化"
+              "mapping_reason": "量子通信+量子计算双龙头，参与祖冲之号，量子随机数发生器商用化",
+              "match_level": "high"
             }
           ]
         },
@@ -2433,12 +2556,14 @@
             {
               "code": "688027",
               "name": "国盾量子",
-              "mapping_reason": "稀释制冷机在研，量子计算基础设施最全的A股标的"
+              "mapping_reason": "稀释制冷机在研，量子计算基础设施最全的A股标的",
+              "match_level": "medium"
             },
             {
               "code": "688048",
               "name": "长光华芯",
-              "mapping_reason": "高功率半导体激光芯片龙头，低温光学/量子光源上游"
+              "mapping_reason": "高功率半导体激光芯片龙头，低温光学/量子光源上游",
+              "match_level": "high"
             }
           ]
         },
@@ -2467,12 +2592,14 @@
             {
               "code": "688396",
               "name": "华润微",
-              "mapping_reason": "国内少数具备超导薄膜工艺的代工厂，MEMS/NEMS微纳加工经验可迁移"
+              "mapping_reason": "国内少数具备超导薄膜工艺的代工厂，MEMS/NEMS微纳加工经验可迁移",
+              "match_level": "general"
             },
             {
               "code": "688012",
               "name": "中微公司",
-              "mapping_reason": "刻蚀设备龙头，EBL配套刻蚀对约瑟夫森结制备有潜在助力"
+              "mapping_reason": "刻蚀设备龙头，EBL配套刻蚀对约瑟夫森结制备有潜在助力",
+              "match_level": "high"
             }
           ]
         },
@@ -2501,17 +2628,20 @@
             {
               "code": "688337",
               "name": "普源精电",
-              "mapping_reason": "国内电子测量仪器龙头，5GHz带宽AWG 2024年发布，最接近量子测控的国内厂商"
+              "mapping_reason": "国内电子测量仪器龙头，5GHz带宽AWG 2024年发布，最接近量子测控的国内厂商",
+              "match_level": "high"
             },
             {
               "code": "688112",
               "name": "鼎阳科技",
-              "mapping_reason": "示波器/信号发生器国产替代先锋，射频微波产品线扩展中"
+              "mapping_reason": "示波器/信号发生器国产替代先锋，射频微波产品线扩展中",
+              "match_level": "medium"
             },
             {
               "code": "688283",
               "name": "坤恒顺维",
-              "mapping_reason": "射频仿真/信道模拟器龙头，微波测量技术可迁移至量子测控"
+              "mapping_reason": "射频仿真/信道模拟器龙头，微波测量技术可迁移至量子测控",
+              "match_level": "high"
             }
           ]
         },
@@ -2539,12 +2669,14 @@
             {
               "code": "002049",
               "name": "紫光国微",
-              "mapping_reason": "特种集成电路龙头，射频前端+ADC/DAC能力可延伸至量子读出"
+              "mapping_reason": "特种集成电路龙头，射频前端+ADC/DAC能力可延伸至量子读出",
+              "match_level": "high"
             },
             {
               "code": "600877",
               "name": "电科芯片",
-              "mapping_reason": "中国电科旗下射频芯片平台，有低温电子学研发潜力"
+              "mapping_reason": "中国电科旗下射频芯片平台，有低温电子学研发潜力",
+              "match_level": "general"
             }
           ]
         },
@@ -2572,12 +2704,14 @@
             {
               "code": "600888",
               "name": "新疆众和",
-              "mapping_reason": "国内最大高纯铝供应商(99.999%)，6N高纯铝研发中"
+              "mapping_reason": "国内最大高纯铝供应商(99.999%)，6N高纯铝研发中",
+              "match_level": "high"
             },
             {
               "code": "600330",
               "name": "天通股份",
-              "mapping_reason": "蓝宝石衬底龙头，量子芯片用高阻硅衬底产能"
+              "mapping_reason": "蓝宝石衬底龙头，量子芯片用高阻硅衬底产能",
+              "match_level": "high"
             }
           ]
         },
@@ -2605,7 +2739,8 @@
             {
               "code": "688027",
               "name": "国盾量子",
-              "mapping_reason": "量子操控+随机数软件栈，量子加密商业应用领跑"
+              "mapping_reason": "量子操控+随机数软件栈，量子加密商业应用领跑",
+              "match_level": "medium"
             }
           ]
         }
@@ -2644,7 +2779,8 @@
             {
               "code": "300496",
               "name": "中科创达",
-              "mapping_reason": "机器人中间件+数字孪生平台，NVIDIA Omniverse中国生态伙伴"
+              "mapping_reason": "机器人中间件+数字孪生平台，NVIDIA Omniverse中国生态伙伴",
+              "match_level": "medium"
             }
           ]
         },
@@ -2671,12 +2807,14 @@
             {
               "code": "300496",
               "name": "中科创达",
-              "mapping_reason": "NVIDIA中国合作伙伴，数字孪生仿真平台代理+二次开发"
+              "mapping_reason": "NVIDIA中国合作伙伴，数字孪生仿真平台代理+二次开发",
+              "match_level": "medium"
             },
             {
               "code": "688031",
               "name": "星环科技",
-              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键"
+              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键",
+              "match_level": "medium"
             }
           ]
         },
@@ -2705,12 +2843,14 @@
             {
               "code": "002230",
               "name": "科大讯飞",
-              "mapping_reason": "多模态AI龙头，语音+视觉+语言融合技术可迁移至机器人交互模型"
+              "mapping_reason": "多模态AI龙头，语音+视觉+语言融合技术可迁移至机器人交互模型",
+              "match_level": "high"
             },
             {
               "code": "688256",
               "name": "寒武纪",
-              "mapping_reason": "AI训练芯片，机器人基础模型训练算力底座"
+              "mapping_reason": "AI训练芯片，机器人基础模型训练算力底座",
+              "match_level": "medium"
             }
           ]
         },
@@ -2740,17 +2880,20 @@
             {
               "code": "688256",
               "name": "寒武纪",
-              "mapping_reason": "国产AI训练芯片龙头，思元590对物理AI仿真有一定适配潜力"
+              "mapping_reason": "国产AI训练芯片龙头，思元590对物理AI仿真有一定适配潜力",
+              "match_level": "high"
             },
             {
               "code": "688041",
               "name": "海光信息",
-              "mapping_reason": "深算系列DCU，类CUDA生态，物理仿真GPU替代路径"
+              "mapping_reason": "深算系列DCU，类CUDA生态，物理仿真GPU替代路径",
+              "match_level": "medium"
             },
             {
               "code": "300474",
               "name": "景嘉微",
-              "mapping_reason": "国产GPU龙头，图形渲染+通用计算双路线"
+              "mapping_reason": "国产GPU龙头，图形渲染+通用计算双路线",
+              "match_level": "high"
             }
           ]
         },
@@ -2780,22 +2923,26 @@
             {
               "code": "603728",
               "name": "鸣志电器",
-              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树"
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树",
+              "match_level": "medium"
             },
             {
               "code": "688377",
               "name": "鼎智科技",
-              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整"
+              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整",
+              "match_level": "medium"
             },
             {
               "code": "003021",
               "name": "兆威机电",
-              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商"
+              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商",
+              "match_level": "high"
             },
             {
               "code": "300580",
               "name": "贝斯特",
-              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件"
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件",
+              "match_level": "medium"
             }
           ]
         },
@@ -2825,17 +2972,20 @@
             {
               "code": "300007",
               "name": "汉威科技",
-              "mapping_reason": "气体传感器龙头，柔性压阻传感器+电子皮肤研发，机器人触觉感知布局"
+              "mapping_reason": "气体传感器龙头，柔性压阻传感器+电子皮肤研发，机器人触觉感知布局",
+              "match_level": "high"
             },
             {
               "code": "603662",
               "name": "柯力传感",
-              "mapping_reason": "力传感器龙头，应变片自制(壁垒最高环节)，可延伸至触觉阵列"
+              "mapping_reason": "力传感器龙头，应变片自制(壁垒最高环节)，可延伸至触觉阵列",
+              "match_level": "high"
             },
             {
               "code": "300416",
               "name": "苏试试验",
-              "mapping_reason": "环境试验设备龙头，力学传感器技术储备"
+              "mapping_reason": "环境试验设备龙头，力学传感器技术储备",
+              "match_level": "high"
             }
           ]
         },
@@ -2865,17 +3015,20 @@
             {
               "code": "603662",
               "name": "柯力传感",
-              "mapping_reason": "A股唯一自制应变片的力传感器企业，六维力研发成功送样机器人客户"
+              "mapping_reason": "A股唯一自制应变片的力传感器企业，六维力研发成功送样机器人客户",
+              "match_level": "high"
             },
             {
               "code": "603489",
               "name": "八方股份",
-              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力"
+              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力",
+              "match_level": "high"
             },
             {
               "code": "300114",
               "name": "中航电测",
-              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中"
+              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中",
+              "match_level": "general"
             }
           ]
         },
@@ -2905,12 +3058,14 @@
             {
               "code": "688023",
               "name": "奥比中光",
-              "mapping_reason": "3D视觉传感器全球第二(仅次于Intel)，结构光/ToF双路线"
+              "mapping_reason": "3D视觉传感器全球第二(仅次于Intel)，结构光/ToF双路线",
+              "match_level": "high"
             },
             {
               "code": "002273",
               "name": "水晶光电",
-              "mapping_reason": "光学元件龙头，3D结构光DOE/扩散片，深度相机核心光学器件"
+              "mapping_reason": "光学元件龙头，3D结构光DOE/扩散片，深度相机核心光学器件",
+              "match_level": "high"
             }
           ]
         }
