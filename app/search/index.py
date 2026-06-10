@@ -983,6 +983,29 @@ def _load_technical_eval(
     return result
 
 
+_macd_signals_cache: dict[str, dict[str, str]] = {}
+
+def _load_macd_signals(
+    dataset_dir: str | Path = DEFAULT_DATASET_DIR,
+) -> dict[str, str]:
+    """Load MACD signal dataset. Returns dict keyed by 'market:symbol' -> signal label."""
+    cache_key = str(dataset_dir)
+    if cache_key in _macd_signals_cache:
+        return _macd_signals_cache[cache_key]
+
+    path = Path(dataset_dir) / "dataset_macd_signals_current.json"
+    if not path.is_file():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        rows = json.load(f)
+    result = {}
+    for row in rows:
+        key = f"{row.get('market','')}:{row.get('symbol','')}"
+        result[key] = row.get("macd_signal", "")
+    _macd_signals_cache[cache_key] = result
+    return result
+
+
 def _build_tech_eval_async(trading_day: str) -> None:
     """Spawn background process to build tech eval for a given date."""
     import subprocess
@@ -2030,6 +2053,16 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             and _normalize_text(row.get("tech_short_trend_prev")) != short_trend_switch_target
             and _normalize_text(row.get("tech_short_trend_prev")) != ""
         ]
+
+    # MACD signal filter
+    macd_signal_target = _normalize_text(params.get("macd_signal"))
+    if macd_signal_target:
+        macd_data = _load_macd_signals()
+        if macd_data:
+            filtered = [
+                row for row in filtered
+                if macd_data.get(f"{_normalize_text(row.get('market'))}:{_normalize_text(row.get('symbol'))}") == macd_signal_target
+            ]
 
     for param_key, (field_name, bound) in numeric_field_filters.items():
         threshold = _coerce_float(params.get(param_key))

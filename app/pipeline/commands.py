@@ -179,6 +179,17 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
              '--strategy', 'blowup_break', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
+        (
+            'rebuild_screener_ma_pullback',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'ma_pullback', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_macd_signals',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_macd_signals.py'),
+             '--tdxdir', TONGDAXIN_DIR],
+        ),
         # Optional: Kronos AI prediction (CPU ~10s/stock, 5000 stocks ~14 hours)
         # Uncomment to enable daily AI prediction rebuild:
         # (
