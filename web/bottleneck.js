@@ -467,15 +467,16 @@ async function renderStep4() {
               ${m.show_all ? `✅ 全部 ${m.total_stocks} 家候选标的：` : `📊 共 ${m.total_stocks} 家候选，展示前 ${m.stocks.length} 家（剩余 ${m.remaining} 家）`}
             </p>
             <table class="data-table" style="margin-top:8px;">
-              <thead><tr><th>#</th><th>股票代码</th><th>股票名称</th><th>操作</th></tr></thead>
+              <thead><tr><th>#</th><th>股票代码</th><th>股票名称</th><th>入选理由</th><th>操作</th></tr></thead>
               <tbody>
                 ${m.stocks.map((s, idx) => `
                   <tr>
                     <td>${idx+1}</td>
                     <td style="font-weight:600;">${typeof s === 'object' ? s.code : s}</td>
                     <td>${typeof s === 'object' ? (s.name || '—') : '—'}</td>
+                    <td style="font-size:12px;color:var(--text-muted);max-width:280px;">${typeof s === 'object' ? (s.mapping_reason || '—') : '—'}</td>
                     <td>
-                      <button class="btn" style="padding:4px 10px;font-size:11px;"
+                      <button class="btn" style="padding:4px 10px;font-size:11px;white-space:nowrap;"
                               onclick="window.open('/stock-score.html?symbol=${typeof s === 'object' ? s.code : s}&market=${(typeof s === 'object' ? s.code : s).startsWith('6')?'sh':'sz'}&name=${encodeURIComponent(typeof s === 'object' ? (s.name || '') : '')}','_blank')">
                         查看 →
                       </button>
