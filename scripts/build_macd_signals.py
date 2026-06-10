@@ -178,16 +178,14 @@ def detect_signals(
 
 
 def build_macd_signals(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
-    # When trading_day is set, use historical RPS
+    # When trading_day is set, use historical RPS and truncate daily bars
+    _orig_Reader_factory = Reader.factory
     if trading_day:
         from app.search.index import load_rps_rows_as_of
         import app.search.index as _idx
         _orig_load_rps_rows = _idx.load_rps_rows
         _idx.load_rps_rows = lambda **kw: load_rps_rows_as_of(trading_day)
 
-        _orig_Reader_factory = Reader.factory
         def _patched_factory(*fa, **kw):
             r = _orig_Reader_factory(*fa, **kw)
             _orig_daily = r.daily
@@ -201,6 +199,8 @@ def build_macd_signals(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") 
             r.daily = _daily_wrapper
             return r
         Reader.factory = staticmethod(_patched_factory)
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    rps_rows = load_rps_rows()
     results: list[dict[str, Any]] = []
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
