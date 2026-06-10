@@ -207,19 +207,20 @@
     "humanoid-robot": {
       "id": "humanoid-robot",
       "name": "人形机器人量产",
-      "description": "人形机器人是具身智能终极形态——特斯拉Optimus Gen3预计2026年量产(内部先用→2027外销)，Figure AI/1X/宇树/智元/傅利叶/优必选竞速商业化。2030年全球人形机器人市场预计350亿美元，100万+台出货。每台人形机器人≈14个线性关节(行星滚柱丝杠)+28个旋转关节(谐波减速器+电机)+2只灵巧手+全身触觉/力觉感知。产业链核心瓶颈：行星滚柱丝杠(特斯拉自研+舍弗勒/日本THK垄断，国产恒立液压突破中)、谐波减速器(日本哈默纳科一支独大)、六维力传感器、灵巧手微型执行器。",
-      "anchor": "特斯拉Optimus树立人形机器人量产标准 → 200万台对应2800万个丝杠+5600万个减速器 → 丝杠/减速器/六维力/灵巧手四大瓶颈国内仅1-3家企业能突破",
+      "description": "人形机器人是具身智能终极形态——特斯拉Optimus Gen3预计2026年内部产线试用(2027外销)，Figure AI获数十亿美元估值，宇树G1/H1以$1.6万起售价引爆市场。2030年全球人形机器人市场预测300-1000亿美元。每台人形机器人≈14个线性关节(行星滚柱丝杠+力传感器)+28个旋转关节(谐波减速器+无框力矩电机+双编码器)+2只灵巧手(12个微型空心杯电机)+全身触觉/力觉感知+AI SoC+电池。核心瓶颈层层嵌套：(1)行星滚柱丝杠——特斯拉自研+舍弗勒/SKF/THK垄断外供，恒立液压国内唯一批产；(2)谐波减速器——日本哈默纳科全球>70%；(3)六维力传感器——ATI/OnRobot双寡头；(4)灵巧手微型电机——Maxon/Faulhaber瑞士德国百年垄断；(5)高端编码器——海德汉/雷尼绍；(6)磁钢/特种合金——日立金属/大同特殊钢。日本+德国几乎在每一个精密传动/传感环节掌握了定价权。",
+      "anchor": "特斯拉Optimus树立人形机器人量产标准 → 200万台对应2800万丝杠+5600万减速器+400万六维力+1200万微型电机 → 精密传动/传感被日本德国垄断 → 国产仅1-3家企业有替代希望",
       "layers": [
         {
           "level": 0,
           "name": "人形机器人整机集成",
           "role": "integrator",
-          "description": "集成AI大脑+运动小脑+执行器+感知传感+电池动力。特斯拉(Optimus)/Figure AI(02)/宇树(G1/H1)/智元(远征)/优必选(Walker)形成中美双梯队。特斯拉垂直整合最深(自研执行器/灵巧手/FSD芯片)。中国在整机数量和应用场景上领先。",
+          "description": "集成AI大脑+运动小脑+执行器+感知传感+电池动力。特斯拉(Optimus Gen3)/Figure AI(02)/宇树(G1/H1)/智元(远征)/优必选(Walker S)形成中美双梯队。特斯拉垂直整合最深(自研执行器/灵巧手/FSD芯片)。中国在整机数量和应用场景上领先——2025年宇树G1量产价$1.6万创行业最低，智元已交付千台级。",
           "global_players": [
             "特斯拉(美国)",
             "Figure AI(美国)",
             "宇树科技(中国)",
             "智元机器人(中国)",
+            "1X Technologies(挪威)",
             "优必选(中国)"
           ],
           "domestic_players": [
@@ -251,11 +252,11 @@
           "level": 1,
           "name": "关节执行器总成(旋转+线性)",
           "role": "actuation",
-          "description": "特斯拉Optimus采用自研Rotary(谐波+力矩电机+双编码器+力矩传感器+交叉滚子轴承)和Linear(行星滚柱丝杠+力传感器)执行器。这一设计已成为行业标杆——线性执行器用于膝关节/髋关节提供高推力密度，旋转执行器用于肩/腕关节。国内仅恒立液压/鼎智科技/汇川技术形成执行器总成能力。",
+          "description": "特斯拉Optimus采用自研Rotary(谐波+力矩电机+双编码器+力矩传感器+交叉滚子轴承)和Linear(行星滚柱丝杠+力传感器)执行器。这一设计已成行业标杆——线性执行器用于膝/髋关节提供高推力密度(>5000N)，旋转执行器用于肩/腕关节。恒立液压是国内唯一能供线性执行器总成的企业(丝杠+电机+编码器一体化)。鼎智科技/汇川技术在旋转执行器追赶中。",
           "global_players": [
             "特斯拉(美国自研)",
             "THK(日本)",
-            "舍弗勒/Schaeffler(德国)",
+            "舍弗勒(德国)",
             "恒立液压(中国)"
           ],
           "domestic_players": [
@@ -273,7 +274,7 @@
             {
               "code": "601100",
               "name": "恒立液压",
-              "mapping_reason": "液压件龙头切入丝杠，线性执行器总成能力，特斯拉Optimus潜在供应商"
+              "mapping_reason": "液压件龙头切入丝杠+电机+编码器一体化总成，特斯拉Optimus潜在供应商"
             },
             {
               "code": "688377",
@@ -291,7 +292,7 @@
           "level": 2,
           "name": "🔴 行星滚柱丝杠",
           "role": "transmission",
-          "description": "行星滚柱丝杠是线性执行器核心传动件——将电机旋转运动转为高精度直线运动(推力>5000N、精度<0.01mm、寿命>10000h)。每台Optimus用14根丝杠，200万台对应2800万根——而全球年产能仅约100万根(主要由SKF/舍弗勒/THK供应)。特斯拉自研丝杠(已到Gen3)但仅自用。国内恒立液压2024年建成国内首条机器人行星滚柱丝杠产线(5万根/年→扩产50万根)，是唯一批产企业。鼎智科技/贝斯特/五洲新春处于研发→送样阶段。",
+          "description": "行星滚柱丝杠是线性执行器核心——将电机旋转运动转为高精度直线运动(推力>5000N、精度<0.01mm、寿命>10000h)。每台Optimus用14根，200万台=2800万根——而全球产能仅约100万根/年(SKF/舍弗勒/THK/恒立)。特斯拉自研丝杠(已到Gen3，自用不外卖)。恒立液压2024年建成国内首条机器人级丝杠产线(5万→50万根/年扩产)，是除特斯拉体系外唯一批量供应者。鼎智/贝斯特/五洲新春处于送样阶段。核心壁垒：螺纹磨削精度(μ级)、材料热处理、滚柱-丝杠匹配(公差<2μm)。",
           "global_players": [
             "SKF(瑞典)",
             "舍弗勒(德国)",
@@ -309,13 +310,13 @@
           "is_bottleneck": true,
           "bottleneck_level": "core",
           "bottleneck_score": 5.0,
-          "bottleneck_reason": "全球能批量生产机器人级行星滚柱丝杠的仅SKF/舍弗勒/THK/恒立4家，且SKF/舍弗勒/THK主要面向机床/航空(对机器人订单响应极慢)。特斯拉自研自用不外卖。恒立液压是除特斯拉体系外唯一能供机器人丝杠的企业——5万根年产能 vs 远期2800万根需求，缺口>500倍。",
+          "bottleneck_reason": "全球能批产机器人级行星滚柱丝杠仅SKF/舍弗勒/THK/恒立4家。传统三强(SKF/舍弗勒/THK)面向机床/航空市场，对机器人订单响应极慢。特斯拉自研自用不外卖。恒立是国内唯一批产者——5万根年产能 vs 远期2800万根需求，缺口>500倍。且核心材料(特种轴承钢GCr15SiMn)被日本大同特殊钢垄断——材料+加工双重瓶颈。",
           "skip_reason": "",
           "a_share_candidates": [
             {
               "code": "601100",
               "name": "恒立液压",
-              "mapping_reason": "国内唯一批产机器人行星滚柱丝杠(2024建成首条产线，5万→50万根/年扩产)"
+              "mapping_reason": "国内唯一批产机器人行星滚柱丝杠(2024投产，5万→50万根/年扩产)，特斯拉送样中"
             },
             {
               "code": "688377",
@@ -338,7 +339,7 @@
           "level": 3,
           "name": "🔴 谐波减速器",
           "role": "transmission",
-          "description": "谐波减速器是旋转执行器核心——通过柔轮弹性变形实现高减速比(>50:1)、零背隙、高扭矩密度。每台Optimus用28个旋转关节(28个谐波减速器)，200万台=5600万个。日本哈默纳科全球市占率>70%，独家供应特斯拉Optimus。国内绿的谐波市占率>60%(国产份额)，但全球份额仅约15%——「国产替代中的二次替代」机会巨大。来福谐波/同川精密/大族谐波追赶中。",
+          "description": "谐波减速器是旋转执行器核心——通过柔轮弹性变形实现高减速比(>50:1)、零背隙、高扭矩密度。每台Optimus用28个旋转关节(28个谐波)，200万台=5600万个。日本哈默纳科全球市占率>70%，独家供应特斯拉Optimus。哈默纳科2025年产能约200万台/年(供给所有行业)，其中分配给机器人约50-80万台——即便全部给Optimus也只能供2-3万台。绿的谐波国内市占率>60%但全球仅约15%，2024年产能约60万台/年。来福谐波/同川精密追赶中。核心壁垒：柔轮材料(特种合金钢，日本大同特殊钢独家)+热处理工艺(渗碳氮化)+齿形设计(S形齿)。",
           "global_players": [
             "哈默纳科/Harmonic Drive(日本70%+)",
             "绿的谐波(中国15%)",
@@ -354,13 +355,13 @@
           "is_bottleneck": true,
           "bottleneck_level": "core",
           "bottleneck_score": 5.0,
-          "bottleneck_reason": "哈默纳科全球谐波减速器市占率>70%，独家供应特斯拉Optimus(优先级最高客户)。绿的谐波2024年产能约40万台/年 vs 远期5600万需求缺口>100倍。柔轮材料(特种合金钢)和热处理工艺均有极高技术壁垒，新进入者合格周期>5年。日本政府2024年暗示可能限制谐波减速器对华出口。",
+          "bottleneck_reason": "哈默纳科全球>70%，独家供特斯拉。柔轮材料(大同特殊钢)被日本垄断——从材料到热处理到齿形设计形成50年技术壁垒。绿的谐波国内龙头但全球仅15%，产能缺口>100倍。日本政府2025年暗示可能限制机器人核心部件对华出口。谐波+RV减速器合计是人形机器人成本最高(>30%)的硬件瓶颈。",
           "skip_reason": "",
           "a_share_candidates": [
             {
               "code": "688017",
               "name": "绿的谐波",
-              "mapping_reason": "国产谐波减速器绝对龙头(国内≥60%)，特斯拉Optimus送样中，2024扩产至60万台/年"
+              "mapping_reason": "国产谐波减速器绝对龙头(国内≥60%)，特斯拉Optimus送样中，2025扩产至60万台/年"
             },
             {
               "code": "002472",
@@ -378,7 +379,7 @@
           "level": 4,
           "name": "🔴 六维力/力矩传感器",
           "role": "sensing",
-          "description": "六维力传感器是机器人力控的核心——同时测量Fx/Fy/Fz/Mx/My/Mz六个分量，安装于手腕/脚踝关节实现柔顺控制。全球高端六维力传感器被ATI Industrial(美)/OnRobot(丹麦)双寡头垄断(单价>1万美元)。国内宇立仪器(未上市)为全球第三家能量产者(已供Figure AI)，柯力传感/坤维科技/蓝点触控追赶中。每台人形机器人需4-6个六维力传感器。",
+          "description": "六维力传感器同时测Fx/Fy/Fz/Mx/My/Mz，安装于手腕/脚踝实现柔顺力控。每台人形机器人需4-6个。全球高端被ATI Industrial(美)/OnRobot(丹麦)双寡头垄断(单价>$1万/个)。国内宇立仪器(未上市)为全球第三家能量产者(已供Figure AI)。柯力传感/坤维科技/蓝点触控追赶中。壁垒：(1)应变片自制(柯力是A股唯一)；(2)贴片工艺(手工，良率70-80%)；(3)六维解耦算法；(4)温补。全球年产能<10万只 vs 远期400-600万只需求。",
           "global_players": [
             "ATI Industrial(美国)",
             "OnRobot(丹麦)",
@@ -387,24 +388,25 @@
           ],
           "domestic_players": [
             "柯力传感 603662",
-            "八方股份 603489"
+            "八方股份 603489",
+            "中航电测 300114"
           ],
           "supplier_count": 2,
           "is_bottleneck": true,
           "bottleneck_level": "secondary",
           "bottleneck_score": 4.0,
-          "bottleneck_reason": "全球可批量供应六维力传感器的仅ATI/OnRobot/宇立3家(宇立2024年产能~2万只/年)。百万台人形机器人对应400-600万只需求。国产宇立/柯力已突破但一致性/温度漂移/寿命距ATI仍有3-5年差距。技术壁垒：应变片粘贴工艺+解耦算法+温度补偿三座大山。",
+          "bottleneck_reason": "全球高端六维力仅ATI/OnRobot/宇立3家可批量供应。年产能<10万只 vs 远期400-600万只需求，缺口>40倍。柯力传感是A股唯一自制应变片企业——壁垒最高的环节(应变片决定精度+温漂+寿命)。中国在六维力领域已属全球第二梯队(日本/德国均无批量企业)。",
           "skip_reason": "",
           "a_share_candidates": [
             {
               "code": "603662",
               "name": "柯力传感",
-              "mapping_reason": "力传感器龙头，六维力传感器研发成功送样机器人客户，应变片自制(壁垒最高环节)"
+              "mapping_reason": "A股唯一自制应变片力传感器企业，六维力研发成功送样机器人客户"
             },
             {
               "code": "603489",
               "name": "八方股份",
-              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力"
+              "mapping_reason": "力矩传感器龙头，力矩检测技术可迁移至六维力"
             },
             {
               "code": "300114",
@@ -417,10 +419,10 @@
           "level": 5,
           "name": "🔴 灵巧手（空心杯电机+微型丝杠+触觉）",
           "role": "end-effector",
-          "description": "灵巧手是人形机器人从'能走'到'能干活'的质变节点。每只灵巧手需6个微型空心杯电机(驱动5指)、6根微型丝杠/腱绳、指尖MEMS触觉传感器三维集成。全球仅Maxon(瑞士)/Faulhaber(德国)能批量供应机器人级微型空心杯电机(直径<13mm、功率密度>10W/cm³)。国内鸣志电器/鼎智科技处于送样验证阶段。每台人形机器人=2只灵巧手，百万台=200万只。",
+          "description": "灵巧手是人形机器人从「能走」到「能干活」的质变节点。每只灵巧手含6个微型空心杯电机(ϕ<8mm驱动5指)×2只手=12个。全球仅Maxon(瑞士)/Faulhaber(德国)可批量供应机器人级微型空心杯电机(功率密度>10W/cm³)。鸣志电器/鼎智科技处于送样验证。百万台人形机器人=200万只灵巧手=1200万个微型空心杯电机——Maxon全球年产能仅约500万个(含所有行业)。缺口巨大且扩产缓慢(精密绕线机被日本日特/小田原垄断)。",
           "global_players": [
-            "Maxon Motor(瑞士)",
-            "Faulhaber(德国)",
+            "Maxon Motor(瑞士百年)",
+            "Faulhaber(德国百年)",
             "鸣志电器(中国)",
             "鼎智科技(中国)"
           ],
@@ -433,13 +435,13 @@
           "is_bottleneck": true,
           "bottleneck_level": "secondary",
           "bottleneck_score": 3.5,
-          "bottleneck_reason": "微型空心杯电机(ϕ<13mm)全球仅Maxon/Faulhaber两家可批量供应(百年瑞士/德国精密制造壁垒)。鸣志电器/鼎智科技突破中但功率密度/寿命差距30-50%。微型丝杠+触觉传感器更是全球供应链空白(特斯拉自研)，是整机放量的隐性瓶颈。",
+          "bottleneck_reason": "ϕ<8mm微型空心杯电机全球仅Maxon(瑞士)/Faulhaber(德国)两家可批量供应(百年精密制造壁垒)。鸣志/鼎智突破中但功率密度/寿命差距30-50%。精密绕线机(日特/小田原)被日本垄断——做出电机需要先买到绕线机(又一个嵌套瓶颈)。1200万电机需求 vs Maxon 500万全球总产能(含医疗/航空)，缺口>70%。",
           "skip_reason": "",
           "a_share_candidates": [
             {
               "code": "603728",
               "name": "鸣志电器",
-              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，机器人灵巧手电机送样特斯拉/宇树"
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树"
             },
             {
               "code": "688377",
@@ -462,7 +464,7 @@
           "level": 6,
           "name": "空心杯电机/无框力矩电机",
           "role": "motor",
-          "description": "旋转执行器用无框力矩电机(高扭矩密度+薄型)，灵巧手用微型空心杯电机(低惯量+快速响应)。国内步科股份/伟创电气无框力矩电机已批量供应工业机器人，向人形机器人拓展。电机层国产替代进展最快——差距从10年缩小至3年。",
+          "description": "旋转执行器用无框力矩电机(高扭矩密度+薄型)，灵巧手用微型空心杯电机(低惯量+快响应)。无框力矩电机全球由Kollmorgen(美)/Parker(美)/Aerotech(美)寡头垄断。国内步科股份/伟创电气/禾川科技已批量供应工业级，向人形机器人拓展。电机层国产替代最成熟——差距从10年缩小至3年。核心材料：钕铁硼永磁体(中国掌控全球80%+稀土加工产能)、硅钢片、绝缘材料。",
           "global_players": [
             "Kollmorgen(美国)",
             "Parker(美国)",
@@ -479,7 +481,7 @@
           "bottleneck_level": "none",
           "bottleneck_score": 1.0,
           "bottleneck_reason": "",
-          "skip_reason": "电机层供应商充分，国内企业技术追赶快，非瓶颈",
+          "skip_reason": "电机层供应商充分，中国稀土永磁供应链完整，非瓶颈",
           "a_share_candidates": [
             {
               "code": "688160",
@@ -502,10 +504,10 @@
           "level": 7,
           "name": "🔴 磁编码器/关节角度传感器",
           "role": "sensing",
-          "description": "每个旋转/线性执行器需≥1个编码器实时反馈角度/位置——人形机器人整机需40-60个编码器。高端磁编码器(>24位分辨率+<0.01°精度)全球由海德汉(德)/雷尼绍(英)/iC-Haus(德)垄断，单价$50-200。每百万台人形机器人=4000-6000万个编码器——这是容易被忽视的精密传感器瓶颈。国内仅汇川技术/奥普特/禾川科技有编码器自研能力，精度高端的差距1-2个数量级。",
+          "description": "每个旋转/线性执行器需≥1个编码器实时反馈角度/位置——人形机器人整机需40-60个编码器。高端磁编码器(>24位分辨率+<0.01°精度)全球由海德汉(德)/雷尼绍(英)/iC-Haus(德磁编码芯片)垄断，单价$50-200/个。每百万台人形机器人=4000-6000万个编码器——极易被忽视的精密传感器瓶颈。国内汇川技术/禾川科技有编码器自研能力但精度差1个数量级(18-22位 vs 24+位)。iC-Haus的光刻磁编码芯片是核心——精度决定于芯片，被德国独家掌控。",
           "global_players": [
-            "海德汉/Heidenhain(德国)",
-            "雷尼绍/Renishaw(英国)",
+            "海德汉(德国)",
+            "雷尼绍(英国)",
             "iC-Haus(德国芯片)",
             "汇川技术(中国)"
           ],
@@ -517,7 +519,7 @@
           "is_bottleneck": true,
           "bottleneck_level": "secondary",
           "bottleneck_score": 3.0,
-          "bottleneck_reason": "高端磁编码器全球仅海德汉/雷尼绍/iC-Haus 3家可供应>24位分辨率产品。人形机器人放量后编码器需求量暴增至亿级——海德汉/雷尼绍主要面向CNC/半导体(对机器人批量订单响应极慢)。国内汇川/禾川仅有中端编码器(<18位)，精度差一个数量级。是容易被忽视的'隐性瓶颈'。",
+          "bottleneck_reason": "高端磁编码器(>24位)全球仅海德汉/雷尼绍/iC-Haus 3家。编码器需求量亿级——远超目前海德汉/雷尼绍面向CNC/半导体的产能。iC-Haus磁编码芯片被德国独家掌握——决定精度的核心是芯片而非机械(是容易被忽视的'隐性半导体瓶颈')。国内编码器精度差1个数量级。",
           "skip_reason": "",
           "a_share_candidates": [
             {
@@ -529,6 +531,41 @@
               "code": "688320",
               "name": "禾川科技",
               "mapping_reason": "编码器自研能力，运动控制完整方案商"
+            }
+          ]
+        },
+        {
+          "level": 8,
+          "name": "🔴 特种轴承/精密轴承钢",
+          "role": "material",
+          "description": "人形机器人每个关节都含轴承(交叉滚子轴承/角接触轴承/深沟球轴承)，整机需40-60个轴承。机器人级轴承要求：(1)高刚性(变形<1μm)；(2)低摩擦(启动力矩<0.1N·cm)；(3)长寿命(>2万小时)。交叉滚子轴承(用于旋转关节输出端)全球仅THK(日本)/IKO(日本)/人本股份(中国)3家供应商。核心材料：特种轴承钢GCr15SiMn——被日本大同特殊钢(全球>60%)、瑞典OVAKO垄断。国内中信特钢/抚顺特钢可产GCr15但SiMn牌号差距5-8年(高Si提高耐磨但增加脆性——热处理窗口极窄)。",
+          "global_players": [
+            "THK(日本交叉滚子)",
+            "IKO(日本交叉滚子)",
+            "大同特殊钢(日本轴承钢>60%)",
+            "OVAKO(瑞典轴承钢)"
+          ],
+          "domestic_players": [
+            "人本股份(未上市)",
+            "中信特钢 000708",
+            "抚顺特钢 600399"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.0,
+          "bottleneck_reason": "机器人级交叉滚子轴承全球仅THK/IKO/人本3家。更关键的是材料层——特种轴承钢GCr15SiMn被大同特殊钢(日本>60%)+OVAKO(瑞典)垄断。国产SiMn牌号热处理窗口窄——耐磨性够但脆性高，长期可靠性未经验证。材料瓶颈在上游制约着丝杠+减速器+轴承三个环节。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "000708",
+              "name": "中信特钢",
+              "mapping_reason": "国内最大特钢企业，轴承钢产能领先，SiMn牌号研发中"
+            },
+            {
+              "code": "600399",
+              "name": "抚顺特钢",
+              "mapping_reason": "高温合金/特钢龙头，军用轴承钢技术可迁移至机器人领域"
             }
           ]
         }
@@ -2577,126 +2614,103 @@
     "physical-ai": {
       "id": "physical-ai",
       "name": "物理AI (Physical AI)",
-      "description": "物理AI是AI从「数字世界」跃入「物理世界」的范式革命——让机器人/自动驾驶/智能制造真正理解和预测物理规律(重力/摩擦/碰撞/流体)。NVIDIA CEO黄仁勋在GTC 2025将物理AI定义为「AI的下一波浪潮」，推出Cosmos/Isaac/Omniverse三大物理AI平台。核心引擎是可微分物理仿真+世界模型+Sim-to-Real迁移+机器人具身智能。物理AI的瓶颈在于——物理仿真引擎需要同时满足精度(对应实物误差<1%)和实时性(<10ms)，需要专门硬件(高性能GPU+专用传感器)。全球仅NVIDIA/Google DeepMind/特斯拉构建了完整栈。",
-      "anchor": "AI从数字走向物理是不可逆的产业方向 → NVIDIA Omniverse/Cosmos树立物理AI标准 → 高端仿真硬件+灵巧手+磁编码器被美国/欧洲垄断 → 国产物理AI基础设施必须突破",
+      "description": "物理AI是AI从数字世界跃入物理世界的范式革命——让机器人/自动驾驶/智能制造真正理解和预测物理规律。NVIDIA CEO黄仁勋在GTC 2025将其定义为「AI的下一波浪潮」，推出Cosmos世界模型+Isaac仿真+Omniverse数字孪生三大平台。2026年物理AI进入产业化元年：特斯拉Optimus Gen3量产在即、Figure AI获数十亿美元融资、Physical Intelligence发布π0机器人基础模型。核心瓶颈：(1)可微分物理仿真引擎需要同时满足精度(<1%误差)和实时性(<10ms)；(2)机器人基础模型需要海量真实世界交互数据；(3)灵巧手+触觉传感器+六维力传感器被欧美垄断；(4)边缘AI芯片(Jetson/高通)算力约束。整个链条从仿真软件→训练算力→机器人硬件→传感器→执行器，几乎每个环节都存在1-3家全球垄断者。",
+      "anchor": "AI从数字走向物理是不可逆的产业方向 → NVIDIA Omniverse/Cosmos+Google RT-2树立物理AI标准 → 灵巧手/触觉/六维力被欧美垄断 → 国产必须在仿真引擎+精密传感器+边缘算力三条线突破",
       "layers": [
         {
           "level": 0,
           "name": "物理AI平台/世界模型",
           "role": "software",
-          "description": "物理AI的核心软件栈——包括可微分物理仿真引擎(NVIDIA Isaac Sim、MuJoCo、Bullet)、世界模型(World Model，预测未来的视觉-物理状态)、Sim-to-Real迁移框架。NVIDIA Omniverse+Isaac是目前工业标准，涵盖机器人/自动驾驶/数字孪生三大场景。国内华为(昇思MindSpore Robotics)/百度(飞桨)有类似布局但差距2-3年。",
+          "description": "物理AI的核心软件栈——包括世界模型(World Model，预测未来视觉-物理状态)、可微分物理仿真引擎(NVIDIA Isaac Sim/MuJoCo)、Sim-to-Real迁移框架。NVIDIA Omniverse+Isaac+Cosmos是目前工业标准三件套。Google DeepMind发布Genie 2世界模型。Physical Intelligence(π0)和Skild AI发布机器人基础模型。国内华为昇思MindSpore Robotics/百度飞桨有类似布局但差距2-3年。",
           "global_players": [
             "NVIDIA Omniverse(美国)",
             "Google DeepMind(美国)",
-            "特斯拉(美国)",
-            "华为(中国)"
+            "Physical Intelligence(美国)",
+            "Skild AI(美国)",
+            "特斯拉(美国自研)"
           ],
           "domestic_players": [
             "华为(未上市)",
             "中科创达 300496",
-            "海康机器人(未上市)"
+            "百度(未上市)"
           ],
           "supplier_count": 5,
           "is_bottleneck": false,
           "bottleneck_level": "none",
+          "bottleneck_score": 0,
           "bottleneck_reason": "",
-          "skip_reason": "开源引擎(MuJoCo/Bullet/Isaac Gym)可用，华为/百度跟进，非单一瓶颈",
+          "skip_reason": "开源引擎(MuJoCo/Bullet/Isaac Gym)可用，华为/百度跟进中，非单一瓶颈",
           "a_share_candidates": [
             {
               "code": "300496",
               "name": "中科创达",
               "mapping_reason": "机器人中间件+数字孪生平台，NVIDIA Omniverse中国生态伙伴"
-            },
-            {
-              "code": "688023",
-              "name": "奥比中光",
-              "mapping_reason": "3D视觉传感器+深度相机，物理AI感知硬件层关键输入"
             }
           ]
         },
         {
           "level": 1,
-          "name": "🔴 机器人灵巧手/末端执行器",
-          "role": "hardware",
-          "description": "物理AI在机器人领域的终极执行器——灵巧手需模拟人类手指21个自由度、力控精度<0.1N、触觉分辨率<1mm。全球仅Shadow Robot(英国)/特斯拉Optimus Gen3(美国)/因时机器人(中国)/宇树科技(中国)布局。国内因时机器人/钧舵机器人处于量产阶段但仍以工业夹爪为主，真灵巧手(仿人5指)量产能力极为有限。每只Optimus用2只灵巧手，百万台人形机器人对应200万只灵巧手的巨大缺口。",
+          "name": "🔴 可微分物理仿真引擎",
+          "role": "software",
+          "description": "物理仿真的核心——需同时满足：物理精度(碰撞/摩擦/流体误差<1%)、实时性(>1000fps)、可微分(梯度回传用于RL训练)。NVIDIA Isaac Sim是目前唯一工业级方案(基于PhysX 5+RTX渲染)，MuJoCo(Google DeepMind)是学术界标准但精度不足。全球能提供工业级物理仿真引擎的仅NVIDIA一家——Isaac Sim绑定了CUDA生态和Omniverse数字孪生工具链，迁移成本极高(需重写全部物理模型)。国产替代为零：国内仿真仍停留在Gazebo/Mujoco实验室阶段。",
           "global_players": [
-            "Shadow Robot(英国)",
-            "特斯拉(美国)",
-            "因时机器人(中国)",
-            "宇树科技(中国)"
+            "NVIDIA Isaac Sim(美国) 100%垄断工业级",
+            "Google MuJoCo(美国学术开源)",
+            "Bullet(开源)"
           ],
           "domestic_players": [
-            "因时机器人(未上市)",
-            "拓斯达 300607",
-            "鸣志电器 603728"
+            "无(完全空白)"
           ],
-          "supplier_count": 3,
+          "supplier_count": 1,
           "is_bottleneck": true,
-          "bottleneck_level": "secondary",
-          "bottleneck_score": 3.5,
-          "bottleneck_reason": "仿人灵巧手(5指+力控+触觉)全球能工程化量产的仅Shadow/特斯拉/因时3家。微型空心杯电机+微型丝杠+MEMS触觉传感器三者均面临产能瓶颈。人形机器人放量后灵巧手将是产业链最大缺口之一。",
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "工业级可微分物理仿真引擎全球仅NVIDIA Isaac Sim一家(绑定CUDA+Omniverse)。物理精度(PhysX 5 GPU加速)+实时渲染(RTX)+可微分训练(RLOps)三者闭环，构成极高迁移壁垒。国产为零——物理引擎底层数学+GPU并行优化+物理参数标定需要10年以上积累。且Isaac Sim依赖NVIDIA GPU硬件(对华禁运H100/B200)，软件+硬件双重卡脖子。",
           "skip_reason": "",
           "a_share_candidates": [
             {
-              "code": "300607",
-              "name": "拓斯达",
-              "mapping_reason": "工业机器人+末端执行器龙头，灵巧手关节模组拓展"
+              "code": "300496",
+              "name": "中科创达",
+              "mapping_reason": "NVIDIA中国合作伙伴，数字孪生仿真平台代理+二次开发"
             },
             {
-              "code": "603728",
-              "name": "鸣志电器",
-              "mapping_reason": "微型空心杯电机龙头，灵巧手驱动电机核心供应商"
-            },
-            {
-              "code": "300580",
-              "name": "贝斯特",
-              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零部件"
+              "code": "688031",
+              "name": "星环科技",
+              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键"
             }
           ]
         },
         {
           "level": 2,
-          "name": "🔴 3D视觉/触觉/力觉传感器",
-          "role": "sensing",
-          "description": "物理AI需要「多模态感知」——3D视觉(结构光/ToF/LiDAR)提供三维空间理解、触觉(GelSight/磁触觉)提供材质/压力感知、六维力/力矩传感器提供交互力反馈。全球六维力传感器由ATI(美)/OnRobot(丹麦)垄断高端市场(单价>1万美元)，国内宇立仪器/坤维科技/蓝点触控突破中。3D视觉由英特尔RealSense/奥比中光/图漾科技竞争。",
+          "name": "🔴 机器人基础模型 (Robot Foundation Model)",
+          "role": "software",
+          "description": "机器人基础模型是物理AI的「大脑」——将视觉/语言/触觉/动作多模态输入融合，直接输出机器人关节指令。Google RT-2(2023)是首个视觉-语言-动作(VLA)模型，Physical Intelligence π0(2024)实现跨机器人平台泛化。训练一个基础模型需要100万+小时的真实机器人交互数据——数据采集成本极高(一台机器人+操作员=$50-150/h)。全球仅Google/Physical Intelligence/特斯拉/Skild AI 4家拥有大规模机器人数据采集设施。国内智元/宇树/优必选处于应用层，基础模型层面几乎为零。",
           "global_players": [
-            "ATI Industrial(美国)",
-            "OnRobot(丹麦)",
-            "Intel RealSense(美国)",
-            "奥比中光(中国)"
+            "Google DeepMind RT-2(美国)",
+            "Physical Intelligence π0(美国)",
+            "特斯拉(美国自研)",
+            "Skild AI(美国)"
           ],
           "domestic_players": [
-            "奥比中光 688023",
-            "柯力传感 603662",
-            "八方股份 603489",
-            "睿创微纳 688002"
+            "智元机器人(未上市)",
+            "宇树科技(未上市)"
           ],
-          "supplier_count": 3,
+          "supplier_count": 2,
           "is_bottleneck": true,
-          "bottleneck_level": "secondary",
-          "bottleneck_score": 3.0,
-          "bottleneck_reason": "高端六维力传感器(精度<0.1%FS、耦合误差<1%)被ATI/OnRobot双寡头垄断。国内宇立/坤维突破但产品一致性/寿命距国际差距3-5年。MEMS触觉传感器(GelSight类)全球仅MIT/Stanford/日本XELA掌握核心工艺，国内几乎空白。",
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "机器人基础模型全球仅Google/特斯拉/PI/Skild 4家，均在美国。大规模真实世界数据采集(100万+小时)构筑了极高壁垒——数据飞轮一旦形成难以追赶。国内智元/宇树在整机层活跃但基础模型为零，依赖开源模型(RT-2/Octo)微调。且训练需要H100/B200集群(对华禁运)，算力+数据双重瓶颈。",
           "skip_reason": "",
           "a_share_candidates": [
             {
-              "code": "688023",
-              "name": "奥比中光",
-              "mapping_reason": "3D视觉传感器龙头，结构光/ToF双路线，机器人+物理AI感知核心"
+              "code": "002230",
+              "name": "科大讯飞",
+              "mapping_reason": "多模态AI龙头，语音+视觉+语言融合技术可迁移至机器人交互模型"
             },
             {
-              "code": "603662",
-              "name": "柯力传感",
-              "mapping_reason": "称重/力传感器龙头，六维力/力矩传感器研发中，应变片技术基础扎实"
-            },
-            {
-              "code": "688002",
-              "name": "睿创微纳",
-              "mapping_reason": "非制冷红外/MEMS传感器龙头，热成像+多光谱感知"
-            },
-            {
-              "code": "002273",
-              "name": "水晶光电",
-              "mapping_reason": "光学元件龙头，3D结构光DOE/扩散片，深度相机核心光学器件"
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "AI训练芯片，机器人基础模型训练算力底座"
             }
           ]
         },
@@ -2704,12 +2718,12 @@
           "level": 3,
           "name": "🔴 物理AI训练/推理算力(GPU/H100/B200)",
           "role": "compute",
-          "description": "物理AI仿真需大规模并行计算——训练一个物理世界基础模型(World Model)需要数千张H100/B200 GPU连续训练数月。NVIDIA Blackwell B200和Rubin平台是核心硬件。但GPU供应商高度集中：NVIDIA一家占AI GPU 90%+、对华禁运H100/B200，国内华为昇腾910B/寒武纪思元590性能差距2-3倍。",
+          "description": "物理AI仿真+基础模型训练需大规模并行计算——训练一个世界模型需要数千张H100/B200 GPU。NVIDIA一家占AI GPU 90%+、对华禁运H100/B200。国内华为昇腾910B性能约为H100的30-40%，且产能严重不足。边缘推理端：NVIDIA Jetson Orin(275 TOPS)是人形机器人在线推理的主流方案，高通RB6跟进。华为昇腾Atlas 200对标但AI软件栈(CUDA vs CANN)差距3-5年。",
           "global_players": [
-            "NVIDIA(美国90%+)",
+            "NVIDIA(美国90%+GPU)",
+            "高通(美国边缘AI)",
             "华为昇腾(中国)",
-            "AMD(美国)",
-            "寒武纪(中国)"
+            "AMD(美国)"
           ],
           "domestic_players": [
             "寒武纪 688256",
@@ -2720,7 +2734,7 @@
           "is_bottleneck": true,
           "bottleneck_level": "core",
           "bottleneck_score": 4.5,
-          "bottleneck_reason": "物理AI大模型训练需要H100/B200级GPU(对华禁运)。国内昇腾910B性能约为H100的30-40%，且产能严重不足。GPU瓶颈是整个AI领域(包括物理AI)的全局性供给瓶颈，短期(2024-2027)无解。",
+          "bottleneck_reason": "H100/B200级GPU对华禁运是全局性瓶颈。昇腾910B性能仅H100的30-40%且产能不足。边缘推理端Jetson Orin也被限制(2024年出口管制扩展)。物理AI所需的仿真渲染(RTX光追)在国产GPU上几乎无法运行。短期(2025-2028)无解。",
           "skip_reason": "",
           "a_share_candidates": [
             {
@@ -2742,74 +2756,161 @@
         },
         {
           "level": 4,
-          "name": "机器人执行器总成(无框力矩电机+编码器+减速器)",
-          "role": "actuation",
-          "description": "物理AI的「肌肉」——旋转关节(无框力矩电机+谐波减速器+双编码器)、直线关节(行星滚柱丝杠+力传感器)。全球无框力矩电机由Kollmorgen(美)/Parker(美)/Aerotech(美)寡头垄断。国内步科股份/伟创电气突破中。编码器精度(>24位分辨率)是定位精度的基础——海德汉(德)/雷尼绍(英)垄断高端编码器市场，国内仅汇川/禾川/奥普特布局。",
+          "name": "🔴 机器人灵巧手/末端执行器",
+          "role": "hardware",
+          "description": "物理AI的终极执行器——仿人灵巧手需模拟人类手指21个自由度、力控精度<0.1N、触觉分辨率<1mm。每只手含：6个微型空心杯电机(ϕ<8mm)、6根微型丝杠/腱绳、指尖MEMS触觉传感器(GelSight/Digit)、掌心力矩传感器。全球仅Shadow Robot(英国)/特斯拉Optimus Gen3(美国)/因时机器人(中国)有仿人灵巧手产品。微型空心杯电机全球仅Maxon(瑞士)/Faulhaber(德国)可批量供应(ϕ<13mm、功率密度>10W/cm³)。鸣志电器/鼎智科技突破中但功率密度差距30-50%。",
           "global_players": [
-            "Kollmorgen(美国)",
-            "海德汉/Heidenhain(德国)",
-            "雷尼绍/Renishaw(英国)",
-            "绿的谐波(中国)"
+            "Shadow Robot(英国)",
+            "特斯拉(美国自研)",
+            "Maxon Motor(瑞士空心杯)",
+            "Faulhaber(德国空心杯)"
           ],
           "domestic_players": [
-            "绿的谐波 688017",
-            "步科股份 688160",
-            "伟创电气 688698",
-            "奥普特 688686"
+            "因时机器人(未上市)",
+            "鸣志电器 603728",
+            "鼎智科技 688377"
           ],
-          "supplier_count": 4,
-          "is_bottleneck": false,
-          "bottleneck_level": "none",
-          "bottleneck_score": 2.0,
-          "bottleneck_reason": "",
-          "skip_reason": "电机+减速器国内已有绿的谐波/步科等批量供应，编码器虽高端被垄断但中端国产已可替代，非核心瓶颈",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "仿人灵巧手(5指+力控+触觉)全球仅Shadow/特斯拉/因时3家。微型空心杯电机(ϕ<8mm)被Maxon/Faulhaber瑞士德国两巨头百年垄断。百万台人形机器人→200万只灵巧手→1200万个微型空心杯电机→Maxon全球年产能仅约500万个(供全部行业)。国内鸣志/鼎智差距30-50%。",
+          "skip_reason": "",
           "a_share_candidates": [
             {
-              "code": "688017",
-              "name": "绿的谐波",
-              "mapping_reason": "谐波减速器国内龙头(市占率>60%)，人形机器人旋转关节核心"
+              "code": "603728",
+              "name": "鸣志电器",
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树"
             },
             {
-              "code": "688160",
-              "name": "步科股份",
-              "mapping_reason": "无框力矩电机龙头，机器人低压伺服先驱，人形机器人电机核心供应商"
+              "code": "688377",
+              "name": "鼎智科技",
+              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整"
             },
             {
-              "code": "688686",
-              "name": "奥普特",
-              "mapping_reason": "机器视觉龙头，3D视觉+深度学习缺陷检测，物理AI质检场景核心"
+              "code": "003021",
+              "name": "兆威机电",
+              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商"
+            },
+            {
+              "code": "300580",
+              "name": "贝斯特",
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件"
             }
           ]
         },
         {
           "level": 5,
-          "name": "🔵 物理AI数据合成/Sim-to-Real",
-          "role": "data",
-          "description": "物理AI面临「数据饥饿」——真实世界物理交互数据采集成本极高、安全风险大、耗时漫长。Sim-to-Real数据合成技术在仿真环境中生成百万级物理交互数据(RGB/深度/触觉/力)并迁移到现实。NVIDIA Cosmos是首个物理AI世界模型数据合成平台。国内智源研究院/上海AI实验室有类似布局，但完整合成→训练→验证闭环尚未形成。",
+          "name": "🔴 触觉传感器(电子皮肤)",
+          "role": "sensing",
+          "description": "触觉传感器是物理AI「感知物理世界」的最后一块拼图——让机器人感知材质纹理、接触力分布、温度、滑动。主流方案：(1)GelSight(凝胶光学)由MIT发明——摄像头拍摄弹性体变形还原3D力分布；(2)磁触觉(Digit/ GelSight Mini)用磁力计阵列；(3)压阻/电容阵列(大面积电子皮肤)。全球仅GelSight Inc(美国)/XSENSOR(加拿大)/Tekscan(美国)/因时机器人(中国)有成熟触觉传感器。日本XELA在MEMS触觉方向领先。国内大面积电子皮肤(汉威科技/柯力传感)处于实验室阶段——分辨率(<1mm)和耐久性(>10万次)均不满足工业要求。",
           "global_players": [
-            "NVIDIA Cosmos(美国)",
-            "Google Genie(美国)",
-            "智源研究院(中国)"
+            "GelSight Inc(美国MIT)",
+            "Digit(美国Meta)",
+            "XSENSOR(加拿大)",
+            "XELA Robotics(日本MEMS)"
           ],
           "domestic_players": [
-            "无直接上市标的"
+            "汉威科技 300007",
+            "柯力传感 603662",
+            "苏试试验 300416"
           ],
-          "supplier_count": 4,
-          "is_bottleneck": false,
-          "bottleneck_level": "none",
-          "bottleneck_score": 2.0,
-          "bottleneck_reason": "",
-          "skip_reason": "数据合成为纯软件层，开源模型(Genie/UniSim)可用，非供给瓶颈",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高分辨率(<1mm)触觉传感器全球仅GelSight/Digit/XELA 3-4家。关键技术壁垒：弹性体配方(光学透过率+耐磨性+回弹)、亚毫米级摄像机模组、3D力场重建算法。国内大面积电子皮肤仍处实验室阶段，耐久性/分辨率差距5-8年。是人形机器人从'能走'到'能操作精密物品'的关键瓶颈。",
+          "skip_reason": "",
           "a_share_candidates": [
             {
-              "code": "300496",
-              "name": "中科创达",
-              "mapping_reason": "数字孪生+机器人仿真平台，Sim-to-Real数据流闭环"
+              "code": "300007",
+              "name": "汉威科技",
+              "mapping_reason": "气体传感器龙头，柔性压阻传感器+电子皮肤研发，机器人触觉感知布局"
             },
             {
-              "code": "688031",
-              "name": "星环科技",
-              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键"
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "力传感器龙头，应变片自制(壁垒最高环节)，可延伸至触觉阵列"
+            },
+            {
+              "code": "300416",
+              "name": "苏试试验",
+              "mapping_reason": "环境试验设备龙头，力学传感器技术储备"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "🔴 六维力/力矩传感器",
+          "role": "sensing",
+          "description": "六维力传感器同时测量Fx/Fy/Fz/Mx/My/Mz六个分量，安装于机器人手腕/脚踝实现力控柔顺操作。全球高端六维力被ATI Industrial(美国)/OnRobot(丹麦)双寡头垄断(单价>$1万)。国内宇立仪器(未上市)为全球第三家能量产者(已供Figure AI)。技术壁垒：(1)应变片粘贴工艺(手工操作，良率70-80%)；(2)六维解耦算法(耦合误差<1%)；(3)温度补偿(温漂<0.01%FS/°C)。每台人形机器人需4-6个六维力传感器，百万台=400-600万个——远超全球年产能(<10万只)。",
+          "global_players": [
+            "ATI Industrial(美国)",
+            "OnRobot(丹麦)",
+            "宇立仪器(中国)",
+            "柯力传感(中国)"
+          ],
+          "domestic_players": [
+            "柯力传感 603662",
+            "八方股份 603489",
+            "中航电测 300114"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4.0,
+          "bottleneck_reason": "全球高端六维力仅ATI(美)/OnRobot(丹麦)/宇立(中)3家可批量供应。产能极度不足(<10万只/年 vs 远期400-600万只需求)。应变片自制(柯力传感是A股唯一有自制能力的)+贴片手工良率+解耦算法+温补四座大山。日本/德国均无六维力传感器量产企业(日本依赖ATI进口)，中国已属全球第二梯队。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "A股唯一自制应变片的力传感器企业，六维力研发成功送样机器人客户"
+            },
+            {
+              "code": "603489",
+              "name": "八方股份",
+              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力"
+            },
+            {
+              "code": "300114",
+              "name": "中航电测",
+              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中"
+            }
+          ]
+        },
+        {
+          "level": 7,
+          "name": "3D视觉传感器(深度相机/LiDAR)",
+          "role": "sensing",
+          "description": "物理AI需要3D空间理解——深度相机(结构光/ToF/双目立体视觉)提供RGB-D输入用于物体识别/抓取/导航。Intel RealSense(全球市占率60%+)已停产但库存仍在流通，奥比中光(中国)在结构光/ToF方面全球第二。固态LiDAR(激光雷达)用于远距离(>50m)环境建模——禾赛/速腾聚创全球领先。3D视觉层国产替代进展良好，非瓶颈。",
+          "global_players": [
+            "Intel RealSense(美国停产)",
+            "奥比中光(中国)",
+            "禾赛科技(中国)",
+            "Ouster(美国)"
+          ],
+          "domestic_players": [
+            "奥比中光 688023",
+            "禾赛科技(美股HSAI)",
+            "速腾聚创 2498.HK"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.0,
+          "bottleneck_reason": "",
+          "skip_reason": "国产3D视觉已全球领先(奥比中光/禾赛)，非瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688023",
+              "name": "奥比中光",
+              "mapping_reason": "3D视觉传感器全球第二(仅次于Intel)，结构光/ToF双路线"
+            },
+            {
+              "code": "002273",
+              "name": "水晶光电",
+              "mapping_reason": "光学元件龙头，3D结构光DOE/扩散片，深度相机核心光学器件"
             }
           ]
         }
