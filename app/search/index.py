@@ -983,18 +983,25 @@ def _load_technical_eval(
     return result
 
 
-_macd_signals_cache: dict[str, dict[str, str]] = {}
+_macd_signals_cache: dict[tuple[str, str], dict[str, str]] = {}
 
 def _load_macd_signals(
     dataset_dir: str | Path = DEFAULT_DATASET_DIR,
+    as_of_date: str = "",
 ) -> dict[str, str]:
-    """Load MACD signal dataset. Returns dict keyed by 'market:symbol' -> signal label."""
-    cache_key = str(dataset_dir)
+    """Load MACD signal dataset. When as_of_date is provided, loads date-specific file.
+    Returns dict keyed by 'market:symbol' -> signal label."""
+    cache_key = (str(dataset_dir), as_of_date)
     if cache_key in _macd_signals_cache:
         return _macd_signals_cache[cache_key]
 
-    path = Path(dataset_dir) / "dataset_macd_signals_current.json"
+    if as_of_date:
+        path = Path(dataset_dir) / f"dataset_macd_signals_{as_of_date}.json"
+    else:
+        path = Path(dataset_dir) / "dataset_macd_signals_current.json"
     if not path.is_file():
+        if as_of_date:
+            _build_macd_async(as_of_date)
         return {}
     with open(path, "r", encoding="utf-8") as f:
         rows = json.load(f)
@@ -1004,6 +1011,24 @@ def _load_macd_signals(
         result[key] = row.get("macd_signal", "")
     _macd_signals_cache[cache_key] = result
     return result
+
+
+def _build_macd_async(trading_day: str) -> None:
+    """Spawn background process to build MACD signals for a given date."""
+    import subprocess
+    try:
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(PROJECT_ROOT / "scripts" / "build_macd_signals.py"),
+                "--trading-day", trading_day,
+                "--tdxdir", "/mnt/c/new_tdx64",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
 
 
 def _build_tech_eval_async(trading_day: str) -> None:
@@ -2057,12 +2082,15 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     # MACD signal filter
     macd_signal_target = _normalize_text(params.get("macd_signal"))
     if macd_signal_target:
-        macd_data = _load_macd_signals()
+        macd_data = _load_macd_signals(as_of_date=as_of_date)
         if macd_data:
             filtered = [
                 row for row in filtered
                 if macd_data.get(f"{_normalize_text(row.get('market'))}:{_normalize_text(row.get('symbol'))}") == macd_signal_target
             ]
+        else:
+            # MACD data not yet built for this date — return empty
+            filtered = []
 
     for param_key, (field_name, bound) in numeric_field_filters.items():
         threshold = _coerce_float(params.get(param_key))

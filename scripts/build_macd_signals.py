@@ -177,9 +177,30 @@ def detect_signals(
     return ""
 
 
-def build_macd_signals(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+def build_macd_signals(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
+    # When trading_day is set, use historical RPS
+    if trading_day:
+        from app.search.index import load_rps_rows_as_of
+        import app.search.index as _idx
+        _orig_load_rps_rows = _idx.load_rps_rows
+        _idx.load_rps_rows = lambda **kw: load_rps_rows_as_of(trading_day)
+
+        _orig_Reader_factory = Reader.factory
+        def _patched_factory(*fa, **kw):
+            r = _orig_Reader_factory(*fa, **kw)
+            _orig_daily = r.daily
+            def _daily_wrapper(**dkw):
+                result = _orig_daily(**dkw)
+                if result is not None and not result.empty:
+                    result = result.sort_index()
+                    mask = result.index <= trading_day
+                    result = result.loc[mask]
+                return result
+            r.daily = _daily_wrapper
+            return r
+        Reader.factory = staticmethod(_patched_factory)
     results: list[dict[str, Any]] = []
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -223,10 +244,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build MACD signal dataset")
     parser.add_argument("--tdxdir", default=DEFAULT_TDX_DIR)
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
+    parser.add_argument("--trading-day", default=None, help="Build as of historical date (YYYY-MM-DD)")
     args = parser.parse_args()
 
-    output = Path(args.output)
-    rows = build_macd_signals(tdxdir=args.tdxdir)
+    trading_day = args.trading_day
+    if trading_day:
+        output = DEFAULT_DATASET_DIR / f"dataset_macd_signals_{trading_day}.json"
+    else:
+        output = Path(args.output)
+
+    rows = build_macd_signals(tdxdir=args.tdxdir, trading_day=trading_day or "")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
 
