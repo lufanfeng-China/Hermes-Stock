@@ -1398,6 +1398,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'rebuild_screener_rps_climb', 'name': '重建 RPS爬升 策略', 'desc': '重建 RPS 持续爬升策略结果'},
             {'id': 'rebuild_screener_blowup_stall', 'name': '重建 爆量滞涨 策略', 'desc': '重建放量滞涨预警策略结果'},
             {'id': 'rebuild_screener_blowup_break', 'name': '重建 爆量突破 策略', 'desc': '重建放量突破策略结果'},
+            {'id': 'rebuild_screener_ma_pullback', 'name': '重建 均线回踩 策略', 'desc': '重建多头趋势回踩MA20支撑策略结果'},
+            {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ])
 
         # Determine which tasks are completed (based on current data freshness)
