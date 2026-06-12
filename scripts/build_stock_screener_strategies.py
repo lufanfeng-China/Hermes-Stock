@@ -150,9 +150,8 @@ def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]
     return candidates
 
 def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
-    """RPS首次：RPS总分(rps20+rps50+rps120+rps250)上穿360, 且过去60个交易日首次满足."""
+    """RPS首次：RPS总分上穿360+趋势多头/强多头+短趋势多头/强多头+距MA10<10%+收盘价10日最高, 过去60日首次."""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
-    # Use historical RPS when trading_day is set (import before monkey-patch captures stale ref)
     if trading_day:
         from app.search.index import load_rps_rows_as_of
         rps_rows = load_rps_rows_as_of(trading_day)
@@ -162,7 +161,11 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
     if not candidates:
         return []
 
-    # Compute cross-sectional RPS for past 60 trading days (up to trading_day if set)
+    # Load tech eval for trend/short_trend filtering
+    from app.search.index import _load_technical_eval
+    tech_eval = _load_technical_eval(as_of_date=trading_day or "")
+
+    # Compute cross-sectional RPS for past 60 trading days
     past_rps_by_day = _compute_past_days_rps(reader, rps_rows, ndays=60, as_of=trading_day)
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -172,13 +175,47 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
         symbol_val = str(row.get("symbol", "")).strip()
         key = (market_val, symbol_val)
 
+        # ── Condition 2: 趋势多头/强多头 ──
+        te = tech_eval.get(symbol_val, {})
+        trend = str(te.get("trend", "")).lower()
+        if trend not in ("bullish", "strong_bullish"):
+            continue
+
+        # ── Condition 3: 短趋势多头/强多头 ──
+        short_trend = str(te.get("short_trend", "")).lower()
+        if short_trend not in ("bullish", "strong_bullish"):
+            continue
+
+        # ── Condition 4: 距MA10 < 10% ──
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        closes = daily["close"].astype(float).tolist()
+        if len(closes) < 15:
+            continue
+        ti = len(closes) - 1
+        close_t = closes[ti]
+        ma10 = sum(closes[max(0, ti - 9):ti + 1]) / 10
+        dist_ma10 = abs(close_t - ma10) / ma10 * 100.0
+        if dist_ma10 >= 10:
+            continue
+
+        # ── Condition 5: 收盘价10日最高 ──
+        recent_closes = closes[max(0, ti - 9):ti + 1]
+        if close_t < max(recent_closes) - 1e-9:
+            continue
+
+        # ── Condition 1: RPS首次 (same as before) ──
         rps20_t = _coerce_float(row.get("rps_20")) or 0
         rps50_t = _coerce_float(row.get("rps_50")) or 0
         rps120_t = _coerce_float(row.get("rps_120")) or 0
         rps250_t = _coerce_float(row.get("rps_250")) or 0
         total_today = rps20_t + rps50_t + rps120_t + rps250_t
 
-        # Check if this stock ever had RPS total > 360 in the past 60 days
         ever_met = False
         yesterday_total = None
         for day_idx, day_rps in enumerate(past_rps_by_day):
@@ -190,7 +227,7 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             if None in (r20, r50, r120, r250):
                 continue
             day_total = r20 + r50 + r120 + r250
-            if day_idx == 0:  # yesterday
+            if day_idx == 0:
                 yesterday_total = day_total
             if day_total > 360:
                 ever_met = True
@@ -208,6 +245,10 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             "cross_above_360": crossed,
             "yesterday_total": round(yesterday_total, 2) if yesterday_total is not None else None,
             "first_in_60d": is_first,
+            "trend": trend,
+            "short_trend": short_trend,
+            "dist_ma10_pct": round(dist_ma10, 2),
+            "is_10d_high": bool(close_t >= max(recent_closes) - 1e-9),
         }
 
         results.append({
@@ -216,10 +257,10 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             "symbol": symbol_val,
             "strategy": STRATEGY_FIRST,
             "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST]["label"],
-            "passed": is_first and crossed,
+            "passed": crossed,
             "conditions": conditions,
             "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history",
+            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))

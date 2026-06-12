@@ -4,7 +4,7 @@ const PAGE_SIZE = 50;
 const STRATEGY_PRESETS = {
   rps_first: {
     strategy: 'rps_first',
-    description: 'RPS总分(rps20+rps50+rps120+rps250)上穿360, 且过去60个交易日首次满足',
+    description: 'RPS总分上穿360 + 趋势多头/强多头 + 短趋势多头/强多头 + 距10MA<20%',
   },
   ma_cross: {
     strategy: 'ma_cross',
