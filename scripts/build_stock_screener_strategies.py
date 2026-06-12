@@ -152,7 +152,12 @@ def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]
 def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
     """RPS首次：RPS总分(rps20+rps50+rps120+rps250)上穿360, 且过去60个交易日首次满足."""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
+    # Use historical RPS when trading_day is set (import before monkey-patch captures stale ref)
+    if trading_day:
+        from app.search.index import load_rps_rows_as_of
+        rps_rows = load_rps_rows_as_of(trading_day)
+    else:
+        rps_rows = load_rps_rows()
     candidates = _rps_first_candidates(rps_rows)
     if not candidates:
         return []
