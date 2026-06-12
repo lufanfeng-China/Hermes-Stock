@@ -4,7 +4,7 @@ const PAGE_SIZE = 50;
 const STRATEGY_PRESETS = {
   rps_first: {
     strategy: 'rps_first',
-    description: 'RPS总分上穿360 + 趋势多头/强多头 + 短趋势多头/强多头 + 距10MA<20%',
+    description: 'RPS总分上穿360 + 趋势多头/强多头 + 短趋势多头/强多头 + 距10MA<10% + 收盘价10日最高',
   },
   ma_cross: {
     strategy: 'ma_cross',
