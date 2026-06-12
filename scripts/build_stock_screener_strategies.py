@@ -118,7 +118,7 @@ def _compute_past_days_rps(reader, rps_rows, ndays=5):
 
 
 def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Find stocks where 3 out of 4 RPS >= 90 and the remaining one >= 80."""
+    """Find stocks where RPS total (rps20+rps50+rps120+rps250) crosses above 360 today."""
     candidates: list[dict[str, Any]] = []
     for row in rps_rows:
         rps20 = _coerce_float(row.get("rps_20"))
@@ -127,22 +127,21 @@ def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]
         rps250 = _coerce_float(row.get("rps_250"))
         if None in (rps20, rps50, rps120, rps250):
             continue
-        above_90 = sum(1 for v in (rps20, rps50, rps120, rps250) if v >= 90)
-        below_80 = sum(1 for v in (rps20, rps50, rps120, rps250) if v < 80)
-        if above_90 >= 3 and below_80 == 0:
+        rps_total = rps20 + rps50 + rps120 + rps250
+        if rps_total > 360:
             candidates.append(row)
     return candidates
 
 def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """RPS首次：今天任意3个RPS≥90且余下1个≥80，且过去5个交易日从未满足此条件。"""
+    """RPS首次：RPS总分(rps20+rps50+rps120+rps250)上穿360, 且过去60个交易日首次满足."""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
     candidates = _rps_first_candidates(rps_rows)
     if not candidates:
         return []
 
-    # Compute cross-sectional RPS for the past 5 trading days (index 0=yesterday, 1=2days ago, ...)
-    past_rps_by_day = _compute_past_days_rps(reader, rps_rows, ndays=5)
+    # Compute cross-sectional RPS for past 60 trading days
+    past_rps_by_day = _compute_past_days_rps(reader, rps_rows, ndays=60)
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
     results: list[dict[str, Any]] = []
@@ -151,38 +150,42 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
         symbol_val = str(row.get("symbol", "")).strip()
         key = (market_val, symbol_val)
 
-        # Check if this stock ever met the 3-of-4 condition in the past 5 days
+        rps20_t = _coerce_float(row.get("rps_20")) or 0
+        rps50_t = _coerce_float(row.get("rps_50")) or 0
+        rps120_t = _coerce_float(row.get("rps_120")) or 0
+        rps250_t = _coerce_float(row.get("rps_250")) or 0
+        total_today = rps20_t + rps50_t + rps120_t + rps250_t
+
+        # Check if this stock ever had RPS total > 360 in the past 60 days
         ever_met = False
-        past_days_detail: dict[str, object] = {}
+        yesterday_total = None
         for day_idx, day_rps in enumerate(past_rps_by_day):
             rps = day_rps.get(key, {})
-            rps20 = rps.get("rps_20")
-            rps50 = rps.get("rps_50")
-            rps120 = rps.get("rps_120")
-            rps250 = rps.get("rps_250")
-            days_ago = day_idx + 1
-            
-            above_90 = sum(1 for v in (rps20, rps50, rps120, rps250) if v is not None and v >= 90)
-            below_80 = sum(1 for v in (rps20, rps50, rps120, rps250) if v is not None and v < 80)
-            day_met = above_90 >= 3 and below_80 == 0
-
-            past_days_detail[f"day_{days_ago}_met"] = day_met
-            past_days_detail[f"day_{days_ago}_above_90_count"] = above_90
-            past_days_detail[f"day_{days_ago}_rps20"] = rps20
-            past_days_detail[f"day_{days_ago}_rps50"] = rps50
-            past_days_detail[f"day_{days_ago}_rps120"] = rps120
-            past_days_detail[f"day_{days_ago}_rps250"] = rps250
-            if day_met:
+            r20 = rps.get("rps_20")
+            r50 = rps.get("rps_50")
+            r120 = rps.get("rps_120")
+            r250 = rps.get("rps_250")
+            if None in (r20, r50, r120, r250):
+                continue
+            day_total = r20 + r50 + r120 + r250
+            if day_idx == 0:  # yesterday
+                yesterday_total = day_total
+            if day_total > 360:
                 ever_met = True
+                break
 
         is_first = not ever_met
+        crossed = yesterday_total is not None and yesterday_total <= 360
 
         conditions: dict[str, object] = {
-            "today_rps20_ge_90": True,
-            "today_rps50_ge_90": True,
-            "today_rps120_ge_90": True,
-            "today_rps250_ge_90": True,
-            **past_days_detail,
+            "rps_total": round(total_today, 2),
+            "rps20": round(rps20_t, 2),
+            "rps50": round(rps50_t, 2),
+            "rps120": round(rps120_t, 2),
+            "rps250": round(rps250_t, 2),
+            "cross_above_360": crossed,
+            "yesterday_total": round(yesterday_total, 2) if yesterday_total is not None else None,
+            "first_in_60d": is_first,
         }
 
         results.append({
@@ -191,10 +194,10 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
             "symbol": symbol_val,
             "strategy": STRATEGY_FIRST,
             "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST]["label"],
-            "passed": is_first,
+            "passed": is_first and crossed,
             "conditions": conditions,
             "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
+            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
