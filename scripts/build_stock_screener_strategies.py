@@ -73,11 +73,12 @@ def _return_pct(closes: list[float], end_index: int, window: int) -> float | Non
     return (closes[end_index] - base) / base * 100.0
 
 
-def _compute_past_days_rps(reader, rps_rows, ndays=5):
+def _compute_past_days_rps(reader, rps_rows, ndays=5, as_of: str = ""):
     """Compute cross-sectional RPS for the past N trading days.
     
     Uses the pre-computed RPS history dataset to look up RPS values for prior days.
-    Returns a list of dicts, one per past day (index 0 = yesterday).
+    When as_of is provided, only considers trading days up to that date.
+    Returns a list of dicts, one per past day (index 0 = yesterday relative to as_of).
     Each dict maps (market, symbol) → {rps_20, rps_50, rps_120, rps_250}.
     """
     import json as _json
@@ -92,6 +93,22 @@ def _compute_past_days_rps(reader, rps_rows, ndays=5):
     trading_days = sorted(set(str(h.get("trading_day", "")) for h in all_history if h.get("trading_day")))
     if not trading_days:
         return []
+    
+    # When as_of is set, find its index and only use days up to it
+    if as_of:
+        as_of_idx = None
+        for i, td in enumerate(trading_days):
+            if td == as_of:
+                as_of_idx = i
+                break
+        if as_of_idx is None:
+            # Find closest day <= as_of
+            for i in range(len(trading_days) - 1, -1, -1):
+                if trading_days[i] <= as_of:
+                    as_of_idx = i
+                    break
+        if as_of_idx is not None:
+            trading_days = trading_days[:as_of_idx + 1]
     
     # Build lookup: trading_day → {(market, symbol): {rps_20, rps_50, rps_120, rps_250}}
     rps_by_day: dict[str, dict[tuple[str, str], dict[str, float | None]]] = {}
@@ -132,7 +149,7 @@ def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]
             candidates.append(row)
     return candidates
 
-def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
     """RPS首次：RPS总分(rps20+rps50+rps120+rps250)上穿360, 且过去60个交易日首次满足."""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
@@ -140,8 +157,8 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any
     if not candidates:
         return []
 
-    # Compute cross-sectional RPS for past 60 trading days
-    past_rps_by_day = _compute_past_days_rps(reader, rps_rows, ndays=60)
+    # Compute cross-sectional RPS for past 60 trading days (up to trading_day if set)
+    past_rps_by_day = _compute_past_days_rps(reader, rps_rows, ndays=60, as_of=trading_day)
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
     results: list[dict[str, Any]] = []
@@ -960,7 +977,7 @@ def main() -> None:
 
     try:
         if args.strategy == STRATEGY_FIRST:
-            rows = build_rps_first_rows(tdxdir=args.tdxdir)
+            rows = build_rps_first_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
         elif args.strategy == STRATEGY_MA_CROSS:
             rows = build_ma_cross_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_WASHOUT:
