@@ -3285,6 +3285,650 @@
           ]
         }
       ]
+    },
+    "cpo": {
+      "id": "cpo",
+      "name": "CPO（共封装光学）",
+      "description": "CPO(Co-Packaged Optics)将光引擎与交换ASIC芯片封装在同一基板上，用光纤替代铜互连，解决AI数据中心800G/1.6T时代的带宽-功耗-延迟瓶颈。传统可插拔光模块每比特能耗约30pJ，CPO可降至5pJ以下。Broadcom Bailly CPO交换机2025年量产，NVIDIA Spectrum-X CPO预计2026年推出。2026年CPO市场规模约5亿美元→2030年超100亿美元。产业链核心瓶颈：(1)硅光芯片制造——CMOS兼容硅光工艺全球仅台积电/格罗方德/Intel 3家；(2)CW激光器——InP材料外延被Lumentum/Coherent/住友电工垄断；(3)光纤阵列单元(FAU)——高密度(>64通道)精密对准；(4)2.5D/3D先进封装——台积电CoWoS-S独家。中国在光模块组装端领先（中际旭创/新易盛全球前三），但上游硅光芯片和激光器严重依赖进口。",
+      "anchor": "AI算力需求→800G/1.6T光互联→传统可插拔能效到头→CPO是唯一路径→硅光芯片+激光器+封装三重瓶颈",
+      "layers": [
+        {
+          "level": 0,
+          "name": "CPO交换机/系统集成",
+          "role": "integrator",
+          "description": "CPO系统集成光引擎+交换ASIC+光纤+散热于一体。Broadcom Bailly(Tomahawk 6, 51.2Tbps, 64×800G CPO)2025年量产, 已获Meta/Google订单。NVIDIA Spectrum-X CPO(51.2Tbps)预计2026年。Cisco/华为/新华三跟进中。国内锐捷/中兴有CPO交换机原型但离量产2-3年——核心瓶颈不在系统集成而在光引擎供应。",
+          "global_players": [
+            "Broadcom(美国)",
+            "NVIDIA(美国)",
+            "Cisco(美国)",
+            "华为(中国)"
+          ],
+          "domestic_players": [
+            "锐捷网络 301165",
+            "中兴通讯 000063"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "多家交换机企业布局CPO, 非供给瓶颈。瓶颈在光引擎层",
+          "a_share_candidates": [
+            {
+              "code": "301165",
+              "name": "锐捷网络",
+              "mapping_reason": "国产交换机龙头, CPO交换机原型研发中, 数据中心客户基础",
+              "match_level": "high"
+            },
+            {
+              "code": "000063",
+              "name": "中兴通讯",
+              "mapping_reason": "通信设备龙头, 光网络+交换机双线, CPO布局",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 硅光引擎芯片（PIC）",
+          "role": "core",
+          "description": "硅光引擎是CPO的心脏——在硅基衬底上集成调制器/波导/光栅耦合器/Ge光电探测器, 将电信号转为光信号。CMOS兼容硅光工艺全球仅台积电(90nm硅光, 已量产Broadcom Bailly)、格罗方德(45nm硅光, 供Intel/Ayar Labs)、Intel(自研硅光, 100G/通道)3家。国内中科院微电子所/上海光机所/国盾量子处于研发阶段——硅光芯片设计(EDA工具被Synopsys/Cadence垄断)+制造(TSMC/GF不接中国订单)+测试(光学探针台被Cascade/FormFactor垄断)三重壁垒。每颗CPO光引擎=8-16个调制器+1个AWG+4-8个Ge PD+光栅耦合器阵列, 良率是最大挑战(目前约60%)。",
+          "global_players": [
+            "台积电/TSMC(台湾90nm硅光)",
+            "格罗方德/GF(美国45nm硅光)",
+            "Intel(美国自研)",
+            "Broadcom(美国自研)"
+          ],
+          "domestic_players": [
+            "无(研发阶段)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "CMOS兼容硅光工艺全球仅TSMC(90nm)/GF(45nm)/Intel 3家。TSMC不接中国订单, GF被美国控制。硅光EDA工具(Synopsys/Cadence)+光学探针台(Cascade/FormFactor)全被美国垄断。中国硅光设计+制造+测试为零——这是一整条缺失的产业链。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, 硅光光源(DFB激光器)布局",
+              "match_level": "high"
+            },
+            {
+              "code": "688313",
+              "name": "仕佳光子",
+              "mapping_reason": "PLC光分路器龙头, AWG阵列波导光栅可用于硅光引擎波分复用",
+              "match_level": "high"
+            },
+            {
+              "code": "300620",
+              "name": "光库科技",
+              "mapping_reason": "铌酸锂调制器龙头, 薄膜铌酸锂(TFLN)调制器可用于硅光引擎",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 CW激光器光源（DFB/EML）",
+          "role": "source",
+          "description": "CPO光引擎需要外置CW(连续波)激光器提供光源——每通道一个波长(1310nm/1550nm, 100mW+功率)。InP(磷化铟)基DFB/EML激光器全球由Lumentum(美)/Coherent(美, 原II-VI)/住友电工(日)/三菱电机(日)四巨头垄断(合计>80%)。Lumentum/Coherent是Broadcom Bailly的CW激光器供应商。国内源杰科技/光迅科技/长光华芯在DFB激光器追赶中, 但100mW+高功率CW激光器仍依赖进口。核心壁垒: InP外延片(被IQE(英)/住友化学(日)垄断)+高精度光栅(周期240nm, 电子束光刻)。每台51.2T CPO交换机需64个CW激光器, 100万台=6400万个激光器。",
+          "global_players": [
+            "Lumentum(美国)",
+            "Coherent/II-VI(美国)",
+            "住友电工(日本)",
+            "三菱电机(日本)"
+          ],
+          "domestic_players": [
+            "源杰科技 688498",
+            "光迅科技 002281",
+            "长光华芯 688048"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "InP基高功率CW激光器(100mW+)全球被Lumentum/Coherent/住友/三菱四巨头垄断(>80%)。InP外延片被IQE(英)/住友化学(日)垄断——从衬底到外延到芯片三级卡脖子。国内源杰/光迅/长光华芯在低功率DFB有突破但100mW+高功率CW仍依赖进口。100万台CPO交换机=6400万个CW激光器——产能缺口巨大。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688498",
+              "name": "源杰科技",
+              "mapping_reason": "国产光芯片龙头, DFB激光器已量产(10G/25G), 100G EML研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002281",
+              "name": "光迅科技",
+              "mapping_reason": "光模块+光芯片一体化, DFB/EML自研, 硅光芯片布局",
+              "match_level": "general"
+            },
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, VCSEL/DFB多路线, CW激光器研发",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 光纤阵列单元（FAU）",
+          "role": "interconnect",
+          "description": "FAU(Fiber Array Unit)将64-128根光纤以亚微米精度排列成阵列, 对准硅光芯片的光栅耦合器。每个光引擎需1-2个FAU, 对准精度<0.5μm(相当于头发丝的1/200)。全球仅Senko(日本)/US Conec(美国)/Molex(美国)/潮州三环(中国)4家批量供应。国内天孚通信/太辰光追赶中。核心壁垒: V型槽精密加工(间距误差<0.2μm)+光纤固定(UV固化胶耐温>200°C)+MT插芯(多芯连接器)。每台CPO交换机需64-128个FAU通道, 百万台=数亿通道——产能严重不足。",
+          "global_players": [
+            "Senko(日本)",
+            "US Conec(美国)",
+            "Molex(美国)",
+            "潮州三环(中国)"
+          ],
+          "domestic_players": [
+            "天孚通信 300394",
+            "太辰光 300570",
+            "潮州三环 300408"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高密度FAU(>64通道)全球仅Senko/US Conec/Molex/潮州三环4家。对准精度<0.5μm需要V型槽超高精度加工(间距误差<0.2μm)。百万台CPO=数亿通道需求, 几乎是当前全球FAU年产能的10倍以上。中国在天孚/太辰光有较完整的FAU供应链, 但高精度V型槽设备依赖日本Disco。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300394",
+              "name": "天孚通信",
+              "mapping_reason": "光器件龙头, FAU阵列+MT插芯+光接口组件完整产品线, 全球光模块核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300570",
+              "name": "太辰光",
+              "mapping_reason": "光纤连接器龙头, FA/MT插芯自研, 高密度光纤阵列",
+              "match_level": "high"
+            },
+            {
+              "code": "300408",
+              "name": "三环集团",
+              "mapping_reason": "陶瓷插芯/MT插芯全球龙头(市占>70%), FAU核心组件",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 2.5D/3D先进封装（CoWoS/硅中介层）",
+          "role": "packaging",
+          "description": "CPO光引擎需通过2.5D硅中介层(CoWoS-S)与交换ASIC实现超高密度互连(>10000路/mm²), 同时满足电信号→光信号的低损耗转换。台积电CoWoS-S独家供应Broadcom Bailly CPO封装, 单片面积可达3000mm²。国内长电科技XDFOI/通富微电FCBGA在2.5D封装追赶中, 但CPO级封装(光+电共封装)国内为零——要求同时处理光信号对准(<0.5μm)和电信号互连(<10μm间距), 比纯电封装复杂一个数量级。",
+          "global_players": [
+            "台积电CoWoS(台湾)100%垄断CPO级",
+            "三星I-Cube(韩国)",
+            "Intel EMIB(美国)"
+          ],
+          "domestic_players": [
+            "长电科技 600584",
+            "通富微电 002156"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "CPO级封装(光+电共封装)全球被台积电CoWoS-S独家垄断。要求同时处理光学对准(<0.5μm)和电互连(<10μm间距)——国内2.5D封装刚起步, CPO级为零。ABF膜(味之素100%垄断)是硅中介层的前置瓶颈——双重卡脖子。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "600584",
+              "name": "长电科技",
+              "mapping_reason": "国内先进封装龙头, XDFOI 2.5D平台, 光+电共封装研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002156",
+              "name": "通富微电",
+              "mapping_reason": "AMD核心封装供应商, FCBGA+2.5D, 硅光封装布局",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "光模块组装（CPO配套可插拔）",
+          "role": "assembly",
+          "description": "CPO时代可插拔光模块(800G/1.6T)仍将与CPO共存(CPO用于交换机内, 可插拔用于交换机间)。中际旭创(全球800G市占率>40%)、新易盛(全球前三)、天孚通信(光引擎代工)在可插拔光模块领域全球领先。中国在光模块组装端有绝对优势——全球前10中有7家中国企业。非瓶颈, 但随着CPO渗透率提升, 可插拔市场增速将放缓。",
+          "global_players": [
+            "中际旭创(中国>40%)",
+            "新易盛(中国)",
+            "Coherent(美国)",
+            "Ciena(美国)"
+          ],
+          "domestic_players": [
+            "中际旭创 300308",
+            "新易盛 300502",
+            "天孚通信 300394",
+            "光迅科技 002281"
+          ],
+          "supplier_count": 8,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "中国光模块组装全球领先(前10占7席), 非瓶颈。瓶颈在上游硅光芯片和激光器",
+          "a_share_candidates": [
+            {
+              "code": "300308",
+              "name": "中际旭创",
+              "mapping_reason": "全球光模块龙头(800G市占>40%), 谷歌/NVIDIA核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300502",
+              "name": "新易盛",
+              "mapping_reason": "全球光模块前三, 800G已量产, 1.6T研发中",
+              "match_level": "medium"
+            }
+          ]
+        }
+      ]
+    },
+    "800v-sic-power": {
+      "id": "800v-sic-power",
+      "name": "800V SiC 功率半导体",
+      "description": "800V高压平台是新能源车从「够用」到「好用」的质变——充电15分钟续航400km(4C快充)、系统效率提升5-8%、线束重量减半。2025年比亚迪、小鹏、理想、蔚来、华为智选全面转向800V, 2026年800V车型渗透率预计突破25%。每台800V车≈20-30颗SiC MOSFET(主驱逆变器)+OBC+DC-DC+空调压缩机, 2000万台800V车=4-6亿颗SiC MOSFET。核心瓶颈:(1)SiC衬底——6英寸→8英寸切换中, Wolfspeed/Coherent/ST/罗姆四巨头垄断全球>80%产能;(2)SiC MOSFET设计——沟槽栅/双沟槽专利被英飞凌/罗姆/Wolfspeed封锁;(3)SiC模块封装——银烧结+AMB陶瓷基板+Si3N4基板被日本/德国垄断。中国在SiC全链条上正全面追赶——天科合达/天岳先进(衬底)、比亚迪半导/斯达半导(器件模块)。",
+      "anchor": "新能源车快充是刚需→800V高压平台渗透率从5%→25%→SiC MOSFET需求暴增→衬底+设计+封装三重瓶颈→国产替代2025-2028窗口期",
+      "layers": [
+        {
+          "level": 0,
+          "name": "SiC功率模块（主驱逆变器）",
+          "role": "module",
+          "description": "SiC功率模块是800V电驱的「心脏」——将电池直流电转为三相交流电驱动电机, 占电驱系统成本约40%。每台800V车主驱逆变器用20-30颗SiC MOSFET芯片(6-8个半桥模块)。全球SiC模块由英飞凌(德, 市占>30%, 特斯拉主供)、ST(意法, 特斯拉Cybertruck)、安森美(美)、罗姆(日)四巨头主导。国内比亚迪半导体(自研自用, 全球首家量产沟槽栅SiC MOSFET)、斯达半导(国内第一, 供小鹏/理想)、芯联集成追赶中。国产差距从2020年的5年缩小至2025年的1-2年。",
+          "global_players": [
+            "英飞凌(德国>30%)",
+            "ST意法半导体(瑞士)",
+            "安森美(美国)",
+            "罗姆(日本)",
+            "比亚迪半导体(中国)"
+          ],
+          "domestic_players": [
+            "比亚迪半导体(未上市)",
+            "斯达半导 603290",
+            "芯联集成 688469",
+            "士兰微 600460"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.0,
+          "bottleneck_reason": "",
+          "skip_reason": "模块设计国产突破快(比亚迪沟槽栅全球首发), 差距缩小至1-2年。瓶颈在上游芯片和衬底",
+          "a_share_candidates": [
+            {
+              "code": "603290",
+              "name": "斯达半导",
+              "mapping_reason": "国内IGBT/SiC模块龙头, 供小鹏/理想800V平台, 自建SiC芯片产线",
+              "match_level": "high"
+            },
+            {
+              "code": "688469",
+              "name": "芯联集成",
+              "mapping_reason": "SiC晶圆代工龙头, 比亚迪/斯达核心代工厂, 8英寸SiC线2025量产",
+              "match_level": "high"
+            },
+            {
+              "code": "600460",
+              "name": "士兰微",
+              "mapping_reason": "IDM功率半导体, SiC MOSFET+模块自研, 汽车级认证",
+              "match_level": "general"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 SiC MOSFET芯片（沟槽栅/双沟槽）",
+          "role": "chip",
+          "description": "SiC MOSFET芯片是功率模块的核心——需同时满足高压(>1200V)、低导通电阻(<10mΩ·cm²)、高开关频率(>50kHz)。沟槽栅(Trench Gate)和双沟槽(Double Trench)是最先进结构——英飞凌CoolSiC(沟槽栅, 全球专利保护)、罗姆(双沟槽, 全球首发)、Wolfspeed(平面栅趋向沟槽)。国内比亚迪半导体2024年全球首家量产沟槽栅SiC MOSFET(供仰望U8), 但产能仅够自用。斯达半导/华润微/士兰微在平面栅SiC MOSFET已量产, 沟槽栅差距1-2年。核心壁垒: 沟槽刻蚀(深宽比>5:1, 侧壁粗糙度<1nm)+栅氧界面态控制(<10¹¹cm⁻²eV⁻¹)+短沟道效应抑制。",
+          "global_players": [
+            "英飞凌(德国专利)",
+            "罗姆(日本双沟槽)",
+            "Wolfspeed(美国)",
+            "比亚迪半导体(中国沟槽栅)"
+          ],
+          "domestic_players": [
+            "斯达半导 603290",
+            "华润微 688396",
+            "士兰微 600460",
+            "芯联集成 688469"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "沟槽栅SiC MOSFET全球仅英飞凌/罗姆/Wolfspeed/比亚迪4家有生产能力, 且英飞凌/罗姆/Wolfspeed专利壁垒极深。沟槽刻蚀(深宽比>5:1)+栅氧界面态(<10¹¹)两大工艺长期被封锁。比亚迪突破但产能仅够自用。斯达/华润/士兰在平面栅已量产但沟槽栅仍需1-2年。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603290",
+              "name": "斯达半导",
+              "mapping_reason": "国产SiC MOSFET龙头(平面栅已量产), 沟槽栅研发中, 供小鹏/理想",
+              "match_level": "high"
+            },
+            {
+              "code": "688396",
+              "name": "华润微",
+              "mapping_reason": "IDM功率半导体, 6英寸SiC MOSFET产线投产, 向8英寸升级",
+              "match_level": "medium"
+            },
+            {
+              "code": "600460",
+              "name": "士兰微",
+              "mapping_reason": "IDM SiC MOSFET+模块, 12英寸产线建设中",
+              "match_level": "medium"
+            },
+            {
+              "code": "688469",
+              "name": "芯联集成",
+              "mapping_reason": "SiC晶圆代工龙头, 8英寸SiC线2025量产, 为比亚迪/斯达代工",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 SiC衬底（6英寸→8英寸）",
+          "role": "substrate",
+          "description": "SiC衬底占SiC器件成本约45-50%。6英寸→8英寸衬底切换可使单颗芯片成本降低30-40%(面积增加1.78倍, 边缘损耗降低)。全球6英寸SiC衬底产能由Wolfspeed(美, 市占>30%)、Coherent(美)/ST(意法, 收购Norstel)/罗姆(日, 收购SiCrystal)/天科合达(中国)五巨头主导。8英寸衬底是下一代制高点——Wolfspeed 2022年全球首发8英寸, 天科合达2024年中国首发8英寸(良率约40% vs Wolfspeed 70%)。核心壁垒: PVT法晶体生长(2300°C, 生长速度<0.5mm/h, 需要7-10天长一根晶锭)+ 微管缺陷密度(<0.1/cm²)+ 晶圆切割(CMP抛光粗糙度<0.1nm)。国内天科合达/天岳先进全球市占率合计约15%, 8英寸追赶中。",
+          "global_players": [
+            "Wolfspeed(美国>30%)",
+            "Coherent(美国)",
+            "ST意法半导体(瑞士)",
+            "罗姆(日本)",
+            "天科合达(中国)"
+          ],
+          "domestic_players": [
+            "天科合达(未上市)",
+            "天岳先进 688234",
+            "烁科中科信(未上市)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "SiC衬底占成本45-50%, 是最昂贵的单一材料。8英寸衬底全球仅Wolfspeed(良率70%)和天科合达(良率40%)能量产——良率差距直接决定成本竞争力。PVT法晶体生长被Wolfspeed/Coherent专利封锁(2300°C温场控制+籽晶固定技术)。天科合达/天岳先进全球合计15%, 产能缺口>5倍。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688234",
+              "name": "天岳先进",
+              "mapping_reason": "国产SiC衬底龙头(全球市占约8%), 6英寸量产, 8英寸研发中, 供英飞凌/博世",
+              "match_level": "high"
+            },
+            {
+              "code": "600703",
+              "name": "三安光电",
+              "mapping_reason": "化合物半导体龙头, SiC衬底+外延+器件全产业链, 长沙160亿SiC项目",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "SiC外延片",
+          "role": "epitaxy",
+          "description": "在SiC衬底上生长同质外延层(厚度5-100μm), 是制造SiC MOSFET的关键步骤。外延层缺陷密度直接决定芯片良率。全球SiC外延由Wolfspeed/ST/罗姆(自用为主)+瀚天天成(中国, 全球最大独立外延代工厂)主导。国内瀚天天成/普兴电子外延技术已接近国际水平(缺陷密度<0.5/cm²)。CVD外延设备被Aixtron(德)/LPE(意)/NuFlare(日)三巨头垄断——又是一层嵌套瓶颈。",
+          "global_players": [
+            "Wolfspeed(美国)",
+            "ST(瑞士)",
+            "瀚天天成(中国)",
+            "Aixtron(德国CVD设备)"
+          ],
+          "domestic_players": [
+            "天岳先进 688234",
+            "三安光电 600703"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1.5,
+          "bottleneck_reason": "",
+          "skip_reason": "国产外延技术接近国际水平(瀚天天成全球最大外延代工厂), 非瓶颈。但CVD设备被Aixtron/LPE/NuFlare垄断(嵌套瓶颈)",
+          "a_share_candidates": [
+            {
+              "code": "688234",
+              "name": "天岳先进",
+              "mapping_reason": "SiC衬底+外延一体化, 供英飞凌/博世",
+              "match_level": "medium"
+            },
+            {
+              "code": "600703",
+              "name": "三安光电",
+              "mapping_reason": "SiC全产业链(衬底+外延+器件), 长沙160亿项目",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 SiC模块封装（银烧结+AMB基板+Si3N4）",
+          "role": "packaging",
+          "description": "SiC模块封装要求远超IGBT——工作温度>200°C(IGBT <150°C)、功率密度>30kW/L、开关速度>50kHz。三大关键材料:(1)银烧结——替代传统焊料(PbSn), 熔点>960°C vs 焊料<300°C, 银浆/银膜被贺利氏(德)/京瓷(日)/Alpha(美)垄断;(2)AMB陶瓷基板——氮化硅Si3N4活性金属钎焊, 导热率>90W/mK, 被京瓷(日)/东芝材料(日)/罗杰斯(美)垄断;(3)Si3N4陶瓷基板——本身被东芝材料(日)/Denka(日)/丸和(日)三大日本企业垄断。国内博敏电子/富乐华在AMB基板追赶中, 中瓷电子在陶瓷基板布局——但日本在AMB+Si3N4两个环节有>80%的绝对垄断。",
+          "global_players": [
+            "贺利氏(德银浆)",
+            "京瓷(日AMB+Si3N4)",
+            "东芝材料(日Si3N4)",
+            "Denka(日Si3N4)",
+            "罗杰斯(美AMB)"
+          ],
+          "domestic_players": [
+            "博敏电子 603936",
+            "中瓷电子 003031"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "银烧结+AMB陶瓷基板+Si3N4陶瓷三大关键封装材料被日本(京瓷/东芝材料/Denka/丸和)+德国(贺利氏)垄断>80%。Si3N4基板是其中最卡脖子的一环——日本企业50年陶瓷工艺积淀, 高导热+高强度+高韧性三者矛盾要求难以同时满足。国产博敏/中瓷在追赶但差距5-8年。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603936",
+              "name": "博敏电子",
+              "mapping_reason": "AMB陶瓷基板国产替代先锋, SiC模块封装载板, 供比亚迪/斯达",
+              "match_level": "medium"
+            },
+            {
+              "code": "003031",
+              "name": "中瓷电子",
+              "mapping_reason": "电子陶瓷龙头, Si3N4陶瓷基板研发, 氮化铝AlN已量产",
+              "match_level": "high"
+            }
+          ]
+        }
+      ]
+    },
+    "glass-substrate-packaging": {
+      "id": "glass-substrate-packaging",
+      "name": "玻璃基板先进封装",
+      "description": "玻璃基板(Glass Core Substrate)是先进封装的下一个范式革命——用玻璃替代有机ABF基板, 实现:(1)超低热膨胀(CTE~3ppm vs ABF~17ppm, 与硅匹配);(2)超高平整度(粗糙度<1nm vs ABF>100nm);(3)超细线宽(<1μm vs ABF>10μm);(4)支持TGV(玻璃通孔)实现3D垂直互连。Intel 2023年全球首发玻璃基板封装测试芯片, 计划2026-2028量产。三星/台积电/苹果/AMD跟进。2030年玻璃基板封装市场预计超50亿美元。核心瓶颈:(1)玻璃基板制造——Corning/Schott/AGC/Asahi四巨头垄断;(2)TGV钻孔——激光诱导深蚀刻/电化学放电, 设备被LPKF(德)/Corning(美)垄断;(3)金属化填充——TGV高深宽比(>10:1)铜填充被TEL(日)/Applied Materials(美)垄断。中国在沃格光电/彩虹股份有玻璃基板布局, 但距先进封装级差距>5年。",
+      "anchor": "AI芯片尺寸逼近掩模极限→ABF基板翘曲/热膨胀不可接受→玻璃基板是唯一方案→玻璃基板+TGV钻孔+金属化三重瓶颈, 日本+德国+美国掌控全链",
+      "layers": [
+        {
+          "level": 0,
+          "name": "玻璃基板封装集成",
+          "role": "integrator",
+          "description": "Intel 2023年全球首发玻璃基板测试芯片(EMIB+玻璃基板), 计划2026-2028量产(Arrow Lake后续平台)。三星玻璃基板2024年演示, 2027年量产目标。台积电评估玻璃基板用于CoWoS下一代。苹果/AMD跟进但尚未公开路线图。玻璃基板封装需要将TGV钻孔+金属化+RDL重布线+芯片键合多个前道工艺整合——目前仅Intel有完整方案的公开演示。国内长电科技/通富微电/华天科技在传统ABF封装跟随, 玻璃基板封装为零。",
+          "global_players": [
+            "Intel(美国首家演示)",
+            "三星(韩国)",
+            "台积电(台湾)",
+            "长电科技(中国)"
+          ],
+          "domestic_players": [
+            "长电科技 600584",
+            "通富微电 002156"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "集成层面Intel/三星/TSMC均有布局, 国内长电可跟随。瓶颈在上游玻璃基板和TGV设备",
+          "a_share_candidates": [
+            {
+              "code": "600584",
+              "name": "长电科技",
+              "mapping_reason": "国内先进封装龙头, XDFOI 2.5D, 玻璃基板封装长期技术跟踪",
+              "match_level": "high"
+            },
+            {
+              "code": "002156",
+              "name": "通富微电",
+              "mapping_reason": "AMD核心封装伙伴, 先进封装跟随, 基板技术储备",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 封装级玻璃基板",
+          "role": "substrate",
+          "description": "封装级玻璃基板需同时满足: (1)CTE~3ppm(与硅匹配, ABF~17ppm, 翘曲降低>80%);(2)表面粗糙度<1nm(ABF>100nm);(3)厚度<100μm且大面积(>510×515mm);(4)高杨氏模量(>70GPa, ABF~5GPa)。全球仅Corning(美, 康宁大猩猩玻璃技术延伸)/Schott(德, 特种玻璃百年)/AGC(日, 旭硝子)/Asahi Glass(日)四家玻璃巨头有能力供应封装级玻璃基板。中国彩虹股份/沃格光电在显示玻璃基板有积累, 但封装级(CTE<3ppm+粗糙度<1nm+大面积薄化)——差距>5年。Corning是Intel玻璃基板独家供应商。每片AI芯片封装用1片玻璃基板, 百万片AI芯片=百万片玻璃基板。",
+          "global_players": [
+            "Corning/康宁(美国) Intel独家",
+            "Schott/肖特(德国)",
+            "AGC/旭硝子(日本)",
+            "Asahi Glass(日本)"
+          ],
+          "domestic_players": [
+            "彩虹股份 600707",
+            "沃格光电 603773"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "封装级玻璃基板(CTE<3ppm+粗糙度<1nm+大面积薄化)全球仅Corning/Schott/AGC/Asahi四家百年玻璃巨头。Corning是Intel独家供应商——从大猩猩玻璃技术延伸, 50年玻璃配方+下拉法成型+离子交换强化三大壁垒。中国彩虹/沃格在显示玻璃有积累但封装级差距>5年——配方(无碱硼硅酸盐)+薄化(<100μm)+平坦度(TTV<1μm)三重门。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "600707",
+              "name": "彩虹股份",
+              "mapping_reason": "国产显示玻璃基板龙头(G8.5+), 封装级玻璃基板研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "603773",
+              "name": "沃格光电",
+              "mapping_reason": "玻璃薄化/镀膜龙头, TGV玻璃通孔布局, 玻璃基板封装最接近标的",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 TGV钻孔设备（激光/电化学）",
+          "role": "equipment",
+          "description": "TGV(Through Glass Via)是玻璃基板的核心工艺——在玻璃上钻出直径5-30μm、深宽比>10:1的通孔, 孔密度可达10000+/mm²。全球TGV钻孔技术分两派:(1)激光诱导深蚀刻(LIDE)——LPKF(德国)独家专利, 用激光改性玻璃结构+湿法蚀刻形成通孔;(2)电化学放电加工(ECDM)——Corning自研, 用等离子体放电钻孔。LPKF的LIDE设备是除Corning(自用不外售)外唯一商用TGV钻孔方案, 单价>500万美元/台。国内大族激光/德龙激光在TGV布局但精度(>50μm)距LPKF(5-10μm)差距5-10倍。每片玻璃基板需钻数万至数十万个TGV孔——钻孔效率是瓶颈(目前>10分钟/片)。",
+          "global_players": [
+            "LPKF(德国LIDE专利)100%垄断商用",
+            "Corning(美国自用ECDM)",
+            "大族激光(中国)"
+          ],
+          "domestic_players": [
+            "大族激光 002008",
+            "德龙激光 688170"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5.0,
+          "bottleneck_reason": "商用TGV钻孔设备全球仅LPKF(德国LIDE专利)独家供应(单价>$500万/台)。LPKF产能约50台/年——若全球量产玻璃基板, 需求可达500-1000台/年。国产大族/德龙TGV精度>50μm(差距5-10倍), 且LIDE核心激光器(超快紫外激光)依赖进口。TGV钻孔是玻璃基板封装从0到1的核心设备瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002008",
+              "name": "大族激光",
+              "mapping_reason": "国产激光设备龙头, TGV钻孔设备研发中, 超快激光器布局",
+              "match_level": "high"
+            },
+            {
+              "code": "688170",
+              "name": "德龙激光",
+              "mapping_reason": "精密激光加工(半导体/显示), TGV玻璃钻孔设备, 超快紫外激光",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 TGV金属化填充（高深宽比铜填充）",
+          "role": "equipment",
+          "description": "TGV钻孔后需在孔壁沉积种子层(Ti/Cu, <100nm均匀性)+电镀填充铜(无空隙, 深宽比>10:1)。这比TSV(硅通孔)难一个数量级——玻璃是绝缘体, 无法用PVD直接沉积, 需先化学镀+ALD+ECD复合工艺。全球TGV金属化设备由TEL(东京电子, 日本, 干法前处理+ALD)、Applied Materials(美国, PVD+CVD)、Lam Research(美国, 电镀ECD)三巨头垄断——和TSV设备重叠但参数要求更高。国内北方华创/中微公司在TSV设备(PVD/刻蚀)有布局, 但TGV专用化学镀+ALD集成设备为零。TGV金属化是玻璃基板量产的「最后一公里」——没有无空隙填充, 玻璃基板封装就是一纸空文。",
+          "global_players": [
+            "TEL/东京电子(日本)",
+            "Applied Materials(美国)",
+            "Lam Research(美国)"
+          ],
+          "domestic_players": [
+            "北方华创 002371",
+            "中微公司 688012"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "TGV金属化(化学镀+ALD+ECD)全球被TEL/Applied/Lam三家垄断。高深宽比(>10:1)无空隙铜填充是技术上的极限挑战——玻璃绝缘体需要完全不同于硅通孔的金属化方案。国产北方华创/中微在TSV(PVD/刻蚀)有布局, 但TGV专用金属化为零。且TGV设备需要和LPKF钻孔设备配合(工艺集成), LPKF+TEL/Applied捆绑, 国产无法进入。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002371",
+              "name": "北方华创",
+              "mapping_reason": "国产半导体设备龙头, TSV深硅刻蚀+PVD已有, TGV金属化研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "688012",
+              "name": "中微公司",
+              "mapping_reason": "刻蚀设备龙头, TSV深孔刻蚀, TGV电镀/ALD拓展",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "ABF膜/ABF载板（过渡期仍需要）",
+          "role": "substrate",
+          "description": "玻璃基板从研发到量产至少需3-5年(Intel 2026-2028量产目标), 期间AI芯片封装仍100%依赖ABF膜+ABF载板。ABF膜被味之素(日本)100%垄断, ABF载板被揖斐电/新光电气/欣兴(台湾)垄断>80%。兴森科技/深南电路在ABF载板追赶中(样件验证阶段)。这一层在现有先进封装链中已有详细拆解, 此处不再展开——但玻璃基板的出现正是为了解决ABF基板的根本性局限(CTE mismatch+平坦度+线宽极限)。",
+          "global_players": [
+            "味之素(日本ABF膜100%)",
+            "揖斐电(日本载板)",
+            "欣兴(台湾载板)",
+            "兴森科技(中国)"
+          ],
+          "domestic_players": [
+            "兴森科技 002436",
+            "深南电路 002916"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 2.0,
+          "bottleneck_reason": "",
+          "skip_reason": "ABF膜+载板在现有封装链已详细拆解(advanced-packaging), 此处不重复。玻璃基板是ABF的终极替代方案, 但量产仍需3-5年",
+          "a_share_candidates": [
+            {
+              "code": "002436",
+              "name": "兴森科技",
+              "mapping_reason": "国产ABF载板最领先, FC-BGA小批量送样, 玻璃基板前瞻布局",
+              "match_level": "medium"
+            },
+            {
+              "code": "002916",
+              "name": "深南电路",
+              "mapping_reason": "PCB龙头, FC-BGA基板拓展, 封装基板技术储备",
+              "match_level": "high"
+            }
+          ]
+        }
+      ]
     }
   }
 }
