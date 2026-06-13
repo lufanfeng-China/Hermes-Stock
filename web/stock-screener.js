@@ -16,7 +16,7 @@ const STRATEGY_PRESETS = {
   },
   blowup_break: {
     strategy: 'blowup_break',
-    description: 'VA=V6~V10均量; 近5日阳线量>3xVA阴线>2xVA; 5日涨幅5%-20%; 趋势/短趋势非空头',
+    description: 'VA=V6~V10均量; 近5日阳线量>3xVA阴线>2xVA; 5日涨幅5%-20%; 排除空头+震荡',
   },
   ma_pullback: {
     strategy: 'ma_pullback',

@@ -492,7 +492,7 @@ def build_ma_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, A
 
 
 def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """爆量突破：VA=V6~V10均量; 近5日每根阳线量>3xVA且阴线>2xVA; 5日涨幅5%-20%; 趋势/短趋势非空头"""
+    """爆量突破：VA=V6~V10均量; 近5日每根阳线量>3xVA且阴线>2xVA; 5日涨幅5%-20%; 趋势/短趋势排除空头+震荡"""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -508,11 +508,11 @@ def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
         if not market_val or not symbol_val:
             continue
 
-        # Trend filter: 趋势和短期趋势不能是空头/强空头
+        # Trend filter: 趋势和短期趋势不能是空头/强空头/震荡
         te = tech_eval.get(symbol_val, {})
         trend = str(te.get("trend", "")).lower()
         short_trend = str(te.get("short_trend", "")).lower()
-        if trend in ("bearish", "strong_bearish") or short_trend in ("bearish", "strong_bearish"):
+        if trend in ("bearish", "strong_bearish", "neutral") or short_trend in ("bearish", "strong_bearish", "neutral"):
             continue
 
         try:
