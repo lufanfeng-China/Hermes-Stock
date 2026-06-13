@@ -1068,10 +1068,19 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         row["return_1_pct"] = round((closes[-1] / closes[-2] - 1) * 100, 2)
                         row["return_5_pct"] = round((closes[-1] / closes[-6] - 1) * 100, 2)
                         row["return_20_pct"] = round((closes[-1] / closes[-21] - 1) * 100, 2)
-                        # Return since added
+                        # Return since added: find closes from add_date onwards
                         add_price = row.get("add_price")
-                        if add_price and add_price > 0:
-                            row["return_since_add_pct"] = round((closes[-1] / add_price - 1) * 100, 2)
+                        add_date = (row.get("added_at", "") or "")[:10]
+                        if add_price and add_price > 0 and add_date:
+                            daily_dates = [str(d).split("T")[0] for d in daily.index]
+                            since_closes = []
+                            for i, d in enumerate(daily_dates):
+                                if d >= add_date:
+                                    since_closes.append(float(closes[i]))
+                            if since_closes:
+                                row["return_since_add_pct"] = round((since_closes[-1] / add_price - 1) * 100, 2)
+                                row["max_return_pct"] = round((max(since_closes) / add_price - 1) * 100, 2)
+                                row["max_loss_pct"] = round((min(since_closes) / add_price - 1) * 100, 2)
                         # MA10 distance
                         ma10 = sum(closes[-10:]) / 10
                         row["ma10_dist_pct"] = round((closes[-1] - ma10) / ma10 * 100, 2) if ma10 != 0 else None
@@ -1124,7 +1133,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         self.respond_json(HTTPStatus.OK, {"stocks": stocks_out})
 
     def handle_watchlist_add(self) -> None:
-        """Add stocks to watchlist. Body: {stocks: [{market, symbol}, ...]}"""
+        """Add stocks to watchlist. Body: {stocks: [{market, symbol}, ...], backtest_date?: 'YYYY-MM-DD'}
+        When backtest_date is provided, uses the next trading day's open as benchmark price,
+        and sets added_at to the backtest date."""
         try:
             content_length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
@@ -1137,6 +1148,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if not isinstance(incoming, list) or not incoming:
             self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing stocks array"})
             return
+
+        backtest_date = str(body.get("backtest_date", "")).strip()
 
         wl = _load_watchlist()
         existing = {(str(s["market"]), str(s["symbol"])) for s in wl.get("stocks", [])}
@@ -1159,17 +1172,34 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             if key in existing:
                 skipped += 1
                 continue
-            entry = {"market": key[0], "symbol": key[1], "added_at": now}
-            # Record add_price from TDX
+
+            added_at = now
+            add_price = None
+
             if reader:
                 try:
                     daily = reader.daily(symbol=key[1])
                     if daily is not None and not daily.empty and len(daily) >= 1:
                         daily = daily.sort_index()
-                        closes = daily["close"].astype(float).tolist()
-                        entry["add_price"] = round(closes[-1], 2)
+                        if backtest_date:
+                            # Backtest mode: use next trading day's open as benchmark
+                            mask = daily.index > backtest_date
+                            future = daily.loc[mask]
+                            if not future.empty:
+                                add_price = round(float(future.iloc[0]["open"]), 2)
+                            else:
+                                # No future data, use latest close
+                                add_price = round(float(daily.iloc[-1]["close"]), 2)
+                            added_at = backtest_date
+                        else:
+                            # Live mode: use latest close
+                            add_price = round(float(daily.iloc[-1]["close"]), 2)
                 except Exception:
                     pass
+
+            entry = {"market": key[0], "symbol": key[1], "added_at": added_at}
+            if add_price is not None:
+                entry["add_price"] = add_price
             wl["stocks"].append(entry)
             existing.add(key)
             added += 1

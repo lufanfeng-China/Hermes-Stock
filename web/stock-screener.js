@@ -765,10 +765,12 @@ async function addToWatchlist() {
   if (btnBtm) { btnBtm.disabled = true; btnBtm.textContent = '添加中...'; }
 
   try {
+    const body = { stocks };
+    if (selectedDate) body.backtest_date = selectedDate;
     const resp = await fetch('/api/watchlist/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stocks }),
+      body: JSON.stringify(body),
     });
     const data = await resp.json();
     if (data.ok) {

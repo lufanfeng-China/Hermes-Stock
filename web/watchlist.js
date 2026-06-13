@@ -100,28 +100,30 @@ function renderTable(stocks) {
     const ma10c = s.ma10_dist_pct != null ? pctColor(s.ma10_dist_pct) : 'var(--muted)';
     const ret = s.return_since_add_pct != null ? fmtPct(s.return_since_add_pct) : '—';
     const retColor = s.return_since_add_pct != null ? pctColor(s.return_since_add_pct) : 'var(--muted)';
-    const addedDate = (s.added_at || '').slice(0, 10) || '—';
-    const r1 = fmtPct(s.return_1_pct);
+    const maxRet = s.max_return_pct != null ? fmtPct(s.max_return_pct) : "—";
+    const maxRetColor = s.max_return_pct != null ? pctColor(s.max_return_pct) : "var(--muted)";
+    const maxLoss = s.max_loss_pct != null ? fmtPct(s.max_loss_pct) : "—";
+    const maxLossColor = s.max_loss_pct != null ? pctColor(s.max_loss_pct) : "var(--muted)";
+    const addedDate = (s.added_at || "").slice(0, 10) || "—";
 
-    return `<tr data-idx="${i}" data-market="${esc(s.market)}" data-symbol="${esc(s.symbol)}" data-name="${esc(name)}" tabindex="0">
-      <td><input type="checkbox" class="wl-row-check" data-idx="${i}"></td>
-      <td class="wl-name-cell"><span class="wl-stock-name">${esc(name)}</span><br><span class="wl-stock-symbol">${esc(marketSymbol)}</span></td>
-      <td class="num wl-price-cell" title="点击查看K线">${price}</td>
-      <td class="num" style="color:${ma10c}">${ma10d}</td>
-      <td class="num" style="color:${retColor}">${ret}</td>
+    return `<tr data-idx=\"${i}\" data-market=\"${esc(s.market)}\" data-symbol=\"${esc(s.symbol)}\" data-name=\"${esc(name)}\" tabindex=\"0\">
+      <td><input type=\"checkbox\" class=\"wl-row-check\" data-idx=\"${i}\"></td>
+      <td class=\"wl-name-cell\"><span class=\"wl-stock-name\">${esc(name)}</span><br><span class=\"wl-stock-symbol\">${esc(marketSymbol)}</span></td>
+      <td class=\"num wl-price-cell\" title=\"点击查看K线\">${price}</td>
+      <td class=\"num\" style=\"color:${ma10c}\">${ma10d}</td>
+      <td class=\"num\" style=\"color:${retColor}\">${ret}</td>
+      <td class=\"num\" style=\"color:${maxRetColor}\">${maxRet}</td>
+      <td class=\"num\" style=\"color:${maxLossColor}\">${maxLoss}</td>
       <td>${addedDate}</td>
-      <td class="num"><span class="wl-score">${ms}</span> ${mr}</td>
-      <td class="num"><span class="wl-score">${is_}</span> ${ir}</td>
+      <td class=\"num\"><span class=\"wl-score\">${ms}</span> ${mr}</td>
+      <td class=\"num\"><span class=\"wl-score\">${is_}</span> ${ir}</td>
       <td>${esc(ind)}</td>
-      <td style="color:${trendColor(trend)}">${esc(trend)}</td>
-      <td style="color:${trendColor(shortTrend)}">${esc(shortTrend)}${shortTrendSwitch !== '—' ? ' ' + shortTrendSwitch : ''}</td>
-      <td style="color:${trendColor(momentum)}">${esc(momentum)}</td>
-      <td style="color:${trendColor(volume)}">${esc(volume)}</td>
-      <td>${buyTrigger}</td>
-      <td class="num" style="color:${pctColor(s.return_1_pct)}">${r1}</td>
-      <td class="num">${s.short_trend_duration != null ? s.short_trend_duration + '天' : '—'}</td>
-      <td style="color:${concColor};font-weight:600" title="${esc(s.tech_conclusion_reason || '')}">${esc(conclusion)}</td>
-      <td><button class="wl-remove-btn" data-idx="${i}" type="button">✕</button></td>
+      <td style=\"color:${trendColor(trend)}\">${esc(trend)}</td>
+      <td style=\"color:${trendColor(shortTrend)}\">${esc(shortTrend)}${shortTrendSwitch !== '—' ? ' ' + shortTrendSwitch : ''}</td>
+      <td style=\"color:${trendColor(momentum)}\">${esc(momentum)}</td>
+      <td style=\"color:${trendColor(volume)}\">${esc(volume)}</td>
+      <td style=\"color:${concColor};font-weight:600\" title=\"${esc(s.tech_conclusion_reason || '')}\">${esc(conclusion)}</td>
+      <td><button class=\"wl-remove-btn\" data-idx=\"${i}\" type=\"button\">✕</button></td>
     </tr>`;
   }).join('');
 

@@ -1,0 +1,997 @@
+{
+  "trend_id": "cpo",
+  "created_at": "2026-06-13 16:27:39",
+  "iso_timestamp": "2026-06-13T16:27:39.149411",
+  "timestamp_short": "20260613-162739",
+  "filename": "cpo_20260613-162739.json",
+  "steps": {
+    "step1": {
+      "ok": true,
+      "type": "detail",
+      "trend": {
+        "id": "cpo",
+        "name": "CPO（共封装光学）",
+        "description": "CPO(Co-Packaged Optics)将光引擎与交换ASIC芯片封装在同一基板上，用光纤替代铜互连，解决AI数据中心800G/1.6T时代的带宽-功耗-延迟瓶颈。传统可插拔光模块每比特能耗约30pJ，CPO可降至5pJ以下。Broadcom Bailly CPO交换机2025年量产，NVIDIA Spectrum-X CPO预计2026年推出。2026年CPO市场规模约5亿美元→2030年超100亿美元。产业链核心瓶颈：(1)硅光芯片制造——CMOS兼容硅光工艺全球仅台积电/格罗方德/Intel 3家；(2)CW激光器——InP材料外延被Lumentum/Coherent/住友电工垄断；(3)光纤阵列单元(FAU)——高密度(>64通道)精密对准；(4)2.5D/3D先进封装——台积电CoWoS-S独家。中国在光模块组装端领先（中际旭创/新易盛全球前三），但上游硅光芯片和激光器严重依赖进口。",
+        "anchor": "AI算力需求→800G/1.6T光互联→传统可插拔能效到头→CPO是唯一路径→硅光芯片+激光器+封装三重瓶颈",
+        "layer_count": 6
+      }
+    },
+    "step2": {
+      "ok": true,
+      "type": "preset",
+      "trend_name": "CPO（共封装光学）",
+      "trend_id": "cpo",
+      "description": "CPO(Co-Packaged Optics)将光引擎与交换ASIC芯片封装在同一基板上，用光纤替代铜互连，解决AI数据中心800G/1.6T时代的带宽-功耗-延迟瓶颈。传统可插拔光模块每比特能耗约30pJ，CPO可降至5pJ以下。Broadcom Bailly CPO交换机2025年量产，NVIDIA Spectrum-X CPO预计2026年推出。2026年CPO市场规模约5亿美元→2030年超100亿美元。产业链核心瓶颈：(1)硅光芯片制造——CMOS兼容硅光工艺全球仅台积电/格罗方德/Intel 3家；(2)CW激光器——InP材料外延被Lumentum/Coherent/住友电工垄断；(3)光纤阵列单元(FAU)——高密度(>64通道)精密对准；(4)2.5D/3D先进封装——台积电CoWoS-S独家。中国在光模块组装端领先（中际旭创/新易盛全球前三），但上游硅光芯片和激光器严重依赖进口。",
+      "anchor": "AI算力需求→800G/1.6T光互联→传统可插拔能效到头→CPO是唯一路径→硅光芯片+激光器+封装三重瓶颈",
+      "total_layers": 6,
+      "layers": [
+        {
+          "level": 0,
+          "name": "CPO交换机/系统集成",
+          "role": "integrator",
+          "description": "CPO系统集成光引擎+交换ASIC+光纤+散热于一体。Broadcom Bailly(Tomahawk 6, 51.2Tbps, 64×800G CPO)2025年量产, 已获Meta/Google订单。NVIDIA Spectrum-X CPO(51.2Tbps)预计2026年。Cisco/华为/新华三跟进中。国内锐捷/中兴有CPO交换机原型但离量产2-3年——核心瓶颈不在系统集成而在光引擎供应。",
+          "global_players": [
+            "Broadcom(美国)",
+            "NVIDIA(美国)",
+            "Cisco(美国)",
+            "华为(中国)"
+          ],
+          "domestic_players": [
+            "锐捷网络 301165",
+            "中兴通讯 000063"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "多家交换机企业布局CPO, 非供给瓶颈。瓶颈在光引擎层",
+          "a_share_candidates": [
+            {
+              "code": "301165",
+              "name": "锐捷网络",
+              "mapping_reason": "国产交换机龙头, CPO交换机原型研发中, 数据中心客户基础",
+              "match_level": "high"
+            },
+            {
+              "code": "000063",
+              "name": "中兴通讯",
+              "mapping_reason": "通信设备龙头, 光网络+交换机双线, CPO布局",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 硅光引擎芯片（PIC）",
+          "role": "core",
+          "description": "硅光引擎是CPO的心脏——在硅基衬底上集成调制器/波导/光栅耦合器/Ge光电探测器, 将电信号转为光信号。CMOS兼容硅光工艺全球仅台积电(90nm硅光, 已量产Broadcom Bailly)、格罗方德(45nm硅光, 供Intel/Ayar Labs)、Intel(自研硅光, 100G/通道)3家。国内中科院微电子所/上海光机所/国盾量子处于研发阶段——硅光芯片设计(EDA工具被Synopsys/Cadence垄断)+制造(TSMC/GF不接中国订单)+测试(光学探针台被Cascade/FormFactor垄断)三重壁垒。每颗CPO光引擎=8-16个调制器+1个AWG+4-8个Ge PD+光栅耦合器阵列, 良率是最大挑战(目前约60%)。",
+          "global_players": [
+            "台积电/TSMC(台湾90nm硅光)",
+            "格罗方德/GF(美国45nm硅光)",
+            "Intel(美国自研)",
+            "Broadcom(美国自研)"
+          ],
+          "domestic_players": [
+            "无(研发阶段)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CMOS兼容硅光工艺全球仅TSMC(90nm)/GF(45nm)/Intel 3家。TSMC不接中国订单, GF被美国控制。硅光EDA工具(Synopsys/Cadence)+光学探针台(Cascade/FormFactor)全被美国垄断。中国硅光设计+制造+测试为零——这是一整条缺失的产业链。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, 硅光光源(DFB激光器)布局",
+              "match_level": "high"
+            },
+            {
+              "code": "688313",
+              "name": "仕佳光子",
+              "mapping_reason": "PLC光分路器龙头, AWG阵列波导光栅可用于硅光引擎波分复用",
+              "match_level": "high"
+            },
+            {
+              "code": "300620",
+              "name": "光库科技",
+              "mapping_reason": "铌酸锂调制器龙头, 薄膜铌酸锂(TFLN)调制器可用于硅光引擎",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 CW激光器光源（DFB/EML）",
+          "role": "source",
+          "description": "CPO光引擎需要外置CW(连续波)激光器提供光源——每通道一个波长(1310nm/1550nm, 100mW+功率)。InP(磷化铟)基DFB/EML激光器全球由Lumentum(美)/Coherent(美, 原II-VI)/住友电工(日)/三菱电机(日)四巨头垄断(合计>80%)。Lumentum/Coherent是Broadcom Bailly的CW激光器供应商。国内源杰科技/光迅科技/长光华芯在DFB激光器追赶中, 但100mW+高功率CW激光器仍依赖进口。核心壁垒: InP外延片(被IQE(英)/住友化学(日)垄断)+高精度光栅(周期240nm, 电子束光刻)。每台51.2T CPO交换机需64个CW激光器, 100万台=6400万个激光器。",
+          "global_players": [
+            "Lumentum(美国)",
+            "Coherent/II-VI(美国)",
+            "住友电工(日本)",
+            "三菱电机(日本)"
+          ],
+          "domestic_players": [
+            "源杰科技 688498",
+            "光迅科技 002281",
+            "长光华芯 688048"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "InP基高功率CW激光器(100mW+)全球被Lumentum/Coherent/住友/三菱四巨头垄断(>80%)。InP外延片被IQE(英)/住友化学(日)垄断——从衬底到外延到芯片三级卡脖子。国内源杰/光迅/长光华芯在低功率DFB有突破但100mW+高功率CW仍依赖进口。100万台CPO交换机=6400万个CW激光器——产能缺口巨大。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688498",
+              "name": "源杰科技",
+              "mapping_reason": "国产光芯片龙头, DFB激光器已量产(10G/25G), 100G EML研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002281",
+              "name": "光迅科技",
+              "mapping_reason": "光模块+光芯片一体化, DFB/EML自研, 硅光芯片布局",
+              "match_level": "general"
+            },
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, VCSEL/DFB多路线, CW激光器研发",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 光纤阵列单元（FAU）",
+          "role": "interconnect",
+          "description": "FAU(Fiber Array Unit)将64-128根光纤以亚微米精度排列成阵列, 对准硅光芯片的光栅耦合器。每个光引擎需1-2个FAU, 对准精度<0.5μm(相当于头发丝的1/200)。全球仅Senko(日本)/US Conec(美国)/Molex(美国)/潮州三环(中国)4家批量供应。国内天孚通信/太辰光追赶中。核心壁垒: V型槽精密加工(间距误差<0.2μm)+光纤固定(UV固化胶耐温>200°C)+MT插芯(多芯连接器)。每台CPO交换机需64-128个FAU通道, 百万台=数亿通道——产能严重不足。",
+          "global_players": [
+            "Senko(日本)",
+            "US Conec(美国)",
+            "Molex(美国)",
+            "潮州三环(中国)"
+          ],
+          "domestic_players": [
+            "天孚通信 300394",
+            "太辰光 300570",
+            "潮州三环 300408"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高密度FAU(>64通道)全球仅Senko/US Conec/Molex/潮州三环4家。对准精度<0.5μm需要V型槽超高精度加工(间距误差<0.2μm)。百万台CPO=数亿通道需求, 几乎是当前全球FAU年产能的10倍以上。中国在天孚/太辰光有较完整的FAU供应链, 但高精度V型槽设备依赖日本Disco。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300394",
+              "name": "天孚通信",
+              "mapping_reason": "光器件龙头, FAU阵列+MT插芯+光接口组件完整产品线, 全球光模块核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300570",
+              "name": "太辰光",
+              "mapping_reason": "光纤连接器龙头, FA/MT插芯自研, 高密度光纤阵列",
+              "match_level": "high"
+            },
+            {
+              "code": "300408",
+              "name": "三环集团",
+              "mapping_reason": "陶瓷插芯/MT插芯全球龙头(市占>70%), FAU核心组件",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 2.5D/3D先进封装（CoWoS/硅中介层）",
+          "role": "packaging",
+          "description": "CPO光引擎需通过2.5D硅中介层(CoWoS-S)与交换ASIC实现超高密度互连(>10000路/mm²), 同时满足电信号→光信号的低损耗转换。台积电CoWoS-S独家供应Broadcom Bailly CPO封装, 单片面积可达3000mm²。国内长电科技XDFOI/通富微电FCBGA在2.5D封装追赶中, 但CPO级封装(光+电共封装)国内为零——要求同时处理光信号对准(<0.5μm)和电信号互连(<10μm间距), 比纯电封装复杂一个数量级。",
+          "global_players": [
+            "台积电CoWoS(台湾)100%垄断CPO级",
+            "三星I-Cube(韩国)",
+            "Intel EMIB(美国)"
+          ],
+          "domestic_players": [
+            "长电科技 600584",
+            "通富微电 002156"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CPO级封装(光+电共封装)全球被台积电CoWoS-S独家垄断。要求同时处理光学对准(<0.5μm)和电互连(<10μm间距)——国内2.5D封装刚起步, CPO级为零。ABF膜(味之素100%垄断)是硅中介层的前置瓶颈——双重卡脖子。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "600584",
+              "name": "长电科技",
+              "mapping_reason": "国内先进封装龙头, XDFOI 2.5D平台, 光+电共封装研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002156",
+              "name": "通富微电",
+              "mapping_reason": "AMD核心封装供应商, FCBGA+2.5D, 硅光封装布局",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "光模块组装（CPO配套可插拔）",
+          "role": "assembly",
+          "description": "CPO时代可插拔光模块(800G/1.6T)仍将与CPO共存(CPO用于交换机内, 可插拔用于交换机间)。中际旭创(全球800G市占率>40%)、新易盛(全球前三)、天孚通信(光引擎代工)在可插拔光模块领域全球领先。中国在光模块组装端有绝对优势——全球前10中有7家中国企业。非瓶颈, 但随着CPO渗透率提升, 可插拔市场增速将放缓。",
+          "global_players": [
+            "中际旭创(中国>40%)",
+            "新易盛(中国)",
+            "Coherent(美国)",
+            "Ciena(美国)"
+          ],
+          "domestic_players": [
+            "中际旭创 300308",
+            "新易盛 300502",
+            "天孚通信 300394",
+            "光迅科技 002281"
+          ],
+          "supplier_count": 8,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "中国光模块组装全球领先(前10占7席), 非瓶颈。瓶颈在上游硅光芯片和激光器",
+          "a_share_candidates": [
+            {
+              "code": "300308",
+              "name": "中际旭创",
+              "mapping_reason": "全球光模块龙头(800G市占>40%), 谷歌/NVIDIA核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300502",
+              "name": "新易盛",
+              "mapping_reason": "全球光模块前三, 800G已量产, 1.6T研发中",
+              "match_level": "medium"
+            }
+          ]
+        }
+      ]
+    },
+    "step3": {
+      "ok": true,
+      "trend_name": "CPO（共封装光学）",
+      "total_layers": 6,
+      "bottleneck_count": 4,
+      "all_layers": [
+        {
+          "level": 0,
+          "name": "CPO交换机/系统集成",
+          "supplier_count": 4,
+          "is_bottleneck": false,
+          "skip_reason": "多家交换机企业布局CPO, 非供给瓶颈。瓶颈在光引擎层"
+        },
+        {
+          "level": 1,
+          "name": "🔴 硅光引擎芯片（PIC）",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CMOS兼容硅光工艺全球仅TSMC(90nm)/GF(45nm)/Intel 3家。TSMC不接中国订单, GF被美国控制。硅光EDA工具(Synopsys/Cadence)+光学探针台(Cascade/FormFactor)全被美国垄断。中国硅光设计+制造+测试为零——这是一整条缺失的产业链。",
+          "skip_reason": ""
+        },
+        {
+          "level": 2,
+          "name": "🔴 CW激光器光源（DFB/EML）",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "InP基高功率CW激光器(100mW+)全球被Lumentum/Coherent/住友/三菱四巨头垄断(>80%)。InP外延片被IQE(英)/住友化学(日)垄断——从衬底到外延到芯片三级卡脖子。国内源杰/光迅/长光华芯在低功率DFB有突破但100mW+高功率CW仍依赖进口。100万台CPO交换机=6400万个CW激光器——产能缺口巨大。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "🔴 光纤阵列单元（FAU）",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高密度FAU(>64通道)全球仅Senko/US Conec/Molex/潮州三环4家。对准精度<0.5μm需要V型槽超高精度加工(间距误差<0.2μm)。百万台CPO=数亿通道需求, 几乎是当前全球FAU年产能的10倍以上。中国在天孚/太辰光有较完整的FAU供应链, 但高精度V型槽设备依赖日本Disco。",
+          "skip_reason": ""
+        },
+        {
+          "level": 4,
+          "name": "🔴 2.5D/3D先进封装（CoWoS/硅中介层）",
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CPO级封装(光+电共封装)全球被台积电CoWoS-S独家垄断。要求同时处理光学对准(<0.5μm)和电互连(<10μm间距)——国内2.5D封装刚起步, CPO级为零。ABF膜(味之素100%垄断)是硅中介层的前置瓶颈——双重卡脖子。",
+          "skip_reason": ""
+        },
+        {
+          "level": 5,
+          "name": "光模块组装（CPO配套可插拔）",
+          "supplier_count": 8,
+          "is_bottleneck": false,
+          "skip_reason": "中国光模块组装全球领先(前10占7席), 非瓶颈。瓶颈在上游硅光芯片和激光器"
+        }
+      ],
+      "bottlenecks": [
+        {
+          "level": 1,
+          "name": "🔴 硅光引擎芯片（PIC）",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CMOS兼容硅光工艺全球仅TSMC(90nm)/GF(45nm)/Intel 3家。TSMC不接中国订单, GF被美国控制。硅光EDA工具(Synopsys/Cadence)+光学探针台(Cascade/FormFactor)全被美国垄断。中国硅光设计+制造+测试为零——这是一整条缺失的产业链。",
+          "skip_reason": ""
+        },
+        {
+          "level": 4,
+          "name": "🔴 2.5D/3D先进封装（CoWoS/硅中介层）",
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CPO级封装(光+电共封装)全球被台积电CoWoS-S独家垄断。要求同时处理光学对准(<0.5μm)和电互连(<10μm间距)——国内2.5D封装刚起步, CPO级为零。ABF膜(味之素100%垄断)是硅中介层的前置瓶颈——双重卡脖子。",
+          "skip_reason": ""
+        },
+        {
+          "level": 2,
+          "name": "🔴 CW激光器光源（DFB/EML）",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "InP基高功率CW激光器(100mW+)全球被Lumentum/Coherent/住友/三菱四巨头垄断(>80%)。InP外延片被IQE(英)/住友化学(日)垄断——从衬底到外延到芯片三级卡脖子。国内源杰/光迅/长光华芯在低功率DFB有突破但100mW+高功率CW仍依赖进口。100万台CPO交换机=6400万个CW激光器——产能缺口巨大。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "🔴 光纤阵列单元（FAU）",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高密度FAU(>64通道)全球仅Senko/US Conec/Molex/潮州三环4家。对准精度<0.5μm需要V型槽超高精度加工(间距误差<0.2μm)。百万台CPO=数亿通道需求, 几乎是当前全球FAU年产能的10倍以上。中国在天孚/太辰光有较完整的FAU供应链, 但高精度V型槽设备依赖日本Disco。",
+          "skip_reason": ""
+        }
+      ],
+      "summary": "在 6 层产业链中，识别出 4 个瓶颈层。按卡脖子程度排序，前三个最关键的瓶颈是：🔴 硅光引擎芯片（PIC）、🔴 2.5D/3D先进封装（CoWoS/硅中介层）、🔴 CW激光器光源（DFB/EML）。"
+    },
+    "step4": {
+      "ok": true,
+      "trend_name": "CPO（共封装光学）",
+      "mapped_layers": [
+        {
+          "level": 1,
+          "name": "🔴 硅光引擎芯片（PIC）",
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CMOS兼容硅光工艺全球仅TSMC(90nm)/GF(45nm)/Intel 3家。TSMC不接中国订单, GF被美国控制。硅光EDA工具(Synopsys/Cadence)+光学探针台(Cascade/FormFactor)全被美国垄断。中国硅光设计+制造+测试为零——这是一整条缺失的产业链。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, 硅光光源(DFB激光器)布局",
+              "match_level": "high"
+            },
+            {
+              "code": "688313",
+              "name": "仕佳光子",
+              "mapping_reason": "PLC光分路器龙头, AWG阵列波导光栅可用于硅光引擎波分复用",
+              "match_level": "high"
+            },
+            {
+              "code": "300620",
+              "name": "光库科技",
+              "mapping_reason": "铌酸锂调制器龙头, 薄膜铌酸锂(TFLN)调制器可用于硅光引擎",
+              "match_level": "high"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 2,
+          "name": "🔴 CW激光器光源（DFB/EML）",
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "InP基高功率CW激光器(100mW+)全球被Lumentum/Coherent/住友/三菱四巨头垄断(>80%)。InP外延片被IQE(英)/住友化学(日)垄断——从衬底到外延到芯片三级卡脖子。国内源杰/光迅/长光华芯在低功率DFB有突破但100mW+高功率CW仍依赖进口。100万台CPO交换机=6400万个CW激光器——产能缺口巨大。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "688498",
+              "name": "源杰科技",
+              "mapping_reason": "国产光芯片龙头, DFB激光器已量产(10G/25G), 100G EML研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002281",
+              "name": "光迅科技",
+              "mapping_reason": "光模块+光芯片一体化, DFB/EML自研, 硅光芯片布局",
+              "match_level": "general"
+            },
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, VCSEL/DFB多路线, CW激光器研发",
+              "match_level": "high"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 3,
+          "name": "🔴 光纤阵列单元（FAU）",
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高密度FAU(>64通道)全球仅Senko/US Conec/Molex/潮州三环4家。对准精度<0.5μm需要V型槽超高精度加工(间距误差<0.2μm)。百万台CPO=数亿通道需求, 几乎是当前全球FAU年产能的10倍以上。中国在天孚/太辰光有较完整的FAU供应链, 但高精度V型槽设备依赖日本Disco。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "300394",
+              "name": "天孚通信",
+              "mapping_reason": "光器件龙头, FAU阵列+MT插芯+光接口组件完整产品线, 全球光模块核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300570",
+              "name": "太辰光",
+              "mapping_reason": "光纤连接器龙头, FA/MT插芯自研, 高密度光纤阵列",
+              "match_level": "high"
+            },
+            {
+              "code": "300408",
+              "name": "三环集团",
+              "mapping_reason": "陶瓷插芯/MT插芯全球龙头(市占>70%), FAU核心组件",
+              "match_level": "high"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 4,
+          "name": "🔴 2.5D/3D先进封装（CoWoS/硅中介层）",
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "CPO级封装(光+电共封装)全球被台积电CoWoS-S独家垄断。要求同时处理光学对准(<0.5μm)和电互连(<10μm间距)——国内2.5D封装刚起步, CPO级为零。ABF膜(味之素100%垄断)是硅中介层的前置瓶颈——双重卡脖子。",
+          "show_all": true,
+          "total_stocks": 2,
+          "stocks": [
+            {
+              "code": "600584",
+              "name": "长电科技",
+              "mapping_reason": "国内先进封装龙头, XDFOI 2.5D平台, 光+电共封装研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002156",
+              "name": "通富微电",
+              "mapping_reason": "AMD核心封装供应商, FCBGA+2.5D, 硅光封装布局",
+              "match_level": "medium"
+            }
+          ],
+          "remaining": 0
+        }
+      ]
+    },
+    "step5": {
+      "ok": true,
+      "trend_name": "CPO（共封装光学）",
+      "total_verified": 10,
+      "stocks": [
+        {
+          "code": "300394",
+          "market": "sz",
+          "name": "天孚通信",
+          "layers": [
+            "🔴 光纤阵列单元（FAU）"
+          ],
+          "total_score": 77.86,
+          "market_rank": 21,
+          "market_total": 5517,
+          "industry_rank": 2,
+          "industry_total": 86,
+          "ind1": "通信",
+          "ind2": "通信设备",
+          "close": 280.95,
+          "change_5d": -38.5,
+          "change_20d": -29.8,
+          "change_60d": -9.7,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 24.3,
+            "growth": 16.1,
+            "operating": 12.1,
+            "cashflow": 10.5,
+            "solvency": 8.9,
+            "asset_quality": 6
+          }
+        },
+        {
+          "code": "688498",
+          "market": "sh",
+          "name": "源杰科技",
+          "layers": [
+            "🔴 CW激光器光源（DFB/EML）"
+          ],
+          "total_score": 71.52,
+          "market_rank": 124,
+          "market_total": 5517,
+          "industry_rank": 8,
+          "industry_total": 198,
+          "ind1": "电子",
+          "ind2": "半导体",
+          "close": 1400.01,
+          "change_5d": 6,
+          "change_20d": -10.2,
+          "change_60d": 54,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 23.6,
+            "growth": 19.8,
+            "operating": 8.4,
+            "cashflow": 7.1,
+            "solvency": 7.6,
+            "asset_quality": 5.1
+          }
+        },
+        {
+          "code": "300408",
+          "market": "sz",
+          "name": "三环集团",
+          "layers": [
+            "🔴 光纤阵列单元（FAU）"
+          ],
+          "total_score": 68.85,
+          "market_rank": 230,
+          "market_total": 5517,
+          "industry_rank": 8,
+          "industry_total": 59,
+          "ind1": "电子",
+          "ind2": "元器件",
+          "close": 126.5,
+          "change_5d": -6.2,
+          "change_20d": 47.6,
+          "change_60d": 129.7,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 21.7,
+            "growth": 16.5,
+            "operating": 6.1,
+            "cashflow": 9.5,
+            "solvency": 9,
+            "asset_quality": 6.1
+          }
+        },
+        {
+          "code": "688313",
+          "market": "sh",
+          "name": "仕佳光子",
+          "layers": [
+            "🔴 硅光引擎芯片（PIC）"
+          ],
+          "total_score": 63.33,
+          "market_rank": 606,
+          "market_total": 5517,
+          "industry_rank": 14,
+          "industry_total": 86,
+          "ind1": "通信",
+          "ind2": "通信设备",
+          "close": 149.07,
+          "change_5d": -4.9,
+          "change_20d": -15.1,
+          "change_60d": 81.8,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 23.2,
+            "growth": 14.4,
+            "operating": 10.5,
+            "cashflow": 6.8,
+            "solvency": 4.1,
+            "asset_quality": 4.3
+          }
+        },
+        {
+          "code": "002281",
+          "market": "sz",
+          "name": "光迅科技",
+          "layers": [
+            "🔴 CW激光器光源（DFB/EML）"
+          ],
+          "total_score": 62.71,
+          "market_rank": 667,
+          "market_total": 5517,
+          "industry_rank": 15,
+          "industry_total": 86,
+          "ind1": "通信",
+          "ind2": "通信设备",
+          "close": 204.97,
+          "change_5d": -9.9,
+          "change_20d": 4.3,
+          "change_60d": 145.5,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 16.6,
+            "growth": 15.9,
+            "operating": 9.4,
+            "cashflow": 11.5,
+            "solvency": 3.6,
+            "asset_quality": 5.7
+          }
+        },
+        {
+          "code": "300620",
+          "market": "sz",
+          "name": "光库科技",
+          "layers": [
+            "🔴 硅光引擎芯片（PIC）"
+          ],
+          "total_score": 60.87,
+          "market_rank": 878,
+          "market_total": 5517,
+          "industry_rank": 16,
+          "industry_total": 86,
+          "ind1": "通信",
+          "ind2": "通信设备",
+          "close": 285.88,
+          "change_5d": -10.7,
+          "change_20d": 5.1,
+          "change_60d": 69.5,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 15.8,
+            "growth": 19,
+            "operating": 7.8,
+            "cashflow": 8.4,
+            "solvency": 5.3,
+            "asset_quality": 4.6
+          }
+        },
+        {
+          "code": "002156",
+          "market": "sz",
+          "name": "通富微电",
+          "layers": [
+            "🔴 2.5D/3D先进封装（CoWoS/硅中介层）"
+          ],
+          "total_score": 60.68,
+          "market_rank": 897,
+          "market_total": 5517,
+          "industry_rank": 41,
+          "industry_total": 198,
+          "ind1": "电子",
+          "ind2": "半导体",
+          "close": 57.22,
+          "change_5d": -14.4,
+          "change_20d": 0.4,
+          "change_60d": 22.3,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 12.2,
+            "growth": 16.7,
+            "operating": 11.6,
+            "cashflow": 14.9,
+            "solvency": 0.5,
+            "asset_quality": 4.9
+          }
+        },
+        {
+          "code": "300570",
+          "market": "sz",
+          "name": "太辰光",
+          "layers": [
+            "🔴 光纤阵列单元（FAU）"
+          ],
+          "total_score": 57.03,
+          "market_rank": 1366,
+          "market_total": 5517,
+          "industry_rank": 27,
+          "industry_total": 86,
+          "ind1": "通信",
+          "ind2": "通信设备",
+          "close": 185.08,
+          "change_5d": 9.9,
+          "change_20d": 15.4,
+          "change_60d": 46.8,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 21.8,
+            "growth": 6.6,
+            "operating": 7.5,
+            "cashflow": 10,
+            "solvency": 7.8,
+            "asset_quality": 3.4
+          }
+        },
+        {
+          "code": "600584",
+          "market": "sh",
+          "name": "长电科技",
+          "layers": [
+            "🔴 2.5D/3D先进封装（CoWoS/硅中介层）"
+          ],
+          "total_score": 54.87,
+          "market_rank": 1744,
+          "market_total": 5517,
+          "industry_rank": 91,
+          "industry_total": 198,
+          "ind1": "电子",
+          "ind2": "半导体",
+          "close": 68.92,
+          "change_5d": -8.9,
+          "change_20d": 18.7,
+          "change_60d": 50.6,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 8.4,
+            "growth": 12.3,
+            "operating": 12.4,
+            "cashflow": 15.4,
+            "solvency": 1.9,
+            "asset_quality": 4.5
+          }
+        },
+        {
+          "code": "688048",
+          "market": "sh",
+          "name": "长光华芯",
+          "layers": [
+            "🔴 硅光引擎芯片（PIC）",
+            "🔴 CW激光器光源（DFB/EML）"
+          ],
+          "total_score": 51.01,
+          "market_rank": 2514,
+          "market_total": 5517,
+          "industry_rank": 118,
+          "industry_total": 198,
+          "ind1": "电子",
+          "ind2": "半导体",
+          "close": 334.35,
+          "change_5d": -9.3,
+          "change_20d": -20.1,
+          "change_60d": 88.6,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 6.7,
+            "growth": 16.8,
+            "operating": 3.8,
+            "cashflow": 10,
+            "solvency": 7.4,
+            "asset_quality": 6.3
+          }
+        }
+      ]
+    },
+    "step6": {
+      "ok": true,
+      "trend_name": "CPO（共封装光学）",
+      "cross_checks": [
+        {
+          "level": 1,
+          "layer_name": "🔴 硅光引擎芯片（PIC）",
+          "bottleneck_score": 5,
+          "global_monopoly": "台积电/TSMC(台湾90nm硅光)",
+          "domestic_leader": "长光华芯",
+          "all_candidates": [
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, 硅光光源(DFB激光器)布局",
+              "match_level": "high"
+            },
+            {
+              "code": "688313",
+              "name": "仕佳光子",
+              "mapping_reason": "PLC光分路器龙头, AWG阵列波导光栅可用于硅光引擎波分复用",
+              "match_level": "high"
+            },
+            {
+              "code": "300620",
+              "name": "光库科技",
+              "mapping_reason": "铌酸锂调制器龙头, 薄膜铌酸锂(TFLN)调制器可用于硅光引擎",
+              "match_level": "high"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（台积电/TSMC(台湾90nm硅光)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "valuation_risk",
+              "question": "当前股价是否已经充分反映了「唯一国产替代者」的溢价？安全边际有多少？",
+              "trigger": "股价短期内大幅上涨，5年分位进入极高区间"
+            },
+            {
+              "type": "capacity_bottleneck",
+              "question": "国产龙头的产能是否足够承接爆发的需求？产能爬坡周期是多久？",
+              "trigger": "公司季报显示产能利用率接近上限但新产能尚未投产"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "layer_name": "🔴 CW激光器光源（DFB/EML）",
+          "bottleneck_score": 4.5,
+          "global_monopoly": "Lumentum(美国)",
+          "domestic_leader": "源杰科技",
+          "all_candidates": [
+            {
+              "code": "688498",
+              "name": "源杰科技",
+              "mapping_reason": "国产光芯片龙头, DFB激光器已量产(10G/25G), 100G EML研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002281",
+              "name": "光迅科技",
+              "mapping_reason": "光模块+光芯片一体化, DFB/EML自研, 硅光芯片布局",
+              "match_level": "general"
+            },
+            {
+              "code": "688048",
+              "name": "长光华芯",
+              "mapping_reason": "高功率半导体激光芯片龙头, VCSEL/DFB多路线, CW激光器研发",
+              "match_level": "high"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Lumentum(美国)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "layer_name": "🔴 光纤阵列单元（FAU）",
+          "bottleneck_score": 3.5,
+          "global_monopoly": "Senko(日本)",
+          "domestic_leader": "天孚通信",
+          "all_candidates": [
+            {
+              "code": "300394",
+              "name": "天孚通信",
+              "mapping_reason": "光器件龙头, FAU阵列+MT插芯+光接口组件完整产品线, 全球光模块核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300570",
+              "name": "太辰光",
+              "mapping_reason": "光纤连接器龙头, FA/MT插芯自研, 高密度光纤阵列",
+              "match_level": "high"
+            },
+            {
+              "code": "300408",
+              "name": "三环集团",
+              "mapping_reason": "陶瓷插芯/MT插芯全球龙头(市占>70%), FAU核心组件",
+              "match_level": "high"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Senko(日本)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "layer_name": "🔴 2.5D/3D先进封装（CoWoS/硅中介层）",
+          "bottleneck_score": 5,
+          "global_monopoly": "台积电CoWoS(台湾)100%垄断CPO级",
+          "domestic_leader": "长电科技",
+          "all_candidates": [
+            {
+              "code": "600584",
+              "name": "长电科技",
+              "mapping_reason": "国内先进封装龙头, XDFOI 2.5D平台, 光+电共封装研发中",
+              "match_level": "high"
+            },
+            {
+              "code": "002156",
+              "name": "通富微电",
+              "mapping_reason": "AMD核心封装供应商, FCBGA+2.5D, 硅光封装布局",
+              "match_level": "medium"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（台积电CoWoS(台湾)100%垄断CPO级）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "domestic_newcomer",
+              "question": "如果有新的国产厂商突破技术进入供应，现有国产龙头的唯一性优势是否会被削弱？",
+              "trigger": "新国产厂商宣布技术突破或通过客户验证"
+            },
+            {
+              "type": "valuation_risk",
+              "question": "当前股价是否已经充分反映了「唯一国产替代者」的溢价？安全边际有多少？",
+              "trigger": "股价短期内大幅上涨，5年分位进入极高区间"
+            },
+            {
+              "type": "capacity_bottleneck",
+              "question": "国产龙头的产能是否足够承接爆发的需求？产能爬坡周期是多久？",
+              "trigger": "公司季报显示产能利用率接近上限但新产能尚未投产"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        }
+      ]
+    },
+    "step7": {
+      "timestamp": "2026/6/13 16:27:35",
+      "trend_name": "CPO（共封装光学）",
+      "bottleneck_count": 4,
+      "total_stocks": 10
+    }
+  }
+}
