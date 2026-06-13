@@ -125,8 +125,15 @@
       }
 
       latestTradingDays = payload.trading_days || [];
+      // Sort rows by latest trading day change_pct descending
+      const rows = payload.rows || [];
+      rows.sort((a, b) => {
+        const aVal = (a.cells && a.cells[0] && a.cells[0].change_pct != null) ? a.cells[0].change_pct : -Infinity;
+        const bVal = (b.cells && b.cells[0] && b.cells[0].change_pct != null) ? b.cells[0].change_pct : -Infinity;
+        return bVal - aVal;
+      });
       renderHeader(latestTradingDays);
-      renderRows(payload.rows || []);
+      renderRows(rows);
       applyResponsiveLayout(latestTradingDays);
 
       const tradingDays = latestTradingDays;
