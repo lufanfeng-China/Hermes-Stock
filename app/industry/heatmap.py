@@ -402,6 +402,28 @@ def industry_heatmap_response(
     if not trading_days:
         raise RuntimeError("no trading-day returns available for selected industries")
 
+    # Compute industry-average RPS20
+    from app.search.index import load_rps_rows
+    rps_rows = load_rps_rows()
+    rps_by_symbol: dict[str, float] = {}
+    for r in rps_rows:
+        sym = str(r.get("symbol", "")).strip()
+        val = r.get("rps_20")
+        if sym and val is not None:
+            rps_by_symbol[sym] = float(val)
+
+    member_keys = _build_industry_member_keys(selected, industry_rows)
+    for row in rows:
+        code = row.get("industry_level_2_code", "")
+        symbols = member_keys.get(code, [])
+        rps_values = []
+        for sk in symbols:
+            sym = sk.split(":", 1)[-1] if ":" in sk else sk
+            v = rps_by_symbol.get(sym)
+            if v is not None:
+                rps_values.append(v)
+        row["rps20"] = round(sum(rps_values) / len(rps_values), 1) if rps_values else None
+
     payload = {
         "ok": True,
         "selected_industries": selected,

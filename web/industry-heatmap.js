@@ -30,10 +30,18 @@
   }
 
   function renderHeader(tradingDays) {
-    const staleCells = headerRowEl.querySelectorAll(".heatmap-date");
+    const staleCells = headerRowEl.querySelectorAll(".heatmap-date, .heatmap-rps20");
     for (const cell of staleCells) {
       cell.remove();
     }
+    // RPS20 column
+    const rpsTh = document.createElement("th");
+    rpsTh.className = "heatmap-rps20";
+    rpsTh.scope = "col";
+    rpsTh.textContent = "RPS20";
+    rpsTh.title = "行业平均RPS20";
+    headerRowEl.appendChild(rpsTh);
+    // Date columns
     for (const day of tradingDays) {
       const cell = document.createElement("th");
       const label = document.createElement("span");
@@ -58,6 +66,14 @@
       industryCell.textContent = row.industry_level_2_name;
       tr.appendChild(industryCell);
 
+      // RPS20 cell
+      const rpsTd = document.createElement("td");
+      rpsTd.className = "heatmap-rps20-cell";
+      const rpsVal = row.rps20 != null ? Number(row.rps20) : null;
+      rpsTd.textContent = rpsVal != null ? rpsVal.toFixed(1) : "—";
+      rpsTd.title = `${row.industry_level_2_name} 平均RPS20: ${rpsTd.textContent}`;
+      tr.appendChild(rpsTd);
+
       for (const cell of row.cells) {
         const td = document.createElement("td");
         const value = typeof cell.pct_change === "number" ? cell.pct_change : null;
@@ -65,7 +81,7 @@
         td.style.background = value === null ? "rgba(127, 153, 170, 0.12)" : utils.pctToHeatColor(value);
         td.style.color = value === null ? "var(--muted)" : Math.abs(utils.clampHeatValue(value)) >= 2.5 ? "#f7fbff" : "#12202b";
         td.textContent = utils.getHeatmapCellText(value);
-        td.title = `${row.industry_level_2_name}\n${cell.trading_day}\nChange: ${formatPct(value)}\nStocks: ${cell.stock_count}`;
+        td.title = `${row.industry_level_2_name}\\n${cell.trading_day}\\nChange: ${formatPct(value)}\\nStocks: ${cell.stock_count}`;
         tr.appendChild(td);
       }
 
