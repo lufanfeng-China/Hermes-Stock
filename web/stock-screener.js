@@ -10,14 +10,6 @@ const STRATEGY_PRESETS = {
     strategy: 'ma_cross',
     description: 'MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10向上 + 均线粘合<10%',
   },
-  washout: {
-    strategy: 'washout',
-    description: '30日内有首板涨停; 次日高开低走且量2-4倍; 最新价首次站上洗盘日开盘',
-  },
-  rps_climb: {
-    strategy: 'rps_climb',
-    description: 'RPS20>50>120>250多头排列; RPS20>50; RPS20/50/120连续3天高于5日前',
-  },
   blowup_stall: {
     strategy: 'blowup_stall',
     description: '放巨量但涨不动：量>2.5x50日均量 + 阳线 + 涨幅<2% + 距20日最高≤2% + 冲高回落/高位, 按信号强度排序',

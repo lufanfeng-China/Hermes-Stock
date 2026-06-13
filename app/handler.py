@@ -1394,8 +1394,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'update_rps_current', 'name': '更新当前 RPS', 'desc': '从历史 RPS 提取最新交易日数据'},
             {'id': 'rebuild_screener_rps_first', 'name': '重建 RPS首次 策略', 'desc': '重建 RPS首次进入前50 的选股策略结果'},
             {'id': 'rebuild_screener_ma_cross', 'name': '重建 均线选股 策略', 'desc': '重建均线多头排列选股策略结果'},
-            {'id': 'rebuild_screener_washout', 'name': '重建 涨停洗盘 策略', 'desc': '重建涨停后缩量洗盘策略结果'},
-            {'id': 'rebuild_screener_rps_climb', 'name': '重建 RPS爬升 策略', 'desc': '重建 RPS 持续爬升策略结果'},
             {'id': 'rebuild_screener_blowup_stall', 'name': '重建 爆量滞涨 策略', 'desc': '重建放量滞涨预警策略结果'},
             {'id': 'rebuild_screener_blowup_break', 'name': '重建 爆量突破 策略', 'desc': '重建放量突破策略结果'},
             {'id': 'rebuild_screener_ma_pullback', 'name': '重建 均线回踩 策略', 'desc': '重建多头趋势回踩MA20支撑策略结果'},

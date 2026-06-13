@@ -1052,7 +1052,7 @@ def _build_strategy_async(trading_day: str, strategy: str) -> None:
     """Spawn background process to build ALL strategy datasets for a given date.
     Builds all strategies so the date file is complete after first visit."""
     import subprocess
-    all_strategies = ["rps_first", "ma_cross", "washout", "rps_climb", "blowup_stall", "blowup_break", "ma_pullback"]
+    all_strategies = ["rps_first", "ma_cross", "blowup_stall", "blowup_break", "ma_pullback"]
     # Build the requested strategy first (fastest path), then the rest
     ordered = [strategy] + [s for s in all_strategies if s != strategy]
     try:
