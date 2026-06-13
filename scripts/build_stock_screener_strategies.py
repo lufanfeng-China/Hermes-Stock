@@ -492,7 +492,7 @@ def build_ma_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, A
 
 
 def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """爆量突破：连续两天真阳线上涨; 每天量>3倍50日均量; 涨前5天量均<2倍50日均量"""
+    """爆量突破：VA=V6~V10均量; 近5日每根阳线量>3xVA且阴线>2xVA; 5日涨幅5%-20%"""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     rps_rows = load_rps_rows()
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -511,51 +511,51 @@ def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
         if daily is None or daily.empty:
             continue
         daily = daily.sort_index()
+        if len(daily) < 11:
+            continue
+
+        n = len(daily)
         closes = daily["close"].astype(float).tolist()
         opens = daily["open"].astype(float).tolist()
         volumes = daily["volume"].astype(float).tolist()
-        if len(closes) < 55:  # need 2 up days + 50 MA + 1 extra
+
+        t_idx = n - 1  # today (V1)
+
+        # VA = average volume of V6-V10 (days 6-10 ago)
+        v6_10 = volumes[t_idx - 9:t_idx - 4]  # indices for V6..V10
+        va = sum(v6_10) / 5.0
+        if va <= 0:
             continue
 
-        n = len(closes)
-        t_idx = n - 1   # today
-        y_idx = n - 2   # yesterday
-
-        # Condition 1: 连续两天上涨，且每天收盘>开盘（真阳线）
-        if not (closes[t_idx] > closes[y_idx] > closes[y_idx - 1]):
-            continue
-        if not (closes[t_idx] > opens[t_idx] and closes[y_idx] > opens[y_idx]):
-            continue
-
-        # 50日成交均量基线: 涨前一天的 50 日均量
-        # 涨前一天 = y_idx - 1 (the day before the first up day)
-        ma_start = y_idx - 1 - 49
-        if ma_start < 0:
-            continue
-        ma_vol = sum(volumes[ma_start : y_idx]) / 50.0
-        if ma_vol <= 0:
-            continue
-
-        # Condition 2: 两天上涨的成交量都 > 3x 50日均量
-        vol_y = volumes[y_idx]
-        vol_t = volumes[t_idx]
-        if not (vol_y > ma_vol * 3.0 and vol_t > ma_vol * 3.0):
+        # Condition: 最近5日(V1-V5) 成交量条件+涨幅条件
+        all_vol_ok = True
+        vol_ratios: list[float] = []
+        for offset in range(5):
+            idx = t_idx - offset
+            vol = volumes[idx]
+            c = closes[idx]
+            o = opens[idx]
+            if c > o:
+                # 阳线: volume > 3x VA
+                if vol <= va * 3.0:
+                    all_vol_ok = False
+                    break
+            else:
+                # 阴线: volume > 2x VA
+                if vol <= va * 2.0:
+                    all_vol_ok = False
+                    break
+            vol_ratios.append(round(vol / va, 2))
+        if not all_vol_ok:
             continue
 
-        # Condition 3: 涨前5天的成交量都 < 2x 50日均量
-        vol_before_ok = True
-        for j in range(y_idx - 5, y_idx):
-            if j < 0:
-                vol_before_ok = False
-                break
-            if volumes[j] >= ma_vol * 2.0:
-                vol_before_ok = False
-                break
-        if not vol_before_ok:
+        # Condition: 5日涨幅 5% < ret < 20%
+        ret_5d = (closes[t_idx] / closes[t_idx - 5] - 1) * 100.0
+        if ret_5d <= 5.0 or ret_5d >= 20.0:
             continue
 
         passed = True
-
+        # vol_ratios is [V1, V2, V3, V4, V5]
         results.append({
             "trading_day": row.get("trading_day"),
             "market": market_val,
@@ -564,10 +564,13 @@ def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
             "strategy_label": STRATEGY_METADATA[STRATEGY_BLOWUP_BREAK]["label"],
             "passed": passed,
             "conditions": {
-                "vol_ratio_y": round(vol_y / ma_vol, 2),
-                "vol_ratio_t": round(vol_t / ma_vol, 2),
-                "before_5d_all_below_2x": True,
-                "ma_vol": round(ma_vol, 0),
+                "va": round(va, 0),
+                "vol_ratio_v1": vol_ratios[0],
+                "vol_ratio_v2": vol_ratios[1],
+                "vol_ratio_v3": vol_ratios[2],
+                "vol_ratio_v4": vol_ratios[3],
+                "vol_ratio_v5": vol_ratios[4],
+                "ret_5d_pct": round(ret_5d, 2),
             },
             "generated_at": generated_at,
             "data_source": "local_tongdaxin_daily",
