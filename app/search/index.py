@@ -1414,11 +1414,18 @@ def _classification_label(classification: str, sub_classification: str = "") -> 
 def _score_rank_lookups(
     score_rows: dict[str, object],
     industry_lookup: dict[tuple[str, str], dict[str, object]],
-) -> tuple[dict[str, int], int, dict[str, int], dict[str, int], dict[str, float]]:
+) -> tuple[dict[str, int], int, dict[str, int], dict[str, int], dict[str, float], dict[str, float]]:
     """Compute market and Shenwan level-2 score ranks for screener rows."""
+
+    # Pre-compute trend scores for blending
+    snap = _load_financial_snapshot()
+    trend_payload = _compute_trend_scores_from_snapshot(snap) if snap else None
+    trend_market = (trend_payload or {}).get("sub_indicators", {})
+    trend_ind = (trend_payload or {}).get("ind_sub_indicators", {})
 
     market_scored: list[tuple[str, float]] = []
     market_score_lookup: dict[str, float] = {}
+    industry_score_lookup: dict[str, float] = {}
     industry_scored: dict[str, list[tuple[str, float]]] = {}
     for score_key, score_entry in score_rows.items():
         if not isinstance(score_entry, dict):
@@ -1428,21 +1435,31 @@ def _score_rank_lookups(
         symbol = symbol.strip()
         if not market or not symbol:
             continue
-        total_score = _screener_market_total_score(score_entry)
-        if total_score is not None:
-            market_scored.append((str(score_key), total_score))
-            market_score_lookup[str(score_key)] = total_score
+        # ── Blended market score ──
+        abs_total = _screener_market_total_score(score_entry)
+        if abs_total is not None:
+            trend_total = _screener_trend_total_score(score_entry, str(score_key), trend_market, trend_ind)
+            if trend_total is not None:
+                blended = round(abs_total * 0.6 + trend_total * 0.4, 4)
+            else:
+                blended = abs_total
+            market_scored.append((str(score_key), blended))
+            market_score_lookup[str(score_key)] = blended
 
-        industry_score = _coerce_float(score_entry.get("ind_total_score"))
-        if industry_score is None:
+        # ── Blended industry score ──
+        ind_abs = _coerce_float(score_entry.get("ind_total_score"))
+        if ind_abs is None:
             continue
+        ind_t = _screener_ind_trend_total(score_entry, str(score_key), trend_ind)
+        ind_blended = round(ind_abs * 0.6 + ind_t * 0.4, 4) if ind_t is not None else ind_abs
         industry = industry_lookup.get((market, symbol)) or {}
         industry_level_2 = (
             _normalize_text(score_entry.get("industry_sw_level_2"))
             or _normalize_text(industry.get("industry_level_2_name"))
         )
         if industry_level_2:
-            industry_scored.setdefault(industry_level_2, []).append((str(score_key), industry_score))
+            industry_scored.setdefault(industry_level_2, []).append((str(score_key), ind_blended))
+        industry_score_lookup[str(score_key)] = ind_blended
 
     market_rank = _rank_descending(market_scored)
     industry_rank: dict[str, int] = {}
@@ -1450,7 +1467,54 @@ def _score_rank_lookups(
     for industry_level_2, items in industry_scored.items():
         industry_rank.update(_rank_descending(items))
         industry_universe_size[industry_level_2] = len(items)
-    return market_rank, len(market_scored), industry_rank, industry_universe_size, market_score_lookup
+    return market_rank, len(market_scored), industry_rank, industry_universe_size, market_score_lookup, industry_score_lookup
+
+
+def _screener_trend_total_score(
+    score_entry: dict[str, object],
+    score_key: str,
+    trend_market: dict[str, dict[str, float]],
+    trend_ind: dict[str, dict[str, float]],
+) -> float | None:
+    """Compute blended trend total from cached trend percentiles."""
+    m_trend = trend_market.get(score_key, {})
+    i_trend = trend_ind.get(score_key, {})
+    if not m_trend:
+        return None
+    blended_trend = blend_market_scores_with_industry(m_trend, i_trend)
+    dim_scores_raw: dict[str, list[float]] = {}
+    for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+        dim_scores_raw.setdefault(dim, []).append(float(blended_trend.get(sub_key, 0.0) or 0.0))
+    total = 0.0
+    has_value = False
+    for dim, values in dim_scores_raw.items():
+        if not values:
+            continue
+        total += (sum(values) / len(values)) * _DIM_WEIGHTS.get(dim, 0.0)
+        has_value = True
+    return round(total, 4) if has_value else None
+
+
+def _screener_ind_trend_total(
+    score_entry: dict[str, object],
+    score_key: str,
+    trend_ind: dict[str, dict[str, float]],
+) -> float | None:
+    """Compute industry trend total from cached trend percentiles."""
+    i_trend = trend_ind.get(score_key, {})
+    if not i_trend:
+        return None
+    dim_scores_raw: dict[str, list[float]] = {}
+    for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+        dim_scores_raw.setdefault(dim, []).append(float(i_trend.get(sub_key, 0.0) or 0.0))
+    total = 0.0
+    has_value = False
+    for dim, values in dim_scores_raw.items():
+        if not values:
+            continue
+        total += (sum(values) / len(values)) * _DIM_WEIGHTS.get(dim, 0.0)
+        has_value = True
+    return round(total, 4) if has_value else None
 
 
 def _screener_market_total_score(score_entry: dict[str, object]) -> float | None:
@@ -1749,7 +1813,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     industry_lookup = {_security_key(row): row for row in industry_rows}
     rps_lookup = {_security_key(row): row for row in rps_rows}
     price_pct_lookup = price_pct_rows  # keyed by symbol string
-    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup = _score_rank_lookups(
+    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup, industry_score_lookup = _score_rank_lookups(
         score_rows if isinstance(score_rows, dict) else {},
         industry_lookup,
     )
@@ -1884,7 +1948,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             "industry_level_1": industry_level_1,
             "industry_level_2": industry_level_2,
             "market_total_score": market_score_lookup.get(score_key, _coerce_float(score_entry.get("total_score"))),
-            "industry_total_score": _coerce_float(score_entry.get("ind_total_score")),
+            "industry_total_score": industry_score_lookup.get(score_key, _coerce_float(score_entry.get("ind_total_score"))),
             "market_total_rank": market_total_rank,
             "market_total_universe_size": market_total_universe_size,
             "industry_total_rank": industry_total_rank,
@@ -2583,7 +2647,7 @@ def _build_tail_session_matches(conditions: dict[str, object], condition_enabled
     score_rows = snapshot.get("scores") if isinstance(snapshot, dict) else {}
     if not isinstance(score_rows, dict):
         score_rows = {}
-    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup = _score_rank_lookups(
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup = _score_rank_lookups(
         score_rows,
         industry_lookup,
     )
@@ -2667,7 +2731,7 @@ def _build_tail_session_matches(conditions: dict[str, object], condition_enabled
             "turnover_pct": round(float(turnover_pct), 2) if turnover_pct is not None else None,
             "industry_level_1": industry_level_1,
             "industry_level_2": industry_level_2,
-            "industry_total_score": _coerce_float(score_entry.get("ind_total_score")),
+            "industry_total_score": _industry_score_lookup.get(score_key, _coerce_float(score_entry.get("ind_total_score"))),
             "industry_total_rank": _coerce_int(score_entry.get("industry_total_rank")) or industry_rank_lookup.get(score_key),
             "industry_total_universe_size": (
                 _coerce_int(score_entry.get("industry_total_universe_size"))
@@ -2699,7 +2763,7 @@ def _build_rps_pullback_matches(
     security_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in security_rows}
     industry_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in industry_rows}
     valuation_lookup: dict[tuple[str, str], dict[str, object]] = _realtime_valuation_lookup()
-    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup = _score_rank_lookups(
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup = _score_rank_lookups(
         score_rows,
         industry_lookup,
     )
@@ -2778,7 +2842,7 @@ def _build_rps_pullback_matches(
             or _normalize_text(industry.get("industry_level_2_name"))
         )
         score_key = f"{market}:{symbol}"
-        industry_total_score = _coerce_float(score_entry.get("ind_total_score"))
+        industry_total_score = _industry_score_lookup.get(score_key, _coerce_float(score_entry.get("ind_total_score")))
         industry_total_rank = industry_rank_lookup.get(score_key)
         industry_total_universe_size = industry_universe_sizes.get(industry_level_2)
         stock_name = _normalize_text(security.get("stock_name")) or symbol
@@ -2867,7 +2931,7 @@ def _build_scheme_2560_matches(
     score_rows: dict[str, object] = snapshot.get("scores") if isinstance(snapshot, dict) else {}
     if not isinstance(score_rows, dict):
         score_rows = {}
-    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup = _score_rank_lookups(
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup = _score_rank_lookups(
         score_rows,
         industry_lookup,
     )
@@ -3225,7 +3289,7 @@ def _build_scheme_2560_matches(
             "turnover_pct": round(float(turnover_pct), 2) if turnover_pct is not None else None,
             "industry_level_1": industry_level_1,
             "industry_level_2": industry_level_2,
-            "industry_total_score": round(_coerce_float(score_entry.get("ind_total_score")), 1) if score_entry.get("ind_total_score") is not None else None,
+            "industry_total_score": round(_industry_score_lookup.get(score_key, _coerce_float(score_entry.get("ind_total_score"))), 1) if _industry_score_lookup.get(score_key) is not None or score_entry.get("ind_total_score") is not None else None,
             "industry_total_rank": _coerce_int(score_entry.get("industry_total_rank")) or industry_rank_lookup.get(score_key),
             "industry_total_universe_size": (
                 _coerce_int(score_entry.get("industry_total_universe_size"))
@@ -3252,7 +3316,7 @@ def _build_ma_cross_matches(
     industry_lookup = {_security_key(row): row for row in load_industry_rows()}
     snapshot = _load_financial_snapshot() or {}
     score_rows = snapshot.get("scores") or {}
-    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup = _score_rank_lookups(
+    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup, industry_score_lookup = _score_rank_lookups(
         score_rows if isinstance(score_rows, dict) else {},
         industry_lookup,
     )
