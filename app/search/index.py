@@ -4164,7 +4164,7 @@ def compute_financial_scores(market_symbols):
                 blended_total = round(absolute_total * 0.6 + trend_total * 0.4, 2)
 
                 # ── Divergence warning ──
-                divergence = abs(absolute_total - trend_total) >= 20.0
+                divergence = abs(absolute_total - trend_total) >= 10.0
                 divergence_label = (
                     "⚠️ 绝对评分与趋势评分背离" if divergence else ""
                 )
