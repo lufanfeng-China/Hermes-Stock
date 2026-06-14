@@ -3929,6 +3929,92 @@ def _score_industry_group(stocks_with_data, stocks_without_data):
         scores[key] = {k: 0.0 for k in _SUB_KEYS}
 
     return scores
+
+# ── Trend scoring (YoY change percentile) ──────────────────────────────────
+
+_trend_scores_cache: dict | None = None
+
+def _compute_trend_scores_from_snapshot(snap: dict) -> dict:
+    """Compute YoY-change percentile scores for all sub-indicators from the snapshot.
+
+    Returns: {sub_indicators: {key_str: {sub_key: pct}}, ind_sub_indicators: {key_str: {sub_key: pct}}}
+    where pct is 0-100, higher = better improvement.
+    """
+    global _trend_scores_cache
+    if _trend_scores_cache is not None:
+        return _trend_scores_cache
+    # Collect all raw YoY changes per sub-indicator
+    market_yoy: dict[str, dict[str, float]] = {}  # {key_str: {sub_key: yoy_pct}}
+    industry_map = _load_industry_map()
+    # Group stocks by industry for industry-level percentile
+    industry_stocks: dict[str, list[str]] = {}  # {ind2: [key_str]}
+
+    for key_str, entry in (snap.get("scores", {}) or {}).items():
+        raw = entry.get("raw_sub_indicators", {})
+        prev = entry.get("prev_raw_sub_indicators", {})
+        if not raw or not prev:
+            continue
+
+        market_yoy[key_str] = {}
+        for sub_key, dim, field, higher_better, zero_penalty in _SUB_DEFS:
+            cur = raw.get(sub_key)
+            prv = prev.get(sub_key)
+            if cur is not None and prv is not None and prv != 0:
+                yoy = (cur - prv) / abs(prv) * 100.0
+            else:
+                yoy = None
+            market_yoy[key_str][sub_key] = yoy
+
+        # Industry grouping
+        parts = key_str.split(":", 1)
+        if len(parts) == 2:
+            ind2, _ = industry_map.get((parts[0], parts[1]), ("", ""))
+            if ind2:
+                industry_stocks.setdefault(ind2, []).append(key_str)
+
+    # Percentile-rank YoY changes within full market
+    market_sub_pct: dict[str, dict[str, float]] = {}
+    for sub_key, dim, field, higher_better, zero_penalty in _SUB_DEFS:
+        values = []
+        for key_str in market_yoy:
+            v = market_yoy[key_str].get(sub_key)
+            if v is not None:
+                values.append((key_str, v))
+        # Sort: for higher_better=True, higher YoY → higher percentile
+        # For higher_better=False (e.g., debt_ratio), more negative YoY (improvement) → higher percentile
+        if higher_better:
+            values.sort(key=lambda x: x[1])
+        else:
+            values.sort(key=lambda x: -x[1])
+        n = len(values)
+        for rank, (key_str, _) in enumerate(values):
+            pct = round((rank + 1) / n * 100.0, 4)
+            market_sub_pct.setdefault(key_str, {})[sub_key] = pct
+
+    # Percentile-rank YoY changes within each industry
+    ind_sub_pct: dict[str, dict[str, float]] = {}
+    for ind2, stocks in industry_stocks.items():
+        for sub_key, dim, field, higher_better, zero_penalty in _SUB_DEFS:
+            values = []
+            for key_str in stocks:
+                v = market_yoy.get(key_str, {}).get(sub_key)
+                if v is not None:
+                    values.append((key_str, v))
+            if not values:
+                continue
+            if higher_better:
+                values.sort(key=lambda x: x[1])
+            else:
+                values.sort(key=lambda x: -x[1])
+            n = len(values)
+            for rank, (key_str, _) in enumerate(values):
+                pct = round((rank + 1) / n * 100.0, 4)
+                ind_sub_pct.setdefault(key_str, {})[sub_key] = pct
+
+    result = {"sub_indicators": market_sub_pct, "ind_sub_indicators": ind_sub_pct}
+    _trend_scores_cache = result
+    return result
+
 # ---------------------------------------------------------------------------
 # Public API: batch scores
 # ---------------------------------------------------------------------------
@@ -3942,6 +4028,11 @@ def compute_financial_scores(market_symbols):
 
     if snap is not None:
         # Fast path: use pre-computed snapshot
+        # ── Pre-compute trend scores from full snapshot ──
+        trend_payload = _compute_trend_scores_from_snapshot(snap)
+        all_trend_sub = trend_payload["sub_indicators"]  # {key_str: {sub_key: percentile}}
+        all_trend_ind_sub = trend_payload.get("ind_sub_indicators", {})  # {key_str: {sub_key: percentile}}
+
         scores = {}
         for market, symbol in market_symbols:
             key_str = f"{market}:{symbol}"
@@ -3960,15 +4051,42 @@ def compute_financial_scores(market_symbols):
                 for dim, vals in dim_scores_raw.items():
                     avg = sum(vals) / len(vals) if vals else 0.0
                     weighted[dim] = round(avg * _DIM_WEIGHTS.get(dim, 0.0), 2)
-                total = round(sum(weighted.values()), 2)
+                absolute_total = round(sum(weighted.values()), 2)
+
+                # ── Trend scores ──
+                trend_sub = blend_market_scores_with_industry(
+                    all_trend_sub.get(key_str, {}),
+                    all_trend_ind_sub.get(key_str, {}),
+                )
+                trend_dim_raw = {}
+                for sub_key, dim, field, higher_better, zero_penalty in _SUB_DEFS:
+                    trend_dim_raw.setdefault(dim, []).append(trend_sub.get(sub_key, 0.0))
+                trend_weighted = {}
+                for dim, vals in trend_dim_raw.items():
+                    avg = sum(vals) / len(vals) if vals else 0.0
+                    trend_weighted[dim] = round(avg * _DIM_WEIGHTS.get(dim, 0.0), 2)
+                trend_total = round(sum(trend_weighted.values()), 2)
+
+                # ── Blended total (60% absolute + 40% trend) ──
+                blended_total = round(absolute_total * 0.6 + trend_total * 0.4, 2)
+
+                # ── Divergence warning ──
+                divergence = abs(absolute_total - trend_total) >= 20.0
+                divergence_label = (
+                    "⚠️ 绝对评分与趋势评分背离" if divergence else ""
+                )
+
                 scores[(market, symbol)] = {
                     "report_date": entry.get("report_date", ""),
                     "announce_date": entry.get("announce_date", ""),
-                    # Flatten blended market-facing sub-indicators and add dim_scores + total_score.
                     **{k: v for k, v in sub_indicators.items()},
                     "dim_scores": weighted,
-                    "total_score": total,
-                    # 行业排名（也在快照里预计算好了）
+                    "total_score": blended_total,
+                    "absolute_total_score": absolute_total,
+                    "trend_total_score": trend_total,
+                    "trend_dim_scores": trend_weighted,
+                    "divergence_warning": divergence,
+                    "divergence_label": divergence_label,
                     "ind_sub_indicators": industry_sub_indicators,
                     "ind_dim_scores": entry.get("ind_dim_scores", {}),
                     "ind_total_score": entry.get("ind_total_score", 0.0),
@@ -5078,6 +5196,7 @@ def _load_snapshot_score_rankings():
         if not isinstance(entry, dict) or ":" not in key_str:
             continue
         market, symbol = key_str.split(":", 1)
+        # ── Absolute score ──
         adjusted_sub = blend_market_scores_with_industry(
             entry.get("sub_indicators", {}),
             entry.get("ind_sub_indicators", {}),
@@ -5089,7 +5208,24 @@ def _load_snapshot_score_rankings():
         for dim, vals in dim_scores_raw.items():
             avg = sum(vals) / len(vals) if vals else 0.0
             weighted[dim] = avg * _DIM_WEIGHTS.get(dim, 0.0)
-        total = round(sum(weighted.values()), 4)
+        absolute_total = round(sum(weighted.values()), 4)
+
+        # ── Trend score (blend with absolute) ──
+        trend_payload = _compute_trend_scores_from_snapshot(snap)
+        trend_sub = blend_market_scores_with_industry(
+            trend_payload["sub_indicators"].get(key_str, {}),
+            trend_payload["ind_sub_indicators"].get(key_str, {}),
+        )
+        trend_dim_raw: dict[str, list[float]] = {}
+        for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+            trend_dim_raw.setdefault(dim, []).append(float(trend_sub.get(sub_key, 0.0) or 0.0))
+        trend_weighted = {}
+        for dim, vals in trend_dim_raw.items():
+            avg = sum(vals) / len(vals) if vals else 0.0
+            trend_weighted[dim] = avg * _DIM_WEIGHTS.get(dim, 0.0)
+        trend_total = round(sum(trend_weighted.values()), 4)
+
+        total = round(absolute_total * 0.6 + trend_total * 0.4, 4)
         market_rows.append((total, market, symbol))
 
         ind_total_score = entry.get("ind_total_score")
@@ -5410,6 +5546,9 @@ def compute_stock_score(market, symbol):
     total_score = score_data.pop("total_score", 0.0) if score_data else 0.0
     dim_scores = score_data.pop("dim_scores", {}) if score_data else {}
     sub_indicators = score_data.pop("sub_indicators", {}) if score_data else {}
+    absolute_total_score = score_data.pop("absolute_total_score", None) if score_data else None
+    trend_total_score = score_data.pop("trend_total_score", None) if score_data else None
+    divergence_label = score_data.pop("divergence_label", "") if score_data else ""
     # Raw (non-percentile) sub-indicator values and report period
     raw_sub_indicators = score_data.pop("raw_sub_indicators", {}) if score_data else {}
     prev_raw_sub_indicators = score_data.pop("prev_raw_sub_indicators", {}) if score_data else {}
@@ -5449,6 +5588,9 @@ def compute_stock_score(market, symbol):
         "score_data": score_data,
         "total_score": total_score,
         "dim_scores": dim_scores,
+        "absolute_total_score": absolute_total_score,
+        "trend_total_score": trend_total_score,
+        "divergence_label": divergence_label,
         "score_methodology": score_methodology,
         "latest_report_analysis": latest_report_analysis,
         "market_total_rank": market_total_rank,

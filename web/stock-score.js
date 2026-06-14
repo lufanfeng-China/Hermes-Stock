@@ -1465,6 +1465,9 @@ function renderScore(result) {
     industry_total_rank,
     industry_total_universe_size,
     latest_report_analysis,
+    absolute_total_score,
+    trend_total_score,
+    divergence_label,
   } = result;
 
   if (!ok || !total_score) {
@@ -1526,6 +1529,16 @@ function renderScore(result) {
     industry_total_rank,
     industry_total_universe_size,
   });
+
+  // ── Trend score & divergence ──
+  const trendAbs = absolute_total_score != null ? formatTotalScore(absolute_total_score) : "—";
+  const trendT = trend_total_score != null ? formatTotalScore(trend_total_score) : "—";
+  const divText = divergence_label || "";
+  const trendEl = document.getElementById("hdr-trend-info");
+  if (trendEl) {
+    trendEl.innerHTML = `绝对 ${trendAbs} · 趋势 ${trendT}${divText ? ' <span style="color:var(--warning,orange)">' + escapeHtml(divText) + '</span>' : ''}`;
+    trendEl.style.display = "";
+  }
 
   // ── Radar charts ────────────────────────────────────────────────────────
   const mRawDim = {};
