@@ -4076,6 +4076,20 @@ def compute_financial_scores(market_symbols):
                     "⚠️ 绝对评分与趋势评分背离" if divergence else ""
                 )
 
+                # ── Industry blended scores ──
+                ind_abs_total = entry.get("ind_total_score", 0.0)
+                ind_trend_dim = {}
+                for sub_key, dim, field, higher_better, zero_penalty in _SUB_DEFS:
+                    ind_trend_dim.setdefault(dim, []).append(
+                        float(all_trend_ind_sub.get(key_str, {}).get(sub_key, 0.0) or 0.0)
+                    )
+                ind_trend_weighted = {}
+                for dim, vals in ind_trend_dim.items():
+                    avg = sum(vals) / len(vals) if vals else 0.0
+                    ind_trend_weighted[dim] = round(avg * _DIM_WEIGHTS.get(dim, 0.0), 2)
+                ind_trend_total = round(sum(ind_trend_weighted.values()), 2)
+                ind_blended = round(float(ind_abs_total) * 0.6 + ind_trend_total * 0.4, 2)
+
                 scores[(market, symbol)] = {
                     "report_date": entry.get("report_date", ""),
                     "announce_date": entry.get("announce_date", ""),
@@ -4089,7 +4103,10 @@ def compute_financial_scores(market_symbols):
                     "divergence_label": divergence_label,
                     "ind_sub_indicators": industry_sub_indicators,
                     "ind_dim_scores": entry.get("ind_dim_scores", {}),
-                    "ind_total_score": entry.get("ind_total_score", 0.0),
+                    "ind_trend_dim_scores": ind_trend_weighted,
+                    "ind_trend_total_score": ind_trend_total,
+                    "ind_total_score": ind_blended,
+                    "ind_absolute_total_score": ind_abs_total,
                     "raw_sub_indicators": entry.get("raw_sub_indicators", {}),
                     "prev_raw_sub_indicators": entry.get("prev_raw_sub_indicators", {}),
                     "latest_period": entry.get("latest_period", ""),
@@ -5228,14 +5245,29 @@ def _load_snapshot_score_rankings():
         total = round(absolute_total * 0.6 + trend_total * 0.4, 4)
         market_rows.append((total, market, symbol))
 
-        ind_total_score = entry.get("ind_total_score")
-        ind2, _ind1 = industry_map.get((market, symbol), ("", ""))
+        # ── Industry blended score for ranking ──
+        ind_abs = entry.get("ind_total_score")
         try:
-            ind_total_value = float(ind_total_score)
+            ind_abs_val = float(ind_abs)
         except (TypeError, ValueError):
-            ind_total_value = None
-        if ind2 and ind_total_value is not None:
-            industry_rows.setdefault(ind2, []).append((ind_total_value, market, symbol))
+            ind_abs_val = None
+
+        # Compute industry trend score
+        ind_trend_dim = {}
+        for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+            ind_trend_dim.setdefault(dim, []).append(
+                float(trend_payload["ind_sub_indicators"].get(key_str, {}).get(sub_key, 0.0) or 0.0)
+            )
+        ind_t_w = {}
+        for dim, vals in ind_trend_dim.items():
+            avg = sum(vals) / len(vals) if vals else 0.0
+            ind_t_w[dim] = avg * _DIM_WEIGHTS.get(dim, 0.0)
+        ind_trend_val = round(sum(ind_t_w.values()), 4)
+
+        ind2, _ind1 = industry_map.get((market, symbol), ("", ""))
+        if ind2 and ind_abs_val is not None:
+            ind_blended = round(ind_abs_val * 0.6 + ind_trend_val * 0.4, 4)
+            industry_rows.setdefault(ind2, []).append((ind_blended, market, symbol))
 
     market_rows.sort(key=lambda item: (-item[0], item[1], item[2]))
     market_ranks = {(market, symbol): idx for idx, (_score, market, symbol) in enumerate(market_rows, start=1)}
@@ -5542,6 +5574,8 @@ def compute_stock_score(market, symbol):
     ind_total_score = score_data.pop("ind_total_score", 0.0) if score_data else 0.0
     ind_dim_scores = score_data.pop("ind_dim_scores", {}) if score_data else {}
     ind_sub_indicators = score_data.pop("ind_sub_indicators", {}) if score_data else {}
+    ind_absolute_total_score = score_data.pop("ind_absolute_total_score", None) if score_data else None
+    ind_trend_total_score = score_data.pop("ind_trend_total_score", None) if score_data else None
     # Promoted market-rank fields to top level for the "全市场" radar
     total_score = score_data.pop("total_score", 0.0) if score_data else 0.0
     dim_scores = score_data.pop("dim_scores", {}) if score_data else {}
@@ -5605,4 +5639,6 @@ def compute_stock_score(market, symbol):
         "ind_total_score": ind_total_score,
         "ind_dim_scores": ind_dim_scores,
         "ind_sub_indicators": ind_sub_indicators,
+        "ind_absolute_total_score": ind_absolute_total_score,
+        "ind_trend_total_score": ind_trend_total_score,
     }

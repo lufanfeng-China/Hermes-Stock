@@ -1468,6 +1468,8 @@ function renderScore(result) {
     absolute_total_score,
     trend_total_score,
     divergence_label,
+    ind_absolute_total_score,
+    ind_trend_total_score,
   } = result;
 
   if (!ok || !total_score) {
@@ -1538,6 +1540,14 @@ function renderScore(result) {
   if (trendEl) {
     trendEl.innerHTML = `绝对 ${trendAbs} · 趋势 ${trendT}${divText ? ' <span style="color:var(--warning,orange)">' + escapeHtml(divText) + '</span>' : ''}`;
     trendEl.style.display = "";
+  }
+  // Industry trend
+  const indTrendEl = document.getElementById("hdr-ind-trend-info");
+  if (indTrendEl) {
+    const iAbs = ind_absolute_total_score != null ? formatTotalScore(ind_absolute_total_score) : "—";
+    const iTrend = ind_trend_total_score != null ? formatTotalScore(ind_trend_total_score) : "—";
+    indTrendEl.textContent = `绝对 ${iAbs} · 趋势 ${iTrend}`;
+    indTrendEl.style.display = "";
   }
 
   // ── Radar charts ────────────────────────────────────────────────────────
