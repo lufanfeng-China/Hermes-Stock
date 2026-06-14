@@ -2335,28 +2335,6 @@ function buildSummaryLine(structuredInsights) {
   return `${posPart}${negPart ? '，' + negPart + '。' : '。'}${verdict}`;
 }
 
-// ── Competitive Edge (async, cached) ─────────────────────────────────────────
-
-async function loadCompetitiveEdge(market, symbol, stockName) {
-  const container = document.getElementById("competitive-edge-section");
-  if (!container) return;
-  container.innerHTML = '<p class="muted" style="font-size:12px">加载竞争优势…</p>';
-  try {
-    const resp = await fetch(`/api/competitive-edge?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&stock_name=${encodeURIComponent(stockName || "")}`);
-    const data = await resp.json();
-    if (data.ok && data.text) {
-      const refreshed = data.refreshed_at ? data.refreshed_at.slice(0, 10) : "";
-      const staleNote = data.stale ? ' <span style="color:var(--warning,orange);font-size:11px">(已过期)</span>' : '';
-      container.innerHTML = `<p style="font-size:13px;line-height:1.7;color:var(--text)">${escapeHtml(data.text)}</p>
-        <p class="metric-meta" style="font-size:11px">竞争优势 · 更新于 ${refreshed}${staleNote}</p>`;
-    } else {
-      container.innerHTML = '';
-    }
-  } catch (e) {
-    container.innerHTML = '';
-  }
-}
-
 // ── Insights Rendering ───────────────────────────────────────────────────────
 
 function renderInsights(structuredInsights) {
@@ -2866,9 +2844,6 @@ function resetStockScoreDashboardState() {
   resetAiFinancialReport("查询股票后可生成分析");
   setTechPlaceholders();
   resetInsights();
-  // Clear competitive edge section
-  const ce = document.getElementById("competitive-edge-section");
-  if (ce) ce.innerHTML = "";
 }
 
 function toStockIdentity(row) {
@@ -3366,8 +3341,6 @@ async function doSearch(selectedRow = null) {
     // Build and render comprehensive insights from score + profile + valuation
     const structuredInsights = buildStructuredInsights(result, profile, valuationPayload);
     renderInsights(structuredInsights);
-    // Async load competitive edge (cached, non-blocking)
-    loadCompetitiveEdge(market, symbol, result?.stock_name || searchState.selectedStock?.stock_name || symbol);
     searchState.currentStock = {
       market,
       symbol,
