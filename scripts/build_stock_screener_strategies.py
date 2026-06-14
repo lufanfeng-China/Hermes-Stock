@@ -491,16 +491,20 @@ def build_ma_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, A
     return results
 
 
-def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
     """爆量突破：VA=V6~V10均量; 近5日每根阳线量>3xVA且阴线>2xVA; 5日涨幅5%-20%; 趋势/短趋势排除空头+震荡"""
     reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
+    if trading_day:
+        from app.search.index import load_rps_rows_as_of
+        rps_rows = load_rps_rows_as_of(trading_day)
+    else:
+        rps_rows = load_rps_rows()
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
     results: list[dict[str, Any]] = []
 
     # Load tech eval for trend filtering
     from app.search.index import _load_technical_eval
-    tech_eval = _load_technical_eval()
+    tech_eval = _load_technical_eval(as_of_date=trading_day or "")
 
     for row in rps_rows:
         market_val = str(row.get("market", "")).strip().lower()
@@ -775,7 +779,7 @@ def main() -> None:
         elif args.strategy == STRATEGY_BLOWUP_STALL:
             rows = build_blowup_stall_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_BLOWUP_BREAK:
-            rows = build_blowup_break_rows(tdxdir=args.tdxdir)
+            rows = build_blowup_break_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
         elif args.strategy == STRATEGY_MA_PULLBACK:
             rows = build_ma_pullback_rows(tdxdir=args.tdxdir)
         else:
