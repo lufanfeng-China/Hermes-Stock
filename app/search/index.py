@@ -1414,7 +1414,7 @@ def _classification_label(classification: str, sub_classification: str = "") -> 
 def _score_rank_lookups(
     score_rows: dict[str, object],
     industry_lookup: dict[tuple[str, str], dict[str, object]],
-) -> tuple[dict[str, int], int, dict[str, int], dict[str, int], dict[str, float], dict[str, float]]:
+) -> tuple[dict[str, int], int, dict[str, int], dict[str, int], dict[str, float], dict[str, float], dict[str, float], dict[str, float], dict[str, float], dict[str, float]]:
     """Compute market and Shenwan level-2 score ranks for screener rows."""
 
     # Pre-compute trend scores for blending
@@ -1425,7 +1425,11 @@ def _score_rank_lookups(
 
     market_scored: list[tuple[str, float]] = []
     market_score_lookup: dict[str, float] = {}
+    market_abs_lookup: dict[str, float] = {}
+    market_trend_lookup: dict[str, float] = {}
     industry_score_lookup: dict[str, float] = {}
+    industry_abs_lookup: dict[str, float] = {}
+    industry_trend_lookup: dict[str, float] = {}
     industry_scored: dict[str, list[tuple[str, float]]] = {}
     for score_key, score_entry in score_rows.items():
         if not isinstance(score_entry, dict):
@@ -1438,8 +1442,10 @@ def _score_rank_lookups(
         # ── Blended market score ──
         abs_total = _screener_market_total_score(score_entry)
         if abs_total is not None:
+            market_abs_lookup[str(score_key)] = abs_total
             trend_total = _screener_trend_total_score(score_entry, str(score_key), trend_market, trend_ind)
             if trend_total is not None:
+                market_trend_lookup[str(score_key)] = trend_total
                 blended = round(abs_total * 0.6 + trend_total * 0.4, 4)
             else:
                 blended = abs_total
@@ -1450,7 +1456,10 @@ def _score_rank_lookups(
         ind_abs = _coerce_float(score_entry.get("ind_total_score"))
         if ind_abs is None:
             continue
+        industry_abs_lookup[str(score_key)] = ind_abs
         ind_t = _screener_ind_trend_total(score_entry, str(score_key), trend_ind)
+        if ind_t is not None:
+            industry_trend_lookup[str(score_key)] = ind_t
         ind_blended = round(ind_abs * 0.6 + ind_t * 0.4, 4) if ind_t is not None else ind_abs
         industry = industry_lookup.get((market, symbol)) or {}
         industry_level_2 = (
@@ -1467,7 +1476,7 @@ def _score_rank_lookups(
     for industry_level_2, items in industry_scored.items():
         industry_rank.update(_rank_descending(items))
         industry_universe_size[industry_level_2] = len(items)
-    return market_rank, len(market_scored), industry_rank, industry_universe_size, market_score_lookup, industry_score_lookup
+    return market_rank, len(market_scored), industry_rank, industry_universe_size, market_score_lookup, industry_score_lookup, market_abs_lookup, market_trend_lookup, industry_abs_lookup, industry_trend_lookup
 
 
 def _screener_trend_total_score(
@@ -1813,7 +1822,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     industry_lookup = {_security_key(row): row for row in industry_rows}
     rps_lookup = {_security_key(row): row for row in rps_rows}
     price_pct_lookup = price_pct_rows  # keyed by symbol string
-    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup, industry_score_lookup = _score_rank_lookups(
+    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup, industry_score_lookup, market_abs_lookup, market_trend_lookup, industry_abs_lookup, industry_trend_lookup = _score_rank_lookups(
         score_rows if isinstance(score_rows, dict) else {},
         industry_lookup,
     )
@@ -1948,7 +1957,11 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             "industry_level_1": industry_level_1,
             "industry_level_2": industry_level_2,
             "market_total_score": market_score_lookup.get(score_key, _coerce_float(score_entry.get("total_score"))),
+            "market_absolute_score": market_abs_lookup.get(score_key),
+            "market_trend_score": market_trend_lookup.get(score_key),
             "industry_total_score": industry_score_lookup.get(score_key, _coerce_float(score_entry.get("ind_total_score"))),
+            "industry_absolute_score": industry_abs_lookup.get(score_key),
+            "industry_trend_score": industry_trend_lookup.get(score_key),
             "market_total_rank": market_total_rank,
             "market_total_universe_size": market_total_universe_size,
             "industry_total_rank": industry_total_rank,
@@ -2647,7 +2660,7 @@ def _build_tail_session_matches(conditions: dict[str, object], condition_enabled
     score_rows = snapshot.get("scores") if isinstance(snapshot, dict) else {}
     if not isinstance(score_rows, dict):
         score_rows = {}
-    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup = _score_rank_lookups(
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup, _market_abs_lookup, _market_trend_lookup, _industry_abs_lookup, _industry_trend_lookup = _score_rank_lookups(
         score_rows,
         industry_lookup,
     )
@@ -2763,7 +2776,7 @@ def _build_rps_pullback_matches(
     security_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in security_rows}
     industry_lookup: dict[tuple[str, str], dict[str, object]] = {_security_key(r): r for r in industry_rows}
     valuation_lookup: dict[tuple[str, str], dict[str, object]] = _realtime_valuation_lookup()
-    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup = _score_rank_lookups(
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup, _market_abs_lookup, _market_trend_lookup, _industry_abs_lookup, _industry_trend_lookup = _score_rank_lookups(
         score_rows,
         industry_lookup,
     )
@@ -2931,7 +2944,7 @@ def _build_scheme_2560_matches(
     score_rows: dict[str, object] = snapshot.get("scores") if isinstance(snapshot, dict) else {}
     if not isinstance(score_rows, dict):
         score_rows = {}
-    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup = _score_rank_lookups(
+    _market_rank_lookup, _market_universe_size, industry_rank_lookup, industry_universe_sizes, _market_score_lookup, _industry_score_lookup, _market_abs_lookup, _market_trend_lookup, _industry_abs_lookup, _industry_trend_lookup = _score_rank_lookups(
         score_rows,
         industry_lookup,
     )
@@ -3316,7 +3329,7 @@ def _build_ma_cross_matches(
     industry_lookup = {_security_key(row): row for row in load_industry_rows()}
     snapshot = _load_financial_snapshot() or {}
     score_rows = snapshot.get("scores") or {}
-    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup, industry_score_lookup = _score_rank_lookups(
+    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup, industry_score_lookup, market_abs_lookup, market_trend_lookup, industry_abs_lookup, industry_trend_lookup = _score_rank_lookups(
         score_rows if isinstance(score_rows, dict) else {},
         industry_lookup,
     )
