@@ -2335,6 +2335,30 @@ function buildSummaryLine(structuredInsights) {
   return `${posPart}${negPart ? '，' + negPart + '。' : '。'}${verdict}`;
 }
 
+// ── Competitive Edge (async, cached) ─────────────────────────────────────────
+
+async function loadCompetitiveEdge(market, symbol, stockName) {
+  const container = document.getElementById("competitive-edge-section");
+  if (!container) return;
+  container.innerHTML = '<p class="muted">加载竞争优势分析…</p>';
+  try {
+    const resp = await fetch(`/api/competitive-edge?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&stock_name=${encodeURIComponent(stockName || "")}`);
+    const data = await resp.json();
+    if (data.ok && data.text) {
+      const lines = data.text.split("\n\n").filter(l => l.trim());
+      const html = lines.map(l => `<p>${escapeHtml(l)}</p>`).join("");
+      const refreshed = data.refreshed_at ? ` (更新于 ${data.refreshed_at.slice(0, 10)})` : "";
+      container.innerHTML = `<div class="competitive-edge-content">${html}<p class="metric-meta" style="margin-top:8px">数据来源：公开信息搜索${refreshed}</p></div>`;
+    } else if (data.pending) {
+      container.innerHTML = '<p class="muted">竞争优势分析搜索中，稍后刷新查看…</p>';
+    } else {
+      container.innerHTML = '<p class="muted">暂无竞争优势数据</p>';
+    }
+  } catch (e) {
+    container.innerHTML = '<p class="muted">竞争优势分析暂不可用</p>';
+  }
+}
+
 // ── Insights Rendering ───────────────────────────────────────────────────────
 
 function renderInsights(structuredInsights) {
@@ -3341,6 +3365,8 @@ async function doSearch(selectedRow = null) {
     // Build and render comprehensive insights from score + profile + valuation
     const structuredInsights = buildStructuredInsights(result, profile, valuationPayload);
     renderInsights(structuredInsights);
+    // Async load competitive edge (cached, non-blocking)
+    loadCompetitiveEdge(market, symbol, result?.stock_name || searchState.selectedStock?.stock_name || symbol);
     searchState.currentStock = {
       market,
       symbol,

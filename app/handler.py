@@ -330,6 +330,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-score-subdiag-explanation":
             self.handle_stock_score_subdiag_explanation(parsed.query)
             return
+        if parsed.path == "/api/competitive-edge":
+            self.handle_competitive_edge(parsed.query)
+            return
         if parsed.path == "/api/data-update-status":
             self.handle_data_update_status(parsed.query)
             return
@@ -1399,6 +1402,22 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "data_update_status_error", "message": str(exc)}},
             )
+
+    def handle_competitive_edge(self, query: str) -> None:
+        """Return cached/searched competitive edge analysis for a stock."""
+        from app.competitive_edge import get_stock_competitive_edge
+        params = parse_qs(query)
+        market = str(params.get("market", [""])[0]).strip().lower()
+        symbol = str(params.get("symbol", [""])[0]).strip()
+        stock_name = str(params.get("stock_name", [""])[0]).strip()
+        if not market or not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing market/symbol"})
+            return
+        try:
+            result = get_stock_competitive_edge(market, symbol, stock_name)
+            self.respond_json(HTTPStatus.OK, {"ok": True, **result})
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
 
     def handle_data_update_plan(self) -> None:
         """Return data freshness + pending task list with descriptions."""
