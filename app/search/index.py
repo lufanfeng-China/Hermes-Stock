@@ -1526,6 +1526,18 @@ def _screener_ind_trend_total(
     return round(total, 4) if has_value else None
 
 
+def _score_divergence_label(abs_score: float | None, trend_score: float | None) -> str:
+    """Return 'positive' (trend improving), 'negative' (trend worsening), or ''."""
+    if abs_score is None or trend_score is None:
+        return ""
+    diff = trend_score - abs_score
+    if diff >= 10:
+        return "positive"
+    if diff <= -10:
+        return "negative"
+    return ""
+
+
 def _screener_market_total_score(score_entry: dict[str, object]) -> float | None:
     sub_indicators = score_entry.get("sub_indicators")
     ind_sub_indicators = score_entry.get("ind_sub_indicators")
@@ -1962,6 +1974,9 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             "industry_total_score": industry_score_lookup.get(score_key, _coerce_float(score_entry.get("ind_total_score"))),
             "industry_absolute_score": industry_abs_lookup.get(score_key),
             "industry_trend_score": industry_trend_lookup.get(score_key),
+            "score_divergence": _score_divergence_label(
+                market_abs_lookup.get(score_key), market_trend_lookup.get(score_key)
+            ),
             "market_total_rank": market_total_rank,
             "market_total_universe_size": market_total_universe_size,
             "industry_total_rank": industry_total_rank,
@@ -2025,6 +2040,7 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         "industry_temperature_label": "industry_temperature_label",
         "classification": "classification",
         "valuation_band": "valuation_band_label",
+        "score_divergence": "score_divergence",
     }
     numeric_field_filters = {
         "min_total_score": ("market_total_score", "min"),
