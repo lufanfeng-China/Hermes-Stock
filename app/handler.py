@@ -469,6 +469,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/watchlist/clear":
             self.handle_watchlist_clear()
             return
+        if parsed.path == "/api/competitive-edge":
+            self.handle_competitive_edge("")
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_HEAD(self) -> None:  # noqa: N802
@@ -1404,8 +1407,29 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             )
 
     def handle_competitive_edge(self, query: str) -> None:
-        """Return cached/searched competitive edge analysis for a stock."""
-        from app.competitive_edge import get_stock_competitive_edge
+        """GET: return cached competitive edge. POST: save new data."""
+        from app.competitive_edge import get_stock_competitive_edge, save_competitive_edge
+
+        if self.command == "POST":
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+                body = json.loads(raw.decode("utf-8"))
+            except Exception:
+                self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid JSON"})
+                return
+            market = str(body.get("market", "")).strip().lower()
+            symbol = str(body.get("symbol", "")).strip()
+            text = str(body.get("text", "")).strip()
+            stock_name = str(body.get("stock_name", "")).strip()
+            if not market or not symbol or not text:
+                self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing market/symbol/text"})
+                return
+            result = save_competitive_edge(market, symbol, text, stock_name)
+            self.respond_json(HTTPStatus.OK, {"ok": True, **result})
+            return
+
+        # GET
         params = parse_qs(query)
         market = str(params.get("market", [""])[0]).strip().lower()
         symbol = str(params.get("symbol", [""])[0]).strip()

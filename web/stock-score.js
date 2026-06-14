@@ -2340,22 +2340,20 @@ function buildSummaryLine(structuredInsights) {
 async function loadCompetitiveEdge(market, symbol, stockName) {
   const container = document.getElementById("competitive-edge-section");
   if (!container) return;
-  container.innerHTML = '<p class="muted">加载竞争优势分析…</p>';
+  container.innerHTML = '<p class="muted" style="font-size:12px">加载竞争优势…</p>';
   try {
     const resp = await fetch(`/api/competitive-edge?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&stock_name=${encodeURIComponent(stockName || "")}`);
     const data = await resp.json();
     if (data.ok && data.text) {
-      const lines = data.text.split("\n\n").filter(l => l.trim());
-      const html = lines.map(l => `<p>${escapeHtml(l)}</p>`).join("");
-      const refreshed = data.refreshed_at ? ` (更新于 ${data.refreshed_at.slice(0, 10)})` : "";
-      container.innerHTML = `<div class="competitive-edge-content">${html}<p class="metric-meta" style="margin-top:8px">数据来源：公开信息搜索${refreshed}</p></div>`;
-    } else if (data.pending) {
-      container.innerHTML = '<p class="muted">竞争优势分析搜索中，稍后刷新查看…</p>';
+      const refreshed = data.refreshed_at ? data.refreshed_at.slice(0, 10) : "";
+      const staleNote = data.stale ? ' <span style="color:var(--warning,orange);font-size:11px">(已过期)</span>' : '';
+      container.innerHTML = `<p style="font-size:13px;line-height:1.7;color:var(--text)">${escapeHtml(data.text)}</p>
+        <p class="metric-meta" style="font-size:11px">竞争优势 · 更新于 ${refreshed}${staleNote}</p>`;
     } else {
-      container.innerHTML = '<p class="muted">暂无竞争优势数据</p>';
+      container.innerHTML = '';
     }
   } catch (e) {
-    container.innerHTML = '<p class="muted">竞争优势分析暂不可用</p>';
+    container.innerHTML = '';
   }
 }
 
