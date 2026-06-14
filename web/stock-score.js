@@ -2866,6 +2866,9 @@ function resetStockScoreDashboardState() {
   resetAiFinancialReport("查询股票后可生成分析");
   setTechPlaceholders();
   resetInsights();
+  // Clear competitive edge section
+  const ce = document.getElementById("competitive-edge-section");
+  if (ce) ce.innerHTML = "";
 }
 
 function toStockIdentity(row) {
