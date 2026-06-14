@@ -2045,6 +2045,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
     numeric_field_filters = {
         "min_total_score": ("market_total_score", "min"),
         "min_ind_total_score": ("industry_total_score", "min"),
+        "min_absolute_score": ("market_absolute_score", "min"),
+        "min_trend_score": ("market_trend_score", "min"),
         "max_market_rank": ("market_total_rank", "max"),
         "max_industry_rank": ("industry_total_rank", "max"),
         "min_primary_percentile": ("primary_percentile", "min"),
@@ -2258,6 +2260,14 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
                 else:
                     filtered = [row for row in filtered if _passes_min_max(row.get(field_name), max_value=threshold)]
             break
+
+    # ── Trend-Absolute gap filter ──
+    gap_threshold = _coerce_float(params.get("min_trend_abs_gap"))
+    if gap_threshold is not None:
+        filtered = [
+            row for row in filtered
+            if (row.get("market_trend_score") or 0) - (row.get("market_absolute_score") or 0) >= gap_threshold
+        ]
 
     filtered.sort(
         key=lambda row: (

@@ -85,9 +85,12 @@
           <legend>评分与排名</legend>
           <div class="filter-row"><label>全市场总分 ≥</label><input name="min_total_score" type="number" step="0.1"></div>
           <div class="filter-row"><label>行业内总分 ≥</label><input name="min_ind_total_score" type="number" step="0.1"></div>
-          <div class="filter-row"><label>评分背离</label><select name="score_divergence"><option value="">不限</option><option value="positive">🟢 趋势好转</option><option value="negative">🔴 趋势变坏</option></select></div>
+          <div class="filter-row"><label>绝对评分 ≥</label><input name="min_absolute_score" type="number" step="0.1"></div>
+          <div class="filter-row"><label>趋势评分 ≥</label><input name="min_trend_score" type="number" step="0.1"></div>
+          <div class="filter-row"><label>趋势−绝对 ≥</label><input name="min_trend_abs_gap" type="number" step="0.1" placeholder="正数=趋势好转"></div>
           <div class="filter-row"><label>全市场排名 ≤</label><input name="max_market_rank" type="number" step="1"></div>
           <div class="filter-row"><label>二级行业排名 ≤</label><input name="max_industry_rank" type="number" step="1"></div>
+          <div class="filter-row"><label>评分背离</label><select name="score_divergence"><option value="">不限</option><option value="positive">🟢 趋势好转</option><option value="negative">🔴 趋势变坏</option></select></div>
         </fieldset>
 
         <!-- ── 行业和概念 ── -->
@@ -245,6 +248,6 @@
   </main>
 
   <script src="/nav.js"></script>
-  <script type="module" src="/stock-screener.js?v=20260614-div"></script>
+  <script type="module" src="/stock-screener.js?v=20260614-gap"></script>
 </body>
 </html>
