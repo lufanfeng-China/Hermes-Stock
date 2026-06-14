@@ -5495,7 +5495,12 @@ def build_stock_score_industry_total_peer_benchmark(market, symbol):
             member_valuation_lookup[(row_market, row_symbol)] = valuation_row
     rows: list[dict[str, object]] = []
 
+    # Pre-compute trend scores for blended industry total
+    trend_payload = _compute_trend_scores_from_snapshot(snap)
+    ind_trend_sub = trend_payload.get("ind_sub_indicators", {})
+
     for peer_market, peer_symbol, entry in peer_entries:
+        key_str = f"{peer_market}:{peer_symbol}"
         ind_dim_scores = entry.get("ind_dim_scores", {})
         valuation_inputs = member_valuation_lookup.get((peer_market, peer_symbol)) or {}
         if not valuation_inputs:
@@ -5508,6 +5513,20 @@ def build_stock_score_industry_total_peer_benchmark(market, symbol):
                 continue
             dimension_scores[dim] = round(raw_score / weight, 4)
 
+        # Blended industry total
+        ind_abs = _safe_float(entry.get("ind_total_score")) or 0.0
+        ind_t_dim = {}
+        for sub_key, dim, _field, _higher_better, _zero_penalty in _SUB_DEFS:
+            ind_t_dim.setdefault(dim, []).append(
+                float(ind_trend_sub.get(key_str, {}).get(sub_key, 0.0) or 0.0)
+            )
+        ind_t_w = {}
+        for dim, vals in ind_t_dim.items():
+            avg = sum(vals) / len(vals) if vals else 0.0
+            ind_t_w[dim] = avg * _DIM_WEIGHTS.get(dim, 0.0)
+        ind_t = round(sum(ind_t_w.values()), 4)
+        blended = round(ind_abs * 0.6 + ind_t * 0.4, 2)
+
         rows.append(
             {
                 "stock_name": name_lookup.get((peer_market, peer_symbol), peer_symbol),
@@ -5518,7 +5537,7 @@ def build_stock_score_industry_total_peer_benchmark(market, symbol):
                 "free_float_market_cap": _safe_float(valuation_inputs.get("free_float_market_cap")),
                 "ps_ttm": _safe_float(valuation_inputs.get("ps_ttm")),
                 "pe_ttm": _safe_float(valuation_inputs.get("pe_ttm")),
-                "total_score": _safe_float(entry.get("ind_total_score")),
+                "total_score": blended,
                 "report_date": str(entry.get("report_date") or ""),
                 "is_current_stock": peer_market == market and peer_symbol == symbol,
                 "dimension_scores": dimension_scores,
