@@ -2335,6 +2335,25 @@ function buildSummaryLine(structuredInsights) {
   return `${posPart}${negPart ? '，' + negPart + '。' : '。'}${verdict}`;
 }
 
+// ── Competitive Edge (async, cached, full-width) ─────────────────────────────
+
+async function loadCompetitiveEdge(market, symbol, stockName) {
+  const card = document.getElementById("competitive-edge-card");
+  const body = document.getElementById("competitive-edge-body");
+  if (!card || !body) return;
+  try {
+    const resp = await fetch(`/api/competitive-edge?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&stock_name=${encodeURIComponent(stockName || "")}`);
+    const data = await resp.json();
+    if (data.ok && data.text) {
+      const refreshed = data.refreshed_at ? data.refreshed_at.slice(0, 10) : "";
+      const staleNote = data.stale ? ' <span style="color:var(--warning,orange);font-size:11px">(已过期)</span>' : '';
+      body.innerHTML = `<p style="font-size:13px;line-height:1.8;color:var(--text)">${escapeHtml(data.text)}</p>
+        <p class="metric-meta" style="font-size:11px;margin-top:8px">更新于 ${refreshed}${staleNote}</p>`;
+      card.style.display = "";
+    }
+  } catch (e) { /* silent */ }
+}
+
 // ── Insights Rendering ───────────────────────────────────────────────────────
 
 function renderInsights(structuredInsights) {
@@ -2844,6 +2863,9 @@ function resetStockScoreDashboardState() {
   resetAiFinancialReport("查询股票后可生成分析");
   setTechPlaceholders();
   resetInsights();
+  // Hide competitive edge card
+  const ceCard = document.getElementById("competitive-edge-card");
+  if (ceCard) ceCard.style.display = "none";
 }
 
 function toStockIdentity(row) {
@@ -3341,6 +3363,8 @@ async function doSearch(selectedRow = null) {
     // Build and render comprehensive insights from score + profile + valuation
     const structuredInsights = buildStructuredInsights(result, profile, valuationPayload);
     renderInsights(structuredInsights);
+    // Async load competitive edge (cached, non-blocking, full-width)
+    loadCompetitiveEdge(market, symbol, result?.stock_name || searchState.selectedStock?.stock_name || symbol);
     searchState.currentStock = {
       market,
       symbol,
