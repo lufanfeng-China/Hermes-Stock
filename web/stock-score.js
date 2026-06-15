@@ -2352,8 +2352,10 @@ async function loadCompetitiveEdge(market, symbol, stockName) {
       body.innerHTML = `<p style="font-size:13px;line-height:1.8;color:var(--text)">${escapeHtml(data.text)}</p>
         <p class="metric-meta" style="font-size:11px;margin-top:8px">更新于 ${refreshed}${staleNote}</p>`;
       card.style.display = "";
+    } else {
+      card.style.display = "none";
     }
-  } catch (e) { /* silent */ }
+  } catch (e) { card.style.display = "none"; }
 }
 
 // ── Insights Rendering ───────────────────────────────────────────────────────
