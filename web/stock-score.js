@@ -2353,7 +2353,31 @@ async function loadCompetitiveEdge(market, symbol, stockName) {
         <p class="metric-meta" style="font-size:11px;margin-top:8px">更新于 ${refreshed}${staleNote}</p>`;
       card.style.display = "";
     } else {
-      card.style.display = "none";
+      // No cache — show self-service input
+      body.innerHTML = `<textarea id="ce-input" style="width:100%;min-height:60px;font-size:13px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px" placeholder="粘贴竞争优势信息…"></textarea>
+        <button id="ce-save-btn" style="margin-top:6px;padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer">保存</button>
+        <span id="ce-msg" style="font-size:11px;color:var(--muted);margin-left:8px"></span>`;
+      card.style.display = "";
+      document.getElementById("ce-save-btn").onclick = async () => {
+        const text = document.getElementById("ce-input").value.trim();
+        if (!text) return;
+        const msg = document.getElementById("ce-msg");
+        msg.textContent = "保存中…";
+        try {
+          const r = await fetch("/api/competitive-edge", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({market, symbol, stock_name: stockName, text}),
+          });
+          const rd = await r.json();
+          if (rd.ok) {
+            body.innerHTML = `<p style="font-size:13px;line-height:1.8;color:var(--text)">${escapeHtml(text)}</p>
+              <p class="metric-meta" style="font-size:11px;margin-top:8px">更新于 ${rd.refreshed_at.slice(0,10)}</p>`;
+          } else {
+            msg.textContent = "保存失败";
+          }
+        } catch (e) { msg.textContent = "网络错误"; }
+      };
     }
   } catch (e) { card.style.display = "none"; }
 }
