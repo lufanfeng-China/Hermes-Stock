@@ -2341,6 +2341,8 @@ async function loadCompetitiveEdge(market, symbol, stockName) {
   const card = document.getElementById("competitive-edge-card");
   const body = document.getElementById("competitive-edge-body");
   if (!card || !body) return;
+  card.style.display = "";
+  body.innerHTML = '<p class="muted">加载中…</p>';
   try {
     const resp = await fetch(`/api/competitive-edge?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&stock_name=${encodeURIComponent(stockName || "")}`);
     const data = await resp.json();
