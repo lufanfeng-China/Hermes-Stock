@@ -1431,11 +1431,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         market = str(params.get("market", [""])[0]).strip().lower()
         symbol = str(params.get("symbol", [""])[0]).strip()
         stock_name = str(params.get("stock_name", [""])[0]).strip()
+        auto_search = str(params.get("auto_search", [""])[0]).strip().lower() in ("1", "true", "yes")
         if not market or not symbol:
             self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing market/symbol"})
             return
         try:
-            result = get_stock_competitive_edge(market, symbol, stock_name)
+            result = get_stock_competitive_edge(market, symbol, stock_name, auto_search=auto_search)
             self.respond_json(HTTPStatus.OK, {"ok": True, **result})
         except Exception as exc:
             self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
