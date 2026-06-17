@@ -1136,7 +1136,20 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
 
             stocks_out.append(row)
 
-        self.respond_json(HTTPStatus.OK, {"stocks": stocks_out})
+        # Sort by added_at descending (most recent first)
+        stocks_out.sort(key=lambda r: str(r.get("added_at", "") or ""), reverse=True)
+
+        # Compute overall portfolio return (equal-weighted)
+        overall_return = None
+        valid_returns = [r.get("return_since_add_pct") for r in stocks_out
+                         if r.get("return_since_add_pct") is not None]
+        if valid_returns:
+            overall_return = round(sum(valid_returns) / len(valid_returns), 2)
+
+        self.respond_json(HTTPStatus.OK, {
+            "stocks": stocks_out,
+            "overall_return_pct": overall_return,
+        })
 
     def handle_watchlist_add(self) -> None:
         """Add stocks to watchlist. Body: {stocks: [{market, symbol}, ...], backtest_date?: 'YYYY-MM-DD'}

@@ -187,6 +187,22 @@ function bindRowEvents() {
   });
 }
 
+// ── Overall Return ───────────────────────────────────────────────────────────
+
+function renderOverall(overall_pct, count) {
+  const el = document.getElementById('wl-overall');
+  if (!el) return;
+  if (overall_pct == null || count === 0) {
+    el.style.display = 'none';
+    return;
+  }
+  const sign = overall_pct >= 0 ? '+' : '';
+  const color = overall_pct >= 0 ? 'var(--profit,#4ecca3)' : 'var(--loss,#ff6b6b)';
+  const icon = overall_pct >= 0 ? '📈' : '📉';
+  el.style.display = 'block';
+  el.innerHTML = `${icon} 组合总体收益 (${count}只, 等权): <strong style=\"color:${color};font-size:14px\">${sign}${overall_pct.toFixed(1)}%</strong>`;
+}
+
 // ── API ─────────────────────────────────────────────────────────────────────
 
 async function loadWatchlist() {
@@ -210,6 +226,7 @@ async function loadWatchlist() {
     } else {
       content.style.display = 'block';
       renderTable(watchlistData);
+      renderOverall(data.overall_return_pct, watchlistData.length);
     }
   } catch (err) {
     loading.style.display = 'none';
