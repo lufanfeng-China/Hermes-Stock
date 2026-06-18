@@ -196,7 +196,7 @@ function renderOverall(overall_pct, count) {
   const sign = overall_pct >= 0 ? '+' : '';
   const color = overall_pct >= 0 ? 'var(--profit,#4ecca3)' : 'var(--loss,#ff6b6b)';
   const icon = overall_pct >= 0 ? '📈' : '📉';
-  el.style.display = 'block';
+  el.style.display = 'inline-block';
   el.innerHTML = `${icon} 组合总体收益 (${count}只, 等权): <strong style=\"color:${color};font-size:14px\">${sign}${overall_pct.toFixed(1)}%</strong>`;
 }
 
@@ -211,7 +211,7 @@ function renderOverallFinal(final_pct, count) {
   const color = final_pct >= 0 ? 'var(--profit,#4ecca3)' : 'var(--loss,#ff6b6b)';
   const icon = '🏁';
   el.style.display = 'inline-block';
-  el.style.marginLeft = '20px';
+  el.style.marginLeft = '16px';
   el.innerHTML = `${icon} 组合最终收益 (${count}只): <strong style=\"color:${color};font-size:14px\">${sign}${final_pct.toFixed(1)}%</strong>`;
 }
 
