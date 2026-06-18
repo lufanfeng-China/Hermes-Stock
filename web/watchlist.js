@@ -89,6 +89,11 @@ function renderTable(stocks) {
     const conclusion = s.tech_conclusion_label || '—';
     const concColor = s.tech_conclusion_color || trendColor(conclusion);
 
+    const status = s.status || '—';
+    const statusIcon = status === '结束' ? '🔴' : status === '持有' ? '🟢' : '';
+    const finalRet = s.final_return_pct != null ? fmtPct(s.final_return_pct) : (status === '结束' ? '—' : '—');
+    const finalRetColor = s.final_return_pct != null ? pctColor(s.final_return_pct) : 'var(--muted)';
+
     const price = s.current_price != null ? Number(s.current_price).toFixed(2) : '—';
     const ma10d = s.ma10_dist_pct != null ? (s.ma10_dist_pct>=0?'+':'')+s.ma10_dist_pct.toFixed(1)+'%' : '—';
     const ma10c = s.ma10_dist_pct != null ? pctColor(s.ma10_dist_pct) : 'var(--muted)';
@@ -112,6 +117,8 @@ function renderTable(stocks) {
       <td>${esc(ind)}</td>
       <td style=\"color:${trendColor(trend)}\">${esc(trend)}</td>
       <td style=\"color:${trendColor(shortTrend)}\">${esc(shortTrend)}${shortTrendSwitch !== '—' ? ' ' + shortTrendSwitch : ''}</td>
+      <td>${statusIcon} ${esc(status)}</td>
+      <td class=\"num\" style=\"color:${finalRetColor}\">${finalRet}</td>
       <td style=\"color:${concColor};font-weight:600\" title=\"${esc(s.tech_conclusion_reason || '')}\">${esc(conclusion)}</td>
       <td><button class=\"wl-remove-btn\" data-idx=\"${i}\" type=\"button\">✕</button></td>
     </tr>`;

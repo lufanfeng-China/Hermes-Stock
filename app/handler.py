@@ -1091,6 +1091,26 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         ma10 = sum(closes[-10:]) / 10
                         row["ma10_dist_pct"] = round((closes[-1] - ma10) / ma10 * 100, 2) if ma10 != 0 else None
 
+                        # MA20 break detection: status + final return
+                        add_date = (row.get("added_at", "") or "")[:10]
+                        if add_price and add_price > 0 and add_date:
+                            daily_dates_list = [str(d).split("T")[0] for d in daily.index]
+                            start_idx = None
+                            for j, d in enumerate(daily_dates_list):
+                                if d >= add_date:
+                                    start_idx = j
+                                    break
+                            if start_idx is not None:
+                                row["status"] = "持有"
+                                for j in range(max(start_idx, 19), len(closes)):
+                                    ma20 = sum(closes[j-19:j+1]) / 20
+                                    if closes[j] < ma20:
+                                        sell_price = float(closes[j])
+                                        row["status"] = "结束"
+                                        row["sell_price"] = round(sell_price, 2)
+                                        row["final_return_pct"] = round((sell_price - add_price) / add_price * 100, 2)
+                                        break
+
                         # Candlestick pattern detection
                         try:
                             from app.candlestick_patterns import detect_latest_pattern
