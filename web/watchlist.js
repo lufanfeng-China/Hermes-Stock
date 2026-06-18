@@ -91,8 +91,8 @@ function renderTable(stocks) {
 
     const status = s.status || '—';
     const statusIcon = status === '结束' ? '🔴' : status === '持有' ? '🟢' : '';
-    const finalRet = s.final_return_pct != null ? fmtPct(s.final_return_pct) : (status === '结束' ? '—' : '—');
-    const finalRetColor = s.final_return_pct != null ? pctColor(s.final_return_pct) : 'var(--muted)';
+    const finalRet = s.final_return_pct != null ? fmtPct(s.final_return_pct) : (status === '持有' && s.return_since_add_pct != null ? fmtPct(s.return_since_add_pct) : '—');
+    const finalRetColor = s.final_return_pct != null ? pctColor(s.final_return_pct) : (status === '持有' && s.return_since_add_pct != null ? pctColor(s.return_since_add_pct) : 'var(--muted)');
 
     const price = s.current_price != null ? Number(s.current_price).toFixed(2) : '—';
     const ma10d = s.ma10_dist_pct != null ? (s.ma10_dist_pct>=0?'+':'')+s.ma10_dist_pct.toFixed(1)+'%' : '—';
@@ -200,6 +200,21 @@ function renderOverall(overall_pct, count) {
   el.innerHTML = `${icon} 组合总体收益 (${count}只, 等权): <strong style=\"color:${color};font-size:14px\">${sign}${overall_pct.toFixed(1)}%</strong>`;
 }
 
+function renderOverallFinal(final_pct, count) {
+  const el = document.getElementById('wl-final-overall');
+  if (!el) return;
+  if (final_pct == null || count === 0) {
+    el.style.display = 'none';
+    return;
+  }
+  const sign = final_pct >= 0 ? '+' : '';
+  const color = final_pct >= 0 ? 'var(--profit,#4ecca3)' : 'var(--loss,#ff6b6b)';
+  const icon = '🏁';
+  el.style.display = 'inline-block';
+  el.style.marginLeft = '20px';
+  el.innerHTML = `${icon} 组合最终收益 (${count}只): <strong style=\"color:${color};font-size:14px\">${sign}${final_pct.toFixed(1)}%</strong>`;
+}
+
 // ── API ─────────────────────────────────────────────────────────────────────
 
 async function loadWatchlist() {
@@ -224,6 +239,14 @@ async function loadWatchlist() {
       content.style.display = 'block';
       renderTable(watchlistData);
       renderOverall(data.overall_return_pct, watchlistData.length);
+      // 组合最终收益：结束=MA20跌破价收益，持有=当前收益
+      const finalReturns = watchlistData.map(s => {
+        if (s.final_return_pct != null) return s.final_return_pct;
+        if (s.status === '持有' && s.return_since_add_pct != null) return s.return_since_add_pct;
+        return null;
+      }).filter(v => v != null);
+      const finalOverall = finalReturns.length > 0 ? finalReturns.reduce((a,b)=>a+b,0)/finalReturns.length : null;
+      renderOverallFinal(finalOverall, finalReturns.length);
     }
   } catch (err) {
     loading.style.display = 'none';
