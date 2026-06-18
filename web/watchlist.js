@@ -68,10 +68,6 @@ function renderTable(stocks) {
   tbody.innerHTML = stocks.map((s, i) => {
     const name = s.stock_name || s.symbol;
     const marketSymbol = `${String(s.market || '').toUpperCase()}:${s.symbol}`;
-    const ms = fmtScore(s.market_total_score);
-    const mr = fmtRank(s.market_total_rank, s.market_total_universe_size);
-    const is_ = fmtScore(s.industry_total_score);
-    const ir = fmtRank(s.industry_total_rank, s.industry_total_universe_size);
     const ind = s.industry_level_2 || '—';
 
     const trend = s.tech_trend_label || '—';
@@ -89,8 +85,6 @@ function renderTable(stocks) {
       }
       return '—';
     })();
-    const momentum = s.tech_momentum_label || '—';
-    const volume = s.tech_volume_label || '—';
     const buyTrigger = s.tech_buy_trigger_label ? '✅ ' + esc(s.tech_buy_trigger_label) : '❌ 未触发';
     const conclusion = s.tech_conclusion_label || '—';
     const concColor = s.tech_conclusion_color || trendColor(conclusion);
@@ -115,13 +109,9 @@ function renderTable(stocks) {
       <td class=\"num\" style=\"color:${maxRetColor}\">${maxRet}</td>
       <td class=\"num\" style=\"color:${maxLossColor}\">${maxLoss}</td>
       <td>${addedDate}</td>
-      <td class=\"num\"><span class=\"wl-score\">${ms}</span> ${mr}</td>
-      <td class=\"num\"><span class=\"wl-score\">${is_}</span> ${ir}</td>
       <td>${esc(ind)}</td>
       <td style=\"color:${trendColor(trend)}\">${esc(trend)}</td>
       <td style=\"color:${trendColor(shortTrend)}\">${esc(shortTrend)}${shortTrendSwitch !== '—' ? ' ' + shortTrendSwitch : ''}</td>
-      <td style=\"color:${trendColor(momentum)}\">${esc(momentum)}</td>
-      <td style=\"color:${trendColor(volume)}\">${esc(volume)}</td>
       <td style=\"color:${concColor};font-weight:600\" title=\"${esc(s.tech_conclusion_reason || '')}\">${esc(conclusion)}</td>
       <td><button class=\"wl-remove-btn\" data-idx=\"${i}\" type=\"button\">✕</button></td>
     </tr>`;
