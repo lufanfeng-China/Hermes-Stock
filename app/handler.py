@@ -783,6 +783,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                                 row["ma10_dist_pct"] = round((closes[-1] - ma10) / ma10 * 100, 2) if ma10 != 0 else None
                             else:
                                 row["ma10_dist_pct"] = None
+                            # MA30 slope: daily rate of change of MA30 line (uses as_of truncated data)
+                            if n >= 31:
+                                ma30_today = sum(closes[-30:]) / 30
+                                ma30_yesterday = sum(closes[-31:-1]) / 30
+                                if ma30_yesterday != 0:
+                                    row["ma30_slope_pct"] = round((ma30_today - ma30_yesterday) / ma30_yesterday * 100, 2)
                         else:
                             row["swing_low_price"] = None
                             row["ma10_dist_pct"] = None
