@@ -1091,6 +1091,13 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                         ma10 = sum(closes[-10:]) / 10
                         row["ma10_dist_pct"] = round((closes[-1] - ma10) / ma10 * 100, 2) if ma10 != 0 else None
 
+                        # MA30 slope: daily rate of change of MA30 line
+                        if len(closes) >= 31:
+                            ma30_today = sum(closes[-30:]) / 30
+                            ma30_yesterday = sum(closes[-31:-1]) / 30
+                            if ma30_yesterday != 0:
+                                row["ma30_slope_pct"] = round((ma30_today - ma30_yesterday) / ma30_yesterday * 100, 2)
+
                         # MA20 break detection: status + final return
                         add_date = (row.get("added_at", "") or "")[:10]
                         if add_price and add_price > 0 and add_date:

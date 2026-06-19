@@ -97,6 +97,8 @@ function renderTable(stocks) {
     const price = s.current_price != null ? Number(s.current_price).toFixed(2) : '—';
     const ma10d = s.ma10_dist_pct != null ? (s.ma10_dist_pct>=0?'+':'')+s.ma10_dist_pct.toFixed(1)+'%' : '—';
     const ma10c = s.ma10_dist_pct != null ? pctColor(s.ma10_dist_pct) : 'var(--muted)';
+    const ma30s = s.ma30_slope_pct != null ? (s.ma30_slope_pct>=0?'+':'')+s.ma30_slope_pct.toFixed(2)+'%' : '—';
+    const ma30sc = s.ma30_slope_pct != null ? pctColor(s.ma30_slope_pct) : 'var(--muted)';
     const ret = s.return_since_add_pct != null ? fmtPct(s.return_since_add_pct) : '—';
     const retColor = s.return_since_add_pct != null ? pctColor(s.return_since_add_pct) : 'var(--muted)';
     const maxRet = s.max_return_pct != null ? fmtPct(s.max_return_pct) : "—";
@@ -110,6 +112,7 @@ function renderTable(stocks) {
       <td class=\"wl-name-cell\"><span class=\"wl-stock-name\">${esc(name)}</span><br><span class=\"wl-stock-symbol\">${esc(marketSymbol)}</span></td>
       <td class=\"num wl-price-cell\" title=\"点击查看K线\">${price}</td>
       <td class=\"num\" style=\"color:${ma10c}\">${ma10d}</td>
+      <td class=\"num\" style=\"color:${ma30sc}\">${ma30s}</td>
       <td class=\"num\" style=\"color:${retColor}\">${ret}</td>
       <td class=\"num\" style=\"color:${maxRetColor}\">${maxRet}</td>
       <td class=\"num\" style=\"color:${maxLossColor}\">${maxLoss}</td>
