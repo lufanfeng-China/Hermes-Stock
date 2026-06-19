@@ -236,7 +236,7 @@ function renderScreenerLoadingState() {
   currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
   countEl.textContent = '…';
   pageInfoEl.textContent = '正在筛选...';
-  tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
 }
 
 async function runScreener(page = 1) {
@@ -279,13 +279,13 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row, idx) => {
@@ -297,6 +297,7 @@ function renderScreenerRows(rows) {
       <td class="num">${formatNumber(row.current_price, 2)}</td>
       <td class="num" style="color:${(row.ma10_dist_pct||0)>=0?'var(--up)':'var(--down)'}">${row.ma10_dist_pct != null ? (row.ma10_dist_pct>=0?'+':'')+row.ma10_dist_pct.toFixed(1)+'%' : '-'}</td>
       <td class="num" style="color:${(row.ma30_slope_pct||0)>=0?'var(--up)':'var(--down)'}">${row.ma30_slope_pct != null ? (row.ma30_slope_pct>=0?'+':'')+row.ma30_slope_pct.toFixed(2)+'%' : '-'}</td>
+      <td class="num" style="color:${(row.ma10_slope_pct||0)>=0?'var(--up)':'var(--down)'}">${row.ma10_slope_pct != null ? (row.ma10_slope_pct>=0?'+':'')+row.ma10_slope_pct.toFixed(2)+'%' : '-'}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
       <td>${trendSignal(row.tech_trend, row.tech_trend_label)}</td>
       <td>${trendSignal(row.tech_short_trend, row.tech_short_trend_label)}</td>
