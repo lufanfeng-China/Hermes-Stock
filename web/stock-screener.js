@@ -22,6 +22,10 @@ const STRATEGY_PRESETS = {
     strategy: 'ma_pullback',
     description: '多头趋势(MA20>MA60+RPS20>60)+回踩MA20(回调5-15%)+缩量止跌(阳线+量能回暖+下影线), 按信号评分排序',
   },
+  immortal_trend: {
+    strategy: 'immortal_trend',
+    description: 'EMA6上穿EMA-DEMA18(金叉) + 收盘价>EMA108(多头保护) + RPS总分>360',
+  },
 };
 let currentPage = 1;
 let currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };

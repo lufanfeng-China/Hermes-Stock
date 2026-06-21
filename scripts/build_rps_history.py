@@ -38,7 +38,7 @@ def main() -> None:
     args = parser.parse_args()
 
     reader = Reader.factory(market="std", tdxdir=args.tdxdir)
-    ndays = max(1, min(args.ndays, 250))
+    ndays = max(1, args.ndays)
 
     # Step 1: Load close history for ALL stocks
     print(f"[1/3] Loading daily data for all stocks...", flush=True)

@@ -29,6 +29,7 @@ STRATEGY_MA_CROSS = "ma_cross"
 STRATEGY_BLOWUP_STALL = "blowup_stall"
 STRATEGY_BLOWUP_BREAK = "blowup_break"
 STRATEGY_MA_PULLBACK = "ma_pullback"
+STRATEGY_IMMORTAL_TREND = "immortal_trend"
 STRATEGY_METADATA = {
     STRATEGY_FIRST: {
         "label": "RPS首次",
@@ -44,6 +45,9 @@ STRATEGY_METADATA = {
     },
     STRATEGY_MA_PULLBACK: {
         "label": "均线回踩",
+    },
+    STRATEGY_IMMORTAL_TREND: {
+        "label": "神仙趋势",
     },
 }
 
@@ -695,6 +699,94 @@ def build_blowup_stall_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, 
     return results
 
 
+def build_immortal_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """神仙趋势：EMA6上穿EMA-DEMA18 + 收盘价>EMA108多头保护 + RPS>360。
+    
+    H1 = EMA(CLOSE,6); H2 = EMA(H1,18); H3 = EMA(CLOSE,108)
+    信号: cross(H1,H2) 且 close > H3 且 RPS总分>360
+    """
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    rps_rows = load_rps_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[dict[str, Any]] = []
+
+    for row in rps_rows:
+        market_val = str(row.get("market", "")).strip().lower()
+        symbol_val = str(row.get("symbol", "")).strip()
+        if not market_val or not symbol_val:
+            continue
+
+        # ── RPS总分 > 360 ──
+        rps20 = _coerce_float(row.get("rps_20"))
+        rps50 = _coerce_float(row.get("rps_50"))
+        rps120 = _coerce_float(row.get("rps_120"))
+        rps250 = _coerce_float(row.get("rps_250"))
+        if None in (rps20, rps50, rps120, rps250):
+            continue
+        rps_total = rps20 + rps50 + rps120 + rps250
+        if rps_total <= 360:
+            continue
+
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        closes = daily["close"].astype(float)
+        if len(closes) < 110:
+            continue
+
+        # EMA(CLOSE, 6)
+        h1 = closes.ewm(span=6, adjust=False).mean()
+        # EMA(H1, 18)
+        h2 = h1.ewm(span=18, adjust=False).mean()
+        # EMA(CLOSE, 108)
+        h3 = closes.ewm(span=108, adjust=False).mean()
+
+        h1_t = h1.iloc[-1]
+        h1_y = h1.iloc[-2]
+        h2_t = h2.iloc[-1]
+        h2_y = h2.iloc[-2]
+        h3_t = h3.iloc[-1]
+        close_t = closes.iloc[-1]
+
+        # CROSS(H1, H2): H1 > H2 today AND H1 <= H2 yesterday
+        cross = bool(h1_t > h2_t and h1_y <= h2_y)
+        # 多头趋势保护: close > EMA108
+        above_h3 = bool(close_t > h3_t)
+
+        passed = cross and above_h3
+
+        results.append({
+            "trading_day": row.get("trading_day"),
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_IMMORTAL_TREND,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_IMMORTAL_TREND]["label"],
+            "passed": passed,
+            "conditions": {
+                "rps_total": round(rps_total, 2),
+                "rps20": round(rps20, 2),
+                "rps50": round(rps50, 2),
+                "rps120": round(rps120, 2),
+                "rps250": round(rps250, 2),
+                "h1": round(float(h1_t), 2),
+                "h2": round(float(h2_t), 2),
+                "h3": round(float(h3_t), 2),
+                "close": round(float(close_t), 2),
+                "cross_h1_h2": cross,
+                "above_h3": above_h3,
+            },
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
 def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     existing_rows: list[dict[str, Any]] = []
     if output.exists():
@@ -782,6 +874,8 @@ def main() -> None:
             rows = build_blowup_break_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
         elif args.strategy == STRATEGY_MA_PULLBACK:
             rows = build_ma_pullback_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_IMMORTAL_TREND:
+            rows = build_immortal_trend_rows(tdxdir=args.tdxdir)
         else:
             rows = build_ma_cross_rows(tdxdir=args.tdxdir)
     finally:
