@@ -3,7 +3,7 @@ import json
 import subprocess
 
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
-TONGDAXIN_DIR = "/mnt/c/new_tdx64"
+TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_SYMBOL = "601600"
 DEFAULT_HISTORY_LIMIT = 120
 

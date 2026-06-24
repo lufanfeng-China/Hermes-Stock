@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPS首次策略 最终回测结论 — 60日窗口, RPS≥365
+RPS首次策略 最终回测结论 — 60日窗口, RPS≥360
 输出: 每月信号数 + 24月退出 + 一直持有
 """
 import sys, json
@@ -9,7 +9,7 @@ from collections import defaultdict
 
 PROJECT = Path('/home/lufanfeng/Project-Hermes-Stock')
 DS = PROJECT / 'data' / 'derived' / 'datasets' / 'final'
-TDX = '/mnt/c/new_tdx64'
+TDX = '/home/lufanfeng/tdx_data'
 
 sys.path.insert(0, str(PROJECT))
 from mootdx.reader import Reader
@@ -17,7 +17,7 @@ from mootdx.quotes import Quotes
 reader = Reader.factory(market='std', tdxdir=TDX)
 quotes = Quotes.factory(market='std')
 
-RPS_MIN = 365
+RPS_MIN = 360
 HOLDING_24M = 500
 
 # ── Load signals with 60-day window dedup ──
@@ -190,7 +190,7 @@ def main():
     print()
     print("=" * 95)
     print("  RPS首次策略 最终回测结论")
-    print("  规则: RPS≥365 | 60日窗口去重 | T+1开盘买入 | 无止损")
+    print("  规则: RPS≥360 | 60日窗口去重 | T+1开盘买入 | 无止损")
     print("=" * 95)
     
     # Sort all months from 2023 to 2026
@@ -273,7 +273,7 @@ def main():
     print(f"  {'持有胜率':<10} {'':>6} | {'':>12} {wrh:>12}")
     
     # Summary stats
-    print(f"\n  【核心统计】(2023-01 ~ 2026-06, RPS≥365, 60日窗口)")
+    print(f"\n  【核心统计】(2023-01 ~ 2026-06, RPS≥360, 60日窗口)")
     print(f"  {'─'*60}")
     print(f"  总信号数:           {total_signals} 笔")
     print(f"  月均信号:           {total_signals/42:.1f} 笔 ({len(year_months)}个有信号月/42个月)")

@@ -7,13 +7,13 @@ from pathlib import Path
 from collections import defaultdict
 
 PROJECT = Path('/home/lufanfeng/Project-Hermes-Stock')
-TDX_LDAY = '/mnt/c/new_tdx64/vipdoc/sh/lday'
-TDX_SZ_LDAY = '/mnt/c/new_tdx64/vipdoc/sz/lday'
+TDX_LDAY = '/home/lufanfeng/tdx_data/vipdoc/sh/lday'
+TDX_SZ_LDAY = '/home/lufanfeng/tdx_data/vipdoc/sz/lday'
 OUTPUT = PROJECT / 'data/derived/datasets/final/dataset_stock_rps_history.json'
 
 sys.path.insert(0, str(PROJECT))
 from mootdx.reader import Reader
-reader = Reader.factory(market='std', tdxdir='/mnt/c/new_tdx64')
+reader = Reader.factory(market='std', tdxdir='/home/lufanfeng/tdx_data')
 
 # ── Step 1: discover all stocks from TDX .day files ──
 print("[1/4] Discovering stocks from TDX...", flush=True)

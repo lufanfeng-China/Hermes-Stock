@@ -28,9 +28,9 @@ from app.tdx.parsers import (  # noqa: E402
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--trading-day", default=today_trading_day())
-    parser.add_argument("--tdxhy-path", default="/mnt/c/new_tdx64/T0002/hq_cache/tdxhy.cfg")
-    parser.add_argument("--tdxzs3-path", default="/mnt/c/new_tdx64/T0002/hq_cache/tdxzs3.cfg")
-    parser.add_argument("--tdxzs-path", default="/mnt/c/new_tdx64/T0002/hq_cache/tdxzs.cfg")
+    parser.add_argument("--tdxhy-path", default="/home/lufanfeng/tdx_data/T0002/hq_cache/tdxhy.cfg")
+    parser.add_argument("--tdxzs3-path", default="/home/lufanfeng/tdx_data/T0002/hq_cache/tdxzs3.cfg")
+    parser.add_argument("--tdxzs-path", default="/home/lufanfeng/tdx_data/T0002/hq_cache/tdxzs.cfg")
     parser.add_argument("--output-dir", default="data/derived/datasets/final")
     parser.add_argument("--generated-at", default=None)
     parser.add_argument("--data-cutoff-time", default=None)
@@ -51,7 +51,7 @@ def main() -> int:
         trading_day=args.trading_day,
         generated_at=generated_at,
         data_cutoff_time=data_cutoff_time,
-        source_file=DEFAULT_INDUSTRY_SOURCE_FILE if str(args.tdxhy_path).startswith("/mnt/c/new_tdx64/") else str(args.tdxhy_path),
+        source_file=DEFAULT_INDUSTRY_SOURCE_FILE if str(args.tdxhy_path).startswith("/home/lufanfeng/tdx_data/") else str(args.tdxhy_path),
     )
 
     output_dir = Path(args.output_dir)

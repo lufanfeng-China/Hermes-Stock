@@ -9,7 +9,7 @@ from pathlib import Path
 from collections import defaultdict
 
 PROJECT = Path('/home/lufanfeng/Project-Hermes-Stock')
-TDX = '/mnt/c/new_tdx64'
+TDX = '/home/lufanfeng/tdx_data'
 
 sys.path.insert(0, str(PROJECT))
 from mootdx.reader import Reader

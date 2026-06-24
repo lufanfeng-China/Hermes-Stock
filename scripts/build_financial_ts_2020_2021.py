@@ -5,7 +5,7 @@ import pandas as pd
 from mootdx.financial.financial import FinancialReader
 
 TS_DIR = Path("/home/lufanfeng/Project-Hermes-Stock/data/derived/financial_ts/by_quarter")
-CW_DIR = Path("/mnt/c/new_tdx64/vipdoc/cw")
+CW_DIR = Path("/home/lufanfeng/tdx_data/vipdoc/cw")
 
 def period_from_date(rd):
     s = str(int(rd)).zfill(8)

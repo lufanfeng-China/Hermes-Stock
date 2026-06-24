@@ -24,14 +24,14 @@ from app.tdx.parsers import (
 
 
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
-TONGDAXIN_DIR = "/mnt/c/new_tdx64"
+TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 TARGET_MARKET = "sh"
 TARGET_SYMBOL = "601600"
 REAL_FEATURE_DATASET_NAME = "features_intraday_volume_windows"
-TDXHY_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxhy.cfg")
-TDXZS3_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxzs3.cfg")
-TDXZS_PATH = Path("/mnt/c/new_tdx64/T0002/hq_cache/tdxzs.cfg")
-EXTERN_SYS_PATH = Path("/mnt/c/new_tdx64/T0002/signals/extern_sys.txt")
+TDXHY_PATH = Path("/home/lufanfeng/tdx_data/T0002/hq_cache/tdxhy.cfg")
+TDXZS3_PATH = Path("/home/lufanfeng/tdx_data/T0002/hq_cache/tdxzs3.cfg")
+TDXZS_PATH = Path("/home/lufanfeng/tdx_data/T0002/hq_cache/tdxzs.cfg")
+EXTERN_SYS_PATH = Path("/home/lufanfeng/tdx_data/T0002/signals/extern_sys.txt")
 RPS_CURRENT_DATASET = "dataset_stock_rps_current"
 RPS_SNAPSHOT_DATASET = "snapshot_stock_rps_current"
 
@@ -148,14 +148,14 @@ def _load_industry_concept_datasets(ctx: Any) -> dict[str, list[dict[str, Any]]]
         trading_day=ctx.trading_day,
         generated_at=ctx.generated_at,
         data_cutoff_time=ctx.data_cutoff_time,
-        source_file=DEFAULT_INDUSTRY_SOURCE_FILE if str(TDXHY_PATH).startswith("/mnt/c/new_tdx64/") else str(TDXHY_PATH),
+        source_file=DEFAULT_INDUSTRY_SOURCE_FILE if str(TDXHY_PATH).startswith("/home/lufanfeng/tdx_data/") else str(TDXHY_PATH),
     )
     concept_dictionary_rows, concept_current_rows, concept_snapshot_rows = build_concept_datasets(
         concept_text=load_text_file(EXTERN_SYS_PATH, preferred_encoding="gbk"),
         trading_day=ctx.trading_day,
         generated_at=ctx.generated_at,
         data_cutoff_time=ctx.data_cutoff_time,
-        source_file=DEFAULT_CONCEPT_SOURCE_FILE if str(EXTERN_SYS_PATH).startswith("/mnt/c/new_tdx64/") else str(EXTERN_SYS_PATH),
+        source_file=DEFAULT_CONCEPT_SOURCE_FILE if str(EXTERN_SYS_PATH).startswith("/home/lufanfeng/tdx_data/") else str(EXTERN_SYS_PATH),
     )
     cached = {
         "industry_current": industry_current_rows,

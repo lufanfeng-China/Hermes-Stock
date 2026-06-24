@@ -28,7 +28,7 @@ sys.path.insert(0, "/home/lufanfeng/Kronos")
 
 from app.search.index import load_rps_rows
 
-DEFAULT_TDX_DIR = "/mnt/c/new_tdx64"
+DEFAULT_TDX_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_OUTPUT = PROJECT_ROOT / "data/derived/datasets/final/dataset_kronos_prediction.json"
 LOOKBACK = 400      # input bars
 PRED_LEN = 20       # predict future bars

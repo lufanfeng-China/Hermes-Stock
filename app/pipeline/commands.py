@@ -12,7 +12,7 @@ from threading import Thread
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
-TONGDAXIN_DIR = "/mnt/c/new_tdx64"
+TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 STOCK_SCREENER_STRATEGY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_screener_strategies_current.json"
 STOCK_RPS_CURRENT_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_current.json"

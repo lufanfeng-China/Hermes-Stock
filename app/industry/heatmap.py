@@ -16,7 +16,7 @@ DEFAULT_DATASET_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 DEFAULT_INDUSTRY_DATASET = DEFAULT_DATASET_DIR / "dataset_stock_industry_current.json"
 DEFAULT_HEATMAP_CACHE_DIR = PROJECT_ROOT / "data" / "derived" / "cache"
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
-TONGDAXIN_DIR = "/mnt/c/new_tdx64"
+TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_INDUSTRY_LIMIT: int | None = None
 DEFAULT_LOOKBACK_SESSIONS = 40
 

@@ -22,7 +22,7 @@ import pandas as pd
 from mootdx.reader import Reader
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TDX_DIR = "/mnt/c/new_tdx64"
+TDX_DIR = "/home/lufanfeng/tdx_data"
 DATA_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 OUTPUT = DATA_DIR / "dataset_technical_eval.json"
 RPS_PATH = DATA_DIR / "dataset_stock_rps_history.json"

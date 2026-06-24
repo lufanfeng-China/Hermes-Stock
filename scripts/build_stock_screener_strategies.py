@@ -22,7 +22,7 @@ from app.search.index import (
     load_rps_rows,
 )
 
-DEFAULT_TDX_DIR = "/mnt/c/new_tdx64"
+DEFAULT_TDX_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_OUTPUT = DEFAULT_DATASET_DIR / "dataset_stock_screener_strategies_current.json"
 STRATEGY_FIRST = "rps_first"
 STRATEGY_MA_CROSS = "ma_cross"
@@ -130,6 +130,56 @@ def _compute_past_days_rps(reader, rps_rows, ndays=5, as_of: str = ""):
     return result
 
 
+def _load_past_rps_first_signals(trading_day: str, ndays: int = 60) -> set[tuple[str, str]]:
+    """Return set of (market, symbol) that had a passed RPS首次 signal in the past ndays trading days.
+    
+    Reads strategy history files to check for actual signals (not just RPS>360 crossings).
+    If a strategy file doesn't exist for a past day, that day is skipped (no signal assumed).
+    """
+    import pandas as pd
+
+    parquet_path = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.parquet"
+    if not parquet_path.exists():
+        return set()
+
+    df = pd.read_parquet(parquet_path, columns=['trading_day'])
+    all_td = sorted(df['trading_day'].unique())
+
+    # Find the index of trading_day and go back ndays
+    try:
+        td_idx = all_td.index(trading_day)
+    except ValueError:
+        # trading_day not found — find closest before it
+        for i in range(len(all_td) - 1, -1, -1):
+            if all_td[i] <= trading_day:
+                td_idx = i
+                break
+        else:
+            return set()
+
+    start_idx = max(0, td_idx - ndays)
+    past_days = all_td[start_idx:td_idx]  # exclude today itself
+
+    signaled: set[tuple[str, str]] = set()
+    final_dir = PROJECT_ROOT / "data/derived/datasets/final"
+
+    for pd_day in past_days:
+        strat_path = final_dir / f"dataset_stock_screener_strategies_{pd_day}.json"
+        if not strat_path.exists():
+            continue
+        try:
+            with open(strat_path, 'r', encoding='utf-8') as fh:
+                rows = json.load(fh)
+        except Exception:
+            continue
+        for r in rows:
+            if r.get('strategy') == STRATEGY_FIRST and r.get('passed'):
+                signaled.add((str(r.get('market', '')).strip().lower(),
+                              str(r.get('symbol', '')).strip()))
+
+    return signaled
+
+
 def _rps_first_candidates(rps_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Find stocks where RPS total (rps20+rps50+rps120+rps250) crosses above 360 today."""
     candidates: list[dict[str, Any]] = []
@@ -161,7 +211,10 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
     from app.search.index import _load_technical_eval
     tech_eval = _load_technical_eval(as_of_date=trading_day or "")
 
-    # Compute cross-sectional RPS for past 60 trading days
+    # Load past 60-day RPS首次 signals for dedup (actual signals, not just RPS>360)
+    past_signals = _load_past_rps_first_signals(trading_day or "", ndays=60)
+
+    # Compute cross-sectional RPS for past days (needed for yesterday_total)
     past_rps_by_day = _compute_past_days_rps(reader, rps_rows, ndays=60, as_of=trading_day)
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -229,8 +282,10 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
                 ever_met = True
                 break
 
-        is_first = not ever_met
+        is_first = not ever_met  # based on RPS>360 history (informational)
         crossed = yesterday_total is not None and yesterday_total <= 360
+        # True first signal: crossed AND no actual RPS首次 signal in past 60 trading days
+        is_true_first = key not in past_signals
 
         conditions: dict[str, object] = {
             "rps_total": round(total_today, 2),
@@ -240,7 +295,7 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             "rps250": round(rps250_t, 2),
             "cross_above_360": crossed,
             "yesterday_total": round(yesterday_total, 2) if yesterday_total is not None else None,
-            "first_in_60d": is_first,
+            "first_in_60d": is_true_first,
             "trend": trend,
             "short_trend": short_trend,
             "dist_ma10_pct": round(dist_ma10, 2),
@@ -253,7 +308,7 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             "symbol": symbol_val,
             "strategy": STRATEGY_FIRST,
             "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST]["label"],
-            "passed": crossed,
+            "passed": crossed and is_true_first,
             "conditions": conditions,
             "generated_at": generated_at,
             "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",

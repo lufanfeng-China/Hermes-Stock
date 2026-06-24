@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 # Paths
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
-TONGDAXIN_DIR = "/mnt/c/new_tdx64"
+TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 WEB_ROOT = PROJECT_ROOT / "web"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 WATCHLIST_PATH = PROJECT_ROOT / "data" / "derived" / "watchlist.json"

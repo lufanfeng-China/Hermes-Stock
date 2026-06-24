@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.search.index import DEFAULT_DATASET_DIR, load_rps_rows
 
-DEFAULT_TDX_DIR = "/mnt/c/new_tdx64"
+DEFAULT_TDX_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_OUTPUT = DEFAULT_DATASET_DIR / "dataset_macd_signals_current.json"
 DIVERGENCE_WINDOW = 90  # 背离检测回溯窗口
 

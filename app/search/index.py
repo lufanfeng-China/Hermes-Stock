@@ -19,9 +19,9 @@ TNF_PINYIN_SIZE = 12
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TNF_FILES = (
-    ("sh", Path("/mnt/c/new_tdx64/T0002/hq_cache/shs.tnf")),
-    ("sz", Path("/mnt/c/new_tdx64/T0002/hq_cache/szs.tnf")),
-    ("bj", Path("/mnt/c/new_tdx64/T0002/hq_cache/bjs.tnf")),
+    ("sh", Path("/home/lufanfeng/tdx_data/T0002/hq_cache/shs.tnf")),
+    ("sz", Path("/home/lufanfeng/tdx_data/T0002/hq_cache/szs.tnf")),
+    ("bj", Path("/home/lufanfeng/tdx_data/T0002/hq_cache/bjs.tnf")),
 )
 DEFAULT_DATASET_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 
@@ -1022,7 +1022,7 @@ def _build_macd_async(trading_day: str) -> None:
                 sys.executable,
                 str(PROJECT_ROOT / "scripts" / "build_macd_signals.py"),
                 "--trading-day", trading_day,
-                "--tdxdir", "/mnt/c/new_tdx64",
+                "--tdxdir", "/home/lufanfeng/tdx_data",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -1062,7 +1062,7 @@ def _build_strategy_async(trading_day: str, strategy: str) -> None:
                 str(PROJECT_ROOT / "scripts" / "build_stock_screener_strategies.py"),
                 "--strategy", ordered[0],
                 "--trading-day", trading_day,
-                "--tdxdir", "/mnt/c/new_tdx64",
+                "--tdxdir", "/home/lufanfeng/tdx_data",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -1075,7 +1075,7 @@ def _build_strategy_async(trading_day: str, strategy: str) -> None:
                     str(PROJECT_ROOT / "scripts" / "build_stock_screener_strategies.py"),
                     "--strategy", s,
                     "--trading-day", trading_day,
-                    "--tdxdir", "/mnt/c/new_tdx64",
+                    "--tdxdir", "/home/lufanfeng/tdx_data",
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -2466,7 +2466,7 @@ def load_realtime_intraday_points(market: str, symbol: str) -> list[dict[str, ob
 def _recent_avg_daily_volume(market: str, symbol: str, days: int = 5) -> float | None:
     try:
         from mootdx.reader import Reader
-        reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
+        reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
         daily = reader.daily(symbol=symbol)
     except Exception:
         return None
@@ -2482,7 +2482,7 @@ def _recent_avg_daily_volume(market: str, symbol: str, days: int = 5) -> float |
 def _has_recent_limit_up(market: str, symbol: str, days: int) -> bool:
     try:
         from mootdx.reader import Reader
-        reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
+        reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
         daily = reader.daily(symbol=symbol)
     except Exception:
         return False
@@ -2500,7 +2500,7 @@ def _recent_daily_bars(market: str, symbol: str, count: int = 300) -> list[dict[
     """Return recent daily bars for a stock from local Tongdaxin data."""
     try:
         from mootdx.reader import Reader
-        reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
+        reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
         daily = reader.daily(symbol=symbol)
     except Exception:
         return []
@@ -3349,7 +3349,7 @@ def _build_ma_cross_matches(
     del conditions, condition_enabled  # fixed conditions, not user-configurable
     from mootdx.reader import Reader
 
-    reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
+    reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
     quotes = load_realtime_quote_rows()
     security_lookup = {_security_key(row): row for row in load_security_rows()}
     industry_lookup = {_security_key(row): row for row in load_industry_rows()}
@@ -3520,7 +3520,7 @@ except ModuleNotFoundError as exc:
 else:
     _MOOTDX_IMPORT_ERROR = None
 
-_TDX_DIR = "/mnt/c/new_tdx64"
+_TDX_DIR = "/home/lufanfeng/tdx_data"
 _PROJECT_ROOT = _Path(__file__).resolve().parents[2]
 _INDUSTRY_FILE = _PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_industry_current.json"
 

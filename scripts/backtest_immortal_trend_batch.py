@@ -10,7 +10,7 @@ from collections import defaultdict
 
 PROJECT = Path('/home/lufanfeng/Project-Hermes-Stock')
 DS = PROJECT / 'data' / 'derived' / 'datasets' / 'final'
-TDX = '/mnt/c/new_tdx64'
+TDX = '/home/lufanfeng/tdx_data'
 sys.path.insert(0, str(PROJECT))
 from mootdx.reader import Reader
 reader = Reader.factory(market='std', tdxdir=TDX)

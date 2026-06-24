@@ -7,7 +7,7 @@ import numpy as np
 sys.path.insert(0, '/home/lufanfeng/.venvs/moontdx-china-stock-data/lib/python3.12/site-packages')
 from mootdx.financial.financial import FinancialReader
 
-TDX_CW = Path('/mnt/c/new_tdx64/vipdoc/cw')
+TDX_CW = Path('/home/lufanfeng/tdx_data/vipdoc/cw')
 OUT_DIR = Path('data/derived/financial_ts/by_quarter')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

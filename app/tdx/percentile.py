@@ -3,7 +3,7 @@ import json
 import subprocess
 
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
-TONGDAXIN_DIR = "/mnt/c/new_tdx64"
+TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 
 def compute_stock_price_percentile(
     market: str, symbol: str, *, years: int = 5
@@ -85,7 +85,7 @@ print(json.dumps({
 
     result = _subprocess.run(
         ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python", "-c", script,
-         symbol, market, "/mnt/c/new_tdx64", str(years)],
+         symbol, market, "/home/lufanfeng/tdx_data", str(years)],
         capture_output=True,
         text=True,
         timeout=30,

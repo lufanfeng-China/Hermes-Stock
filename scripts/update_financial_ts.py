@@ -36,7 +36,7 @@ import numpy as np
 
 # ── 路径配置 ────────────────────────────────────────────────────────────────
 PROJECT = Path(__file__).parent.parent.resolve()
-TDX_CW  = Path(os.environ.get("TDX_CW_DIR", "/mnt/c/new_tdx64/vipdoc/cw"))
+TDX_CW  = Path(os.environ.get("TDX_CW_DIR", "/home/lufanfeng/tdx_data/vipdoc/cw"))
 OUT_DIR = PROJECT / "data/derived/financial_ts/by_quarter"
 META_FP = PROJECT / "data/derived/financial_ts/meta.json"
 

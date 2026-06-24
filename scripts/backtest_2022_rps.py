@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
 """
-RPS首次策略 — 2022年10-12月回测
+RPS首次策略 — 2022年全年回测 (8-12月，数据从2022-08-12起)
 24月持有，验证熊市→牛市周期表现
 """
-import sys, json
+import sys, json, resource
+import pandas as pd
 from pathlib import Path
 from collections import defaultdict
 
+# ── 内存保护：超 6GB 时 Python 自报 MemoryError，不会被 WSL OOM Killer 杀死 ──
+try:
+    resource.setrlimit(resource.RLIMIT_AS, (6 * 1024**3, 8 * 1024**3))
+except Exception as e:
+    print(f"  [warn] Could not set memory limit: {e}", file=sys.stderr)
+
 PROJECT = Path('/home/lufanfeng/Project-Hermes-Stock')
 DS = PROJECT / 'data' / 'derived' / 'datasets' / 'final'
-TDX = '/mnt/c/new_tdx64'
+TDX = '/home/lufanfeng/tdx_data'
 sys.path.insert(0, str(PROJECT))
 from mootdx.reader import Reader
 from mootdx.quotes import Quotes
 reader = Reader.factory(market='std', tdxdir=TDX)
 quotes = Quotes.factory(market='std')
 
-RPS_MIN = 365
+RPS_MIN = 360
 HOLDING_24M = 500
 
 # ── Trend helpers ──
@@ -78,36 +85,48 @@ def classify_short_trend(closes):
     if m10>m20 and close>m10: return "recovering"
     return "neutral"
 
-# ── Load RPS history ──
-print("Loading RPS history...", file=sys.stderr)
-rps_path = PROJECT / "data/derived/datasets/final/dataset_stock_rps_history.json"
-with open(rps_path) as f:
-    rps_data = json.load(f)
-print(f"  {len(rps_data)} entries", file=sys.stderr)
+# ── Load RPS history (Parquet: 38MB, ~300MB in memory) ──
+print("Loading RPS history (Parquet)...", file=sys.stderr)
+rps_path = PROJECT / "data/derived/datasets/final/dataset_stock_rps_history.parquet"
+df = pd.read_parquet(rps_path)
+# Compute RPS total for threshold filtering
+df['rps_total'] = df['rps_20'] + df['rps_50'] + df['rps_120'] + df['rps_250']
+print(f"  {len(df):,} rows, {df['trading_day'].nunique()} trading days", file=sys.stderr)
 
-# Index by day
-rps_by_day = defaultdict(dict)
-for h in rps_data:
-    td = str(h.get('trading_day',''))
-    if not td: continue
-    key = (str(h.get('market','')).strip().lower(), str(h.get('symbol','')).strip())
-    rps_by_day[td][key] = {
-        'rps_20': h.get('rps_20'), 'rps_50': h.get('rps_50'),
-        'rps_120': h.get('rps_120'), 'rps_250': h.get('rps_250'),
-    }
+# Trading day index
+all_td = sorted(df['trading_day'].unique())
+td_to_idx = {td: i for i, td in enumerate(all_td)}
 
-all_td = sorted(rps_by_day.keys())
-target_days = [d for d in all_td if d.startswith('2022-10') or d.startswith('2022-11') or d.startswith('2022-12')]
-print(f"  2022 Oct-Dec: {len(target_days)} trading days", file=sys.stderr)
+target_days = [d for d in all_td if d.startswith('2022-')]
+print(f"  2022 (Aug-Dec): {len(target_days)} trading days", file=sys.stderr)
 
-# Build RPS>360 ever cache
+# ── Build rps_by_day only for needed days (target + their previous day) ──
+need_days = set(target_days)
+for td in target_days:
+    idx = td_to_idx[td]
+    if idx > 0:
+        need_days.add(all_td[idx - 1])  # need prev day's RPS for the "yesterday ≤360" check
+
+df_need = df[df['trading_day'].isin(need_days)]
+rps_by_day = {}
+for td, group in df_need.groupby('trading_day'):
+    day_dict = {}
+    for _, row in group.iterrows():
+        key = (row['market'], row['symbol'])
+        day_dict[key] = {
+            'rps_20': row['rps_20'], 'rps_50': row['rps_50'],
+            'rps_120': row['rps_120'], 'rps_250': row['rps_250'],
+        }
+    rps_by_day[td] = day_dict
+
+# ── Build RPS>360 ever cache ──
+print("Building RPS>360 first-occurrence index...", file=sys.stderr)
+df_360 = df[df['rps_total'] > 360]
+# First trading day each stock ever crossed RPS>360
 rps360_ever = {}
-for td in all_td:
-    for key, rps in rps_by_day[td].items():
-        vals = [rps.get('rps_20'), rps.get('rps_50'), rps.get('rps_120'), rps.get('rps_250')]
-        if any(v is None for v in vals): continue
-        if key not in rps360_ever and sum(vals) > 360:
-            rps360_ever[key] = td
+for (market, symbol), group in df_360.groupby(['market', 'symbol']):
+    rps360_ever[(market, symbol)] = group['trading_day'].min()
+print(f"  {len(rps360_ever):,} stocks ever hit RPS>360", file=sys.stderr)
 
 # ── Generate signals ──
 print("Generating signals...", file=sys.stderr)
@@ -125,12 +144,12 @@ for td in target_days:
         # First in 60d
         ever_date = rps360_ever.get((market, code))
         if ever_date and ever_date < td:
-            ever_idx = all_td.index(ever_date) if ever_date in all_td else -1
-            td_idx = all_td.index(td)
+            ever_idx = td_to_idx.get(ever_date, -1)
+            td_idx = td_to_idx[td]
             if ever_idx >= 0 and (td_idx - ever_idx) <= 60: continue
         
         # Yesterday RPS <= 360
-        td_idx = all_td.index(td)
+        td_idx = td_to_idx[td]
         if td_idx > 0:
             prev_td = all_td[td_idx-1]
             prev = rps_by_day[prev_td].get((market, code), {})
@@ -229,7 +248,7 @@ for s in signals:
 # ── Output ──
 print()
 print("=" * 90)
-print("  RPS首次策略 — 2022年10-12月回测 (RPS≥365, 24月持有)")
+print("  RPS首次策略 — 2022年全年回测 (RPS≥360, 24月持有)")
 print("=" * 90)
 
 by_month = defaultdict(list)
@@ -260,6 +279,6 @@ if all_rets_24:
 
 # Context: what market did these signals see?
 print(f"\n  市场背景:")
-print(f"    2022-10~12: A股熊市底部（沪深300在2022年10月见底）")
-print(f"    持有12月 → 覆盖到2023年10月（熊市持续）")
+print(f"    2022-08~12: A股熊市底部（数据从2022-08-12开始）")
+print(f"    持有12月 → 覆盖到2023年（熊市持续）")
 print(f"    持有24月 → 覆盖到2024年底（牛市已来）")

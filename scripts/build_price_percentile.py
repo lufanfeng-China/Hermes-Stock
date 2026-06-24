@@ -15,7 +15,7 @@ from mootdx.reader import Reader
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
-TDX_DIR = r"/mnt/c/new_tdx64"  # WSL path
+TDX_DIR = r"/home/lufanfeng/tdx_data"  # WSL path
 
 OUTPUT_PATH = DATA_DIR / "dataset_price_percentile_5y.json"
 YEARS = 5

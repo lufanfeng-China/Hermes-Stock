@@ -10,7 +10,7 @@ from collections import defaultdict
 
 PROJECT = Path('/home/lufanfeng/Project-Hermes-Stock')
 DS = PROJECT / 'data' / 'derived' / 'datasets' / 'final'
-TDX = '/mnt/c/new_tdx64'
+TDX = '/home/lufanfeng/tdx_data'
 
 sys.path.insert(0, str(PROJECT))
 from mootdx.reader import Reader
@@ -18,7 +18,7 @@ from mootdx.quotes import Quotes
 reader = Reader.factory(market='std', tdxdir=TDX)
 quotes = Quotes.factory(market='std')
 
-RPS_MIN = 365
+RPS_MIN = 360
 HOLDING_12M = 250
 HOLDING_24M = 500
 

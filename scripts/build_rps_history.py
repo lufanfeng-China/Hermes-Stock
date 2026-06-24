@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-DEFAULT_TDX_DIR = "/mnt/c/new_tdx64"
+DEFAULT_TDX_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_OUTPUT = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.json"
 DEFAULT_NDAYS = 120
 
