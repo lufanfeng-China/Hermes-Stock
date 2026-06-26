@@ -164,14 +164,14 @@ def main():
     print()
 
     # 扫描所有 gpcw zip，按文件名排序（由新到旧）
-    # 只处理 2022 年及以后的包（之前的财报历史对当前分析价值有限）
+    # 从 2010 年开始构建完整财报历史
     zips = sorted(TDX_CW.glob("gpcw*.zip"), reverse=True)
-    zips = [z for z in zips if int(z.stem[-8:][:4]) >= 2022]
+    zips = [z for z in zips if int(z.stem[-8:][:4]) >= 2010]
     if not zips:
-        print("ERROR: 找不到 2022 年以后的 gpcw*.zip 文件", file=sys.stderr)
+        print("ERROR: 找不到 2010 年以后的 gpcw*.zip 文件", file=sys.stderr)
         sys.exit(1)
 
-    print(f"发现 {len(zips)} 个 2022 年以后的 gpcw 压缩包\n")
+    print(f"发现 {len(zips)} 个 2010 年以后的 gpcw 压缩包\n")
 
     # 按报告期聚合：period → [(announce_date, report_date, code, row_dict), ...]
     period_data: dict[str, list[dict]] = defaultdict(list)
