@@ -122,12 +122,14 @@ def load_cw_zip(zpath: Path) -> pd.DataFrame | None:
 
 # ── 季度数据写入 ─────────────────────────────────────────────────────────────
 def write_quarter_parquet(period: str, records: list[dict]):
-    """将一个季度内所有股票记录写入 Parquet，按 period 分文件。"""
+    """将一个季度内所有股票记录写入 Parquet，按 period 分文件。
+    去重：同一 code 保留第一条（因为 zip 按新旧顺序处理，第一条 = 最新数据）。"""
     fp = OUT_DIR / f"{period}.parquet"
     df = pd.DataFrame(records).set_index("code")
+    df = df[~df.index.duplicated(keep="first")]
     df.to_parquet(fp, index=True, engine="pyarrow", compression="snappy")
     size_kb = fp.stat().st_size / 1024
-    print(f"  → {period}.parquet  ({len(records)} 股票, {size_kb:.0f} KB)")
+    print(f"  → {period}.parquet  ({len(df)} 股票, {size_kb:.0f} KB)")
 
 
 # ── Meta 维护 ────────────────────────────────────────────────────────────────
