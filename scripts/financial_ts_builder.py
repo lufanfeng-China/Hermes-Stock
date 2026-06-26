@@ -120,7 +120,7 @@ def load_cw_zip(zpath: Path) -> pd.DataFrame | None:
     return df
 
 
-# ── 季度数据写入 ─────────────────────────────────────────────────────────────
+# ── 季度数据写入（支持增量追加）──────────────────────────────────────────────
 def write_quarter_parquet(period: str, records: list[dict]):
     """将一个季度内所有股票记录写入 Parquet，按 period 分文件。
     去重：同一 code 保留第一条（因为 zip 按新旧顺序处理，第一条 = 最新数据）。"""
@@ -130,6 +130,28 @@ def write_quarter_parquet(period: str, records: list[dict]):
     df.to_parquet(fp, index=True, engine="pyarrow", compression="snappy")
     size_kb = fp.stat().st_size / 1024
     print(f"  → {period}.parquet  ({len(df)} 股票, {size_kb:.0f} KB)")
+
+
+def append_quarter_parquet(period: str, records: list[dict]):
+    """增量追加记录到已有 parquet 文件。跳过已存在的 code。
+    返回实际新增的股票数。"""
+    fp = OUT_DIR / f"{period}.parquet"
+    new_df = pd.DataFrame(records).set_index("code")
+    new_df = new_df[~new_df.index.duplicated(keep="first")]
+
+    if fp.exists():
+        existing = pd.read_parquet(fp)
+        # 只保留新 code
+        new_codes = new_df.index.difference(existing.index)
+        new_df = new_df.loc[new_codes]
+        if new_df.empty:
+            return 0
+        combined = pd.concat([existing, new_df])
+        combined.to_parquet(fp, index=True, engine="pyarrow", compression="snappy")
+    else:
+        new_df.to_parquet(fp, index=True, engine="pyarrow", compression="snappy")
+
+    return len(new_df)
 
 
 # ── Meta 维护 ────────────────────────────────────────────────────────────────
@@ -164,7 +186,6 @@ def main():
     print()
 
     # 扫描所有 gpcw zip，按文件名排序（由新到旧）
-    # 从 2010 年开始构建完整财报历史
     zips = sorted(TDX_CW.glob("gpcw*.zip"), reverse=True)
     zips = [z for z in zips if int(z.stem[-8:][:4]) >= 2010]
     if not zips:
@@ -173,16 +194,22 @@ def main():
 
     print(f"发现 {len(zips)} 个 2010 年以后的 gpcw 压缩包\n")
 
-    # 按报告期聚合：period → [(announce_date, report_date, code, row_dict), ...]
-    period_data: dict[str, list[dict]] = defaultdict(list)
+    # ── 流式处理：每个 zip 处理完立即写 parquet，释放内存
     periods_seen: set[str] = set()
     total_stocks = 0
+    period_new_counts: dict[str, int] = defaultdict(int)
 
     meta = load_meta()
 
+    # --force 时清空已有 parquet 文件
+    if args.force:
+        for existing in OUT_DIR.glob("*.parquet"):
+            existing.unlink()
+        periods_seen.clear()
+
     for zpath in zips:
-        period_str = parse_period(int(zpath.stem[-8:]))  # 从文件名提取日期
-        if period_str in periods_seen and not args.force:
+        period_str = parse_period(int(zpath.stem[-8:]))
+        if period_str in periods_seen:
             print(f"  跳过 {zpath.name} (period={period_str} 已处理)")
             continue
 
@@ -195,17 +222,18 @@ def main():
             print(f"  → 空包或解析失败，跳过")
             continue
 
+        # ── 按实际 report_date 分组
+        period_batches: dict[str, list[dict]] = defaultdict(list)
+
         for code, row in df.iterrows():
             rd = int(row.get("report_date", 0))
-            ad = format_announce_date(row.get("财报公告日期", 0))
-
-            # 只保留有报告期的记录
             if rd == 0 or pd.isna(rd):
                 continue
 
+            ad = format_announce_date(row.get("财报公告日期", 0))
             row_dict = {**row.to_dict(), "report_date": rd, "announce_date": ad, "code": code}
 
-            # —— 提取通达信预计算 TTM 字段（万元 → 亿）——
+            # ── 提取通达信预计算 TTM 字段（万元 → 亿）──
             _ttm_net = row.get("近一年归母净利润（万元）", None)
             try:
                 _ttm_net = float(_ttm_net)
@@ -233,33 +261,48 @@ def main():
                     "announce_date": ad,
                     "file":          f"{period_key}.parquet",
                 }
-            # 始终更新最新期
             prev = meta["stocks"][code]["latest_period"]
             if _period_order(period_key) >= _period_order(prev):
                 meta["stocks"][code]["latest_period"] = period_key
 
-            period_data[period_key].append(row_dict)
+            period_batches[period_key].append(row_dict)
+
+        # ── 立即写入各期 parquet，释放内存
+        for period_key, records in period_batches.items():
+            n = append_quarter_parquet(period_key, records)
+            period_new_counts[period_key] += n
+            if n > 0:
+                print(f"  → {period_key}.parquet  +{n} 只新股票")
 
         periods_seen.add(period_str)
         total_stocks += len(df)
-        print(f"  → {len(df)} 只股票, {elapsed:.1f}s")
+        print(f"  → 处理了 {len(df)} 只股票, {elapsed:.1f}s")
 
-    print(f"\n写入季度文件...")
-    for period, records in sorted(period_data.items()):
-        write_quarter_parquet(period, records)
+        # 释放内存：删掉大的 DataFrame 和批次数据
+        del df, period_batches
+        import gc; gc.collect()
 
-    # 写入 latest symlink（最新季度）
-    latest_period = max(period_data.keys(), key=_period_order)
-    latest_fp = OUT_DIR / "latest.parquet"
-    if latest_fp.exists() or latest_fp.is_symlink():
-        latest_fp.unlink()
-    latest_fp.symlink_to(f"{latest_period}.parquet", target_is_directory=False)
+    # ── 汇总写入结果
+    n_periods = len(period_new_counts)
+    n_new_records = sum(period_new_counts.values())
+    print(f"\n写入完成！共 {n_periods} 个季度，{n_new_records} 条新记录")
+
+    # ── 写入 latest symlink
+    all_periods = sorted(OUT_DIR.glob("*.parquet"))
+    all_periods = [p for p in all_periods if p.stem != "latest"]
+    if all_periods:
+        latest_period = max((p.stem for p in all_periods), key=_period_order)
+        latest_fp = OUT_DIR / "latest.parquet"
+        if latest_fp.exists() or latest_fp.is_symlink():
+            latest_fp.unlink()
+        latest_fp.symlink_to(f"{latest_period}.parquet", target_is_directory=False)
+        print(f"latest → {latest_period}.parquet")
 
     # 更新 meta
     meta["stock_count"] = len(meta["stocks"])
     save_meta(meta)
 
-    print(f"\n完成！共处理 {total_stocks} 条股票记录，{len(period_data)} 个季度")
+    print(f"\n完成！共处理 {total_stocks} 条股票记录")
     print(f"Meta 已写入 {META_FP}")
 
 
