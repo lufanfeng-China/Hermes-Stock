@@ -148,7 +148,8 @@ for code in positions:
 
 df=pd.DataFrame(trades)
 n=len(df);wr=(df['ret']>0).mean()*100;mn=df['ret'].mean();md=df['ret'].median()
-tot=df['ret'].sum()*CAP/100;inv=df['lots'].sum()*CAP
+# 修正: ret是加权收益率,需乘以实际份数
+tot=(df['ret']*df['lots']).sum()*CAP/100;inv=df['lots'].sum()*CAP
 
 print("PE-TTM 中长期价值策略 v8 — 最终回测")
 print("══════════════════════════════════════")
@@ -167,7 +168,7 @@ print("-"*60)
 profit_years=0
 for y in sorted(df['ey'].unique()):
     s=df[df['ey']==y];wr_s=(s['ret']>0).mean()*100;mn_s=s['ret'].mean()
-    tot_s=s['ret'].sum()*CAP/100;lots_s=s['lots'].mean()
+    tot_s=(s['ret']*s['lots']).sum()*CAP/100;lots_s=s['lots'].mean()
     hold_q=s['hold'].mean() if 'hold' in s.columns else 0
     if tot_s>0:profit_years+=1
     print(f"{y:>5d} {len(s):>4d} {mn_s:>+8.2f}% {wr_s:>5.1f}% {tot_s:>+12,.0f} {lots_s:>5.1f} {hold_q:>7.1f}")
