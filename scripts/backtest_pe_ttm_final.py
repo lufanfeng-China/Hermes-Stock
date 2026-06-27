@@ -1,4 +1,4 @@
-"""PE-TTM 中长期价值策略 — 最终版本 (公告日补仓)"""
+"""PE-TTM v8 最终版本: 条件⑤ → 公告日 MA5>MA10"""
 import pandas as pd; from pathlib import Path; from mootdx.reader import Reader
 
 BASE=Path('/home/lufanfeng/Project-Hermes-Stock')
@@ -51,23 +51,28 @@ for i in range(SI,EI+1):
         if code not in candidates:candidates[code]=[]
         candidates[code].append(period)
 
-passed_stock=set()
-daily_data={}
-for ci,(code,periods) in enumerate(candidates.items()):
+# 条件⑤: MA5 > MA10
+def check_ma5_gt_ma10(code, period):
+    t=pd.Timestamp(p2d(period))
     try:
         daily=reader.daily(symbol=code)
-        if daily is None or daily.empty:continue
+        if daily is None or daily.empty:return False
         daily=daily.sort_index()
-        if len(daily)<20:continue
-        daily['ma20']=daily['close'].rolling(20).mean()
-        daily_data[code]=daily
-    except:continue
+        if len(daily)<10:return False
+        daily['ma5']=daily['close'].rolling(5).mean()
+        daily['ma10']=daily['close'].rolling(10).mean()
+        mask=daily.index<=t
+        if not mask.any():return False
+        d=daily[mask].iloc[-1]
+        if pd.isna(d['ma5']) or pd.isna(d['ma10']):return False
+        return float(d['ma5'])>float(d['ma10'])
+    except:
+        return False
+
+passed_stock=set()
+for ci,(code,periods) in enumerate(candidates.items()):
     for period in periods:
-        t=pd.Timestamp(p2d(period));m=daily.index<=t
-        if not m.any():continue
-        d=daily[m].iloc[-1]
-        if pd.isna(d['ma20']):continue
-        if float(d['close'])>float(d['ma20']):
+        if check_ma5_gt_ma10(code, period):
             passed_stock.add((code,period))
 
 idx=reader.daily(symbol='000905');idx=idx.sort_index()
@@ -104,10 +109,9 @@ for i in range(SI,EI+1):
                 cl=get_close(code,ad)
                 if cl:
                     tc=sum(p for _,p in lots);tv=cl*len(lots)
-                    trades.append({'r':'Pre','ret':round((tv/tc-1)*100,2),'ey':int(lots[0][0][:4]),'lots':len(lots)})
+                    trades.append({'r':'Pre','ret':round((tv/tc-1)*100,2),'ey':int(lots[0][0][:4]),'lots':len(lots),'hold':0})
                     to_remove.append(code);continue
         cl_trade=row['open_next'];pe_ad=row['pe_ad'];pct=row['pe_pct']
-        # 补仓: 公告日开盘价较上次买入跌20%加1份
         lp=lots[-1][1]
         drop=(cl_trade/lp-1)*100
         if drop<=ADD and len(lots)<MAX_LOTS:
@@ -116,7 +120,10 @@ for i in range(SI,EI+1):
         if pct>=TH:reason='PE'
         if reason:
             tc=sum(p for _,p in lots);tv=cl_trade*len(lots)
-            trades.append({'r':reason,'ret':round((tv/tc-1)*100,2),'ey':int(lots[0][0][:4]),'lots':len(lots)})
+            entry_period=lots[0][0]
+            entry_idx=ALL.index(entry_period)
+            hold_q=i-entry_idx
+            trades.append({'r':reason,'ret':round((tv/tc-1)*100,2),'ey':int(lots[0][0][:4]),'lots':len(lots),'hold':hold_q})
             to_remove.append(code)
     for code in to_remove:del positions[code]
     total_lots=sum(len(l) for l in positions.values())
@@ -133,14 +140,45 @@ for code in positions:
     try:
         row=pe_ix.loc[(code,ALL[-1])]
         cl=row['open_next'];tc=sum(p for _,p in lots);tv=cl*len(lots)
-        trades.append({'r':'End','ret':round((tv/tc-1)*100,2),'ey':int(lots[0][0][:4]),'lots':len(lots)})
+        entry_period=lots[0][0]
+        entry_idx=ALL.index(entry_period)
+        hold_q=EI-entry_idx
+        trades.append({'r':'End','ret':round((tv/tc-1)*100,2),'ey':int(lots[0][0][:4]),'lots':len(lots),'hold':hold_q})
     except:pass
 
 df=pd.DataFrame(trades)
-n=len(df);wr=(df['ret']>0).mean()*100;mn=df['ret'].mean()
+n=len(df);wr=(df['ret']>0).mean()*100;mn=df['ret'].mean();md=df['ret'].median()
 tot=df['ret'].sum()*CAP/100;inv=df['lots'].sum()*CAP
-label='公告日补仓'
-print(f'\n{label}: {n}笔 胜率{wr:.1f}% 均值{mn:+.2f}% 总{tot:+,.0f} ROI{tot/inv*100:+.2f}% 份{df["lots"].mean():.1f}')
+
+print("PE-TTM 中长期价值策略 v8 — 最终回测")
+print("══════════════════════════════════════")
+print(f"回测区间: 2014Q1 ~ 2026Q1")
+print(f"条件⑤: 公告日 MA5 > MA10 (替换原 MA20)")
+print()
+print(f"总交易: {n}笔    胜率: {wr:.1f}%")
+print(f"均值: {mn:+.2f}%    中位: {md:+.2f}%")
+print(f"总盈亏: {tot:+,.0f}    总投资: {inv:+,.0f}")
+print(f"ROI: {tot/inv*100:+.2f}%    份数: {df['lots'].mean():.1f}")
+print()
+
+print("年度明细:")
+print(f"{'年':>5s} {'笔数':>4s} {'均值':>8s} {'胜率':>6s} {'总盈亏':>12s} {'份数':>5s} {'持有(季)':>8s}")
+print("-"*60)
+profit_years=0
 for y in sorted(df['ey'].unique()):
-    s=df[df['ey']==y];wr_s=(s['ret']>0).mean()*100
-    print(f'  {y}:{len(s):>3}笔 均{s["ret"].mean():+.2f}% 胜{wr_s:.1f}% {s["lots"].mean():.1f}份')
+    s=df[df['ey']==y];wr_s=(s['ret']>0).mean()*100;mn_s=s['ret'].mean()
+    tot_s=s['ret'].sum()*CAP/100;lots_s=s['lots'].mean()
+    hold_q=s['hold'].mean() if 'hold' in s.columns else 0
+    if tot_s>0:profit_years+=1
+    print(f"{y:>5d} {len(s):>4d} {mn_s:>+8.2f}% {wr_s:>5.1f}% {tot_s:>+12,.0f} {lots_s:>5.1f} {hold_q:>7.1f}")
+print("-"*60)
+print(f"{'合计':>5s} {n:>4d} {mn:>+8.2f}% {wr:>5.1f}% {tot:>+12,.0f} {df['lots'].mean():>5.1f}")
+print(f"\n盈利年份: {profit_years}年 (仅计正总盈亏)")
+
+print(f"\n退出分布:")
+for r in ['PE','Pre','End']:
+    s=df[df['r']==r]
+    if len(s)>0:
+        wr_s=(s['ret']>0).mean()*100
+        hold=s['hold'].mean() if 'hold' in s.columns else 0
+        print(f"  {r}: {len(s)}笔 均值{s['ret'].mean():+.2f}% 胜{wr_s:.1f}% 持{hold:.1f}季")
