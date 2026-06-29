@@ -30,6 +30,8 @@ STRATEGY_BLOWUP_STALL = "blowup_stall"
 STRATEGY_BLOWUP_BREAK = "blowup_break"
 STRATEGY_MA_PULLBACK = "ma_pullback"
 STRATEGY_IMMORTAL_TREND = "immortal_trend"
+STRATEGY_SLINGSHOT = "slingshot_trend"
+STRATEGY_FIRST_MACD = "rps_first_macd"
 STRATEGY_METADATA = {
     STRATEGY_FIRST: {
         "label": "RPS首次",
@@ -48,6 +50,12 @@ STRATEGY_METADATA = {
     },
     STRATEGY_IMMORTAL_TREND: {
         "label": "神仙趋势",
+    },
+    STRATEGY_SLINGSHOT: {
+        "label": "弹弓趋势",
+    },
+    STRATEGY_FIRST_MACD: {
+        "label": "RPS首次+金叉",
     },
 }
 
@@ -309,6 +317,74 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             "strategy": STRATEGY_FIRST,
             "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST]["label"],
             "passed": crossed and is_true_first,
+            "conditions": conditions,
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
+def build_rps_first_macd_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
+    """RPS首次+MACD金叉: RPS首次7条件全部满足 + 当日MACD金叉(DIF上穿DEA)."""
+    # First build RPS首次 results
+    rps_first_results = build_rps_first_rows(tdxdir=tdxdir, trading_day=trading_day)
+    if not rps_first_results:
+        return []
+
+    # Only check MACD for passed RPS首次 candidates
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    from scripts.build_macd_signals import _compute_macd
+
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[dict[str, Any]] = []
+
+    for item in rps_first_results:
+        if not item.get("passed"):
+            # Keep non-passed items as-is for history tracking
+            results.append(item)
+            continue
+
+        symbol_val = str(item.get("symbol", "")).strip()
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            results.append(item)  # Keep original RPS passing
+            continue
+        if daily is None or daily.empty:
+            results.append(item)
+            continue
+
+        daily = daily.sort_index()
+        closes = daily["close"].astype(float).tolist()
+        if len(closes) < 40:
+            results.append(item)
+            continue
+
+        macd_data = _compute_macd(closes)
+        if macd_data is None:
+            results.append(item)
+            continue
+
+        dif, dea, _hist = macd_data
+        ti = len(closes) - 1
+
+        # MACD golden cross: DIF(t) > DEA(t) AND DIF(t-1) <= DEA(t-1)
+        is_golden = dif[ti] > dea[ti] and dif[ti - 1] <= dea[ti - 1]
+
+        conditions = dict(item.get("conditions", {}))
+        conditions["macd_golden_cross"] = is_golden
+        conditions["dif"] = round(dif[ti], 4)
+        conditions["dea"] = round(dea[ti], 4)
+
+        results.append({
+            "trading_day": item.get("trading_day"),
+            "market": item.get("market"),
+            "symbol": symbol_val,
+            "strategy": STRATEGY_FIRST_MACD,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST_MACD]["label"],
+            "passed": item.get("passed") and is_golden,
             "conditions": conditions,
             "generated_at": generated_at,
             "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
@@ -842,6 +918,111 @@ def build_immortal_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str
     return results
 
 
+def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
+    """弹弓趋势：MA10加速上弯 + 收盘突破 + 放量确认。"""
+    import pandas as pd
+    from app.search.index import load_security_rows
+    reader = Reader.factory(market="std", tdxdir=tdxdir)
+    securities = load_security_rows()
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[dict[str, Any]] = []
+
+    for sec in securities:
+        symbol_val = str(sec.get("symbol", "")).strip()
+        if not symbol_val:
+            continue
+        market_val = str(sec.get("market", "")).strip().lower()
+
+        try:
+            daily = reader.daily(symbol=symbol_val)
+        except Exception:
+            continue
+        if daily is None or daily.empty:
+            continue
+        daily = daily.sort_index()
+        if len(daily) < 60:
+            continue
+
+        closes = daily["close"].astype(float)
+        volumes = daily["volume"].astype(float)
+        n = len(closes)
+
+        ma10 = closes.rolling(10).mean()
+        if pd.isna(ma10.iloc[-1]) or pd.isna(ma10.iloc[-5]):
+            continue
+
+        ma10_t = float(ma10.iloc[-1])
+        ma10_t1 = float(ma10.iloc[-2])
+        ma10_t2 = float(ma10.iloc[-3])
+        ma10_t3 = float(ma10.iloc[-4])
+        ma10_t4 = float(ma10.iloc[-5])
+
+        # Condition 1: Slingshot bend — MA10 must be rising
+        diff = ma10_t - ma10_t4
+        if diff <= 0:
+            continue
+        a1 = ma10_t4 + diff * 0.25
+        a2 = ma10_t4 + diff * 0.50
+        a3 = ma10_t4 + diff * 0.75
+        if not (ma10_t3 < a1 and ma10_t2 < a2 and ma10_t1 < a3):
+            continue
+
+        # Condition 2: Close breakout 5%+
+        close_t = float(closes.iloc[-1])
+        close_t4 = float(closes.iloc[-5])
+        if close_t <= close_t4 * 1.05:
+            continue
+
+        # Condition 3: Volume amplification
+        if n < 15:
+            continue
+        vol_window = volumes.iloc[-14:-4]
+        if len(vol_window) < 10:
+            continue
+        vol_min_10d = float(vol_window.min())
+        if vol_min_10d <= 0:
+            continue
+        vol_threshold = vol_min_10d * 3.0
+        vol_ma50 = volumes.rolling(50).mean()
+        if pd.isna(vol_ma50.iloc[-1]):
+            continue
+        vol_ma50_val = float(vol_ma50.iloc[-1])
+
+        vol_ok = True
+        for i in range(5):
+            v = float(volumes.iloc[-(i+1)])
+            if v <= vol_threshold or v <= vol_ma50_val:
+                vol_ok = False
+                break
+        if not vol_ok:
+            continue
+
+        results.append({
+            "trading_day": str(daily.index[-1])[:10],
+            "market": market_val,
+            "symbol": symbol_val,
+            "strategy": STRATEGY_SLINGSHOT,
+            "strategy_label": STRATEGY_METADATA[STRATEGY_SLINGSHOT]["label"],
+            "passed": True,
+            "conditions": {
+                "ma10_t": round(ma10_t, 2),
+                "ma10_t4": round(ma10_t4, 2),
+                "diff": round(diff, 2),
+                "a1": round(a1, 2), "a2": round(a2, 2), "a3": round(a3, 2),
+                "ma10_t1": round(ma10_t1, 2), "ma10_t2": round(ma10_t2, 2), "ma10_t3": round(ma10_t3, 2),
+                "close_pct": round((close_t/close_t4 - 1) * 100, 2),
+                "vol_min_10d": round(vol_min_10d, 0),
+                "vol_threshold": round(vol_threshold, 0),
+                "vol_ma50": round(vol_ma50_val, 0),
+            },
+            "generated_at": generated_at,
+            "data_source": "local_tongdaxin_daily",
+        })
+
+    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
+    return results
+
+
 def merge_strategy_rows_for_output(output: Path, strategy: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     existing_rows: list[dict[str, Any]] = []
     if output.exists():
@@ -931,6 +1112,10 @@ def main() -> None:
             rows = build_ma_pullback_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_IMMORTAL_TREND:
             rows = build_immortal_trend_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_SLINGSHOT:
+            rows = build_slingshot_trend_rows(tdxdir=args.tdxdir)
+        elif args.strategy == STRATEGY_FIRST_MACD:
+            rows = build_rps_first_macd_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
         else:
             rows = build_ma_cross_rows(tdxdir=args.tdxdir)
     finally:

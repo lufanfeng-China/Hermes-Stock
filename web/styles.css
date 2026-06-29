@@ -4135,3 +4135,92 @@ button:hover {
 .preset-menu-item:hover {
   background: rgba(124,224,195,0.10);
 }
+
+/* PE-TTM 历史走势弹窗 */
+.pe-history-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.pe-history-overlay[hidden] { display: none; }
+.pe-history-modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 24px;
+  width: min(90vw, 780px);
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+.pe-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.pe-history-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+.pe-history-close-btn {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+.pe-history-close-btn:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.pe-history-chart {
+  width: 100%;
+  height: auto;
+  margin: 12px 0;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+.pe-history-legend {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pe-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+/* PE-TTM clickable indicator */
+#hdr-basic-dynamic-pe {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--muted);
+}
+#hdr-basic-dynamic-pe:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+/* PE分位 clickable in screener */
+.pe-pct-clickable {
+  cursor: pointer;
+  color: var(--accent);
+}
+.pe-pct-clickable:hover {
+  text-decoration: underline;
+  color: #f0a040;
+}

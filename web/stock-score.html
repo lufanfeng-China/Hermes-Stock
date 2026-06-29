@@ -614,6 +614,23 @@
     </div>
   </div>
 
-  <script type="module" src="/stock-score.js?v=20260615-ce3"></script>
+  <!-- PE-TTM 历史走势弹窗 -->
+  <div id="pe-history-overlay" class="pe-history-overlay" hidden>
+    <div class="pe-history-modal">
+      <div class="pe-history-header">
+        <h2 id="pe-history-title">PE-TTM 历史走势</h2>
+        <button id="pe-history-close" class="pe-history-close-btn" type="button" aria-label="关闭">&times;</button>
+      </div>
+      <div id="pe-history-status" class="profile-meta muted">加载中...</div>
+      <svg id="pe-history-chart" class="pe-history-chart" viewBox="0 0 720 320" role="img" aria-label="PE-TTM历史走势图"></svg>
+      <div class="pe-history-legend">
+        <span class="pe-legend-item"><span class="pe-legend-dot" style="background:#f0a040"></span> PE-TTM (公告日)</span>
+        <span class="pe-legend-item"><span class="pe-legend-dot" style="background:#60b0e0"></span> 行业中位数</span>
+        <span class="pe-legend-item"><span class="pe-legend-dot" style="background:#4ecf8a"></span> 当前实时PE</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/stock-score.js?v=20260628"></script>
 </body>
 </html>

@@ -2278,6 +2278,42 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
         )
     )
 
+    # PE背离 filter: EPS-TTM连增 + 股价连跌
+    pe_divergence_raw = _normalize_text(params.get("pe_divergence"))
+    if pe_divergence_raw:
+        try:
+            import pandas as _pd
+            from pathlib import Path as _Path
+            N = int(pe_divergence_raw)
+            if N >= 1:
+                db_path = _Path(PROJECT_ROOT) / "data" / "derived" / "pe_ttm_quarterly.parquet"
+                if db_path.exists():
+                    pe_db = _pd.read_parquet(db_path)
+                    pe_filtered = []
+                    for row in filtered:
+                        code = str(row.get("symbol", ""))
+                        stock_data = pe_db[pe_db["code"] == code].sort_values("period")
+                        if len(stock_data) < N + 1:
+                            continue
+                        last_N1 = stock_data.tail(N + 1)
+                        eps_vals = last_N1["ttm_eps"].values
+                        close_vals = last_N1["close_ad"].values
+                        ok = True
+                        for i in range(1, N + 1):
+                            if not (eps_vals[i] > eps_vals[i-1] and close_vals[i] < close_vals[i-1]):
+                                ok = False
+                                break
+                        if ok:
+                            # Verify stock is actively trading (has RPS data)
+                            rps_val = row.get("rps_20")
+                            if rps_val is None:
+                                continue  # skip suspended/delisted
+                            row["pe_divergence"] = True
+                            pe_filtered.append(row)
+                    filtered = pe_filtered
+        except Exception:
+            pass
+
     page = _coerce_int(params.get("page")) or 1
     if page < 1:
         page = 1

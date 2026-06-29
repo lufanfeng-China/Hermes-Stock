@@ -26,6 +26,14 @@ const STRATEGY_PRESETS = {
     strategy: 'immortal_trend',
     description: 'EMA6上穿EMA-DEMA18(金叉) + 收盘价>EMA108(多头保护) + RPS总分>360',
   },
+  slingshot_trend: {
+    strategy: 'slingshot_trend',
+    description: 'MA10加速上弯(中间点低于线性插值) + 收盘价5%+突破 + 持续放量(5日均>3x前10日最低>50日均量)',
+  },
+  rps_first_macd: {
+    strategy: 'rps_first_macd',
+    description: 'RPS首次7条件全部满足 + 当日MACD金叉(DIF上穿DEA) → 回测14年均+25.00%',
+  },
 };
 let currentPage = 1;
 let currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
@@ -240,7 +248,7 @@ function renderScreenerLoadingState() {
   currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
   countEl.textContent = '…';
   pageInfoEl.textContent = '正在筛选...';
-  tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="18" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
 }
 
 async function runScreener(page = 1) {
@@ -283,13 +291,13 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="18" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="18" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row, idx) => {
@@ -303,6 +311,7 @@ function renderScreenerRows(rows) {
       <td class="num" style="color:${(row.ma30_slope_pct||0)>=0?'var(--up)':'var(--down)'}">${row.ma30_slope_pct != null ? (row.ma30_slope_pct>=0?'+':'')+row.ma30_slope_pct.toFixed(2)+'%' : '-'}</td>
       <td class="num" style="color:${(row.ma10_slope_pct||0)>=0?'var(--up)':'var(--down)'}">${row.ma10_slope_pct != null ? (row.ma10_slope_pct>=0?'+':'')+row.ma10_slope_pct.toFixed(2)+'%' : '-'}</td>
       <td class="num">${formatNumber(row.pe_ttm, 2)}</td>
+      <td class="num pe-pct-clickable" data-symbol="${escapeHtml(row.symbol)}" data-name="${escapeHtml(row.stock_name || row.symbol)}">${row.pe_pct != null ? row.pe_pct.toFixed(1) + '%' : '—'}</td>
       <td>${trendSignal(row.tech_trend, row.tech_trend_label)}</td>
       <td>${trendSignal(row.tech_short_trend, row.tech_short_trend_label)}</td>
       <td class="num">${row.short_trend_duration || 1}天</td>
@@ -994,5 +1003,136 @@ btnDelete?.addEventListener('click', () => {
   ddSelectedIdx = -1;
   savePresets(presets);
 });
+
+// ── PE-TTM 历史走势弹窗 ──────────────────────────────────────────────
+
+const peOverlay = document.getElementById('pe-history-overlay');
+const peChartSvg = document.getElementById('pe-history-chart');
+const peStatus = document.getElementById('pe-history-status');
+const peTitle = document.getElementById('pe-history-title');
+const peClose = document.getElementById('pe-history-close');
+
+if (peOverlay) {
+  peClose.addEventListener('click', () => { peOverlay.hidden = true; });
+  peOverlay.addEventListener('click', (e) => {
+    if (e.target === peOverlay) peOverlay.hidden = true;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !peOverlay.hidden) peOverlay.hidden = true;
+  });
+
+  // Delegate click on PE分位 cells
+  tbody.addEventListener('click', (e) => {
+    const cell = e.target.closest('.pe-pct-clickable');
+    if (!cell) return;
+    const symbol = cell.dataset.symbol;
+    const name = cell.dataset.name || symbol;
+    if (!symbol) return;
+    showPeHistoryPopup(symbol, name);
+  });
+}
+
+async function showPeHistoryPopup(symbol, name) {
+  peOverlay.hidden = false;
+  peTitle.textContent = `PE-TTM 历史走势 — ${name}`;
+  peStatus.textContent = '加载中...';
+  peChartSvg.innerHTML = '';
+
+  try {
+    const resp = await fetch(`/api/stock-pe-history?symbol=${encodeURIComponent(symbol)}`);
+    const data = await resp.json();
+    if (!data.ok || !data.history?.length) {
+      peStatus.textContent = '暂无PE历史数据';
+      return;
+    }
+    const history = data.history;
+    peStatus.textContent = `共 ${history.length} 个报告期`;
+
+    const W = 720, H = 320;
+    const pad = { top: 30, right: 40, bottom: 50, left: 55 };
+    const pw = W - pad.left - pad.right;
+    const ph = H - pad.top - pad.bottom;
+
+    const peVals = history.map(h => h.pe_ad).filter(v => v != null);
+    const indVals = history.map(h => h.ind_median_pe).filter(v => v != null);
+    const allVals = [...peVals, ...indVals];
+    if (!allVals.length) { peStatus.textContent = '无有效PE数据'; return; }
+
+    const yMin = 0;
+    let yMax = Math.max(...allVals) * 1.1;
+    const curPE = data.current_pe;
+    if (curPE != null && curPE > yMax) yMax = curPE * 1.1;
+    const yScale = v => pad.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
+    const xStep = history.length > 1 ? pw / (history.length - 1) : pw;
+
+    let yLabels = '';
+    const yTicks = 5;
+    for (let i = 0; i <= yTicks; i++) {
+      const val = yMin + (yMax - yMin) * i / yTicks;
+      const y = yScale(val);
+      yLabels += `<text x="${pad.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${val.toFixed(0)}</text>`;
+      yLabels += `<line x1="${pad.left}" y1="${y}" x2="${W - pad.right}" y2="${y}" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+    }
+
+    let xLabels = '';
+    const xLabelStep = Math.max(1, Math.floor(history.length / 12));
+    for (let i = 0; i < history.length; i++) {
+      if (i % xLabelStep === 0 || i === history.length - 1) {
+        const x = pad.left + i * xStep;
+        xLabels += `<text x="${x}" y="${H - pad.bottom + 16}" text-anchor="middle" font-size="9" fill="var(--muted)">${history[i].period || ''}</text>`;
+      }
+    }
+
+    let pePoints = '', peAreaPoints = '';
+    for (let i = 0; i < history.length; i++) {
+      const v = history[i].pe_ad;
+      if (v == null) continue;
+      const x = pad.left + i * xStep, y = yScale(v);
+      pePoints += `${i === 0 || history[i-1]?.pe_ad == null ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)} `;
+      if (i === 0) peAreaPoints += `M${x.toFixed(1)},${H - pad.bottom} L${x.toFixed(1)},${y.toFixed(1)} `;
+      else peAreaPoints += `L${x.toFixed(1)},${y.toFixed(1)} `;
+    }
+    const lastX = pad.left + (history.length - 1) * xStep;
+    peAreaPoints += `L${lastX.toFixed(1)},${H - pad.bottom} Z`;
+
+    let indPoints = '';
+    for (let i = 0; i < history.length; i++) {
+      const v = history[i].ind_median_pe;
+      if (v == null) continue;
+      const x = pad.left + i * xStep, y = yScale(v);
+      indPoints += `${i === 0 || history[i-1]?.ind_median_pe == null ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)} `;
+    }
+
+    let peDots = '';
+    for (let i = 0; i < history.length; i++) {
+      const v = history[i].pe_ad;
+      if (v == null) continue;
+      const x = pad.left + i * xStep, y = yScale(v);
+      peDots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#f0a040"><title>${history[i].period}: PE=${v.toFixed(1)}</title></circle>`;
+    }
+
+    peChartSvg.innerHTML = `
+      <rect width="${W}" height="${H}" fill="var(--panel-2)" rx="8"/>
+      ${yLabels}
+      ${xLabels}
+      <path d="${peAreaPoints}" fill="url(#peGrad)" opacity="0.15"/>
+      <path d="${pePoints}" fill="none" stroke="#f0a040" stroke-width="2" stroke-linejoin="round"/>
+      ${peDots}
+      <path d="${indPoints}" fill="none" stroke="#60b0e0" stroke-width="1.5" stroke-dasharray="6,3" stroke-linejoin="round"/>
+      ${curPE != null ? `
+      <line x1="${pad.left}" y1="${yScale(curPE).toFixed(1)}" x2="${W - pad.right}" y2="${yScale(curPE).toFixed(1)}" stroke="#4ecf8a" stroke-width="1.5" stroke-dasharray="8,4"/>
+      <text x="${W - pad.right - 4}" y="${yScale(curPE).toFixed(1) - 6}" text-anchor="end" font-size="10" fill="#4ecf8a" font-weight="600">当前 ${curPE}</text>
+      ` : ''}
+      <defs>
+        <linearGradient id="peGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#f0a040" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#f0a040" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+    `;
+  } catch (e) {
+    peStatus.textContent = `加载失败: ${e.message}`;
+  }
+}
 
 refreshPresetUI();

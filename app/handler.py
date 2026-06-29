@@ -285,6 +285,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-kline":
             self.handle_stock_kline(parsed.query)
             return
+        if parsed.path == "/api/stock-pe-history":
+            self.handle_stock_pe_history(parsed.query)
+            return
         if parsed.path == "/api/stock-candle-patterns":
             self.handle_stock_candle_patterns(parsed.query)
             return
@@ -554,6 +557,53 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "kline_unavailable", "message": str(exc)}},
+            )
+
+    def handle_stock_pe_history(self, query: str) -> None:
+        """Return quarterly PE-TTM history for a stock."""
+        import pandas as pd
+        from pathlib import Path
+        params = parse_qs(query)
+        symbol = params.get("symbol", [DEFAULT_SYMBOL])[0].strip() or DEFAULT_SYMBOL
+        try:
+            db_path = Path(PROJECT_ROOT) / "data" / "derived" / "pe_ttm_quarterly.parquet"
+            if not db_path.exists():
+                self.respond_json(HTTPStatus.OK, {"ok": False, "error": "PE database not found"})
+                return
+            pe_db = pd.read_parquet(db_path)
+            stock_data = pe_db[pe_db["code"] == symbol].sort_values("period").copy()
+            if stock_data.empty:
+                self.respond_json(HTTPStatus.OK, {"ok": True, "symbol": symbol, "history": []})
+                return
+            # Select and format the data
+            cols = ["period", "pe_ad", "eps", "ttm_eps", "close_ad", "pe_pct", "ind_median_pe"]
+            available = [c for c in cols if c in stock_data.columns]
+            history = stock_data[available].to_dict(orient="records")
+            # Convert NaN to None for JSON
+            for row in history:
+                for k, v in list(row.items()):
+                    if pd.isna(v):
+                        row[k] = None
+            # Compute current real-time PE (latest close / latest ttm_eps)
+            current_pe = None
+            try:
+                latest_row = stock_data.iloc[-1]
+                latest_ttm = latest_row.get("ttm_eps")
+                if latest_ttm is not None and not pd.isna(latest_ttm) and float(latest_ttm) > 0:
+                    from mootdx.reader import Reader
+                    reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
+                    daily = reader.daily(symbol=symbol)
+                    if daily is not None and not daily.empty:
+                        daily = daily.sort_index()
+                        cur_close = float(daily.iloc[-1]["close"])
+                        current_pe = round(cur_close / float(latest_ttm), 2)
+            except Exception:
+                pass
+            self.respond_json(HTTPStatus.OK, {"ok": True, "symbol": symbol, "history": history, "current_pe": current_pe})
+        except Exception as exc:
+            self.respond_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": {"code": "pe_history_unavailable", "message": str(exc)}},
             )
 
     def handle_stock_candle_patterns(self, query: str) -> None:
@@ -865,12 +915,96 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                                 row["pred_20d_pct"] = pred.get("pred_20d_pct")
                     except Exception:
                         pass
+            # Augment with PE分位 from quarterly database + apply filter
+            if result.get("rows"):
+                self._enrich_pe_percentile(result, params)
             self.respond_json(HTTPStatus.OK, result)
         except Exception as exc:
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "stock_screener_error", "message": str(exc)}},
             )
+
+    @staticmethod
+    def _enrich_pe_percentile(result: dict, params: dict) -> None:
+        """Load PE分位 data and enrich screener rows. Apply min/max pe_pct filter."""
+        import pandas as pd
+        from pathlib import Path
+        try:
+            db_path = Path(PROJECT_ROOT) / "data" / "derived" / "pe_ttm_quarterly.parquet"
+            if not db_path.exists():
+                return
+            pe_db = pd.read_parquet(db_path)
+            # Get latest period's pe_pct for each code
+            latest = pe_db.sort_values("period").groupby("code").last()
+            pe_lookup = latest["pe_pct"].to_dict()
+            # Enrich rows
+            for row in result["rows"]:
+                code = row.get("symbol", "")
+                row["pe_pct"] = pe_lookup.get(code)
+            # Apply filter if requested
+            min_raw = params.get("min_pe_pct", "").strip()
+            max_raw = params.get("max_pe_pct", "").strip()
+            if min_raw or max_raw:
+                min_val = float(min_raw) if min_raw else None
+                max_val = float(max_raw) if max_raw else None
+                filtered = []
+                for row in result["rows"]:
+                    pct = row.get("pe_pct")
+                    if pct is None:
+                        continue
+                    if min_val is not None and pct < min_val:
+                        continue
+                    if max_val is not None and pct > max_val:
+                        continue
+                    filtered.append(row)
+                result["rows"] = filtered
+                result["total"] = len(filtered)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _enrich_pe_divergence(result: dict, params: dict) -> None:
+        """PE背离: EPS-TTM连增但股价连跌，连续N期。"""
+        import pandas as pd
+        from pathlib import Path
+        try:
+            n_raw = params.get("pe_divergence", "").strip()
+            if not n_raw:
+                return
+            N = int(n_raw)
+            if N < 1:
+                return
+            db_path = Path(PROJECT_ROOT) / "data" / "derived" / "pe_ttm_quarterly.parquet"
+            if not db_path.exists():
+                return
+            pe_db = pd.read_parquet(db_path)
+            # For each stock, check last N+1 periods
+            filtered = []
+            for row in result["rows"]:
+                code = row.get("symbol", "")
+                stock_data = pe_db[pe_db["code"] == code].sort_values("period")
+                if len(stock_data) < N + 1:
+                    continue
+                # Check last N consecutive pairs
+                last_N1 = stock_data.tail(N + 1)
+                eps_vals = last_N1["ttm_eps"].values
+                close_vals = last_N1["close_ad"].values
+                ok = True
+                for i in range(1, N + 1):
+                    eps_up = eps_vals[i] > eps_vals[i - 1]
+                    price_down = close_vals[i] < close_vals[i - 1]
+                    if not (eps_up and price_down):
+                        ok = False
+                        break
+                if ok:
+                    row["pe_divergence"] = True
+                    filtered.append(row)
+                # else: skip this row entirely (filter it out)
+            result["rows"] = filtered
+            result["total"] = len(filtered)
+        except Exception:
+            pass
 
     def handle_kronos_predict(self) -> None:
         """On-demand Kronos prediction for a single stock. Body: {market, symbol}"""

@@ -3763,6 +3763,141 @@ document.getElementById("wl-score-add-btn")?.addEventListener("click", async fun
   this.disabled = false;
 });
 
+// ── PE-TTM 历史走势弹窗 ──────────────────────────────────────────────
+
+const peOverlay = document.getElementById('pe-history-overlay');
+const peChartSvg = document.getElementById('pe-history-chart');
+const peStatus = document.getElementById('pe-history-status');
+const peTitle = document.getElementById('pe-history-title');
+const peClose = document.getElementById('pe-history-close');
+
+peClose.addEventListener('click', () => { peOverlay.hidden = true; });
+peOverlay.addEventListener('click', (e) => {
+  if (e.target === peOverlay) peOverlay.hidden = true;
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !peOverlay.hidden) peOverlay.hidden = true;
+});
+
+document.getElementById('hdr-basic-dynamic-pe').addEventListener('click', async () => {
+  const stock = searchState?.currentStock;
+  if (!stock || !stock.symbol) return;
+  const symbol = stock.symbol;
+  const name = stock.stock_name || symbol;
+  peOverlay.hidden = false;
+  peTitle.textContent = `PE-TTM 历史走势 — ${name}`;
+  peStatus.textContent = '加载中...';
+  peChartSvg.innerHTML = '';
+
+  try {
+    const resp = await fetch(`/api/stock-pe-history?symbol=${encodeURIComponent(symbol)}`);
+    const data = await resp.json();
+    if (!data.ok || !data.history || !data.history.length) {
+      peStatus.textContent = '暂无PE历史数据';
+      return;
+    }
+    const history = data.history;
+    peStatus.textContent = `共 ${history.length} 个报告期`;
+
+    // Build SVG chart
+    const W = 720, H = 320;
+    const pad = { top: 30, right: 40, bottom: 50, left: 55 };
+    const pw = W - pad.left - pad.right;
+    const ph = H - pad.top - pad.bottom;
+
+    const peVals = history.map(h => h.pe_ad).filter(v => v != null);
+    const indVals = history.map(h => h.ind_median_pe).filter(v => v != null);
+    const allVals = [...peVals, ...indVals];
+    if (!allVals.length) { peStatus.textContent = '无有效PE数据'; return; }
+
+    const yMin = 0;
+    let yMax = Math.max(...allVals) * 1.1;
+    // Extend Y-axis if current PE is higher
+    const curPE = data.current_pe;
+    if (curPE != null && curPE > yMax) yMax = curPE * 1.1;
+    const yScale = v => pad.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
+    const xStep = history.length > 1 ? pw / (history.length - 1) : pw;
+
+    // Y-axis labels
+    let yLabels = '';
+    const yTicks = 5;
+    for (let i = 0; i <= yTicks; i++) {
+      const val = yMin + (yMax - yMin) * i / yTicks;
+      const y = yScale(val);
+      yLabels += `<text x="${pad.left - 8}" y="${y + 4}" text-anchor="end" class="axis-label" font-size="10" fill="var(--muted)">${val.toFixed(0)}</text>`;
+      yLabels += `<line x1="${pad.left}" y1="${y}" x2="${W - pad.right}" y2="${y}" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+    }
+
+    // X-axis labels (show every Nth period)
+    let xLabels = '';
+    const xLabelStep = Math.max(1, Math.floor(history.length / 12));
+    for (let i = 0; i < history.length; i++) {
+      if (i % xLabelStep === 0 || i === history.length - 1) {
+        const x = pad.left + i * xStep;
+        const p = history[i].period || '';
+        xLabels += `<text x="${x}" y="${H - pad.bottom + 16}" text-anchor="middle" font-size="9" fill="var(--muted)">${p}</text>`;
+      }
+    }
+
+    // PE line
+    let pePoints = '';
+    let peAreaPoints = '';
+    for (let i = 0; i < history.length; i++) {
+      const v = history[i].pe_ad;
+      if (v == null) continue;
+      const x = pad.left + i * xStep;
+      const y = yScale(v);
+      pePoints += `${i === 0 || history[i-1]?.pe_ad == null ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)} `;
+      if (i === 0) peAreaPoints += `M${x.toFixed(1)},${H - pad.bottom} L${x.toFixed(1)},${y.toFixed(1)} `;
+      else peAreaPoints += `L${x.toFixed(1)},${y.toFixed(1)} `;
+    }
+    const lastX = pad.left + (history.length - 1) * xStep;
+    peAreaPoints += `L${lastX.toFixed(1)},${H - pad.bottom} Z`;
+
+    // Industry median line
+    let indPoints = '';
+    for (let i = 0; i < history.length; i++) {
+      const v = history[i].ind_median_pe;
+      if (v == null) continue;
+      const x = pad.left + i * xStep;
+      const y = yScale(v);
+      indPoints += `${i === 0 || history[i-1]?.ind_median_pe == null ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)} `;
+    }
+
+    // Data points on PE line
+    let peDots = '';
+    for (let i = 0; i < history.length; i++) {
+      const v = history[i].pe_ad;
+      if (v == null) continue;
+      const x = pad.left + i * xStep;
+      const y = yScale(v);
+      peDots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="#f0a040"><title>${history[i].period}: PE=${v.toFixed(1)}</title></circle>`;
+    }
+
+    peChartSvg.innerHTML = `
+      <rect width="${W}" height="${H}" fill="var(--panel-2)" rx="8"/>
+      ${yLabels}
+      ${xLabels}
+      <path d="${peAreaPoints}" fill="url(#peGrad)" opacity="0.15"/>
+      <path d="${pePoints}" fill="none" stroke="#f0a040" stroke-width="2" stroke-linejoin="round"/>
+      ${peDots}
+      <path d="${indPoints}" fill="none" stroke="#60b0e0" stroke-width="1.5" stroke-dasharray="6,3" stroke-linejoin="round"/>
+      ${curPE != null ? `
+      <line x1="${pad.left}" y1="${yScale(curPE).toFixed(1)}" x2="${W - pad.right}" y2="${yScale(curPE).toFixed(1)}" stroke="#4ecf8a" stroke-width="1.5" stroke-dasharray="8,4"/>
+      <text x="${W - pad.right - 4}" y="${yScale(curPE).toFixed(1) - 6}" text-anchor="end" font-size="10" fill="#4ecf8a" font-weight="600">当前 ${curPE}</text>
+      ` : ''}
+      <defs>
+        <linearGradient id="peGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#f0a040" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#f0a040" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+    `;
+  } catch (e) {
+    peStatus.textContent = `加载失败: ${e.message}`;
+  }
+});
+
 // ── Auto-load stock from URL params (cross-page deeplink) ────────────────
 
 (function () {

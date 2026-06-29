@@ -67,6 +67,8 @@
         <button type="button" class="nav-link" data-strategy="blowup_break">爆量突破</button>
         <button type="button" class="nav-link" data-strategy="ma_pullback">均线回踩</button>
         <button type="button" class="nav-link" data-strategy="immortal_trend">神仙趋势</button>
+        <button type="button" class="nav-link" data-strategy="slingshot_trend">弹弓趋势</button>
+        <button type="button" class="nav-link" data-strategy="rps_first_macd">RPS首次+金叉</button>
         <button id="stock-screener-sync-tdx-btn" class="nav-link" type="button" style="margin-left:16px">同步到AI股池</button>
         <button id="stock-screener-save-preset-btn" class="nav-link" type="button" style="margin-left:auto">💾 保存方案</button>
         <div id="stock-screener-preset-dropdown" class="preset-dropdown" style="display:none">
@@ -92,6 +94,9 @@
           <div class="filter-row"><label>二级行业排名 ≤</label><input name="max_industry_rank" type="number" step="1"></div>
           <div class="filter-row"><label>趋势−绝对 ≥</label><input name="min_trend_abs_gap" type="number" step="0.1" placeholder="正数=趋势好转"></div>
           <div class="filter-row"><label>评分背离</label><select name="score_divergence"><option value="">不限</option><option value="positive">🟢 趋势好转</option><option value="negative">🔴 趋势变坏</option></select></div>
+          <div class="filter-row"><label>PE分位 ≤</label><input name="max_pe_pct" type="number" step="0.1" placeholder="如 30"></div>
+          <div class="filter-row"><label>PE分位 ≥</label><input name="min_pe_pct" type="number" step="0.1" placeholder="如 0"></div>
+          <div class="filter-row"><label>PE背离(期数)</label><input name="pe_divergence" type="number" step="1" min="1" max="8" value="" placeholder="如 2"></div>
         </fieldset>
 
         <!-- ── 行业和概念 ── -->
@@ -199,6 +204,7 @@
               <th>30斜率</th>
               <th>10斜率</th>
               <th>PE-TTM</th>
+              <th>PE分位</th>
               <th>趋势</th>
               <th>短期趋势</th>
               <th>短延续</th>
@@ -213,7 +219,7 @@
             </tr>
           </thead>
           <tbody id="stock-screener-results-tbody">
-            <tr><td colspan="17" class="stock-score-empty-row">设置条件后点击"执行筛选"</td></tr>
+            <tr><td colspan="18" class="stock-score-empty-row">设置条件后点击"执行筛选"</td></tr>
           </tbody>
         </table>
       </div>
@@ -250,7 +256,24 @@
     </section>
   </main>
 
+  <!-- PE-TTM 历史走势弹窗 -->
+  <div id="pe-history-overlay" class="pe-history-overlay" hidden>
+    <div class="pe-history-modal">
+      <div class="pe-history-header">
+        <h2 id="pe-history-title">PE-TTM 历史走势</h2>
+        <button id="pe-history-close" class="pe-history-close-btn" type="button" aria-label="关闭">&times;</button>
+      </div>
+      <div id="pe-history-status" class="profile-meta muted">加载中...</div>
+      <svg id="pe-history-chart" class="pe-history-chart" viewBox="0 0 720 320" role="img" aria-label="PE-TTM历史走势图"></svg>
+      <div class="pe-history-legend">
+        <span class="pe-legend-item"><span class="pe-legend-dot" style="background:#f0a040"></span> PE-TTM (公告日)</span>
+        <span class="pe-legend-item"><span class="pe-legend-dot" style="background:#60b0e0"></span> 行业中位数</span>
+        <span class="pe-legend-item"><span class="pe-legend-dot" style="background:#4ecf8a"></span> 当前实时PE</span>
+      </div>
+    </div>
+  </div>
+
   <script src="/nav.js"></script>
-  <script type="module" src="/stock-screener.js?v=20260614-gap"></script>
+  <script type="module" src="/stock-screener.js?v=20260628"></script>
 </body>
 </html>
