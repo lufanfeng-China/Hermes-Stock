@@ -327,44 +327,68 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
 
 
 def build_rps_first_macd_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
-    """RPS首次+MACD金叉: RPS首次7条件全部满足 + 当日MACD金叉(DIF上穿DEA)."""
-    # First build RPS首次 results
+    """RPS首次+MACD金叉(延迟): 过去60日内有RPS首次信号 + 当日MACD金叉(DIF上穿DEA)."""
+    # Get today's RPS首次 results (for condition details)
     rps_first_results = build_rps_first_rows(tdxdir=tdxdir, trading_day=trading_day)
-    if not rps_first_results:
+
+    # Build lookup: symbol -> RPS首次 item (for condition details)
+    rps_first_by_symbol: dict[str, dict[str, Any]] = {}
+    for item in rps_first_results:
+        symbol = str(item.get("symbol", "")).strip()
+        if symbol:
+            rps_first_by_symbol[symbol] = item
+
+    # Get past 60-day RPS首次 signaled stocks
+    past_signals = _load_past_rps_first_signals(trading_day or "", ndays=60)
+
+    # Collect all candidates: past-signaled + today's passed
+    all_candidates: dict[str, dict[str, str]] = {}  # symbol -> {market, symbol}
+
+    for market, symbol in past_signals:
+        all_candidates[symbol] = {"market": market, "symbol": symbol}
+
+    # Add today's passed RPS首次 (in case not in past signals)
+    for item in rps_first_results:
+        if item.get("passed"):
+            symbol = str(item.get("symbol", "")).strip()
+            market = str(item.get("market", "")).strip().lower()
+            if symbol and symbol not in all_candidates:
+                all_candidates[symbol] = {"market": market, "symbol": symbol}
+
+    if not all_candidates:
         return []
 
-    # Only check MACD for passed RPS首次 candidates
+    # Check MACD for each candidate
     reader = Reader.factory(market="std", tdxdir=tdxdir)
     from scripts.build_macd_signals import _compute_macd
 
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
     results: list[dict[str, Any]] = []
 
-    for item in rps_first_results:
-        if not item.get("passed"):
-            # Keep non-passed items as-is for history tracking
-            results.append(item)
-            continue
+    for symbol in sorted(all_candidates):
+        info = all_candidates[symbol]
+        market_val = info["market"]
 
-        symbol_val = str(item.get("symbol", "")).strip()
+        # Get condition details from today's RPS首次 if available
+        rps_item = rps_first_by_symbol.get(symbol, {})
+        conditions = dict(rps_item.get("conditions", {}))
+        from_past = symbol not in {str(i.get("symbol", "")).strip() for i in rps_first_results if i.get("passed")}
+        conditions["from_past_signal"] = from_past
+
         try:
-            daily = reader.daily(symbol=symbol_val)
+            daily = reader.daily(symbol=symbol)
         except Exception:
-            results.append(item)  # Keep original RPS passing
             continue
         if daily is None or daily.empty:
-            results.append(item)
             continue
 
         daily = daily.sort_index()
         closes = daily["close"].astype(float).tolist()
         if len(closes) < 40:
-            results.append(item)
             continue
 
         macd_data = _compute_macd(closes)
         if macd_data is None:
-            results.append(item)
             continue
 
         dif, dea, _hist = macd_data
@@ -373,18 +397,17 @@ def build_rps_first_macd_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str
         # MACD golden cross: DIF(t) > DEA(t) AND DIF(t-1) <= DEA(t-1)
         is_golden = dif[ti] > dea[ti] and dif[ti - 1] <= dea[ti - 1]
 
-        conditions = dict(item.get("conditions", {}))
         conditions["macd_golden_cross"] = is_golden
         conditions["dif"] = round(dif[ti], 4)
         conditions["dea"] = round(dea[ti], 4)
 
         results.append({
-            "trading_day": item.get("trading_day"),
-            "market": item.get("market"),
-            "symbol": symbol_val,
+            "trading_day": rps_item.get("trading_day") or trading_day,
+            "market": market_val,
+            "symbol": symbol,
             "strategy": STRATEGY_FIRST_MACD,
             "strategy_label": STRATEGY_METADATA[STRATEGY_FIRST_MACD]["label"],
-            "passed": item.get("passed") and is_golden,
+            "passed": is_golden,
             "conditions": conditions,
             "generated_at": generated_at,
             "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",

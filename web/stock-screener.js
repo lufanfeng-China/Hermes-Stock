@@ -32,7 +32,7 @@ const STRATEGY_PRESETS = {
   },
   rps_first_macd: {
     strategy: 'rps_first_macd',
-    description: 'RPS首次7条件全部满足 + 当日MACD金叉(DIF上穿DEA) → 回测14年均+25.00%',
+    description: '过去60日内RPS首次信号 + 当日MACD金叉(DIF上穿DEA) → 回测14年均+25.00%',
   },
 };
 let currentPage = 1;

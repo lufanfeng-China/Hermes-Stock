@@ -174,6 +174,12 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
         (
+            'rebuild_screener_slingshot',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'slingshot_trend', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
             'rebuild_macd_signals',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_macd_signals.py'),
              '--tdxdir', TONGDAXIN_DIR],

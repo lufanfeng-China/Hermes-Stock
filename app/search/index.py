@@ -3556,7 +3556,7 @@ except ModuleNotFoundError as exc:
 else:
     _MOOTDX_IMPORT_ERROR = None
 
-_TDX_DIR = "/home/lufanfeng/tdx_data"
+_TDX_DIR = "/mnt/c/new_tdx64"
 _PROJECT_ROOT = _Path(__file__).resolve().parents[2]
 _INDUSTRY_FILE = _PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_industry_current.json"
 

@@ -1,0 +1,1298 @@
+{
+  "trend_id": "innovative-drugs",
+  "created_at": "2026-06-29 21:40:02",
+  "iso_timestamp": "2026-06-29T21:40:02.668858",
+  "timestamp_short": "20260629-214002",
+  "filename": "innovative-drugs_20260629-214002.json",
+  "steps": {
+    "step1": {
+      "ok": true,
+      "type": "detail",
+      "trend": {
+        "id": "innovative-drugs",
+        "name": "创新药",
+        "description": "中国创新药进入黄金时代：2025前三季度出海交易103项，披露金额超920亿美元(+77% YoY)。百济神州BTK全球销售超百亿，康方生物PD-1/VEGF双抗114亿美元出海。首版创新药商保目录落地，商保支付比例有望从8%升至44%。ADC(全球在研300+)、双抗、GLP-1(2030年>1000亿美元)、CGT(细胞基因治疗)、小核酸、多肽等多技术路线并行。产业链瓶颈在CXO产能(尤其是ADC/CGT/oligo CDMO)、上游关键材料(培养基/色谱填料)、高端设备(一次性生物反应器)。本链经多角度搜索和交叉验证，覆盖从药物发现到商业化的全流程瓶颈。",
+        "anchor": "全球药企专利悬崖 → 创新药需求爆发 → MNC药企外包中国CXO → 中国药企全球BD出海 → 医保支付改革破局 → 上游材料和设备国产替代加速",
+        "layer_count": 7
+      }
+    },
+    "step2": {
+      "ok": true,
+      "type": "preset",
+      "trend_name": "创新药",
+      "trend_id": "innovative-drugs",
+      "description": "中国创新药进入黄金时代：2025前三季度出海交易103项，披露金额超920亿美元(+77% YoY)。百济神州BTK全球销售超百亿，康方生物PD-1/VEGF双抗114亿美元出海。首版创新药商保目录落地，商保支付比例有望从8%升至44%。ADC(全球在研300+)、双抗、GLP-1(2030年>1000亿美元)、CGT(细胞基因治疗)、小核酸、多肽等多技术路线并行。产业链瓶颈在CXO产能(尤其是ADC/CGT/oligo CDMO)、上游关键材料(培养基/色谱填料)、高端设备(一次性生物反应器)。本链经多角度搜索和交叉验证，覆盖从药物发现到商业化的全流程瓶颈。",
+      "anchor": "全球药企专利悬崖 → 创新药需求爆发 → MNC药企外包中国CXO → 中国药企全球BD出海 → 医保支付改革破局 → 上游材料和设备国产替代加速",
+      "total_layers": 7,
+      "layers": [
+        {
+          "level": 0,
+          "name": "创新药研发/Biotech",
+          "role": "最终产品——从靶点发现到新药上市",
+          "description": "百济神州BTK抑制剂泽布替尼全球销售超百亿元(首个国产十亿美元分子)。康方生物PD-1/VEGF双抗全球授权114亿美元。科伦博泰ADC出海授权默沙东。2025年国产创新药出海交易超920亿美元，头部企业集中盈亏平衡。",
+          "global_players": [
+            "Pfizer",
+            "Roche",
+            "Novartis",
+            "Merck",
+            "AstraZeneca",
+            "BMS"
+          ],
+          "domestic_players": [
+            "百济神州(首款十亿美元)",
+            "康方生物(双抗)",
+            "科伦博泰(ADC出海)",
+            "荣昌生物",
+            "信达生物",
+            "传奇生物(CAR-T)"
+          ],
+          "supplier_count": 15,
+          "is_bottleneck": false,
+          "bottleneck_level": "",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "创新药管线全球/国内均>100家，不构成单一瓶颈。且多数Biotech未在A股上市。",
+          "a_share_candidates": [
+            "688235",
+            "688180"
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 CXO(CRO/CDMO)一体化服务",
+          "role": "创新药的「卖铲人」——研发外包+定制生产",
+          "description": "CXO是创新药产业链中确定性最高的环节：不论哪个药企的新药成功，都需要CXO服务。全球CXO市场超1000亿美元。药明系(药明康德+药明生物+药明合联)是全球前十大CXO中唯一的中国企业。美国《生物安全法案》试图压制药明系但未通过，反而凸显其不可替代性。",
+          "global_players": [
+            "IQVIA(美国，全球最大CRO)",
+            "Lonza(瑞士，CDMO龙头)",
+            "药明系(中国，全球TOP10唯一中企)",
+            "Catalent(美国)"
+          ],
+          "domestic_players": [
+            "药明康德(一体化CXO龙头)",
+            "药明生物(大分子CDMO全球TOP3)",
+            "康龙化成(CRO+CDMO)",
+            "凯莱英(小分子CDMO)",
+            "泰格医药(临床CRO龙头)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球前十大CXO中仅药明系一家中国企业，且美国《生物安全法案》反证其不可替代性。CXO产能建设周期3-5年，全球新产能严重不足。中国CXO具有成本优势(人力成本为欧美1/3)和工程师红利，是全球药企外包首选。任何创新药爆发，CXO是最确定受益方。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            "603259",
+            "300759",
+            "002821",
+            "300347"
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 ADC(抗体偶联药物)CDMO",
+          "role": "ADC的「定制工厂」——全球最紧缺的CDMO细分赛道",
+          "description": "ADC=抗体(大分子)+连接子+毒素(小分子)+偶联技术，生产复杂度远超传统单抗。全球在研ADC超300个，2023-2025年ADC出海交易占创新药出海总额60%+。药明合联是全球ADC CDMO绝对龙头(市占率>30%)，订单排至2027年。全球仅药明合联和Lonza两家能提供ADC一站式(抗体+毒素+偶联)CDMO。",
+          "global_players": [
+            "药明合联(中国，全球ADC CDMO龙头)",
+            "Lonza(瑞士)"
+          ],
+          "domestic_players": [
+            "药明合联(全球ADC CDMO龙头)",
+            "东曜药业(ADC CDMO)",
+            "皓元医药(ADC毒素/连接子供应商)",
+            "博腾股份(ADC CDMO布局)"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅药明合联和Lonza两家能提供ADC一站式CDMO。药明合联全球市占率>30%，订单排至2027年。ADC赛道爆发(全球在研300+个)但CDMO产能极度紧缺。ADC偶联技术know-how壁垒极高，新进入者需要3-5年积累。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            "688131",
+            "688026",
+            "300363"
+          ]
+        },
+        {
+          "level": 3,
+          "name": "GLP-1/多肽 CDMO",
+          "role": "减肥药热潮的供应链——全球最紧缺的产能之一",
+          "description": "司美格鲁肽(诺和诺德)2024年销售超200亿美元，替尔泊肽(礼来)超100亿美元。2030年GLP-1全球市场预计超1000亿美元。多肽合成需固相合成+色谱纯化，产能建设周期2-3年。诺和诺德和礼来已宣布数百亿美元扩产计划。中国多肽CDMO受益于全球产能转移。",
+          "global_players": [
+            "Bachem(瑞士，全球多肽CDMO龙头)",
+            "PolyPeptide(瑞典)",
+            "CordenPharma(瑞士)"
+          ],
+          "domestic_players": [
+            "诺泰生物(多肽CDMO——司美格鲁肽中间体)",
+            "圣诺生物(多肽CDMO)",
+            "翰宇药业(多肽API+制剂)",
+            "奥锐特(多肽/寡核苷酸CDMO)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球多肽CDMO产能极度紧缺，Bachem产能已预订至2027年。中国诺泰生物/圣诺生物承接全球GLP-1产能转移。但多肽原料药(API)端竞争格局较分散(>10家)，仅CDMO端有壁垒。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            "688076",
+            "300199",
+            "688302"
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 CGT(细胞基因治疗)CDMO",
+          "role": "下一代制药的「芯片厂」——病毒载体和细胞制备",
+          "description": "CGT=细胞治疗(CAR-T等)+基因治疗。全球已上市10+款CAR-T产品。CGT CDMO的核心是病毒载体(AAV/慢病毒/逆转录病毒)的GMP生产——全球产能极度紧缺，等待时间12-18个月。病毒载体生产成本占CGT药物总成本40-60%，且技术壁垒极高(需要Biosafety Level 2+)。",
+          "global_players": [
+            "Catalent(美国)",
+            "Lonza(瑞士)",
+            "Thermo Fisher(美国)",
+            "Oxford Biomedica(英国)"
+          ],
+          "domestic_players": [
+            "和元生物(AAV/慢病毒CDMO)",
+            "金斯瑞生物/传奇生物(CAR-T)",
+            "博腾生物(CGT CDMO)",
+            "康希诺(病毒载体平台)"
+          ],
+          "supplier_count": 4,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "全球CGT CDMO产能严重短缺(等待12-18个月)。国内和元生物是唯一专注CGT CDMO的A股公司。但CGT商业化速度慢于ADC和GLP-1，需求爆发时间不确定。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            "688238",
+            "688185",
+            "688363"
+          ]
+        },
+        {
+          "level": 5,
+          "name": "🔴 上游关键材料(培养基/色谱填料)",
+          "role": "生物制药的「柴米油盐」——每天生产都在消耗的必需品",
+          "description": "细胞培养基(让细胞在反应器中生长)和色谱填料(纯化抗体/蛋白)是生物制药的两大核心耗材。全球培养基市场被Thermo Fisher(Gibco品牌)、Merck、Danaher(Cytiva/HyClone)三家垄断80%+。色谱填料被Cytiva(GE)、Tosoh、Merck三家垄断90%+。国产替代刚起步。",
+          "global_players": [
+            "Thermo Fisher(Gibco)",
+            "Danaher/Cytiva(HyClone)",
+            "Merck/Sigma"
+          ],
+          "domestic_players": [
+            "奥浦迈(培养基——国产唯一规模化)",
+            "纳微科技(色谱填料——国产唯一纳米微球)",
+            "百普赛斯(重组蛋白)",
+            "义翘神州(重组蛋白)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球培养基被3家垄断(80%+市场份额)，色谱填料被3家垄断(90%+)。奥浦迈是国内唯一实现培养基规模化生产的上市公司。纳微科技是国内唯一突破纳米微球色谱填料并进入抗体生产供应链的上市公司。这两项是创新药上游最核心的「卡脖子」材料。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            "688293",
+            "688690",
+            "301080",
+            "301047"
+          ]
+        },
+        {
+          "level": 6,
+          "name": "小核酸/寡核苷酸 CDMO",
+          "role": "下一代爆款药物的「定制工厂」——ASO/siRNA药物",
+          "description": "小核酸药物(ASO/siRNA)是继小分子和抗体后的第三代药物技术。诺华Inclisiran(降胆固醇siRNA)年销超30亿美元。小核酸合成难度远高于普通化学药(需要20+步固相合成+硫代修饰)，全球仅少数CDMO能承接。2025年被视为小核酸产业化元年。",
+          "global_players": [
+            "Nitto Denko(日本)",
+            "Agilent(美国)",
+            "Danaher/Cytiva"
+          ],
+          "domestic_players": [
+            "药明康德(合全药业，布局小核酸CDMO)",
+            "瑞博生物(未上市，国内小核酸龙头)",
+            "圣诺医药(未上市)"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "小核酸CDMO全球产能稀缺，但处于产业化早期(2025年才进入爆发前夜)。国内小核酸CDMO企业几乎都未在A股独立上市。药明康德合全药业已布局，但占比小。未来2-3年可能是关键布局窗口。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            "603259",
+            "688076"
+          ]
+        }
+      ]
+    },
+    "step3": {
+      "ok": true,
+      "trend_name": "创新药",
+      "total_layers": 7,
+      "bottleneck_count": 6,
+      "all_layers": [
+        {
+          "level": 0,
+          "name": "创新药研发/Biotech",
+          "supplier_count": 15,
+          "is_bottleneck": false,
+          "skip_reason": "创新药管线全球/国内均>100家，不构成单一瓶颈。且多数Biotech未在A股上市。"
+        },
+        {
+          "level": 1,
+          "name": "🔴 CXO(CRO/CDMO)一体化服务",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球前十大CXO中仅药明系一家中国企业，且美国《生物安全法案》反证其不可替代性。CXO产能建设周期3-5年，全球新产能严重不足。中国CXO具有成本优势(人力成本为欧美1/3)和工程师红利，是全球药企外包首选。任何创新药爆发，CXO是最确定受益方。",
+          "skip_reason": ""
+        },
+        {
+          "level": 2,
+          "name": "🔴 ADC(抗体偶联药物)CDMO",
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅药明合联和Lonza两家能提供ADC一站式CDMO。药明合联全球市占率>30%，订单排至2027年。ADC赛道爆发(全球在研300+个)但CDMO产能极度紧缺。ADC偶联技术know-how壁垒极高，新进入者需要3-5年积累。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "GLP-1/多肽 CDMO",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球多肽CDMO产能极度紧缺，Bachem产能已预订至2027年。中国诺泰生物/圣诺生物承接全球GLP-1产能转移。但多肽原料药(API)端竞争格局较分散(>10家)，仅CDMO端有壁垒。",
+          "skip_reason": ""
+        },
+        {
+          "level": 4,
+          "name": "🔴 CGT(细胞基因治疗)CDMO",
+          "supplier_count": 4,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "全球CGT CDMO产能严重短缺(等待12-18个月)。国内和元生物是唯一专注CGT CDMO的A股公司。但CGT商业化速度慢于ADC和GLP-1，需求爆发时间不确定。",
+          "skip_reason": ""
+        },
+        {
+          "level": 5,
+          "name": "🔴 上游关键材料(培养基/色谱填料)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球培养基被3家垄断(80%+市场份额)，色谱填料被3家垄断(90%+)。奥浦迈是国内唯一实现培养基规模化生产的上市公司。纳微科技是国内唯一突破纳米微球色谱填料并进入抗体生产供应链的上市公司。这两项是创新药上游最核心的「卡脖子」材料。",
+          "skip_reason": ""
+        },
+        {
+          "level": 6,
+          "name": "小核酸/寡核苷酸 CDMO",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "小核酸CDMO全球产能稀缺，但处于产业化早期(2025年才进入爆发前夜)。国内小核酸CDMO企业几乎都未在A股独立上市。药明康德合全药业已布局，但占比小。未来2-3年可能是关键布局窗口。",
+          "skip_reason": ""
+        }
+      ],
+      "bottlenecks": [
+        {
+          "level": 1,
+          "name": "🔴 CXO(CRO/CDMO)一体化服务",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球前十大CXO中仅药明系一家中国企业，且美国《生物安全法案》反证其不可替代性。CXO产能建设周期3-5年，全球新产能严重不足。中国CXO具有成本优势(人力成本为欧美1/3)和工程师红利，是全球药企外包首选。任何创新药爆发，CXO是最确定受益方。",
+          "skip_reason": ""
+        },
+        {
+          "level": 2,
+          "name": "🔴 ADC(抗体偶联药物)CDMO",
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅药明合联和Lonza两家能提供ADC一站式CDMO。药明合联全球市占率>30%，订单排至2027年。ADC赛道爆发(全球在研300+个)但CDMO产能极度紧缺。ADC偶联技术know-how壁垒极高，新进入者需要3-5年积累。",
+          "skip_reason": ""
+        },
+        {
+          "level": 5,
+          "name": "🔴 上游关键材料(培养基/色谱填料)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球培养基被3家垄断(80%+市场份额)，色谱填料被3家垄断(90%+)。奥浦迈是国内唯一实现培养基规模化生产的上市公司。纳微科技是国内唯一突破纳米微球色谱填料并进入抗体生产供应链的上市公司。这两项是创新药上游最核心的「卡脖子」材料。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "GLP-1/多肽 CDMO",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球多肽CDMO产能极度紧缺，Bachem产能已预订至2027年。中国诺泰生物/圣诺生物承接全球GLP-1产能转移。但多肽原料药(API)端竞争格局较分散(>10家)，仅CDMO端有壁垒。",
+          "skip_reason": ""
+        },
+        {
+          "level": 4,
+          "name": "🔴 CGT(细胞基因治疗)CDMO",
+          "supplier_count": 4,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "全球CGT CDMO产能严重短缺(等待12-18个月)。国内和元生物是唯一专注CGT CDMO的A股公司。但CGT商业化速度慢于ADC和GLP-1，需求爆发时间不确定。",
+          "skip_reason": ""
+        },
+        {
+          "level": 6,
+          "name": "小核酸/寡核苷酸 CDMO",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "小核酸CDMO全球产能稀缺，但处于产业化早期(2025年才进入爆发前夜)。国内小核酸CDMO企业几乎都未在A股独立上市。药明康德合全药业已布局，但占比小。未来2-3年可能是关键布局窗口。",
+          "skip_reason": ""
+        }
+      ],
+      "summary": "在 7 层产业链中，识别出 6 个瓶颈层。按卡脖子程度排序，前三个最关键的瓶颈是：🔴 CXO(CRO/CDMO)一体化服务、🔴 ADC(抗体偶联药物)CDMO、🔴 上游关键材料(培养基/色谱填料)。"
+    },
+    "step4": {
+      "ok": true,
+      "trend_name": "创新药",
+      "mapped_layers": [
+        {
+          "level": 1,
+          "name": "🔴 CXO(CRO/CDMO)一体化服务",
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球前十大CXO中仅药明系一家中国企业，且美国《生物安全法案》反证其不可替代性。CXO产能建设周期3-5年，全球新产能严重不足。中国CXO具有成本优势(人力成本为欧美1/3)和工程师红利，是全球药企外包首选。任何创新药爆发，CXO是最确定受益方。",
+          "show_all": true,
+          "total_stocks": 4,
+          "stocks": [
+            {
+              "code": "603259",
+              "name": "药明康德",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "300759",
+              "name": "康龙化成",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "002821",
+              "name": "凯莱英",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "300347",
+              "name": "泰格医药",
+              "mapping_reason": "",
+              "match_level": ""
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 2,
+          "name": "🔴 ADC(抗体偶联药物)CDMO",
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球仅药明合联和Lonza两家能提供ADC一站式CDMO。药明合联全球市占率>30%，订单排至2027年。ADC赛道爆发(全球在研300+个)但CDMO产能极度紧缺。ADC偶联技术know-how壁垒极高，新进入者需要3-5年积累。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "688131",
+              "name": "皓元医药",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "688026",
+              "name": "洁特生物",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "300363",
+              "name": "博腾股份",
+              "mapping_reason": "",
+              "match_level": ""
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 3,
+          "name": "GLP-1/多肽 CDMO",
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球多肽CDMO产能极度紧缺，Bachem产能已预订至2027年。中国诺泰生物/圣诺生物承接全球GLP-1产能转移。但多肽原料药(API)端竞争格局较分散(>10家)，仅CDMO端有壁垒。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "688076",
+              "name": "",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "300199",
+              "name": "翰宇药业",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "688302",
+              "name": "海创药业",
+              "mapping_reason": "",
+              "match_level": ""
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 4,
+          "name": "🔴 CGT(细胞基因治疗)CDMO",
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "全球CGT CDMO产能严重短缺(等待12-18个月)。国内和元生物是唯一专注CGT CDMO的A股公司。但CGT商业化速度慢于ADC和GLP-1，需求爆发时间不确定。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "688238",
+              "name": "和元生物",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "688185",
+              "name": "康希诺",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "688363",
+              "name": "华熙生物",
+              "mapping_reason": "",
+              "match_level": ""
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 5,
+          "name": "🔴 上游关键材料(培养基/色谱填料)",
+          "bottleneck_level": "🔴 核心瓶颈",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "全球培养基被3家垄断(80%+市场份额)，色谱填料被3家垄断(90%+)。奥浦迈是国内唯一实现培养基规模化生产的上市公司。纳微科技是国内唯一突破纳米微球色谱填料并进入抗体生产供应链的上市公司。这两项是创新药上游最核心的「卡脖子」材料。",
+          "show_all": true,
+          "total_stocks": 4,
+          "stocks": [
+            {
+              "code": "688293",
+              "name": "奥浦迈",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "688690",
+              "name": "纳微科技",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "301080",
+              "name": "百普赛斯",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "301047",
+              "name": "义翘神州",
+              "mapping_reason": "",
+              "match_level": ""
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 6,
+          "name": "小核酸/寡核苷酸 CDMO",
+          "bottleneck_level": "🟡 次要瓶颈",
+          "bottleneck_score": 3,
+          "bottleneck_reason": "小核酸CDMO全球产能稀缺，但处于产业化早期(2025年才进入爆发前夜)。国内小核酸CDMO企业几乎都未在A股独立上市。药明康德合全药业已布局，但占比小。未来2-3年可能是关键布局窗口。",
+          "show_all": true,
+          "total_stocks": 2,
+          "stocks": [
+            {
+              "code": "603259",
+              "name": "药明康德",
+              "mapping_reason": "",
+              "match_level": ""
+            },
+            {
+              "code": "688076",
+              "name": "",
+              "mapping_reason": "",
+              "match_level": ""
+            }
+          ],
+          "remaining": 0
+        }
+      ]
+    },
+    "step5": {
+      "ok": true,
+      "trend_name": "创新药",
+      "total_verified": 17,
+      "stocks": [
+        {
+          "code": "603259",
+          "market": "sh",
+          "name": "药明康德",
+          "layers": [
+            "🔴 CXO(CRO/CDMO)一体化服务",
+            "小核酸/寡核苷酸 CDMO"
+          ],
+          "total_score": 66.07,
+          "market_rank": 247,
+          "market_total": 5517,
+          "industry_rank": 6,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 102.72,
+          "change_5d": 5.8,
+          "change_20d": -1.4,
+          "change_60d": 13,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 23.7,
+            "growth": 15.7,
+            "operating": 8.3,
+            "cashflow": 13.4,
+            "solvency": 7.2,
+            "asset_quality": 5.3
+          }
+        },
+        {
+          "code": "688690",
+          "market": "sh",
+          "name": "纳微科技",
+          "layers": [
+            "🔴 上游关键材料(培养基/色谱填料)"
+          ],
+          "total_score": 62.56,
+          "market_rank": 489,
+          "market_total": 5517,
+          "industry_rank": 11,
+          "industry_total": 138,
+          "ind1": "化工",
+          "ind2": "化学制品",
+          "close": 43.28,
+          "change_5d": 28,
+          "change_20d": 24.8,
+          "change_60d": 80.3,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 19.9,
+            "growth": 17.5,
+            "operating": 3.4,
+            "cashflow": 6.7,
+            "solvency": 8.7,
+            "asset_quality": 3.1
+          }
+        },
+        {
+          "code": "300199",
+          "market": "sz",
+          "name": "翰宇药业",
+          "layers": [
+            "GLP-1/多肽 CDMO"
+          ],
+          "total_score": 61.45,
+          "market_rank": 596,
+          "market_total": 5517,
+          "industry_rank": 17,
+          "industry_total": 126,
+          "ind1": "医药医疗",
+          "ind2": "化学制药",
+          "close": 22,
+          "change_5d": 6.1,
+          "change_20d": -3.3,
+          "change_60d": 21.8,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 22.8,
+            "growth": 13.3,
+            "operating": 7,
+            "cashflow": 12.6,
+            "solvency": 0.2,
+            "asset_quality": 5.3
+          }
+        },
+        {
+          "code": "301080",
+          "market": "sz",
+          "name": "百普赛斯",
+          "layers": [
+            "🔴 上游关键材料(培养基/色谱填料)"
+          ],
+          "total_score": 61.32,
+          "market_rank": 621,
+          "market_total": 5517,
+          "industry_rank": 14,
+          "industry_total": 99,
+          "ind1": "医药医疗",
+          "ind2": "生物制品",
+          "close": 40.39,
+          "change_5d": 10.3,
+          "change_20d": -5.6,
+          "change_60d": -2.8,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 16,
+            "growth": 13.9,
+            "operating": 7.5,
+            "cashflow": 12,
+            "solvency": 8.4,
+            "asset_quality": 5.3
+          }
+        },
+        {
+          "code": "301047",
+          "market": "sz",
+          "name": "义翘神州",
+          "layers": [
+            "🔴 上游关键材料(培养基/色谱填料)"
+          ],
+          "total_score": 58.56,
+          "market_rank": 990,
+          "market_total": 5517,
+          "industry_rank": 19,
+          "industry_total": 99,
+          "ind1": "医药医疗",
+          "ind2": "生物制品",
+          "close": 60.59,
+          "change_5d": 2.3,
+          "change_20d": -9.4,
+          "change_60d": -13.9,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 9.3,
+            "growth": 15.3,
+            "operating": 7.2,
+            "cashflow": 9.9,
+            "solvency": 9.8,
+            "asset_quality": 6.3
+          }
+        },
+        {
+          "code": "300759",
+          "market": "sz",
+          "name": "康龙化成",
+          "layers": [
+            "🔴 CXO(CRO/CDMO)一体化服务"
+          ],
+          "total_score": 56.54,
+          "market_rank": 1352,
+          "market_total": 5517,
+          "industry_rank": 18,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 22.71,
+          "change_5d": 4.6,
+          "change_20d": -14.9,
+          "change_60d": -13.5,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 16.3,
+            "growth": 12.7,
+            "operating": 9.8,
+            "cashflow": 13.5,
+            "solvency": 2.2,
+            "asset_quality": 4.2
+          }
+        },
+        {
+          "code": "002821",
+          "market": "sz",
+          "name": "凯莱英",
+          "layers": [
+            "🔴 CXO(CRO/CDMO)一体化服务"
+          ],
+          "total_score": 55.44,
+          "market_rank": 1547,
+          "market_total": 5517,
+          "industry_rank": 23,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 123.82,
+          "change_5d": 9,
+          "change_20d": -1.8,
+          "change_60d": 30.3,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 15.2,
+            "growth": 10.4,
+            "operating": 5.7,
+            "cashflow": 13.6,
+            "solvency": 8.9,
+            "asset_quality": 5.3
+          }
+        },
+        {
+          "code": "688076",
+          "market": "sh",
+          "name": "",
+          "layers": [
+            "GLP-1/多肽 CDMO",
+            "小核酸/寡核苷酸 CDMO"
+          ],
+          "total_score": 53.44,
+          "market_rank": 1940,
+          "market_total": 5517,
+          "industry_rank": 25,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 27.43,
+          "change_5d": 0.7,
+          "change_20d": -10.2,
+          "change_60d": -9.5,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 21.6,
+            "growth": 7.4,
+            "operating": 4.4,
+            "cashflow": 14.1,
+            "solvency": 1.8,
+            "asset_quality": 4.4
+          }
+        },
+        {
+          "code": "300363",
+          "market": "sz",
+          "name": "博腾股份",
+          "layers": [
+            "🔴 ADC(抗体偶联药物)CDMO"
+          ],
+          "total_score": 51.27,
+          "market_rank": 2367,
+          "market_total": 5517,
+          "industry_rank": 31,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 14.28,
+          "change_5d": 3.4,
+          "change_20d": -8.7,
+          "change_60d": -28.1,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 4.5,
+            "growth": 16.9,
+            "operating": 6.8,
+            "cashflow": 10.8,
+            "solvency": 3.8,
+            "asset_quality": 4.3
+          }
+        },
+        {
+          "code": "300347",
+          "market": "sz",
+          "name": "泰格医药",
+          "layers": [
+            "🔴 CXO(CRO/CDMO)一体化服务"
+          ],
+          "total_score": 50.33,
+          "market_rank": 2550,
+          "market_total": 5517,
+          "industry_rank": 32,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 40.12,
+          "change_5d": 1.1,
+          "change_20d": -11.8,
+          "change_60d": -20.1,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 3.6,
+            "growth": 10,
+            "operating": 9.2,
+            "cashflow": 12.9,
+            "solvency": 6.7,
+            "asset_quality": 6.2
+          }
+        },
+        {
+          "code": "688131",
+          "market": "sh",
+          "name": "皓元医药",
+          "layers": [
+            "🔴 ADC(抗体偶联药物)CDMO"
+          ],
+          "total_score": 49.48,
+          "market_rank": 2740,
+          "market_total": 5517,
+          "industry_rank": 37,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 86.37,
+          "change_5d": 14,
+          "change_20d": 15.1,
+          "change_60d": 32.3,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 15.7,
+            "growth": 12.8,
+            "operating": 5.5,
+            "cashflow": 8.8,
+            "solvency": 3.6,
+            "asset_quality": 3.1
+          }
+        },
+        {
+          "code": "688302",
+          "market": "sh",
+          "name": "海创药业",
+          "layers": [
+            "GLP-1/多肽 CDMO"
+          ],
+          "total_score": 47.22,
+          "market_rank": 3193,
+          "market_total": 5517,
+          "industry_rank": 60,
+          "industry_total": 99,
+          "ind1": "医药医疗",
+          "ind2": "生物制品",
+          "close": 35.55,
+          "change_5d": 6.4,
+          "change_20d": -17.9,
+          "change_60d": -8.5,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "利润率极低(-114.8%)且评分不高"
+          ],
+          "dim_scores": {
+            "profitability": 12.5,
+            "growth": 10,
+            "operating": 5.3,
+            "cashflow": 7.8,
+            "solvency": 7.2,
+            "asset_quality": 7.4
+          }
+        },
+        {
+          "code": "688363",
+          "market": "sh",
+          "name": "华熙生物",
+          "layers": [
+            "🔴 CGT(细胞基因治疗)CDMO"
+          ],
+          "total_score": 46.08,
+          "market_rank": 3417,
+          "market_total": 5517,
+          "industry_rank": 2,
+          "industry_total": 3,
+          "ind1": "医药医疗",
+          "ind2": "医疗美容",
+          "close": 35.45,
+          "change_5d": 2.2,
+          "change_20d": -10.3,
+          "change_60d": -17.6,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "营收严重下滑(-23.1%)"
+          ],
+          "dim_scores": {
+            "profitability": 8.4,
+            "growth": 4.6,
+            "operating": 7.7,
+            "cashflow": 13.6,
+            "solvency": 5.2,
+            "asset_quality": 5.3
+          }
+        },
+        {
+          "code": "688293",
+          "market": "sh",
+          "name": "奥浦迈",
+          "layers": [
+            "🔴 上游关键材料(培养基/色谱填料)"
+          ],
+          "total_score": 45.75,
+          "market_rank": 3478,
+          "market_total": 5517,
+          "industry_rank": 41,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 38.09,
+          "change_5d": 10.4,
+          "change_20d": -16,
+          "change_60d": -15.2,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 11.3,
+            "growth": 13.9,
+            "operating": 5.3,
+            "cashflow": 5.8,
+            "solvency": 4.2,
+            "asset_quality": 5
+          }
+        },
+        {
+          "code": "688238",
+          "market": "sh",
+          "name": "和元生物",
+          "layers": [
+            "🔴 CGT(细胞基因治疗)CDMO"
+          ],
+          "total_score": 40.8,
+          "market_rank": 4373,
+          "market_total": 5517,
+          "industry_rank": 48,
+          "industry_total": 55,
+          "ind1": "医药医疗",
+          "ind2": "医疗服务",
+          "close": 5.55,
+          "change_5d": 5.7,
+          "change_20d": -11.2,
+          "change_60d": -19.4,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "利润率极低(-105.0%)且评分不高"
+          ],
+          "dim_scores": {
+            "profitability": 12.5,
+            "growth": 9.9,
+            "operating": 3.3,
+            "cashflow": 7.5,
+            "solvency": 3.2,
+            "asset_quality": 6.1
+          }
+        },
+        {
+          "code": "688026",
+          "market": "sh",
+          "name": "洁特生物",
+          "layers": [
+            "🔴 ADC(抗体偶联药物)CDMO"
+          ],
+          "total_score": 38.08,
+          "market_rank": 4772,
+          "market_total": 5517,
+          "industry_rank": 83,
+          "industry_total": 94,
+          "ind1": "医药医疗",
+          "ind2": "医疗器械",
+          "close": 15.1,
+          "change_5d": 17.6,
+          "change_20d": -2,
+          "change_60d": -7.4,
+          "concept_risk": "high",
+          "risk_flags": [
+            "利润率极低(-3.9%)且评分不高",
+            "营收严重下滑(-12.9%)"
+          ],
+          "dim_scores": {
+            "profitability": 9.2,
+            "growth": 2.6,
+            "operating": 5.1,
+            "cashflow": 12.9,
+            "solvency": 7,
+            "asset_quality": 5.3
+          }
+        },
+        {
+          "code": "688185",
+          "market": "sh",
+          "name": "康希诺",
+          "layers": [
+            "🔴 CGT(细胞基因治疗)CDMO"
+          ],
+          "total_score": 35.34,
+          "market_rank": 5089,
+          "market_total": 5517,
+          "industry_rank": 94,
+          "industry_total": 99,
+          "ind1": "医药医疗",
+          "ind2": "生物制品",
+          "close": 49.93,
+          "change_5d": 1.1,
+          "change_20d": -19.8,
+          "change_60d": -30.4,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "利润率极低(-21.2%)且评分不高"
+          ],
+          "dim_scores": {
+            "profitability": 12.5,
+            "growth": 9.6,
+            "operating": 1.7,
+            "cashflow": 6.8,
+            "solvency": 5.6,
+            "asset_quality": 4.5
+          }
+        }
+      ]
+    },
+    "step6": {
+      "ok": true,
+      "trend_name": "创新药",
+      "cross_checks": [
+        {
+          "level": 1,
+          "layer_name": "🔴 CXO(CRO/CDMO)一体化服务",
+          "bottleneck_score": 5,
+          "global_monopoly": "IQVIA(美国，全球最大CRO)",
+          "domestic_leader": "603259",
+          "all_candidates": [
+            "603259",
+            "300759",
+            "002821",
+            "300347"
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（IQVIA(美国，全球最大CRO)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "valuation_risk",
+              "question": "当前股价是否已经充分反映了「唯一国产替代者」的溢价？安全边际有多少？",
+              "trigger": "股价短期内大幅上涨，5年分位进入极高区间"
+            },
+            {
+              "type": "capacity_bottleneck",
+              "question": "国产龙头的产能是否足够承接爆发的需求？产能爬坡周期是多久？",
+              "trigger": "公司季报显示产能利用率接近上限但新产能尚未投产"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "layer_name": "🔴 ADC(抗体偶联药物)CDMO",
+          "bottleneck_score": 5,
+          "global_monopoly": "药明合联(中国，全球ADC CDMO龙头)",
+          "domestic_leader": "688131",
+          "all_candidates": [
+            "688131",
+            "688026",
+            "300363"
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（药明合联(中国，全球ADC CDMO龙头)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "domestic_newcomer",
+              "question": "如果有新的国产厂商突破技术进入供应，现有国产龙头的唯一性优势是否会被削弱？",
+              "trigger": "新国产厂商宣布技术突破或通过客户验证"
+            },
+            {
+              "type": "valuation_risk",
+              "question": "当前股价是否已经充分反映了「唯一国产替代者」的溢价？安全边际有多少？",
+              "trigger": "股价短期内大幅上涨，5年分位进入极高区间"
+            },
+            {
+              "type": "capacity_bottleneck",
+              "question": "国产龙头的产能是否足够承接爆发的需求？产能爬坡周期是多久？",
+              "trigger": "公司季报显示产能利用率接近上限但新产能尚未投产"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "layer_name": "GLP-1/多肽 CDMO",
+          "bottleneck_score": 4,
+          "global_monopoly": "Bachem(瑞士，全球多肽CDMO龙头)",
+          "domestic_leader": "688076",
+          "all_candidates": [
+            "688076",
+            "300199",
+            "688302"
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Bachem(瑞士，全球多肽CDMO龙头)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "layer_name": "🔴 CGT(细胞基因治疗)CDMO",
+          "bottleneck_score": 3,
+          "global_monopoly": "Catalent(美国)",
+          "domestic_leader": "688238",
+          "all_candidates": [
+            "688238",
+            "688185",
+            "688363"
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Catalent(美国)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "layer_name": "🔴 上游关键材料(培养基/色谱填料)",
+          "bottleneck_score": 5,
+          "global_monopoly": "Thermo Fisher(Gibco)",
+          "domestic_leader": "688293",
+          "all_candidates": [
+            "688293",
+            "688690",
+            "301080",
+            "301047"
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Thermo Fisher(Gibco)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "valuation_risk",
+              "question": "当前股价是否已经充分反映了「唯一国产替代者」的溢价？安全边际有多少？",
+              "trigger": "股价短期内大幅上涨，5年分位进入极高区间"
+            },
+            {
+              "type": "capacity_bottleneck",
+              "question": "国产龙头的产能是否足够承接爆发的需求？产能爬坡周期是多久？",
+              "trigger": "公司季报显示产能利用率接近上限但新产能尚未投产"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "layer_name": "小核酸/寡核苷酸 CDMO",
+          "bottleneck_score": 3,
+          "global_monopoly": "Nitto Denko(日本)",
+          "domestic_leader": "603259",
+          "all_candidates": [
+            "603259",
+            "688076"
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Nitto Denko(日本)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        }
+      ]
+    },
+    "step7": {
+      "timestamp": "2026/6/29 21:40:02",
+      "trend_name": "创新药",
+      "bottleneck_count": 6,
+      "total_stocks": 17
+    }
+  }
+}
