@@ -2032,6 +2032,11 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
                     "RPS标准" if active_strategy == "rps_standard_launch"
                     else (_normalize_text(strategy_entry.get("strategy_label")) or None)
                 )
+                # Expose slingshot GAP from strategy conditions
+                strategy_conditions = strategy_entry.get("conditions") or {}
+                gap_total = _coerce_float(strategy_conditions.get("gap_total"))
+                if gap_total is not None:
+                    row["slingshot_gap"] = gap_total
         rows.append(row)
 
     text_filters = {
