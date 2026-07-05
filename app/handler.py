@@ -1650,10 +1650,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'build_rps_history', 'name': '构建 RPS 历史', 'desc': '计算全市场截面 RPS20/50/120/250，回溯 120 天'},
             {'id': 'update_rps_current', 'name': '更新当前 RPS', 'desc': '从历史 RPS 提取最新交易日数据'},
             {'id': 'rebuild_screener_rps_first', 'name': '重建 RPS首次 策略', 'desc': '重建 RPS首次进入前50 的选股策略结果'},
-            {'id': 'rebuild_screener_ma_cross', 'name': '重建 均线选股 策略', 'desc': '重建均线多头排列选股策略结果'},
-            {'id': 'rebuild_screener_blowup_stall', 'name': '重建 爆量滞涨 策略', 'desc': '重建放量滞涨预警策略结果'},
-            {'id': 'rebuild_screener_blowup_break', 'name': '重建 爆量突破 策略', 'desc': '重建放量突破策略结果'},
-            {'id': 'rebuild_screener_ma_pullback', 'name': '重建 均线回踩 策略', 'desc': '重建多头趋势回踩MA20支撑策略结果'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ])
 

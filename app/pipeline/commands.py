@@ -21,7 +21,7 @@ DEFAULT_SYMBOL = "601600"
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_first", "ma_cross", "blowup_stall", "blowup_break", "ma_pullback", "immortal_trend", "slingshot_trend", "rps_first_macd"}:
+    if strategy not in {"rps_first", "slingshot_trend", "rps_first_macd"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
@@ -147,30 +147,6 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             'rebuild_screener_first',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
              '--strategy', 'rps_first', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_ma_cross',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'ma_cross', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_blowup_stall',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'blowup_stall', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_blowup_break',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'blowup_break', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_ma_pullback',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'ma_pullback', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
         (

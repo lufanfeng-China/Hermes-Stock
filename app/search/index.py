@@ -1052,7 +1052,7 @@ def _build_strategy_async(trading_day: str, strategy: str) -> None:
     """Spawn background process to build ALL strategy datasets for a given date.
     Builds all strategies so the date file is complete after first visit."""
     import subprocess
-    all_strategies = ["rps_first", "ma_cross", "blowup_stall", "blowup_break", "ma_pullback"]
+    all_strategies = ["rps_first", "slingshot_trend"]
     # Build the requested strategy first (fastest path), then the rest
     ordered = [strategy] + [s for s in all_strategies if s != strategy]
     try:
@@ -2426,10 +2426,6 @@ _REALTIME_SCENARIO_DEFAULTS: dict[str, dict[str, object]] = {
             "sp_vol_ratio_min": 1.15,
         },
     },
-    "ma_cross": {
-        "label": "均线选股",
-        "conditions": {},
-    },
 }
 
 
@@ -3377,129 +3373,6 @@ def _build_scheme_2560_matches(
     return rows
 
 
-def _build_ma_cross_matches(
-    conditions: dict[str, object],
-    condition_enabled: dict[str, bool],
-) -> list[dict[str, object]]:
-    """均线选股：MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10上升 + 均线粘合<10%"""
-    del conditions, condition_enabled  # fixed conditions, not user-configurable
-    from mootdx.reader import Reader
-
-    reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
-    quotes = load_realtime_quote_rows()
-    security_lookup = {_security_key(row): row for row in load_security_rows()}
-    industry_lookup = {_security_key(row): row for row in load_industry_rows()}
-    snapshot = _load_financial_snapshot() or {}
-    score_rows = snapshot.get("scores") or {}
-    market_rank_lookup, market_universe_size, industry_rank_lookup, industry_universe_sizes, market_score_lookup, industry_score_lookup, market_abs_lookup, market_trend_lookup, industry_abs_lookup, industry_trend_lookup = _score_rank_lookups(
-        score_rows if isinstance(score_rows, dict) else {},
-        industry_lookup,
-    )
-
-    rows: list[dict[str, object]] = []
-    for q in quotes:
-        symbol = str(q.get("symbol", "")).strip()
-        market = str(q.get("market", "")).strip().lower()
-        if not symbol or not market:
-            continue
-        price = _coerce_float(q.get("price"))
-        open_p = _coerce_float(q.get("open"))
-        if price is None or open_p is None or price <= 0 or open_p <= 0:
-            continue
-
-        try:
-            daily = reader.daily(symbol=symbol)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        closes = daily["close"].astype(float).tolist()
-        if len(closes) < 35:
-            continue
-
-        # Compute MAs
-        def _ma(values, period, idx):
-            if idx < period - 1:
-                return None
-            return sum(values[idx - period + 1 : idx + 1]) / period
-
-        ti = len(closes) - 1   # today's index
-        yi = ti - 1             # yesterday's index
-
-        ma5_t = _ma(closes, 5, ti)
-        ma10_t = _ma(closes, 10, ti)
-        ma20_t = _ma(closes, 20, ti)
-        ma30_t = _ma(closes, 30, ti)
-        ma5_y = _ma(closes, 5, yi)
-        ma10_y = _ma(closes, 10, yi)
-        ma20_y = _ma(closes, 20, yi)
-
-        if None in (ma5_t, ma10_t, ma20_t, ma30_t, ma5_y, ma10_y, ma20_y):
-            continue
-
-        # COND1: CROSS(MA5, MA20) — today MA5 > MA20, yesterday MA5 <= MA20
-        cross = ma5_t > ma20_t and ma5_y <= ma20_y
-
-        # COND2: MA30 > MA5 > MA20 > MA10
-        order_ok = ma30_t > ma5_t > ma20_t > ma10_t
-
-        # COND3: CLOSE > OPEN (阳线) — use realtime price vs open
-        bullish = price > open_p
-
-        # COND4: MA5 > REF(MA5,1) and MA10 > REF(MA10,1)
-        rising = ma5_t > ma5_y and ma10_t > ma10_y
-
-        # COND5: (MAXMA - MINMA) / MINMA * 100 < 10
-        mas = [ma5_t, ma10_t, ma20_t, ma30_t]
-        max_ma = max(mas)
-        min_ma = min(mas)
-        spread = (max_ma - min_ma) / min_ma * 100.0
-        sticky = spread < 10.0
-
-        if not (cross and order_ok and bullish and rising and sticky):
-            continue
-
-        # Build result row
-        key = (market, symbol)
-        security = security_lookup.get(key) or {}
-        industry = industry_lookup.get(key) or {}
-        score_key = f"{market}:{symbol}"
-        score_entry = score_rows.get(score_key) or {}
-        industry_level_2 = (
-            _normalize_text(score_entry.get("industry_sw_level_2"))
-            or _normalize_text(industry.get("industry_level_2_name"))
-        )
-        stock_name = _normalize_text(security.get("stock_name")) or symbol
-
-        gain_pct = ((price - open_p) / open_p * 100.0) if open_p > 0 else 0.0
-
-        rows.append({
-            "market": market,
-            "symbol": symbol,
-            "stock_name": stock_name,
-            "current_price": round(price, 2),
-            "gain_pct": round(gain_pct, 2),
-            "volume_ratio": None,
-            "market_cap_yi": None,
-            "turnover_pct": None,
-            "industry_level_1": (
-                _normalize_text(score_entry.get("industry_sw_level_1"))
-                or _normalize_text(industry.get("industry_level_1_name"))
-            ),
-            "industry_level_2": industry_level_2,
-            "industry_total_score": round(_coerce_float(score_entry.get("ind_total_score")), 1) if score_entry.get("ind_total_score") is not None else None,
-            "industry_total_rank": _coerce_int(score_entry.get("industry_total_rank")) or industry_rank_lookup.get(score_key),
-            "industry_total_universe_size": (
-                _coerce_int(score_entry.get("industry_total_universe_size"))
-                or industry_universe_sizes.get(industry_level_2)
-            ),
-            "matched_conditions": ["均线金叉"],
-        })
-
-    rows.sort(key=lambda r: (-float(r.get("gain_pct") or 0.0), str(r.get("market", "")), str(r.get("symbol", ""))))
-    return rows
-
 
 def realtime_screener_response(params: dict[str, str]) -> dict[str, object]:
     scenario = _normalize_text(params.get("scenario")) or "tail_session"
@@ -3521,10 +3394,6 @@ def realtime_screener_response(params: dict[str, str]) -> dict[str, object]:
         conditions = _parse_realtime_conditions(params, defaults)
         condition_enabled = _parse_realtime_condition_enabled(params)
         rows = _build_scheme_2560_matches(conditions, condition_enabled) if monitor else []
-    elif scenario == "ma_cross":
-        conditions = _parse_realtime_conditions(params, defaults)
-        condition_enabled = _parse_realtime_condition_enabled(params)
-        rows = _build_ma_cross_matches(conditions, condition_enabled) if monitor else []
     else:
         conditions = _parse_realtime_conditions(params, defaults)
         condition_enabled = _parse_realtime_condition_enabled(params)

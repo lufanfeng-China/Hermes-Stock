@@ -25,31 +25,11 @@ from app.search.index import (
 DEFAULT_TDX_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_OUTPUT = DEFAULT_DATASET_DIR / "dataset_stock_screener_strategies_current.json"
 STRATEGY_FIRST = "rps_first"
-STRATEGY_MA_CROSS = "ma_cross"
-STRATEGY_BLOWUP_STALL = "blowup_stall"
-STRATEGY_BLOWUP_BREAK = "blowup_break"
-STRATEGY_MA_PULLBACK = "ma_pullback"
-STRATEGY_IMMORTAL_TREND = "immortal_trend"
 STRATEGY_SLINGSHOT = "slingshot_trend"
 STRATEGY_FIRST_MACD = "rps_first_macd"
 STRATEGY_METADATA = {
     STRATEGY_FIRST: {
         "label": "RPS首次",
-    },
-    STRATEGY_MA_CROSS: {
-        "label": "均线选股",
-    },
-    STRATEGY_BLOWUP_STALL: {
-        "label": "爆量滞涨",
-    },
-    STRATEGY_BLOWUP_BREAK: {
-        "label": "爆量突破",
-    },
-    STRATEGY_MA_PULLBACK: {
-        "label": "均线回踩",
-    },
-    STRATEGY_IMMORTAL_TREND: {
-        "label": "神仙趋势",
     },
     STRATEGY_SLINGSHOT: {
         "label": "弹弓趋势",
@@ -252,6 +232,7 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             continue
         daily = daily.sort_index()
         closes = daily["close"].astype(float).tolist()
+        opens = daily["open"].astype(float)
         if len(closes) < 15:
             continue
         ti = len(closes) - 1
@@ -416,533 +397,8 @@ def build_rps_first_macd_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
     return results
 
-
-def build_ma_cross_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """均线选股：MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10上升 + 均线粘合<10%"""
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    results: list[dict[str, Any]] = []
-
-    for row in rps_rows:
-        market_val = str(row.get("market", "")).strip().lower()
-        symbol_val = str(row.get("symbol", "")).strip()
-        if not market_val or not symbol_val:
-            continue
-
-        try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        closes = daily["close"].astype(float).tolist()
-        if len(closes) < 35:
-            continue
-
-        def _ma(values, period, idx):
-            if idx < period - 1:
-                return None
-            return sum(values[idx - period + 1 : idx + 1]) / period
-
-        ti = len(closes) - 1
-        yi = ti - 1
-
-        ma5_t = _ma(closes, 5, ti)
-        ma10_t = _ma(closes, 10, ti)
-        ma20_t = _ma(closes, 20, ti)
-        ma30_t = _ma(closes, 30, ti)
-        ma5_y = _ma(closes, 5, yi)
-        ma10_y = _ma(closes, 10, yi)
-        ma20_y = _ma(closes, 20, yi)
-
-        if None in (ma5_t, ma10_t, ma20_t, ma30_t, ma5_y, ma10_y, ma20_y):
-            continue
-
-        # COND1: CROSS(MA5, MA20)
-        cross = ma5_t > ma20_t and ma5_y <= ma20_y
-        # COND2: MA30 > MA5 > MA20 > MA10
-        order_ok = ma30_t > ma5_t > ma20_t > ma10_t
-        # COND3+4: we use yesterday's close vs open as approximation for 阳线 + rising
-        opens = daily["open"].astype(float).tolist()
-        bullish = closes[ti] > opens[ti] if len(opens) > ti else True
-        rising = ma5_t > ma5_y and ma10_t > ma10_y
-        # COND5: spread < 10%
-        mas = [ma5_t, ma10_t, ma20_t, ma30_t]
-        spread = (max(mas) - min(mas)) / min(mas) * 100.0
-        sticky = spread < 10.0
-
-        passed = cross and order_ok and bullish and rising and sticky
-
-        results.append({
-            "trading_day": row.get("trading_day"),
-            "market": market_val,
-            "symbol": symbol_val,
-            "strategy": STRATEGY_MA_CROSS,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_MA_CROSS]["label"],
-            "passed": passed,
-            "conditions": {
-                "cross_ma5_ma20": cross,
-                "order_ma30_5_20_10": order_ok,
-                "bullish": bullish,
-                "rising_ma5_ma10": rising,
-                "sticky_pct": round(spread, 2),
-            },
-            "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
-        })
-
-    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
-    return results
-
-def build_ma_pullback_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """均线回踩：多头趋势(MA20>MA60+RPS20>60)+回踩MA20支撑(回调5-15%)+止跌信号(缩量+阳线+下影线)"""
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    results: list[dict[str, Any]] = []
-
-    for row in rps_rows:
-        market_val = str(row.get("market", "")).strip().lower()
-        symbol_val = str(row.get("symbol", "")).strip()
-        if not market_val or not symbol_val:
-            continue
-
-        rps20 = _coerce_float(row.get("rps_20"))
-        rps50 = _coerce_float(row.get("rps_50"))
-        if rps20 is None or rps50 is None:
-            continue
-
-        try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        closes = daily["close"].astype(float).tolist()
-        opens = daily["open"].astype(float).tolist()
-        highs = daily["high"].astype(float).tolist()
-        lows = daily["low"].astype(float).tolist()
-        volumes = daily["volume"].astype(float).tolist()
-        if len(closes) < 70:
-            continue
-
-        def _ma(values, period, idx):
-            if idx < period - 1:
-                return None
-            return sum(values[idx - period + 1 : idx + 1]) / period
-
-        ti = len(closes) - 1
-        close_t = closes[ti]
-
-        ma20_t = _ma(closes, 20, ti)
-        ma60_t = _ma(closes, 60, ti)
-        if None in (ma20_t, ma60_t):
-            continue
-
-        # ---- Layer 1: 确认多头趋势 ----
-        # MA20 > MA60 (中长期多头排列)
-        bull_ma = ma20_t > ma60_t
-        # close > MA60 (没破中长线)
-        above_ma60 = close_t > ma60_t
-        # RPS强度
-        rps_ok = rps20 > 60.0 or rps50 > 65.0
-        if not (bull_ma and above_ma60 and rps_ok):
-            continue
-
-        # ---- Layer 2: 检测回调至支撑位 ----
-        # 20日最高
-        recent_high = max(highs[max(0, ti - 19):ti + 1])
-        pullback_pct = (recent_high - close_t) / recent_high * 100.0
-
-        # 科技股放宽到18%（688/300/301开头）
-        is_tech = symbol_val.startswith(("688", "300", "301"))
-        pb_max = 18.0 if is_tech else 15.0
-        if pullback_pct < 5.0 or pullback_pct > pb_max:
-            continue
-
-        # 距MA20距离
-        dist_ma20 = (close_t - ma20_t) / ma20_t * 100.0
-        if dist_ma20 < -3.0 or dist_ma20 > 2.0:
-            continue
-
-        # 缩量下跌: 近5日均量 / 20日均量 < 0.8
-        vol_5_avg = sum(volumes[max(0, ti - 4):ti + 1]) / min(5, ti + 1)
-        vol_20_avg = sum(volumes[max(0, ti - 19):ti + 1]) / min(20, ti + 1)
-        vol_shrink = (vol_5_avg / vol_20_avg) < 0.8 if vol_20_avg > 0 else False
-
-        # 最近5日未创新低
-        low_recent5 = min(lows[max(0, ti - 4):ti + 1])
-        low_prev5 = min(lows[max(0, ti - 9):max(0, ti - 4) + 1]) if ti >= 5 else low_recent5
-        no_new_low = low_recent5 >= low_prev5
-
-        if not (vol_shrink and no_new_low):
-            continue
-
-        # ---- Layer 3: 确认买入信号 ----
-        # 今日止跌: 收阳 或 收盘>昨收
-        close_y = closes[ti - 1] if ti > 0 else close_t
-        open_t = opens[ti] if len(opens) > ti else close_t
-        stopped_falling = close_t >= close_y or close_t > open_t
-
-        # 量能回暖: 今日量 > 5日均量
-        vol_recovery = volumes[ti] > vol_5_avg if len(volumes) > ti else False
-
-        # 下影线比例
-        candle_range = highs[ti] - lows[ti] if ti < len(highs) else 1
-        lower_shadow = (min(open_t, close_t) - lows[ti]) / candle_range if candle_range > 0 else 0
-
-        if not (stopped_falling and vol_recovery):
-            continue
-
-        passed = True
-
-        # ---- 信号评分 ----
-        pb_norm = min(pullback_pct / pb_max, 1.0)
-        dist_score = max(0, 1.0 - abs(dist_ma20) / 3.0)
-        rps_score = rps20 / 100.0
-        vol_score = min(volumes[ti] / vol_5_avg, 2.0) / 2.0 if vol_5_avg > 0 else 0
-        shadow_score = min(lower_shadow / 0.5, 1.0)
-        candlestick_bonus = 0.05 if lower_shadow > 0.5 else 0.0
-
-        signal_score = round(
-            pb_norm * 0.30
-            + dist_score * 0.20
-            + rps_score * 0.20
-            + vol_score * 0.15
-            + shadow_score * 0.10
-            + candlestick_bonus,
-            4
-        )
-
-        results.append({
-            "trading_day": row.get("trading_day"),
-            "market": market_val,
-            "symbol": symbol_val,
-            "strategy": STRATEGY_MA_PULLBACK,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_MA_PULLBACK]["label"],
-            "passed": passed,
-            "conditions": {
-                "pullback_pct": round(pullback_pct, 2),
-                "dist_ma20_pct": round(dist_ma20, 2),
-                "rps20": round(rps20, 2),
-                "rps50": round(rps50, 2) if rps50 else None,
-                "vol_ratio": round(volumes[ti] / vol_5_avg, 2) if vol_5_avg > 0 and len(volumes) > ti else None,
-                "lower_shadow": round(lower_shadow, 2),
-                "ma20": round(ma20_t, 2),
-                "ma60": round(ma60_t, 2),
-                "close": round(close_t, 2),
-                "is_tech": is_tech,
-                "signal_score": signal_score,
-            },
-            "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current",
-        })
-
-    results.sort(key=lambda item: (
-        -float(item.get("conditions", {}).get("signal_score", 0)),
-        item.get("market", ""),
-        item.get("symbol", ""),
-    ))
-    return results
-
-
-def build_blowup_break_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") -> list[dict[str, Any]]:
-    """爆量突破：VA=V6~V10均量; 近5日每根阳线量>3xVA且阴线>2xVA; 5日涨幅5%-20%; 趋势/短趋势排除空头+震荡"""
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    if trading_day:
-        from app.search.index import load_rps_rows_as_of
-        rps_rows = load_rps_rows_as_of(trading_day)
-    else:
-        rps_rows = load_rps_rows()
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    results: list[dict[str, Any]] = []
-
-    # Load tech eval for trend filtering
-    from app.search.index import _load_technical_eval
-    tech_eval = _load_technical_eval(as_of_date=trading_day or "")
-
-    for row in rps_rows:
-        market_val = str(row.get("market", "")).strip().lower()
-        symbol_val = str(row.get("symbol", "")).strip()
-        if not market_val or not symbol_val:
-            continue
-
-        # Trend filter: 趋势和短期趋势不能是空头/强空头/震荡
-        te = tech_eval.get(symbol_val, {})
-        trend = str(te.get("trend", "")).lower()
-        short_trend = str(te.get("short_trend", "")).lower()
-        if trend in ("bearish", "strong_bearish", "neutral") or short_trend in ("bearish", "strong_bearish", "neutral"):
-            continue
-
-        try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        if len(daily) < 11:
-            continue
-
-        n = len(daily)
-        closes = daily["close"].astype(float).tolist()
-        opens = daily["open"].astype(float).tolist()
-        volumes = daily["volume"].astype(float).tolist()
-
-        t_idx = n - 1  # today (V1)
-
-        # VA = average volume of V6-V10 (days 6-10 ago)
-        v6_10 = volumes[t_idx - 9:t_idx - 4]  # indices for V6..V10
-        va = sum(v6_10) / 5.0
-        if va <= 0:
-            continue
-
-        # Condition: 最近5日(V1-V5) 成交量条件+涨幅条件
-        all_vol_ok = True
-        vol_ratios: list[float] = []
-        for offset in range(5):
-            idx = t_idx - offset
-            vol = volumes[idx]
-            c = closes[idx]
-            o = opens[idx]
-            if c > o:
-                # 阳线: volume > 3x VA
-                if vol <= va * 3.0:
-                    all_vol_ok = False
-                    break
-            else:
-                # 阴线: volume > 2x VA
-                if vol <= va * 2.0:
-                    all_vol_ok = False
-                    break
-            vol_ratios.append(round(vol / va, 2))
-        if not all_vol_ok:
-            continue
-
-        # Condition: 5日涨幅 5% < ret < 20%
-        ret_5d = (closes[t_idx] / closes[t_idx - 5] - 1) * 100.0
-        if ret_5d <= 5.0 or ret_5d >= 20.0:
-            continue
-
-        passed = True
-        # vol_ratios is [V1, V2, V3, V4, V5]
-        results.append({
-            "trading_day": row.get("trading_day"),
-            "market": market_val,
-            "symbol": symbol_val,
-            "strategy": STRATEGY_BLOWUP_BREAK,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_BLOWUP_BREAK]["label"],
-            "passed": passed,
-            "conditions": {
-                "va": round(va, 0),
-                "vol_ratio_v1": vol_ratios[0],
-                "vol_ratio_v2": vol_ratios[1],
-                "vol_ratio_v3": vol_ratios[2],
-                "vol_ratio_v4": vol_ratios[3],
-                "vol_ratio_v5": vol_ratios[4],
-                "ret_5d_pct": round(ret_5d, 2),
-                "trend": trend,
-                "short_trend": short_trend,
-            },
-            "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily",
-        })
-
-    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
-    return results
-
-
-def build_blowup_stall_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """爆量滞涨：放巨量但涨幅极小甚至冲高回落，疑似主力出货。
-
-    条件：量>2.5x50日均量 + 涨幅<2% + 上影线>40% 或 近20日>10%
-    按信号强度排序：量比越大×涨幅越小×上影越长 = 信号越强
-    """
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    results: list[dict[str, Any]] = []
-
-    for row in rps_rows:
-        market_val = str(row.get("market", "")).strip().lower()
-        symbol_val = str(row.get("symbol", "")).strip()
-        if not market_val or not symbol_val:
-            continue
-
-        try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        if len(daily) < 75:
-            continue
-
-        n = len(daily)
-        closes = daily["close"].astype(float).tolist()
-        opens = daily["open"].astype(float).tolist()
-        highs = daily["high"].astype(float).tolist()
-        lows = daily["low"].astype(float).tolist()
-        volumes = daily["volume"].astype(float).tolist()
-
-        t = n - 1
-
-        ma_start = t - 50
-        if ma_start < 0:
-            continue
-        ma_vol = sum(volumes[ma_start:t]) / 50.0
-        if ma_vol <= 0:
-            continue
-
-        vol_r = volumes[t] / ma_vol
-        if vol_r < 2.5:
-            continue
-
-        o_t, c_t, h_t, l_t = opens[t], closes[t], highs[t], lows[t]
-        rng = h_t - l_t
-        if rng == 0:
-            continue
-        upper_r = (h_t - max(o_t, c_t)) / rng
-        chg = (c_t / closes[t - 1] - 1) * 100
-
-        if chg > 2.0:
-            continue
-
-        has_shadow = upper_r > 0.4
-
-        p20 = max(0, t - 20)
-        if p20 >= t:
-            continue
-        ret20 = (c_t / closes[p20] - 1) * 100
-        is_high = ret20 > 10.0
-
-        if not (has_shadow or is_high):
-            continue
-
-        score = round(vol_r * (1 + upper_r) / max(abs(chg), 0.1), 2)
-        if score < 10:
-            continue
-
-        results.append({
-            "trading_day": row.get("trading_day"),
-            "market": market_val,
-            "symbol": symbol_val,
-            "strategy": STRATEGY_BLOWUP_STALL,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_BLOWUP_STALL]["label"],
-            "passed": True,
-            "conditions": {
-                "vol_ratio": round(vol_r, 2),
-                "change_pct": round(chg, 2),
-                "upper_shadow_ratio": round(upper_r, 2),
-                "ret_20d_pct": round(ret20, 2),
-                "has_upper_shadow": has_shadow,
-                "is_high_position": is_high,
-                "ma_vol": round(ma_vol, 0),
-                "signal_score": score,
-            },
-            "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily",
-        })
-
-    results.sort(key=lambda item: (-float(item.get("conditions", {}).get("signal_score", 0)),
-                                    item.get("market", ""), item.get("symbol", "")))
-    return results
-
-
-def build_immortal_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """神仙趋势：EMA6上穿EMA-DEMA18 + 收盘价>EMA108多头保护 + RPS>360。
-    
-    H1 = EMA(CLOSE,6); H2 = EMA(H1,18); H3 = EMA(CLOSE,108)
-    信号: cross(H1,H2) 且 close > H3 且 RPS总分>360
-    """
-    reader = Reader.factory(market="std", tdxdir=tdxdir)
-    rps_rows = load_rps_rows()
-    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    results: list[dict[str, Any]] = []
-
-    for row in rps_rows:
-        market_val = str(row.get("market", "")).strip().lower()
-        symbol_val = str(row.get("symbol", "")).strip()
-        if not market_val or not symbol_val:
-            continue
-
-        # ── RPS总分 > 360 ──
-        rps20 = _coerce_float(row.get("rps_20"))
-        rps50 = _coerce_float(row.get("rps_50"))
-        rps120 = _coerce_float(row.get("rps_120"))
-        rps250 = _coerce_float(row.get("rps_250"))
-        if None in (rps20, rps50, rps120, rps250):
-            continue
-        rps_total = rps20 + rps50 + rps120 + rps250
-        if rps_total <= 360:
-            continue
-
-        try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
-            continue
-        if daily is None or daily.empty:
-            continue
-        daily = daily.sort_index()
-        closes = daily["close"].astype(float)
-        if len(closes) < 110:
-            continue
-
-        # EMA(CLOSE, 6)
-        h1 = closes.ewm(span=6, adjust=False).mean()
-        # EMA(H1, 18)
-        h2 = h1.ewm(span=18, adjust=False).mean()
-        # EMA(CLOSE, 108)
-        h3 = closes.ewm(span=108, adjust=False).mean()
-
-        h1_t = h1.iloc[-1]
-        h1_y = h1.iloc[-2]
-        h2_t = h2.iloc[-1]
-        h2_y = h2.iloc[-2]
-        h3_t = h3.iloc[-1]
-        close_t = closes.iloc[-1]
-
-        # CROSS(H1, H2): H1 > H2 today AND H1 <= H2 yesterday
-        cross = bool(h1_t > h2_t and h1_y <= h2_y)
-        # 多头趋势保护: close > EMA108
-        above_h3 = bool(close_t > h3_t)
-
-        passed = cross and above_h3
-
-        results.append({
-            "trading_day": row.get("trading_day"),
-            "market": market_val,
-            "symbol": symbol_val,
-            "strategy": STRATEGY_IMMORTAL_TREND,
-            "strategy_label": STRATEGY_METADATA[STRATEGY_IMMORTAL_TREND]["label"],
-            "passed": passed,
-            "conditions": {
-                "rps_total": round(rps_total, 2),
-                "rps20": round(rps20, 2),
-                "rps50": round(rps50, 2),
-                "rps120": round(rps120, 2),
-                "rps250": round(rps250, 2),
-                "h1": round(float(h1_t), 2),
-                "h2": round(float(h2_t), 2),
-                "h3": round(float(h3_t), 2),
-                "close": round(float(close_t), 2),
-                "cross_h1_h2": cross,
-                "above_h3": above_h3,
-            },
-            "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily",
-        })
-
-    results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
-    return results
-
-
 def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """弹弓趋势：MA10加速上弯 + 收盘突破 + 放量确认。"""
+    """弹弓趋势：MA10加速上弯 + min(开,收)4日连涨 + 涨幅<20% + 放量 + MA10偏离4~5。"""
     import pandas as pd
     from app.search.index import load_security_rows
     reader = Reader.factory(market="std", tdxdir=tdxdir)
@@ -967,6 +423,7 @@ def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[st
             continue
 
         closes = daily["close"].astype(float)
+        opens = daily["open"].astype(float)
         volumes = daily["volume"].astype(float)
         n = len(closes)
 
@@ -990,13 +447,33 @@ def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[st
         if not (ma10_t3 < a1 and ma10_t2 < a2 and ma10_t1 < a3):
             continue
 
-        # Condition 2: Close breakout 5%+
+        # Condition 2: min(open,close) rising 4 consecutive days
+        if n < 5:
+            continue
         close_t = float(closes.iloc[-1])
         close_t4 = float(closes.iloc[-5])
-        if close_t <= close_t4 * 1.05:
+        open_t4 = float(opens.iloc[-5])
+        open_t3 = float(opens.iloc[-4])
+        open_t2 = float(opens.iloc[-3])
+        open_t1 = float(opens.iloc[-2])
+        open_t = float(opens.iloc[-1])
+        close_t3 = float(closes.iloc[-4])
+        close_t2 = float(closes.iloc[-3])
+        close_t1 = float(closes.iloc[-2])
+        low_t4 = min(open_t4, close_t4)
+        low_t3 = min(open_t3, close_t3)
+        low_t2 = min(open_t2, close_t2)
+        low_t1 = min(open_t1, close_t1)
+        low_t = min(open_t, close_t)
+        if not (low_t4 < low_t3 < low_t2 < low_t1 < low_t):
             continue
 
-        # Condition 3: Volume amplification
+        # Condition 3: Close gain < 20% (not too extended)
+        if close_t >= close_t4 * 1.20:
+            continue
+
+
+        # Condition 4: Volume amplification
         if n < 15:
             continue
         vol_window = volumes.iloc[-14:-4]
@@ -1020,6 +497,27 @@ def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[st
         if not vol_ok:
             continue
 
+        # Condition 5: Cumulative MA10 deviation < 10
+        # Walk backward from today: accumulate (min(open,close) - MA10) * (10/close)
+        # Stop when min(open,close) <= MA10
+        gap_total = 0.0
+        gap_days = 0
+        for j in range(1, min(n, 120)):
+            idx = -(j + 1)
+            if pd.isna(ma10.iloc[idx]):
+                break
+            price_low = float(min(opens.iloc[idx], closes.iloc[idx]))
+            ma10_val = float(ma10.iloc[idx])
+            if price_low <= ma10_val:
+                break
+            c = float(closes.iloc[idx])
+            if c <= 0:
+                break
+            gap_total += (price_low - ma10_val) * (10.0 / c)
+            gap_days += 1
+        if gap_total < 4.0 or gap_total >= 5.0:
+            continue
+
         results.append({
             "trading_day": str(daily.index[-1])[:10],
             "market": market_val,
@@ -1034,9 +532,16 @@ def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[st
                 "a1": round(a1, 2), "a2": round(a2, 2), "a3": round(a3, 2),
                 "ma10_t1": round(ma10_t1, 2), "ma10_t2": round(ma10_t2, 2), "ma10_t3": round(ma10_t3, 2),
                 "close_pct": round((close_t/close_t4 - 1) * 100, 2),
+                "low_t4": round(low_t4, 2),
+                "low_t3": round(low_t3, 2),
+                "low_t2": round(low_t2, 2),
+                "low_t1": round(low_t1, 2),
+                "low_t": round(low_t, 2),
                 "vol_min_10d": round(vol_min_10d, 0),
                 "vol_threshold": round(vol_threshold, 0),
                 "vol_ma50": round(vol_ma50_val, 0),
+                "gap_total": round(gap_total, 2),
+                "gap_days": gap_days,
             },
             "generated_at": generated_at,
             "data_source": "local_tongdaxin_daily",
@@ -1125,22 +630,12 @@ def main() -> None:
     try:
         if args.strategy == STRATEGY_FIRST:
             rows = build_rps_first_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
-        elif args.strategy == STRATEGY_MA_CROSS:
-            rows = build_ma_cross_rows(tdxdir=args.tdxdir)
-        elif args.strategy == STRATEGY_BLOWUP_STALL:
-            rows = build_blowup_stall_rows(tdxdir=args.tdxdir)
-        elif args.strategy == STRATEGY_BLOWUP_BREAK:
-            rows = build_blowup_break_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
-        elif args.strategy == STRATEGY_MA_PULLBACK:
-            rows = build_ma_pullback_rows(tdxdir=args.tdxdir)
-        elif args.strategy == STRATEGY_IMMORTAL_TREND:
-            rows = build_immortal_trend_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_SLINGSHOT:
             rows = build_slingshot_trend_rows(tdxdir=args.tdxdir)
         elif args.strategy == STRATEGY_FIRST_MACD:
             rows = build_rps_first_macd_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
         else:
-            rows = build_ma_cross_rows(tdxdir=args.tdxdir)
+            rows = build_rps_first_rows(tdxdir=args.tdxdir, trading_day=trading_day or "")
     finally:
         # Restore monkey-patches
         if trading_day:

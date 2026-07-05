@@ -6,29 +6,9 @@ const STRATEGY_PRESETS = {
     strategy: 'rps_first',
     description: 'RPS总分上穿360 + 趋势多头/强多头 + 短趋势多头/强多头 + 距10MA<10% + 收盘价10日最高',
   },
-  ma_cross: {
-    strategy: 'ma_cross',
-    description: 'MA5上穿MA20 + MA30>MA5>MA20>MA10 + 阳线 + MA5/MA10向上 + 均线粘合<10%',
-  },
-  blowup_stall: {
-    strategy: 'blowup_stall',
-    description: '放巨量但涨不动：量>2.5x50日均量 + 阳线 + 涨幅<2% + 距20日最高≤2% + 冲高回落/高位, 按信号强度排序',
-  },
-  blowup_break: {
-    strategy: 'blowup_break',
-    description: 'VA=V6~V10均量; 近5日阳线量>3xVA阴线>2xVA; 5日涨幅5%-20%; 排除空头+震荡',
-  },
-  ma_pullback: {
-    strategy: 'ma_pullback',
-    description: '多头趋势(MA20>MA60+RPS20>60)+回踩MA20(回调5-15%)+缩量止跌(阳线+量能回暖+下影线), 按信号评分排序',
-  },
-  immortal_trend: {
-    strategy: 'immortal_trend',
-    description: 'EMA6上穿EMA-DEMA18(金叉) + 收盘价>EMA108(多头保护) + RPS总分>360',
-  },
   slingshot_trend: {
     strategy: 'slingshot_trend',
-    description: 'MA10加速上弯(中间点低于线性插值) + 收盘价5%+突破 + 持续放量(5日均>3x前10日最低>50日均量)',
+    description: 'MA10加速上弯 + min(开,收)4日连涨 + 涨幅<20% + 放量 + MA10偏离4~5',
   },
   rps_first_macd: {
     strategy: 'rps_first_macd',
@@ -252,6 +232,17 @@ function renderScreenerLoadingState() {
 }
 
 async function runScreener(page = 1) {
+  const strategyVal = (strategyInputEl?.value || '').trim();
+  if (!strategyVal) {
+    currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
+    countEl.textContent = '0';
+    pageInfoEl.textContent = '第 1 / 1 页';
+    statusEl.textContent = '请先选择策略方案';
+    tbody.innerHTML = '<tr><td colspan="18" class="stock-score-empty-row">请先选择策略方案</td></tr>';
+    renderPagination(currentPayload);
+    updateWatchlistToolbar();
+    return;
+  }
   currentPage = page;
   statusEl.textContent = '正在筛选...';
   renderScreenerLoadingState();
@@ -482,7 +473,7 @@ tbody.addEventListener('keydown', (event) => {
 });
 
 bindScreenerChartPresetEvents();
-loadTradingDays().then(() => loadIndustryHierarchy()).then(() => runScreener(1));
+loadTradingDays().then(() => loadIndustryHierarchy());
 
 // ── Calendar widget ──────────────────────────────────────────
 
@@ -492,6 +483,16 @@ async function loadTradingDays() {
     const data = await resp.json();
     if (data.ok && data.trading_days) {
       tradingDaysSet = new Set(data.trading_days);
+      // If today is a non-trading day, default to latest trading day
+      const today = new Date().toISOString().slice(0, 10);
+      if (!tradingDaysSet.has(today)) {
+        const latest = getLatestTradingDay();
+        if (latest) {
+          selectedDate = latest;
+          asOfDateInput.value = latest;
+          if (asOfDateText) asOfDateText.textContent = formatDateCN(latest);
+        }
+      }
     }
   } catch (e) {
     console.warn('Failed to load trading days', e);
