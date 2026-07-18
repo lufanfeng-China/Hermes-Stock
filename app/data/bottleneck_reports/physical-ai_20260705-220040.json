@@ -1,0 +1,1423 @@
+{
+  "trend_id": "physical-ai",
+  "created_at": "2026-07-05 22:00:40",
+  "iso_timestamp": "2026-07-05T22:00:40.986789",
+  "timestamp_short": "20260705-220040",
+  "filename": "physical-ai_20260705-220040.json",
+  "steps": {
+    "step1": {
+      "ok": true,
+      "type": "detail",
+      "trend": {
+        "id": "physical-ai",
+        "name": "物理AI (Physical AI)",
+        "description": "物理AI是AI从数字世界跃入物理世界的范式革命——让机器人/自动驾驶/智能制造真正理解和预测物理规律。NVIDIA CEO黄仁勋在GTC 2025将其定义为「AI的下一波浪潮」，推出Cosmos世界模型+Isaac仿真+Omniverse数字孪生三大平台。2026年物理AI进入产业化元年：特斯拉Optimus Gen3量产在即、Figure AI获数十亿美元融资、Physical Intelligence发布π0机器人基础模型。核心瓶颈：(1)可微分物理仿真引擎需要同时满足精度(<1%误差)和实时性(<10ms)；(2)机器人基础模型需要海量真实世界交互数据；(3)灵巧手+触觉传感器+六维力传感器被欧美垄断；(4)边缘AI芯片(Jetson/高通)算力约束。整个链条从仿真软件→训练算力→机器人硬件→传感器→执行器，几乎每个环节都存在1-3家全球垄断者。",
+        "anchor": "AI从数字走向物理是不可逆的产业方向 → NVIDIA Omniverse/Cosmos+Google RT-2树立物理AI标准 → 灵巧手/触觉/六维力被欧美垄断 → 国产必须在仿真引擎+精密传感器+边缘算力三条线突破",
+        "layer_count": 8
+      }
+    },
+    "step2": {
+      "ok": true,
+      "type": "preset",
+      "trend_name": "物理AI (Physical AI)",
+      "trend_id": "physical-ai",
+      "description": "物理AI是AI从数字世界跃入物理世界的范式革命——让机器人/自动驾驶/智能制造真正理解和预测物理规律。NVIDIA CEO黄仁勋在GTC 2025将其定义为「AI的下一波浪潮」，推出Cosmos世界模型+Isaac仿真+Omniverse数字孪生三大平台。2026年物理AI进入产业化元年：特斯拉Optimus Gen3量产在即、Figure AI获数十亿美元融资、Physical Intelligence发布π0机器人基础模型。核心瓶颈：(1)可微分物理仿真引擎需要同时满足精度(<1%误差)和实时性(<10ms)；(2)机器人基础模型需要海量真实世界交互数据；(3)灵巧手+触觉传感器+六维力传感器被欧美垄断；(4)边缘AI芯片(Jetson/高通)算力约束。整个链条从仿真软件→训练算力→机器人硬件→传感器→执行器，几乎每个环节都存在1-3家全球垄断者。",
+      "anchor": "AI从数字走向物理是不可逆的产业方向 → NVIDIA Omniverse/Cosmos+Google RT-2树立物理AI标准 → 灵巧手/触觉/六维力被欧美垄断 → 国产必须在仿真引擎+精密传感器+边缘算力三条线突破",
+      "total_layers": 8,
+      "layers": [
+        {
+          "level": 0,
+          "name": "物理AI平台/世界模型",
+          "role": "software",
+          "description": "物理AI的核心软件栈——包括世界模型(World Model，预测未来视觉-物理状态)、可微分物理仿真引擎(NVIDIA Isaac Sim/MuJoCo)、Sim-to-Real迁移框架。NVIDIA Omniverse+Isaac+Cosmos是目前工业标准三件套。Google DeepMind发布Genie 2世界模型。Physical Intelligence(π0)和Skild AI发布机器人基础模型。国内华为昇思MindSpore Robotics/百度飞桨有类似布局但差距2-3年。",
+          "global_players": [
+            "NVIDIA Omniverse(美国)",
+            "Google DeepMind(美国)",
+            "Physical Intelligence(美国)",
+            "Skild AI(美国)",
+            "特斯拉(美国自研)"
+          ],
+          "domestic_players": [
+            "华为(未上市)",
+            "中科创达 300496",
+            "百度(未上市)"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 0,
+          "bottleneck_reason": "",
+          "skip_reason": "开源引擎(MuJoCo/Bullet/Isaac Gym)可用，华为/百度跟进中，非单一瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "300496",
+              "name": "中科创达",
+              "mapping_reason": "机器人中间件+数字孪生平台，NVIDIA Omniverse中国生态伙伴",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 1,
+          "name": "🔴 可微分物理仿真引擎",
+          "role": "software",
+          "description": "物理仿真的核心——需同时满足：物理精度(碰撞/摩擦/流体误差<1%)、实时性(>1000fps)、可微分(梯度回传用于RL训练)。NVIDIA Isaac Sim是目前唯一工业级方案(基于PhysX 5+RTX渲染)，MuJoCo(Google DeepMind)是学术界标准但精度不足。全球能提供工业级物理仿真引擎的仅NVIDIA一家——Isaac Sim绑定了CUDA生态和Omniverse数字孪生工具链，迁移成本极高(需重写全部物理模型)。国产替代为零：国内仿真仍停留在Gazebo/Mujoco实验室阶段。",
+          "global_players": [
+            "NVIDIA Isaac Sim(美国) 100%垄断工业级",
+            "Google MuJoCo(美国学术开源)",
+            "Bullet(开源)"
+          ],
+          "domestic_players": [
+            "无(完全空白)"
+          ],
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "工业级可微分物理仿真引擎全球仅NVIDIA Isaac Sim一家(绑定CUDA+Omniverse)。物理精度(PhysX 5 GPU加速)+实时渲染(RTX)+可微分训练(RLOps)三者闭环，构成极高迁移壁垒。国产为零——物理引擎底层数学+GPU并行优化+物理参数标定需要10年以上积累。且Isaac Sim依赖NVIDIA GPU硬件(对华禁运H100/B200)，软件+硬件双重卡脖子。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300496",
+              "name": "中科创达",
+              "mapping_reason": "NVIDIA中国合作伙伴，数字孪生仿真平台代理+二次开发",
+              "match_level": "medium"
+            },
+            {
+              "code": "688031",
+              "name": "星环科技",
+              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "name": "🔴 机器人基础模型 (Robot Foundation Model)",
+          "role": "software",
+          "description": "机器人基础模型是物理AI的「大脑」——将视觉/语言/触觉/动作多模态输入融合，直接输出机器人关节指令。Google RT-2(2023)是首个视觉-语言-动作(VLA)模型，Physical Intelligence π0(2024)实现跨机器人平台泛化。训练一个基础模型需要100万+小时的真实机器人交互数据——数据采集成本极高(一台机器人+操作员=$50-150/h)。全球仅Google/Physical Intelligence/特斯拉/Skild AI 4家拥有大规模机器人数据采集设施。国内智元/宇树/优必选处于应用层，基础模型层面几乎为零。",
+          "global_players": [
+            "Google DeepMind RT-2(美国)",
+            "Physical Intelligence π0(美国)",
+            "特斯拉(美国自研)",
+            "Skild AI(美国)"
+          ],
+          "domestic_players": [
+            "智元机器人(未上市)",
+            "宇树科技(未上市)"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "机器人基础模型全球仅Google/特斯拉/PI/Skild 4家，均在美国。大规模真实世界数据采集(100万+小时)构筑了极高壁垒——数据飞轮一旦形成难以追赶。国内智元/宇树在整机层活跃但基础模型为零，依赖开源模型(RT-2/Octo)微调。且训练需要H100/B200集群(对华禁运)，算力+数据双重瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "002230",
+              "name": "科大讯飞",
+              "mapping_reason": "多模态AI龙头，语音+视觉+语言融合技术可迁移至机器人交互模型",
+              "match_level": "high"
+            },
+            {
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "AI训练芯片，机器人基础模型训练算力底座",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "name": "🔴 物理AI训练/推理算力(GPU/H100/B200)",
+          "role": "compute",
+          "description": "物理AI仿真+基础模型训练需大规模并行计算——训练一个世界模型需要数千张H100/B200 GPU。NVIDIA一家占AI GPU 90%+、对华禁运H100/B200。国内华为昇腾910B性能约为H100的30-40%，且产能严重不足。边缘推理端：NVIDIA Jetson Orin(275 TOPS)是人形机器人在线推理的主流方案，高通RB6跟进。华为昇腾Atlas 200对标但AI软件栈(CUDA vs CANN)差距3-5年。",
+          "global_players": [
+            "NVIDIA(美国90%+GPU)",
+            "高通(美国边缘AI)",
+            "华为昇腾(中国)",
+            "AMD(美国)"
+          ],
+          "domestic_players": [
+            "寒武纪 688256",
+            "海光信息 688041",
+            "景嘉微 300474"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "H100/B200级GPU对华禁运是全局性瓶颈。昇腾910B性能仅H100的30-40%且产能不足。边缘推理端Jetson Orin也被限制(2024年出口管制扩展)。物理AI所需的仿真渲染(RTX光追)在国产GPU上几乎无法运行。短期(2025-2028)无解。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "国产AI训练芯片龙头，思元590对物理AI仿真有一定适配潜力",
+              "match_level": "high"
+            },
+            {
+              "code": "688041",
+              "name": "海光信息",
+              "mapping_reason": "深算系列DCU，类CUDA生态，物理仿真GPU替代路径",
+              "match_level": "medium"
+            },
+            {
+              "code": "300474",
+              "name": "景嘉微",
+              "mapping_reason": "国产GPU龙头，图形渲染+通用计算双路线",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "name": "🔴 机器人灵巧手/末端执行器",
+          "role": "hardware",
+          "description": "物理AI的终极执行器——仿人灵巧手需模拟人类手指21个自由度、力控精度<0.1N、触觉分辨率<1mm。每只手含：6个微型空心杯电机(ϕ<8mm)、6根微型丝杠/腱绳、指尖MEMS触觉传感器(GelSight/Digit)、掌心力矩传感器。全球仅Shadow Robot(英国)/特斯拉Optimus Gen3(美国)/因时机器人(中国)有仿人灵巧手产品。微型空心杯电机全球仅Maxon(瑞士)/Faulhaber(德国)可批量供应(ϕ<13mm、功率密度>10W/cm³)。鸣志电器/鼎智科技突破中但功率密度差距30-50%。",
+          "global_players": [
+            "Shadow Robot(英国)",
+            "特斯拉(美国自研)",
+            "Maxon Motor(瑞士空心杯)",
+            "Faulhaber(德国空心杯)"
+          ],
+          "domestic_players": [
+            "因时机器人(未上市)",
+            "鸣志电器 603728",
+            "鼎智科技 688377"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "仿人灵巧手(5指+力控+触觉)全球仅Shadow/特斯拉/因时3家。微型空心杯电机(ϕ<8mm)被Maxon/Faulhaber瑞士德国两巨头百年垄断。百万台人形机器人→200万只灵巧手→1200万个微型空心杯电机→Maxon全球年产能仅约500万个(供全部行业)。国内鸣志/鼎智差距30-50%。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603728",
+              "name": "鸣志电器",
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树",
+              "match_level": "medium"
+            },
+            {
+              "code": "688377",
+              "name": "鼎智科技",
+              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整",
+              "match_level": "medium"
+            },
+            {
+              "code": "003021",
+              "name": "兆威机电",
+              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300580",
+              "name": "贝斯特",
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件",
+              "match_level": "medium"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "name": "🔴 触觉传感器(电子皮肤)",
+          "role": "sensing",
+          "description": "触觉传感器是物理AI「感知物理世界」的最后一块拼图——让机器人感知材质纹理、接触力分布、温度、滑动。主流方案：(1)GelSight(凝胶光学)由MIT发明——摄像头拍摄弹性体变形还原3D力分布；(2)磁触觉(Digit/ GelSight Mini)用磁力计阵列；(3)压阻/电容阵列(大面积电子皮肤)。全球仅GelSight Inc(美国)/XSENSOR(加拿大)/Tekscan(美国)/因时机器人(中国)有成熟触觉传感器。日本XELA在MEMS触觉方向领先。国内大面积电子皮肤(汉威科技/柯力传感)处于实验室阶段——分辨率(<1mm)和耐久性(>10万次)均不满足工业要求。",
+          "global_players": [
+            "GelSight Inc(美国MIT)",
+            "Digit(美国Meta)",
+            "XSENSOR(加拿大)",
+            "XELA Robotics(日本MEMS)"
+          ],
+          "domestic_players": [
+            "汉威科技 300007",
+            "柯力传感 603662",
+            "苏试试验 300416"
+          ],
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高分辨率(<1mm)触觉传感器全球仅GelSight/Digit/XELA 3-4家。关键技术壁垒：弹性体配方(光学透过率+耐磨性+回弹)、亚毫米级摄像机模组、3D力场重建算法。国内大面积电子皮肤仍处实验室阶段，耐久性/分辨率差距5-8年。是人形机器人从'能走'到'能操作精密物品'的关键瓶颈。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "300007",
+              "name": "汉威科技",
+              "mapping_reason": "气体传感器龙头，柔性压阻传感器+电子皮肤研发，机器人触觉感知布局",
+              "match_level": "high"
+            },
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "力传感器龙头，应变片自制(壁垒最高环节)，可延伸至触觉阵列",
+              "match_level": "high"
+            },
+            {
+              "code": "300416",
+              "name": "苏试试验",
+              "mapping_reason": "环境试验设备龙头，力学传感器技术储备",
+              "match_level": "high"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "name": "🔴 六维力/力矩传感器",
+          "role": "sensing",
+          "description": "六维力传感器同时测量Fx/Fy/Fz/Mx/My/Mz六个分量，安装于机器人手腕/脚踝实现力控柔顺操作。全球高端六维力被ATI Industrial(美国)/OnRobot(丹麦)双寡头垄断(单价>$1万)。国内宇立仪器(未上市)为全球第三家能量产者(已供Figure AI)。技术壁垒：(1)应变片粘贴工艺(手工操作，良率70-80%)；(2)六维解耦算法(耦合误差<1%)；(3)温度补偿(温漂<0.01%FS/°C)。每台人形机器人需4-6个六维力传感器，百万台=400-600万个——远超全球年产能(<10万只)。",
+          "global_players": [
+            "ATI Industrial(美国)",
+            "OnRobot(丹麦)",
+            "宇立仪器(中国)",
+            "柯力传感(中国)"
+          ],
+          "domestic_players": [
+            "柯力传感 603662",
+            "八方股份 603489",
+            "中航电测 300114"
+          ],
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球高端六维力仅ATI(美)/OnRobot(丹麦)/宇立(中)3家可批量供应。产能极度不足(<10万只/年 vs 远期400-600万只需求)。应变片自制(柯力传感是A股唯一有自制能力的)+贴片手工良率+解耦算法+温补四座大山。日本/德国均无六维力传感器量产企业(日本依赖ATI进口)，中国已属全球第二梯队。",
+          "skip_reason": "",
+          "a_share_candidates": [
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "A股唯一自制应变片的力传感器企业，六维力研发成功送样机器人客户",
+              "match_level": "high"
+            },
+            {
+              "code": "603489",
+              "name": "八方股份",
+              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力",
+              "match_level": "high"
+            },
+            {
+              "code": "300114",
+              "name": "中航电测",
+              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中",
+              "match_level": "general"
+            }
+          ]
+        },
+        {
+          "level": 7,
+          "name": "3D视觉传感器(深度相机/LiDAR)",
+          "role": "sensing",
+          "description": "物理AI需要3D空间理解——深度相机(结构光/ToF/双目立体视觉)提供RGB-D输入用于物体识别/抓取/导航。Intel RealSense(全球市占率60%+)已停产但库存仍在流通，奥比中光(中国)在结构光/ToF方面全球第二。固态LiDAR(激光雷达)用于远距离(>50m)环境建模——禾赛/速腾聚创全球领先。3D视觉层国产替代进展良好，非瓶颈。",
+          "global_players": [
+            "Intel RealSense(美国停产)",
+            "奥比中光(中国)",
+            "禾赛科技(中国)",
+            "Ouster(美国)"
+          ],
+          "domestic_players": [
+            "奥比中光 688023",
+            "禾赛科技(美股HSAI)",
+            "速腾聚创 2498.HK"
+          ],
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "bottleneck_level": "none",
+          "bottleneck_score": 1,
+          "bottleneck_reason": "",
+          "skip_reason": "国产3D视觉已全球领先(奥比中光/禾赛)，非瓶颈",
+          "a_share_candidates": [
+            {
+              "code": "688023",
+              "name": "奥比中光",
+              "mapping_reason": "3D视觉传感器全球第二(仅次于Intel)，结构光/ToF双路线",
+              "match_level": "high"
+            },
+            {
+              "code": "002273",
+              "name": "水晶光电",
+              "mapping_reason": "光学元件龙头，3D结构光DOE/扩散片，深度相机核心光学器件",
+              "match_level": "high"
+            }
+          ]
+        }
+      ]
+    },
+    "step3": {
+      "ok": true,
+      "trend_name": "物理AI (Physical AI)",
+      "total_layers": 8,
+      "bottleneck_count": 6,
+      "all_layers": [
+        {
+          "level": 0,
+          "name": "物理AI平台/世界模型",
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "skip_reason": "开源引擎(MuJoCo/Bullet/Isaac Gym)可用，华为/百度跟进中，非单一瓶颈"
+        },
+        {
+          "level": 1,
+          "name": "🔴 可微分物理仿真引擎",
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "工业级可微分物理仿真引擎全球仅NVIDIA Isaac Sim一家(绑定CUDA+Omniverse)。物理精度(PhysX 5 GPU加速)+实时渲染(RTX)+可微分训练(RLOps)三者闭环，构成极高迁移壁垒。国产为零——物理引擎底层数学+GPU并行优化+物理参数标定需要10年以上积累。且Isaac Sim依赖NVIDIA GPU硬件(对华禁运H100/B200)，软件+硬件双重卡脖子。",
+          "skip_reason": ""
+        },
+        {
+          "level": 2,
+          "name": "🔴 机器人基础模型 (Robot Foundation Model)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "机器人基础模型全球仅Google/特斯拉/PI/Skild 4家，均在美国。大规模真实世界数据采集(100万+小时)构筑了极高壁垒——数据飞轮一旦形成难以追赶。国内智元/宇树在整机层活跃但基础模型为零，依赖开源模型(RT-2/Octo)微调。且训练需要H100/B200集群(对华禁运)，算力+数据双重瓶颈。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "🔴 物理AI训练/推理算力(GPU/H100/B200)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "H100/B200级GPU对华禁运是全局性瓶颈。昇腾910B性能仅H100的30-40%且产能不足。边缘推理端Jetson Orin也被限制(2024年出口管制扩展)。物理AI所需的仿真渲染(RTX光追)在国产GPU上几乎无法运行。短期(2025-2028)无解。",
+          "skip_reason": ""
+        },
+        {
+          "level": 4,
+          "name": "🔴 机器人灵巧手/末端执行器",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "仿人灵巧手(5指+力控+触觉)全球仅Shadow/特斯拉/因时3家。微型空心杯电机(ϕ<8mm)被Maxon/Faulhaber瑞士德国两巨头百年垄断。百万台人形机器人→200万只灵巧手→1200万个微型空心杯电机→Maxon全球年产能仅约500万个(供全部行业)。国内鸣志/鼎智差距30-50%。",
+          "skip_reason": ""
+        },
+        {
+          "level": 5,
+          "name": "🔴 触觉传感器(电子皮肤)",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高分辨率(<1mm)触觉传感器全球仅GelSight/Digit/XELA 3-4家。关键技术壁垒：弹性体配方(光学透过率+耐磨性+回弹)、亚毫米级摄像机模组、3D力场重建算法。国内大面积电子皮肤仍处实验室阶段，耐久性/分辨率差距5-8年。是人形机器人从'能走'到'能操作精密物品'的关键瓶颈。",
+          "skip_reason": ""
+        },
+        {
+          "level": 6,
+          "name": "🔴 六维力/力矩传感器",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球高端六维力仅ATI(美)/OnRobot(丹麦)/宇立(中)3家可批量供应。产能极度不足(<10万只/年 vs 远期400-600万只需求)。应变片自制(柯力传感是A股唯一有自制能力的)+贴片手工良率+解耦算法+温补四座大山。日本/德国均无六维力传感器量产企业(日本依赖ATI进口)，中国已属全球第二梯队。",
+          "skip_reason": ""
+        },
+        {
+          "level": 7,
+          "name": "3D视觉传感器(深度相机/LiDAR)",
+          "supplier_count": 5,
+          "is_bottleneck": false,
+          "skip_reason": "国产3D视觉已全球领先(奥比中光/禾赛)，非瓶颈"
+        }
+      ],
+      "bottlenecks": [
+        {
+          "level": 1,
+          "name": "🔴 可微分物理仿真引擎",
+          "supplier_count": 1,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "工业级可微分物理仿真引擎全球仅NVIDIA Isaac Sim一家(绑定CUDA+Omniverse)。物理精度(PhysX 5 GPU加速)+实时渲染(RTX)+可微分训练(RLOps)三者闭环，构成极高迁移壁垒。国产为零——物理引擎底层数学+GPU并行优化+物理参数标定需要10年以上积累。且Isaac Sim依赖NVIDIA GPU硬件(对华禁运H100/B200)，软件+硬件双重卡脖子。",
+          "skip_reason": ""
+        },
+        {
+          "level": 2,
+          "name": "🔴 机器人基础模型 (Robot Foundation Model)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "机器人基础模型全球仅Google/特斯拉/PI/Skild 4家，均在美国。大规模真实世界数据采集(100万+小时)构筑了极高壁垒——数据飞轮一旦形成难以追赶。国内智元/宇树在整机层活跃但基础模型为零，依赖开源模型(RT-2/Octo)微调。且训练需要H100/B200集群(对华禁运)，算力+数据双重瓶颈。",
+          "skip_reason": ""
+        },
+        {
+          "level": 3,
+          "name": "🔴 物理AI训练/推理算力(GPU/H100/B200)",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "H100/B200级GPU对华禁运是全局性瓶颈。昇腾910B性能仅H100的30-40%且产能不足。边缘推理端Jetson Orin也被限制(2024年出口管制扩展)。物理AI所需的仿真渲染(RTX光追)在国产GPU上几乎无法运行。短期(2025-2028)无解。",
+          "skip_reason": ""
+        },
+        {
+          "level": 6,
+          "name": "🔴 六维力/力矩传感器",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球高端六维力仅ATI(美)/OnRobot(丹麦)/宇立(中)3家可批量供应。产能极度不足(<10万只/年 vs 远期400-600万只需求)。应变片自制(柯力传感是A股唯一有自制能力的)+贴片手工良率+解耦算法+温补四座大山。日本/德国均无六维力传感器量产企业(日本依赖ATI进口)，中国已属全球第二梯队。",
+          "skip_reason": ""
+        },
+        {
+          "level": 4,
+          "name": "🔴 机器人灵巧手/末端执行器",
+          "supplier_count": 2,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "仿人灵巧手(5指+力控+触觉)全球仅Shadow/特斯拉/因时3家。微型空心杯电机(ϕ<8mm)被Maxon/Faulhaber瑞士德国两巨头百年垄断。百万台人形机器人→200万只灵巧手→1200万个微型空心杯电机→Maxon全球年产能仅约500万个(供全部行业)。国内鸣志/鼎智差距30-50%。",
+          "skip_reason": ""
+        },
+        {
+          "level": 5,
+          "name": "🔴 触觉传感器(电子皮肤)",
+          "supplier_count": 3,
+          "is_bottleneck": true,
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高分辨率(<1mm)触觉传感器全球仅GelSight/Digit/XELA 3-4家。关键技术壁垒：弹性体配方(光学透过率+耐磨性+回弹)、亚毫米级摄像机模组、3D力场重建算法。国内大面积电子皮肤仍处实验室阶段，耐久性/分辨率差距5-8年。是人形机器人从'能走'到'能操作精密物品'的关键瓶颈。",
+          "skip_reason": ""
+        }
+      ],
+      "summary": "在 8 层产业链中，识别出 6 个瓶颈层。按卡脖子程度排序，前三个最关键的瓶颈是：🔴 可微分物理仿真引擎、🔴 机器人基础模型 (Robot Foundation Model)、🔴 物理AI训练/推理算力(GPU/H100/B200)。"
+    },
+    "step4": {
+      "ok": true,
+      "trend_name": "物理AI (Physical AI)",
+      "mapped_layers": [
+        {
+          "level": 1,
+          "name": "🔴 可微分物理仿真引擎",
+          "bottleneck_level": "core",
+          "bottleneck_score": 5,
+          "bottleneck_reason": "工业级可微分物理仿真引擎全球仅NVIDIA Isaac Sim一家(绑定CUDA+Omniverse)。物理精度(PhysX 5 GPU加速)+实时渲染(RTX)+可微分训练(RLOps)三者闭环，构成极高迁移壁垒。国产为零——物理引擎底层数学+GPU并行优化+物理参数标定需要10年以上积累。且Isaac Sim依赖NVIDIA GPU硬件(对华禁运H100/B200)，软件+硬件双重卡脖子。",
+          "show_all": true,
+          "total_stocks": 2,
+          "stocks": [
+            {
+              "code": "300496",
+              "name": "中科创达",
+              "mapping_reason": "NVIDIA中国合作伙伴，数字孪生仿真平台代理+二次开发",
+              "match_level": "medium"
+            },
+            {
+              "code": "688031",
+              "name": "星环科技",
+              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键",
+              "match_level": "medium"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 2,
+          "name": "🔴 机器人基础模型 (Robot Foundation Model)",
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "机器人基础模型全球仅Google/特斯拉/PI/Skild 4家，均在美国。大规模真实世界数据采集(100万+小时)构筑了极高壁垒——数据飞轮一旦形成难以追赶。国内智元/宇树在整机层活跃但基础模型为零，依赖开源模型(RT-2/Octo)微调。且训练需要H100/B200集群(对华禁运)，算力+数据双重瓶颈。",
+          "show_all": true,
+          "total_stocks": 2,
+          "stocks": [
+            {
+              "code": "002230",
+              "name": "科大讯飞",
+              "mapping_reason": "多模态AI龙头，语音+视觉+语言融合技术可迁移至机器人交互模型",
+              "match_level": "high"
+            },
+            {
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "AI训练芯片，机器人基础模型训练算力底座",
+              "match_level": "medium"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 3,
+          "name": "🔴 物理AI训练/推理算力(GPU/H100/B200)",
+          "bottleneck_level": "core",
+          "bottleneck_score": 4.5,
+          "bottleneck_reason": "H100/B200级GPU对华禁运是全局性瓶颈。昇腾910B性能仅H100的30-40%且产能不足。边缘推理端Jetson Orin也被限制(2024年出口管制扩展)。物理AI所需的仿真渲染(RTX光追)在国产GPU上几乎无法运行。短期(2025-2028)无解。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "国产AI训练芯片龙头，思元590对物理AI仿真有一定适配潜力",
+              "match_level": "high"
+            },
+            {
+              "code": "688041",
+              "name": "海光信息",
+              "mapping_reason": "深算系列DCU，类CUDA生态，物理仿真GPU替代路径",
+              "match_level": "medium"
+            },
+            {
+              "code": "300474",
+              "name": "景嘉微",
+              "mapping_reason": "国产GPU龙头，图形渲染+通用计算双路线",
+              "match_level": "high"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 4,
+          "name": "🔴 机器人灵巧手/末端执行器",
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "仿人灵巧手(5指+力控+触觉)全球仅Shadow/特斯拉/因时3家。微型空心杯电机(ϕ<8mm)被Maxon/Faulhaber瑞士德国两巨头百年垄断。百万台人形机器人→200万只灵巧手→1200万个微型空心杯电机→Maxon全球年产能仅约500万个(供全部行业)。国内鸣志/鼎智差距30-50%。",
+          "show_all": true,
+          "total_stocks": 4,
+          "stocks": [
+            {
+              "code": "603728",
+              "name": "鸣志电器",
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树",
+              "match_level": "medium"
+            },
+            {
+              "code": "688377",
+              "name": "鼎智科技",
+              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整",
+              "match_level": "medium"
+            },
+            {
+              "code": "003021",
+              "name": "兆威机电",
+              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300580",
+              "name": "贝斯特",
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件",
+              "match_level": "medium"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 5,
+          "name": "🔴 触觉传感器(电子皮肤)",
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 3.5,
+          "bottleneck_reason": "高分辨率(<1mm)触觉传感器全球仅GelSight/Digit/XELA 3-4家。关键技术壁垒：弹性体配方(光学透过率+耐磨性+回弹)、亚毫米级摄像机模组、3D力场重建算法。国内大面积电子皮肤仍处实验室阶段，耐久性/分辨率差距5-8年。是人形机器人从'能走'到'能操作精密物品'的关键瓶颈。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "300007",
+              "name": "汉威科技",
+              "mapping_reason": "气体传感器龙头，柔性压阻传感器+电子皮肤研发，机器人触觉感知布局",
+              "match_level": "high"
+            },
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "力传感器龙头，应变片自制(壁垒最高环节)，可延伸至触觉阵列",
+              "match_level": "high"
+            },
+            {
+              "code": "300416",
+              "name": "苏试试验",
+              "mapping_reason": "环境试验设备龙头，力学传感器技术储备",
+              "match_level": "high"
+            }
+          ],
+          "remaining": 0
+        },
+        {
+          "level": 6,
+          "name": "🔴 六维力/力矩传感器",
+          "bottleneck_level": "secondary",
+          "bottleneck_score": 4,
+          "bottleneck_reason": "全球高端六维力仅ATI(美)/OnRobot(丹麦)/宇立(中)3家可批量供应。产能极度不足(<10万只/年 vs 远期400-600万只需求)。应变片自制(柯力传感是A股唯一有自制能力的)+贴片手工良率+解耦算法+温补四座大山。日本/德国均无六维力传感器量产企业(日本依赖ATI进口)，中国已属全球第二梯队。",
+          "show_all": true,
+          "total_stocks": 3,
+          "stocks": [
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "A股唯一自制应变片的力传感器企业，六维力研发成功送样机器人客户",
+              "match_level": "high"
+            },
+            {
+              "code": "603489",
+              "name": "八方股份",
+              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力",
+              "match_level": "high"
+            },
+            {
+              "code": "300114",
+              "name": "中航电测",
+              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中",
+              "match_level": "general"
+            }
+          ],
+          "remaining": 0
+        }
+      ]
+    },
+    "step5": {
+      "ok": true,
+      "trend_name": "物理AI (Physical AI)",
+      "total_verified": 15,
+      "stocks": [
+        {
+          "code": "688256",
+          "market": "sh",
+          "name": "寒武纪",
+          "layers": [
+            "🔴 机器人基础模型 (Robot Foundation Model)",
+            "🔴 物理AI训练/推理算力(GPU/H100/B200)"
+          ],
+          "total_score": 68.77,
+          "market_rank": 111,
+          "market_total": 5526,
+          "industry_rank": 12,
+          "industry_total": 177,
+          "ind1": "电子",
+          "ind2": "半导体",
+          "close": 1353,
+          "change_5d": -7.2,
+          "change_20d": -0.4,
+          "change_60d": 31.9,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 24,
+            "growth": 18.9,
+            "operating": 10,
+            "cashflow": 12.1,
+            "solvency": 7.2,
+            "asset_quality": 4
+          }
+        },
+        {
+          "code": "603489",
+          "market": "sh",
+          "name": "八方股份",
+          "layers": [
+            "🔴 六维力/力矩传感器"
+          ],
+          "total_score": 58.06,
+          "market_rank": 1082,
+          "market_total": 5526,
+          "industry_rank": 1,
+          "industry_total": 25,
+          "ind1": "电力设备",
+          "ind2": "电机制造",
+          "close": 29.19,
+          "change_5d": 1.7,
+          "change_20d": -11.9,
+          "change_60d": -3.8,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 12.8,
+            "growth": 16.9,
+            "operating": 8.4,
+            "cashflow": 6.1,
+            "solvency": 8.6,
+            "asset_quality": 6.3
+          }
+        },
+        {
+          "code": "300580",
+          "market": "sz",
+          "name": "贝斯特",
+          "layers": [
+            "🔴 机器人灵巧手/末端执行器"
+          ],
+          "total_score": 55.52,
+          "market_rank": 1538,
+          "market_total": 5526,
+          "industry_rank": 46,
+          "industry_total": 234,
+          "ind1": "汽车",
+          "ind2": "汽车零部件",
+          "close": 25.96,
+          "change_5d": 43.9,
+          "change_20d": 14.2,
+          "change_60d": 13.9,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "行业(汽车/汽车零部件)与技术趋势不直接匹配"
+          ],
+          "dim_scores": {
+            "profitability": 17.9,
+            "growth": 11.2,
+            "operating": 4.4,
+            "cashflow": 4.5,
+            "solvency": 9.2,
+            "asset_quality": 6.2
+          }
+        },
+        {
+          "code": "688041",
+          "market": "sh",
+          "name": "海光信息",
+          "layers": [
+            "🔴 物理AI训练/推理算力(GPU/H100/B200)"
+          ],
+          "total_score": 53.85,
+          "market_rank": 1867,
+          "market_total": 5526,
+          "industry_rank": 84,
+          "industry_total": 177,
+          "ind1": "电子",
+          "ind2": "半导体",
+          "close": 325.4,
+          "change_5d": -5.7,
+          "change_20d": 13.9,
+          "change_60d": 52.2,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 19.8,
+            "growth": 16,
+            "operating": 6.2,
+            "cashflow": 7.2,
+            "solvency": 5.6,
+            "asset_quality": 4
+          }
+        },
+        {
+          "code": "300496",
+          "market": "sz",
+          "name": "中科创达",
+          "layers": [
+            "🔴 可微分物理仿真引擎"
+          ],
+          "total_score": 52.23,
+          "market_rank": 2181,
+          "market_total": 5526,
+          "industry_rank": 31,
+          "industry_total": 218,
+          "ind1": "计算机",
+          "ind2": "软件服务",
+          "close": 62.7,
+          "change_5d": 5.9,
+          "change_20d": 2.4,
+          "change_60d": 10.2,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "行业(计算机/软件服务)与技术趋势不直接匹配"
+          ],
+          "dim_scores": {
+            "profitability": 8.6,
+            "growth": 12.8,
+            "operating": 9.9,
+            "cashflow": 12.7,
+            "solvency": 6.1,
+            "asset_quality": 3.9
+          }
+        },
+        {
+          "code": "688031",
+          "market": "sh",
+          "name": "星环科技",
+          "layers": [
+            "🔴 可微分物理仿真引擎"
+          ],
+          "total_score": 51.3,
+          "market_rank": 2361,
+          "market_total": 5526,
+          "industry_rank": 54,
+          "industry_total": 218,
+          "ind1": "计算机",
+          "ind2": "软件服务",
+          "close": 106.53,
+          "change_5d": -0.9,
+          "change_20d": -30.1,
+          "change_60d": -16.3,
+          "concept_risk": "high",
+          "risk_flags": [
+            "行业(计算机/软件服务)与技术趋势不直接匹配",
+            "利润率极低(-68.9%)且评分不高"
+          ],
+          "dim_scores": {
+            "profitability": 12.5,
+            "growth": 14.9,
+            "operating": 7.5,
+            "cashflow": 7.3,
+            "solvency": 6.3,
+            "asset_quality": 4.9
+          }
+        },
+        {
+          "code": "603728",
+          "market": "sh",
+          "name": "鸣志电器",
+          "layers": [
+            "🔴 机器人灵巧手/末端执行器"
+          ],
+          "total_score": 50.7,
+          "market_rank": 2487,
+          "market_total": 5526,
+          "industry_rank": 14,
+          "industry_total": 25,
+          "ind1": "电力设备",
+          "ind2": "电机制造",
+          "close": 68.02,
+          "change_5d": 21.8,
+          "change_20d": 7.1,
+          "change_60d": 22.3,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 3.8,
+            "growth": 16,
+            "operating": 7.8,
+            "cashflow": 10.8,
+            "solvency": 4.4,
+            "asset_quality": 4.5
+          }
+        },
+        {
+          "code": "688377",
+          "market": "sh",
+          "name": "迪威尔",
+          "layers": [
+            "🔴 机器人灵巧手/末端执行器"
+          ],
+          "total_score": 48.83,
+          "market_rank": 2875,
+          "market_total": 5526,
+          "industry_rank": 87,
+          "industry_total": 211,
+          "ind1": "机械设备",
+          "ind2": "专用设备",
+          "close": 25.93,
+          "change_5d": 9.7,
+          "change_20d": -10,
+          "change_60d": -29,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 10.6,
+            "growth": 8.2,
+            "operating": 7.7,
+            "cashflow": 12.1,
+            "solvency": 5.2,
+            "asset_quality": 4.4
+          }
+        },
+        {
+          "code": "603662",
+          "market": "sh",
+          "name": "柯力传感",
+          "layers": [
+            "🔴 触觉传感器(电子皮肤)",
+            "🔴 六维力/力矩传感器"
+          ],
+          "total_score": 47.19,
+          "market_rank": 3201,
+          "market_total": 5526,
+          "industry_rank": 105,
+          "industry_total": 223,
+          "ind1": "机械设备",
+          "ind2": "通用设备",
+          "close": 80,
+          "change_5d": 23,
+          "change_20d": 27.1,
+          "change_60d": 50.2,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 15.1,
+            "growth": 10.4,
+            "operating": 4.2,
+            "cashflow": 10,
+            "solvency": 5.2,
+            "asset_quality": 3.8
+          }
+        },
+        {
+          "code": "300416",
+          "market": "sz",
+          "name": "苏试试验",
+          "layers": [
+            "🔴 触觉传感器(电子皮肤)"
+          ],
+          "total_score": 46.48,
+          "market_rank": 3353,
+          "market_total": 5526,
+          "industry_rank": 16,
+          "industry_total": 32,
+          "ind1": "社会服务",
+          "ind2": "专业服务",
+          "close": 19.9,
+          "change_5d": -2.4,
+          "change_20d": 10.1,
+          "change_60d": 15.2,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "行业(社会服务/专业服务)与技术趋势不直接匹配"
+          ],
+          "dim_scores": {
+            "profitability": 14.9,
+            "growth": 11.3,
+            "operating": 5.2,
+            "cashflow": 12.4,
+            "solvency": 3.2,
+            "asset_quality": 3.7
+          }
+        },
+        {
+          "code": "003021",
+          "market": "sz",
+          "name": "兆威机电",
+          "layers": [
+            "🔴 机器人灵巧手/末端执行器"
+          ],
+          "total_score": 44.84,
+          "market_rank": 3666,
+          "market_total": 5526,
+          "industry_rank": 17,
+          "industry_total": 25,
+          "ind1": "电力设备",
+          "ind2": "电机制造",
+          "close": 100.8,
+          "change_5d": 23.6,
+          "change_20d": 2.3,
+          "change_60d": 7.5,
+          "concept_risk": "none",
+          "risk_flags": [],
+          "dim_scores": {
+            "profitability": 10.8,
+            "growth": 6.4,
+            "operating": 6,
+            "cashflow": 6.6,
+            "solvency": 9.5,
+            "asset_quality": 7
+          }
+        },
+        {
+          "code": "002230",
+          "market": "sz",
+          "name": "科大讯飞",
+          "layers": [
+            "🔴 机器人基础模型 (Robot Foundation Model)"
+          ],
+          "total_score": 41.68,
+          "market_rank": 4222,
+          "market_total": 5526,
+          "industry_rank": 130,
+          "industry_total": 218,
+          "ind1": "计算机",
+          "ind2": "软件服务",
+          "close": 41.51,
+          "change_5d": 6.1,
+          "change_20d": -9.4,
+          "change_60d": -9.2,
+          "concept_risk": "high",
+          "risk_flags": [
+            "行业(计算机/软件服务)与技术趋势不直接匹配",
+            "利润率极低(-3.2%)且评分不高"
+          ],
+          "dim_scores": {
+            "profitability": 8.5,
+            "growth": 9.3,
+            "operating": 8.9,
+            "cashflow": 14.4,
+            "solvency": 2.3,
+            "asset_quality": 3.9
+          }
+        },
+        {
+          "code": "300007",
+          "market": "sz",
+          "name": "汉威科技",
+          "layers": [
+            "🔴 触觉传感器(电子皮肤)"
+          ],
+          "total_score": 40.72,
+          "market_rank": 4402,
+          "market_total": 5526,
+          "industry_rank": 174,
+          "industry_total": 223,
+          "ind1": "机械设备",
+          "ind2": "通用设备",
+          "close": 43.27,
+          "change_5d": 24.4,
+          "change_20d": 4.4,
+          "change_60d": 4.6,
+          "concept_risk": "medium",
+          "risk_flags": [
+            "营收严重下滑(-15.6%)"
+          ],
+          "dim_scores": {
+            "profitability": 6.6,
+            "growth": 12.7,
+            "operating": 5.9,
+            "cashflow": 4.5,
+            "solvency": 4.6,
+            "asset_quality": 4.3
+          }
+        },
+        {
+          "code": "300474",
+          "market": "sz",
+          "name": "景嘉微",
+          "layers": [
+            "🔴 物理AI训练/推理算力(GPU/H100/B200)"
+          ],
+          "total_score": 39.91,
+          "market_rank": 4522,
+          "market_total": 5526,
+          "industry_rank": 40,
+          "industry_total": 57,
+          "ind1": "国防军工",
+          "ind2": "军工电子",
+          "close": 57.23,
+          "change_5d": 8,
+          "change_20d": -1.5,
+          "change_60d": 4,
+          "concept_risk": "high",
+          "risk_flags": [
+            "利润率极低(-66.7%)且评分不高",
+            "营收严重下滑(-17.9%)"
+          ],
+          "dim_scores": {
+            "profitability": 12.5,
+            "growth": 7,
+            "operating": 1.9,
+            "cashflow": 8.2,
+            "solvency": 9.5,
+            "asset_quality": 7.6
+          }
+        },
+        {
+          "code": "300114",
+          "market": "sz",
+          "name": "",
+          "layers": [
+            "🔴 六维力/力矩传感器"
+          ],
+          "total_score": 0,
+          "market_rank": null,
+          "market_total": 5526,
+          "industry_rank": null,
+          "industry_total": null,
+          "ind1": null,
+          "ind2": null,
+          "close": null,
+          "change_5d": null,
+          "change_20d": null,
+          "change_60d": null,
+          "concept_risk": "high",
+          "risk_flags": [
+            "行业(None/None)与技术趋势不直接匹配",
+            "利润率极低(0.0%)且评分不高",
+            "总分过低(0)"
+          ],
+          "dim_scores": {
+            "profitability": 0,
+            "growth": 0,
+            "operating": 0,
+            "cashflow": 0,
+            "solvency": 0,
+            "asset_quality": 0
+          }
+        }
+      ]
+    },
+    "step6": {
+      "ok": true,
+      "trend_name": "物理AI (Physical AI)",
+      "cross_checks": [
+        {
+          "level": 1,
+          "layer_name": "🔴 可微分物理仿真引擎",
+          "bottleneck_score": 5,
+          "global_monopoly": "NVIDIA Isaac Sim(美国) 100%垄断工业级",
+          "domestic_leader": "中科创达",
+          "all_candidates": [
+            {
+              "code": "300496",
+              "name": "中科创达",
+              "mapping_reason": "NVIDIA中国合作伙伴，数字孪生仿真平台代理+二次开发",
+              "match_level": "medium"
+            },
+            {
+              "code": "688031",
+              "name": "星环科技",
+              "mapping_reason": "大数据+AI基础设施，多模态数据管理对物理AI数据流水线关键",
+              "match_level": "medium"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（NVIDIA Isaac Sim(美国) 100%垄断工业级）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "domestic_newcomer",
+              "question": "如果有新的国产厂商突破技术进入供应，现有国产龙头的唯一性优势是否会被削弱？",
+              "trigger": "新国产厂商宣布技术突破或通过客户验证"
+            },
+            {
+              "type": "valuation_risk",
+              "question": "当前股价是否已经充分反映了「唯一国产替代者」的溢价？安全边际有多少？",
+              "trigger": "股价短期内大幅上涨，5年分位进入极高区间"
+            },
+            {
+              "type": "capacity_bottleneck",
+              "question": "国产龙头的产能是否足够承接爆发的需求？产能爬坡周期是多久？",
+              "trigger": "公司季报显示产能利用率接近上限但新产能尚未投产"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "layer_name": "🔴 机器人基础模型 (Robot Foundation Model)",
+          "bottleneck_score": 4.5,
+          "global_monopoly": "Google DeepMind RT-2(美国)",
+          "domestic_leader": "科大讯飞",
+          "all_candidates": [
+            {
+              "code": "002230",
+              "name": "科大讯飞",
+              "mapping_reason": "多模态AI龙头，语音+视觉+语言融合技术可迁移至机器人交互模型",
+              "match_level": "high"
+            },
+            {
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "AI训练芯片，机器人基础模型训练算力底座",
+              "match_level": "medium"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Google DeepMind RT-2(美国)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "layer_name": "🔴 物理AI训练/推理算力(GPU/H100/B200)",
+          "bottleneck_score": 4.5,
+          "global_monopoly": "NVIDIA(美国90%+GPU)",
+          "domestic_leader": "寒武纪",
+          "all_candidates": [
+            {
+              "code": "688256",
+              "name": "寒武纪",
+              "mapping_reason": "国产AI训练芯片龙头，思元590对物理AI仿真有一定适配潜力",
+              "match_level": "high"
+            },
+            {
+              "code": "688041",
+              "name": "海光信息",
+              "mapping_reason": "深算系列DCU，类CUDA生态，物理仿真GPU替代路径",
+              "match_level": "medium"
+            },
+            {
+              "code": "300474",
+              "name": "景嘉微",
+              "mapping_reason": "国产GPU龙头，图形渲染+通用计算双路线",
+              "match_level": "high"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（NVIDIA(美国90%+GPU)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "layer_name": "🔴 机器人灵巧手/末端执行器",
+          "bottleneck_score": 3.5,
+          "global_monopoly": "Shadow Robot(英国)",
+          "domestic_leader": "鸣志电器",
+          "all_candidates": [
+            {
+              "code": "603728",
+              "name": "鸣志电器",
+              "mapping_reason": "国内空心杯电机领先(ϕ13-30mm全系列)，灵巧手电机送样特斯拉/宇树",
+              "match_level": "medium"
+            },
+            {
+              "code": "688377",
+              "name": "鼎智科技",
+              "mapping_reason": "微型电机+丝杠+编码器一体化，灵巧手执行器微型化方案最完整",
+              "match_level": "medium"
+            },
+            {
+              "code": "003021",
+              "name": "兆威机电",
+              "mapping_reason": "微型齿轮传动龙头，灵巧手微型减速器+齿轮箱核心供应商",
+              "match_level": "high"
+            },
+            {
+              "code": "300580",
+              "name": "贝斯特",
+              "mapping_reason": "精密微型丝杠，灵巧手关节传动核心零件",
+              "match_level": "medium"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（Shadow Robot(英国)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 5,
+          "layer_name": "🔴 触觉传感器(电子皮肤)",
+          "bottleneck_score": 3.5,
+          "global_monopoly": "GelSight Inc(美国MIT)",
+          "domestic_leader": "汉威科技",
+          "all_candidates": [
+            {
+              "code": "300007",
+              "name": "汉威科技",
+              "mapping_reason": "气体传感器龙头，柔性压阻传感器+电子皮肤研发，机器人触觉感知布局",
+              "match_level": "high"
+            },
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "力传感器龙头，应变片自制(壁垒最高环节)，可延伸至触觉阵列",
+              "match_level": "high"
+            },
+            {
+              "code": "300416",
+              "name": "苏试试验",
+              "mapping_reason": "环境试验设备龙头，力学传感器技术储备",
+              "match_level": "high"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（GelSight Inc(美国MIT)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        },
+        {
+          "level": 6,
+          "layer_name": "🔴 六维力/力矩传感器",
+          "bottleneck_score": 4,
+          "global_monopoly": "ATI Industrial(美国)",
+          "domestic_leader": "柯力传感",
+          "all_candidates": [
+            {
+              "code": "603662",
+              "name": "柯力传感",
+              "mapping_reason": "A股唯一自制应变片的力传感器企业，六维力研发成功送样机器人客户",
+              "match_level": "high"
+            },
+            {
+              "code": "603489",
+              "name": "八方股份",
+              "mapping_reason": "力矩传感器龙头(电动两轮车)，力矩检测技术可迁移至六维力",
+              "match_level": "high"
+            },
+            {
+              "code": "300114",
+              "name": "中航电测",
+              "mapping_reason": "应变片/力传感器军工级精度，汉中分公司六维力研发中",
+              "match_level": "general"
+            }
+          ],
+          "key_risks": [
+            {
+              "type": "tech_substitution",
+              "question": "如果出现颠覆性技术路线替代这个环节，逻辑是否还成立？",
+              "trigger": "出现新的封装方案/材料替代，不再需要此环节的产品"
+            },
+            {
+              "type": "global_competition",
+              "question": "如果全球垄断企业（ATI Industrial(美国)）大幅扩产并降价打压，国产替代空间会缩小多少？",
+              "trigger": "海外垄断企业宣布大规模扩产或主动降价"
+            },
+            {
+              "type": "financial_risk",
+              "question": "公司的负债率、ROE、现金流能否支撑大规模扩产？如果需求爆发但公司财务跟不上怎么办？",
+              "trigger": "负债率持续上升、ROE不升反降、自由现金流恶化"
+            }
+          ]
+        }
+      ]
+    },
+    "step7": {
+      "timestamp": "2026/7/5 22:00:40",
+      "trend_name": "物理AI (Physical AI)",
+      "bottleneck_count": 6,
+      "total_stocks": 15
+    }
+  }
+}

@@ -24,6 +24,7 @@
           <a href="/rps-pool.html" class="nav-link stock-score-topbar-action">RPS</a>
           <a href="/stock-score.html" class="nav-link stock-score-topbar-action active">财务评分</a>
           <a href="/stock-screener.html" class="nav-link stock-score-topbar-action">股票筛选</a>
+          <a href="/financial-report.html" class="nav-link stock-score-topbar-action">财报分析</a>
           <a href="/realtime-screener.html" class="nav-link stock-score-topbar-action">实时选股</a>
           <a href="/watchlist.html" class="nav-link stock-score-topbar-action">自选股</a>
           <a href="/bottleneck.html" class="nav-link stock-score-topbar-action">瓶颈股发现</a>
@@ -135,6 +136,7 @@
         <article id="stock-score-basic-info-card" class="search-card stock-score-basic-info-card">
           <div class="search-card-header">
             <div>
+              <p class="eyebrow" id="hdr-name" style="display:none;font-size:16px;color:var(--fg);margin:0 0 4px;"></p>
               <p class="eyebrow">BASIC INFO</p>
               <h2>基础行情</h2>
             </div>
@@ -631,6 +633,15 @@
     </div>
   </div>
 
-  <script type="module" src="/stock-score.js?v=20260628"></script>
+  <script type="module" src="/stock-score.js?v=20260712b"></script>
 </body>
+  <div id="buyback-popup" class="popup-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;justify-content:center;align-items:center;">
+    <div style="background:#1e2128;border:1px solid #2a2d35;border-radius:8px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;padding:24px;color:#d1d4dc;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;font-size:16px;" id="buyback-popup-title">回购/增持记录</h3>
+        <button onclick="document.getElementById('buyback-popup').style.display='none'" style="background:none;border:none;color:#787b86;font-size:20px;cursor:pointer;">✕</button>
+      </div>
+      <div id="buyback-popup-content"></div>
+    </div>
+  </div>
 </html>

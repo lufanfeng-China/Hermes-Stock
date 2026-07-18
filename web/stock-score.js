@@ -1470,6 +1470,7 @@ function renderScore(result) {
     divergence_label,
     ind_absolute_total_score,
     ind_trend_total_score,
+    niche_leader,
   } = result;
 
   if (!ok || !total_score) {
@@ -1487,7 +1488,13 @@ function renderScore(result) {
   // Header
   const nameEl = document.getElementById("hdr-name");
   const symbolEl = document.getElementById("hdr-symbol");
-  if (nameEl) nameEl.textContent = stock_name || "—";
+  if (nameEl) {
+    const nicheBadge = niche_leader
+      ? ` <span style="font-size:11px;background:#2a4a3a;color:#4ade80;padding:1px 6px;border-radius:3px;margin-left:8px;" title="细分龙头: ${niche_leader}">🏆${niche_leader}</span>`
+      : '';
+    nameEl.innerHTML = `${stock_name || "—"}${nicheBadge}`;
+    nameEl.style.display = '';
+  }
   if (symbolEl) symbolEl.textContent = `${result.market}:${result.symbol}`;
 
   // Show watchlist add button
@@ -2336,6 +2343,75 @@ function buildSummaryLine(structuredInsights) {
 }
 
 // ── Competitive Edge (async, cached, full-width) ─────────────────────────────
+
+// ── Buyback Info ──────────────────────────────────────────────────────────────
+async function loadBuybackInfo(symbol) {
+  const nameEl = document.getElementById('hdr-name');
+  if (!nameEl) return;
+  
+  try {
+    const resp = await fetch(`/api/stock-buyback?symbol=${symbol}`);
+    const data = await resp.json();
+    if (!data.ok || (!data.has_buyback && !data.has_increase)) return;
+    
+    // Build badge
+    let badgeHtml = '';
+    if (data.has_buyback) {
+      const types = data.buyback_types.join('、');
+      badgeHtml += `<span class="buyback-badge" data-buyback="1" style="font-size:11px;background:#3a2a2a;color:#f87171;padding:1px 6px;border-radius:3px;margin-left:4px;cursor:pointer;" title="${types}">🔄回购</span>`;
+    }
+    if (data.has_increase) {
+      badgeHtml += `<span class="buyback-badge" data-buyback="1" style="font-size:11px;background:#2a3a4a;color:#60a5fa;padding:1px 6px;border-radius:3px;margin-left:4px;cursor:pointer;" title="增持 ${data.increase_count}条">📈增持</span>`;
+    }
+    
+    // Append badge to hdr-name
+    nameEl.innerHTML += badgeHtml;
+    
+    // Store data for popup
+    nameEl._buybackData = data;
+    
+    // Click handler
+    document.querySelectorAll('.buyback-badge').forEach(b => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showBuybackPopup(data);
+      });
+    });
+  } catch (e) {}
+}
+
+function showBuybackPopup(data) {
+  const popup = document.getElementById('buyback-popup');
+  const content = document.getElementById('buyback-popup-content');
+  if (!popup || !content) return;
+  
+  let html = '';
+  
+  if (data.has_buyback) {
+    html += `<div style="margin-bottom:16px;"><strong style="color:#f87171;">🔄 回购类型:</strong> ${data.buyback_types.join('、')}</div>`;
+  }
+  if (data.has_increase) {
+    html += `<div style="margin-bottom:16px;"><strong style="color:#60a5fa;">📈 增持记录:</strong> ${data.increase_count} 条</div>`;
+  }
+  
+  if (data.records && data.records.length > 0) {
+    html += '<div style="border-top:1px solid #2a2d35;padding-top:12px;margin-top:8px;">';
+    html += '<strong style="font-size:13px;">详细记录:</strong>';
+    html += '<div style="max-height:400px;overflow-y:auto;margin-top:8px;">';
+    for (const rec of data.records) {
+      html += `<div style="padding:6px 0;border-bottom:1px solid rgba(42,45,53,0.5);font-size:12px;color:#9ca3af;line-height:1.5;">${escHtml(rec)}</div>`;
+    }
+    html += '</div></div>';
+  }
+  
+  content.innerHTML = html;
+  popup.style.display = 'flex';
+  
+  // Close on overlay click
+  popup.onclick = (e) => { if (e.target === popup) popup.style.display = 'none'; };
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function loadCompetitiveEdge(market, symbol, stockName) {
   const card = document.getElementById("competitive-edge-card");
@@ -3378,6 +3454,7 @@ async function doSearch(selectedRow = null) {
     renderInsights(structuredInsights);
     // Async load competitive edge (cached, non-blocking, full-width)
     loadCompetitiveEdge(market, symbol, result?.stock_name || searchState.selectedStock?.stock_name || symbol);
+    loadBuybackInfo(symbol);
     searchState.currentStock = {
       market,
       symbol,
@@ -3796,7 +3873,7 @@ document.getElementById('hdr-basic-dynamic-pe').addEventListener('click', async 
       peStatus.textContent = '暂无PE历史数据';
       return;
     }
-    const history = data.history;
+    const history = data.history.filter(h => parseInt(h.period) >= 2021);
     peStatus.textContent = `共 ${history.length} 个报告期`;
 
     // Build SVG chart
@@ -3835,7 +3912,9 @@ document.getElementById('hdr-basic-dynamic-pe').addEventListener('click', async 
       if (i % xLabelStep === 0 || i === history.length - 1) {
         const x = pad.left + i * xStep;
         const p = history[i].period || '';
-        xLabels += `<text x="${x}" y="${H - pad.bottom + 16}" text-anchor="middle" font-size="9" fill="var(--muted)">${p}</text>`;
+        // Q1/Q2/Q3: show only quarter; A: show full year+A
+        const shortP = p.endsWith('A') ? p : p.slice(-2);
+        xLabels += `<text x="${x}" y="${H - pad.bottom + 16}" text-anchor="middle" font-size="9" fill="var(--muted)">${shortP}</text>`;
       }
     }
 

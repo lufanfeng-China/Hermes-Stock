@@ -1052,7 +1052,7 @@ def _build_strategy_async(trading_day: str, strategy: str) -> None:
     """Spawn background process to build ALL strategy datasets for a given date.
     Builds all strategies so the date file is complete after first visit."""
     import subprocess
-    all_strategies = ["rps_first", "slingshot_trend"]
+    all_strategies = ["rps_first", "slingshot_trend", "rps_first_macd", "duotou", "ath_rps360"]
     # Build the requested strategy first (fastest path), then the rest
     ordered = [strategy] + [s for s in all_strategies if s != strategy]
     try:
@@ -2037,6 +2037,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
                 gap_total = _coerce_float(strategy_conditions.get("gap_total"))
                 if gap_total is not None:
                     row["slingshot_gap"] = gap_total
+                # Expose days_since_last_ath for ath_rps360 strategy
+                row["days_since_last_ath"] = _coerce_int(strategy_entry.get("days_since_last_ath"))
         rows.append(row)
 
     text_filters = {
@@ -2101,6 +2103,27 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
             ]
             continue
         filtered = [row for row in filtered if _matches_keyword_filter(row.get(field_name), expected)]
+
+    # Apply symbol/name filter (substring match on code, name, market:symbol, or pinyin initials)
+    sf_raw = _normalize_text(params.get("symbol_filter"))
+    if sf_raw:
+        sf_lower = sf_raw.lower()
+        try:
+            from pypinyin import lazy_pinyin, Style
+            _pinyin_cache: dict[str, str] = {}
+            def _get_pinyin_initials(name: str) -> str:
+                if name not in _pinyin_cache:
+                    _pinyin_cache[name] = "".join(lazy_pinyin(name, style=Style.FIRST_LETTER)).lower()
+                return _pinyin_cache[name]
+        except ImportError:
+            _get_pinyin_initials = None
+        filtered = [
+            row for row in filtered
+            if sf_lower in str(row.get("symbol", "")).lower()
+            or sf_lower in str(row.get("stock_name", "")).lower()
+            or sf_lower in (str(row.get("market", "")).upper() + ":" + str(row.get("symbol", ""))).lower()
+            or (_get_pinyin_initials and sf_lower in _get_pinyin_initials(str(row.get("stock_name", ""))))
+        ]
 
     # Apply technical evaluation text filters (support !prefix for "not", comma-separated for OR)
     for param_key, field_name in tech_text_filters.items():
@@ -2316,6 +2339,81 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
                             row["pe_divergence"] = True
                             pe_filtered.append(row)
                     filtered = pe_filtered
+        except Exception:
+            pass
+
+    # 细分龙头 filter
+    if _coerce_bool(params.get("niche_leader")):
+        try:
+            import pandas as _pd2
+            niche_path = Path(PROJECT_ROOT) / "data" / "derived" / "datasets" / "final" / "dataset_niche_leaders.parquet"
+            if niche_path.exists():
+                ndf = _pd2.read_parquet(niche_path)
+                leader_codes = set()
+                for _, nr in ndf.iterrows():
+                    if nr.get("is_niche_leader"):
+                        c = str(nr.get("symbol", "")).zfill(6)
+                        cat = str(nr.get("niche_category", ""))
+                        if c and cat and cat != "未明确":
+                            leader_codes.add(c)
+                filtered = [r for r in filtered if str(r.get("symbol", "")).zfill(6) in leader_codes]
+        except Exception:
+            pass
+
+    # 回购/增持 filter
+    for filter_name, filter_key in [("has_buyback", "has_buyback"), ("has_increase", "has_increase")]:
+        if _coerce_bool(params.get(filter_name)):
+            try:
+                import json as _json3
+                buyback_path = Path(PROJECT_ROOT) / "data" / "derived" / "datasets" / "final" / "dataset_stock_buyback.json"
+                if buyback_path.exists():
+                    bb_data = _json3.loads(buyback_path.read_text(encoding="utf-8"))
+                    match_codes = set()
+                    for r in bb_data:
+                        if r.get(filter_key):
+                            match_codes.add(str(r.get("symbol", "")).zfill(6))
+                    filtered = [r for r in filtered if str(r.get("symbol", "")).zfill(6) in match_codes]
+            except Exception:
+                pass
+
+    # 业绩预告 filter — 净利增幅、预告净利
+    min_fcast_growth = _coerce_float(params.get("min_forecast_growth"))
+    min_fcast_profit = _coerce_float(params.get("min_forecast_profit"))
+    if min_fcast_growth is not None or min_fcast_profit is not None:
+        try:
+            import pandas as _pd_fcast
+            fcast_dir = Path(PROJECT_ROOT) / "data" / "derived" / "financial_ts" / "forecast_snapshots"
+            if fcast_dir.exists():
+                snaps = sorted(fcast_dir.glob("forecast_*.parquet"), reverse=True)
+                if snaps:
+                    fdf = _pd_fcast.read_parquet(snaps[0])
+                    fcast_map = {}
+                    for idx in fdf.index:
+                        code = str(idx).zfill(6)
+                        fcast_map[code] = {
+                            "growth_lo": float(fdf.loc[idx, "业绩预告-本期净利润同比增幅下限%"]),
+                            "growth_hi": float(fdf.loc[idx, "业绩预告-本期净利润同比增幅上限%"]),
+                            "profit_lo": float(fdf.loc[idx, "业绩预告-本期净利润下限(万元)"]),
+                            "profit_hi": float(fdf.loc[idx, "业绩预告-本期净利润上限(万元)"]),
+                        }
+                    fcast_filtered = []
+                    for row in filtered:
+                        code = str(row.get("symbol", "")).zfill(6)
+                        f = fcast_map.get(code)
+                        if f is None:
+                            # 无预告数据时默认不满足筛选条件
+                            continue
+                        row["forecast_growth_lo"] = f["growth_lo"]
+                        row["forecast_growth_hi"] = f["growth_hi"]
+                        row["forecast_profit_avg"] = round((f["profit_lo"] + f["profit_hi"]) / 2 / 10000, 2)  # 万元→亿
+                        if min_fcast_growth is not None and f["growth_lo"] < min_fcast_growth:
+                            continue
+                        if min_fcast_profit is not None:
+                            profit_avg = (f["profit_lo"] + f["profit_hi"]) / 2 / 10000
+                            if profit_avg < min_fcast_profit:
+                                continue
+                        fcast_filtered.append(row)
+                    filtered = fcast_filtered
         except Exception:
             pass
 
@@ -5673,4 +5771,24 @@ def compute_stock_score(market, symbol):
         "ind_sub_indicators": ind_sub_indicators,
         "ind_absolute_total_score": ind_absolute_total_score,
         "ind_trend_total_score": ind_trend_total_score,
+        "niche_leader": _lookup_niche_leader(symbol),
     }
+
+
+
+def _lookup_niche_leader(symbol: str) -> str:
+    """查找细分龙头标签"""
+    try:
+        import pandas as pd
+        from pathlib import Path
+        p = Path("data/derived/datasets/final/dataset_niche_leaders.parquet")
+        if not p.exists():
+            return ""
+        df = pd.read_parquet(p)
+        row = df[df["symbol"].astype(str).str.zfill(6) == symbol.zfill(6)]
+        if not row.empty and row.iloc[0].get("is_niche_leader"):
+            cat = str(row.iloc[0].get("niche_category", ""))
+            return cat if cat and cat != "未明确" else ""
+    except Exception:
+        pass
+    return ""

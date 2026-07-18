@@ -21,7 +21,7 @@ DEFAULT_SYMBOL = "601600"
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     """Build the stock-screener strategy dataset on demand when a preset needs it."""
     strategy = str(strategy or "").strip()
-    if strategy not in {"rps_first", "slingshot_trend", "rps_first_macd"}:
+    if strategy not in {"rps_first", "slingshot_trend", "rps_first_macd", "duotou", "ath_rps360"}:
         return
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
@@ -124,6 +124,7 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ))
     commands.extend([
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
+        ('fetch_financial_online', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/fetch_latest_financial_online.py')]),
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
         (
@@ -153,6 +154,18 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             'rebuild_screener_slingshot',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
              '--strategy', 'slingshot_trend', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_duotou',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'duotou', '--tdxdir', TONGDAXIN_DIR,
+             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
+        ),
+        (
+            'rebuild_screener_ath',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
+             '--strategy', 'ath_rps360', '--tdxdir', TONGDAXIN_DIR,
              '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
         (

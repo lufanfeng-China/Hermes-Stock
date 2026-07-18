@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>财报分析</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+/* ── 金融终端风 全局 ── */
+:root {
+  --fr-bg: #1a1d23;
+  --fr-card: #21242b;
+  --fr-border: #2a2d35;
+  --fr-fg: #d1d4dc;
+  --fr-muted: #787b86;
+  --fr-accent: #5b9bd5;
+  --fr-up: #ef5350;
+  --fr-down: #26a69a;
+  --fr-hover: #2a2e38;
+  --fr-th-bg: #1e2128;
+}
+.fr-wrap { max-width: 1500px; margin: 0 auto; padding: 20px 28px; background: var(--fr-bg); min-height: 100vh; }
+
+/* ── 顶部栏 ── */
+.fr-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--fr-border); }
+.fr-header h1 { font-size: 18px; font-weight: 600; margin: 0; color: var(--fr-fg); letter-spacing: 0.5px; }
+.fr-period-select {
+  padding: 5px 28px 5px 12px; font-size: 13px; border: 1px solid var(--fr-border);
+  border-radius: 4px; background: var(--fr-card); color: var(--fr-fg);
+  appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23787b86'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+.fr-period-select:focus { outline: none; border-color: var(--fr-accent); }
+#fr-loading { color: var(--fr-muted); font-size: 12px; }
+
+/* ── 分区 ── */
+.fr-section { margin-bottom: 28px; }
+.fr-section h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px 0; color: var(--fr-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+/* ── 表格 ── */
+.fr-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; font-family: 'SF Mono', 'Consolas', 'Menlo', monospace; }
+.fr-table th,
+.fr-table td { text-align: center; }
+.fr-table thead th {
+  padding: 8px 12px; font-weight: 500; font-size: 11px;
+  color: var(--fr-muted); text-transform: uppercase; letter-spacing: 0.5px;
+  background: var(--fr-th-bg); border-bottom: 1px solid var(--fr-border);
+  position: sticky; top: 0; z-index: 2; white-space: nowrap;
+}
+.fr-table thead th[data-sort] { cursor: pointer; }
+.fr-table thead th[data-sort]:hover { color: var(--fr-fg); }
+.fr-table thead th.sorted { color: var(--fr-accent); }
+.fr-table thead th .sort-arrow { font-size: 10px; margin-left: 3px; opacity: 0.7; }
+.fr-table tbody td {
+  padding: 7px 12px; border-bottom: 1px solid rgba(42,45,53,0.5); color: var(--fr-fg);
+  white-space: nowrap; vertical-align: middle;
+}
+.fr-table tbody tr:hover td { background: var(--fr-hover); }
+.fr-table tbody tr:last-child td { border-bottom: none; }
+
+/* 列对齐 */
+.fr-table td.name   { text-align: center; }
+.fr-table td.date   { text-align: center; color: var(--fr-muted); font-size: 12px; }
+.fr-table td.num    { text-align: center; font-variant-numeric: tabular-nums; }
+.fr-table td.delta  { text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; }
+.fr-table th        { text-align: center; }
+
+/* 涨跌色 */
+.fr-up   { color: var(--fr-up); }
+.fr-down { color: var(--fr-down); }
+
+/* 股票名链接 */
+.fr-table td.symbol { color: var(--fr-accent); cursor: pointer; }
+.fr-table td.symbol:hover { text-decoration: underline; }
+
+/* 预告栏 */
+.fr-upcoming-wrap { max-height: 180px; overflow-y: auto; border: 1px solid var(--fr-border); border-radius: 4px; }
+.fr-upcoming-wrap .fr-table tbody td { font-size: 13px; }
+
+/* 状态文字 */
+.fr-status { color: var(--fr-muted); padding: 32px; text-align: center; font-size: 13px; }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">FINANCIAL REPORT TERMINAL</p>
+      <h1>财报分析</h1>
+    </div>
+    <div class="topbar-actions" id="global-nav"></div>
+  </header>
+
+<div class="fr-wrap">
+  <div class="fr-header">
+    <h1>财报分析</h1>
+    <select id="fr-period" class="fr-period-select"><option value="">加载中...</option></select>
+    <span id="fr-loading"></span>
+  </div>
+
+  <div class="fr-section" id="fr-forecast-section">
+    <h2>业绩预告 <span style="font-size:11px;font-weight:400;color:var(--fr-muted);">(半年报H1)</span></h2>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:10px;flex-wrap:wrap;">
+      <label style="font-size:12px;color:var(--fr-muted);">净利增幅≥<input id="fr-fcast-growth-min" type="text" style="width:50px;background:var(--fr-card);border:1px solid var(--fr-border);color:var(--fr-fg);padding:2px 6px;font-size:12px;border-radius:3px;" placeholder="50">%</label>
+      <label style="font-size:12px;color:var(--fr-muted);">预告净利≥<input id="fr-fcast-profit-min" type="text" style="width:60px;background:var(--fr-card);border:1px solid var(--fr-border);color:var(--fr-fg);padding:2px 6px;font-size:12px;border-radius:3px;" placeholder="1">亿</label>
+      <label style="font-size:12px;color:var(--fr-muted);">预告日≥<input id="fr-fcast-date-from" type="text" style="width:70px;background:var(--fr-card);border:1px solid var(--fr-border);color:var(--fr-fg);padding:2px 6px;font-size:12px;border-radius:3px;" placeholder="26-06-01"></label>
+      <button id="fr-fcast-filter-btn" class="fr-period-select" style="font-size:12px;padding:2px 10px;">筛选</button>
+      <button id="fr-fcast-clear-btn" style="font-size:12px;padding:2px 10px;background:var(--fr-card);border:1px solid var(--fr-border);color:var(--fr-muted);border-radius:4px;cursor:pointer;">清除</button>
+    </div>
+    <div class="fr-upcoming-wrap" style="max-height:none;">
+      <table class="fr-table" id="fr-forecast-table">
+        <thead><tr>
+          <th style="width:12%">股票名称</th>
+          <th style="width:8%" data-sort="current_price">股价</th>
+          <th style="width:10%">二级行业</th>
+          <th style="width:9%" data-sort="forecast_date" class="sorted">预告日期<span class="sort-arrow">▼</span></th>
+          <th style="width:10%" data-sort="profit_growth">净利增幅</th>
+          <th style="width:8%" data-sort="pe_pct">PE分位</th>
+          <th style="width:8%" data-sort="net_profit">预告净利</th>
+          <th style="width:8%" data-sort="return_3d">3日涨跌</th>
+        </tr></thead>
+        <tbody><tr><td colspan="8" class="fr-status">加载中...</td></tr></tbody>
+      </table>
+    </div>
+    <div id="fr-fcast-pagination" style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px;font-size:13px;color:var(--fr-muted);">
+      <button id="fr-fcast-prev-btn" class="fr-period-select" style="font-size:12px;padding:3px 10px;" disabled>上一页</button>
+      <span id="fr-fcast-page-info">第 1 页 / 共 1 页 (共 0 条)</span>
+      <button id="fr-fcast-next-btn" class="fr-period-select" style="font-size:12px;padding:3px 10px;" disabled>下一页</button>
+    </div>
+  </div>
+
+  <div class="fr-section" id="fr-upcoming-section">
+    <h2>即将公布</h2>
+    <div class="fr-upcoming-wrap">
+      <table class="fr-table" id="fr-upcoming-table">
+        <thead><tr><th style="width:40%">股票名称</th><th>发布日期</th></tr></thead>
+        <tbody><tr><td colspan="2" class="fr-status">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="fr-section">
+    <h2>已公布财报 <button id="fr-compute-return" class="fr-period-select" style="margin-left:12px;font-size:12px;padding:3px 10px;">计算收益率</button></h2>
+    <table class="fr-table" id="fr-published-table">
+      <thead>
+        <tr>
+          <th style="width:14%">股票名称</th>
+          <th style="width:10%">发布日期</th>
+          <th style="width:11%" data-sort="deducted_roe" class="sorted">扣非ROE%<span class="sort-arrow">▼</span></th>
+          <th style="width:10%">同比Δ</th>
+          <th style="width:13%" data-sort="net_profit">净利润(亿)</th>
+          <th style="width:10%">同比Δ</th>
+          <th style="width:8%" data-sort="pe_pct">PE分位</th>
+          <th style="width:11%" data-sort="deducted_np_yoy">扣非增速%</th>
+          <th style="width:10%">同比Δ</th>
+          <th style="width:10%" data-sort="return_pct">收益率%</th>
+        </tr>
+      </thead>
+      <tbody id="fr-published-tbody">
+        <tr><td colspan="9" class="fr-status">加载中...</td></tr>
+      </tbody>
+    </table>
+    <div id="fr-pagination" style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;font-size:13px;color:var(--fr-muted);">
+      <button id="fr-prev-btn" class="fr-period-select" style="font-size:12px;padding:3px 10px;" disabled>上一页</button>
+      <span id="fr-page-info">第 1 页 / 共 1 页 (共 0 条)</span>
+      <button id="fr-next-btn" class="fr-period-select" style="font-size:12px;padding:3px 10px;" disabled>下一页</button>
+    </div>
+  </div>
+</div>
+
+<script src="/nav.js"></script>
+<script src="/financial-report.js?v=14"></script>
+</body>
+</html>

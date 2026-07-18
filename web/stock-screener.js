@@ -8,11 +8,19 @@ const STRATEGY_PRESETS = {
   },
   slingshot_trend: {
     strategy: 'slingshot_trend',
-    description: 'MA10加速上弯 + min(开,收)4日连涨 + 涨幅<20% + 放量 + MA10偏离4~5',
+    description: 'MA10加速上弯(4日) + min(开,收)3日连涨 + 10日涨幅<30% + 近3日放量 + GAP<4 + 4日≤1阴(跌<2%) + MA10>MA60 + 60日首发',
   },
   rps_first_macd: {
     strategy: 'rps_first_macd',
     description: '过去60日内RPS首次信号 + 当日MACD金叉(DIF上穿DEA) → 回测14年均+25.00%',
+  },
+  duotou: {
+    strategy: 'duotou',
+    description: 'MA10/20/30 > MA60 + MA60近60日单调(至多1次例外，前后10日干净)',
+  },
+  ath_rps360: {
+    strategy: 'ath_rps360',
+    description: '当日收盘创历史新高 + RPS总分>360',
   },
 };
 let currentPage = 1;
@@ -130,6 +138,9 @@ function buildParams(page = currentPage) {
   for (const [key, vals] of Object.entries(multiValues)) {
     if (vals.length) params.set(key, vals.join(','));
   }
+  // Ensure symbol_filter is properly URL-encoded (Chinese chars)
+  const sfRaw = String(data.get('symbol_filter') || '').trim();
+  if (sfRaw) params.set('symbol_filter', sfRaw);
   const asOfDate = asOfDateInput?.value?.trim();
   if (asOfDate) params.set('as_of_date', asOfDate);
   params.set('page', String(page));
@@ -228,17 +239,24 @@ function renderScreenerLoadingState() {
   currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
   countEl.textContent = '…';
   pageInfoEl.textContent = '正在筛选...';
-  tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">正在筛选，请稍候...</td></tr>';
 }
 
 async function runScreener(page = 1) {
   const strategyVal = (strategyInputEl?.value || '').trim();
-  if (!strategyVal) {
+  // Check if any filter has a value (excluding hidden fields)
+  const filterData = new FormData(form);
+  let hasFilter = false;
+  for (const [key, value] of filterData.entries()) {
+    if (key === 'strategy' || key === 'as_of_date') continue;
+    if (String(value || '').trim()) { hasFilter = true; break; }
+  }
+  if (!strategyVal && !hasFilter) {
     currentPayload = { rows: [], total: 0, page: 1, total_pages: 1 };
     countEl.textContent = '0';
     pageInfoEl.textContent = '第 1 / 1 页';
-    statusEl.textContent = '请先选择策略方案';
-    tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">请先选择策略方案</td></tr>';
+    statusEl.textContent = '请先选择策略方案或设置筛选条件';
+    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">请先选择策略方案或设置筛选条件</td></tr>';
     renderPagination(currentPayload);
     updateWatchlistToolbar();
     return;
@@ -282,13 +300,13 @@ async function runScreener(page = 1) {
     }
   } catch (error) {
     statusEl.textContent = `筛选失败：${error.message}`;
-    tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">筛选失败，请调整条件后重试</td></tr>';
   }
 }
 
 function renderScreenerRows(rows) {
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="17" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" class="stock-score-empty-row">没有符合条件的股票</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row, idx) => {
@@ -306,12 +324,10 @@ function renderScreenerRows(rows) {
       <td>${trendSignal(row.tech_short_trend, row.tech_short_trend_label)}</td>
       <td class="num">${row.short_trend_duration || 1}天</td>
       <td class="num">${formatNumber((row.rps_20||0)+(row.rps_50||0)+(row.rps_120||0)+(row.rps_250||0), 0)}</td>
-      <td class="num">${formatNumber(row.swing_low_price, 2)}</td>
       <td class="num">${(() => {
-        const p = row.current_price, sl = row.swing_low_price;
-        if (!p || !sl || sl <= 0) return '—';
-        const pct = ((p - sl) / sl * 100);
-        return (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+        const d = row.days_since_last_ath;
+        if (d == null || d <= 0) return '—';
+        return d + '天前';
       })()}</td>
       <td class="num">${formatRank(row.market_total_rank)} / ${formatRank(row.industry_total_rank)}</td>
       <td class="num">${formatPercentile(row.primary_percentile)}</td>

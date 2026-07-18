@@ -894,6 +894,10 @@ export class KlineChart {
 
     // Tooltip
     const barIndex = this.visible.windowStart + visibleIndex;
+    const prevBar = this.bars[barIndex - 1];
+    const chgPct = prevBar ? ((bar.close - prevBar.close) / prevBar.close * 100) : null;
+    const chgSign = chgPct === null ? '-' : (chgPct >= 0 ? '+' : '');
+    const chgStr = chgPct === null ? '-' : `${chgSign}${chgPct.toFixed(2)}%`;
     const maVals = {};
     for (const w of this.maWindows) {
       maVals[w] = (this.maSeries[w] || [])[barIndex] ?? null;
@@ -904,6 +908,7 @@ export class KlineChart {
       `最高价: ${this._formatTooltipNumber(bar.high)}`,
       `最低价: ${this._formatTooltipNumber(bar.low)}`,
       `收盘价: ${this._formatTooltipNumber(bar.close)}`,
+      `涨跌幅: ${chgStr}`,
       `成交量: ${this._formatTooltipVolume(bar.volume)}`,
       `MA10: ${this._formatTooltipNumber(maVals[10])}`,
       `MA20: ${this._formatTooltipNumber(maVals[20])}`,
@@ -916,7 +921,7 @@ export class KlineChart {
     ];
     const padding = 6;
     const lineH = 13;
-    const tw = 154;
+    const tw = 160;
     const th = lines.length * lineH + padding * 2;
 
     // Position tooltip to avoid edges

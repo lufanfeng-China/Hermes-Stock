@@ -61,7 +61,9 @@ def _generate_via_api(market: str, symbol: str, stock_name: str) -> str:
             f"你是一名A股投资分析师。请基于数据和你的知识，分析{stock_name}（{market}:{symbol}）的竞争优势（护城河），"
             f"输出一个约150-250字中文自然段落。\n\n{context}\n\n"
             f"覆盖品牌/技术/规模/成本/网络效应/特许经营等维度，说明行业定位（龙头/跟随者/利基），"
-            f"判断护城河可持续性。数据不足可用行业常识但标注[推测]。直接输出文本，不加前缀。"
+            f"判断护城河可持续性。数据不足可用行业常识但标注[推测]。"
+            f"\n\n最后单独一行输出标签，格式如下（严格按此格式，不加其他文字）："
+            f"\n[标签: 细分龙头, 领域: XXX] 或 [标签: 非龙头]"
         )
         resp = client.chat.completions.create(
             model=model,

@@ -274,6 +274,176 @@ def _recompute_conclusion_v2(entry: dict) -> None:
                  conclusion_reason="信号不明确，观望")
 
 
+def _prev_year_period(period: str) -> str:
+    """返回上年同期财报期，如 2026Q1 → 2025Q1, 2025A → 2024A"""
+    year = int(period[:4])
+    suffix = period[4:]
+    return f"{year - 1}{suffix}"
+
+
+def _next_period(period: str) -> str:
+    """返回下一财报期，如 2026Q1 → 2026Q2, 2025Q3 → 2025A"""
+    year = int(period[:4])
+    suffix = period[4:]
+    if suffix == "Q1":
+        return f"{year}Q2"
+    elif suffix == "Q2":
+        return f"{year}Q3"
+    elif suffix == "Q3":
+        return f"{year}A"
+    else:  # A
+        return f"{year + 1}Q1"
+
+
+def _enrich_rows_pe_pct(rows: list) -> None:
+    """给rows列表中的每行添加pe_pct字段（5年PE-TTM分位）"""
+    try:
+        from pathlib import Path as _Path
+        import pandas as _pd
+        db_path = _Path("data/derived/pe_ttm_quarterly.parquet")
+        if not db_path.exists():
+            return
+        pe_db = _pd.read_parquet(db_path)
+        latest = pe_db.sort_values("period").groupby("code").last()
+        pe_lookup = latest["pe_pct"].to_dict()
+        for row in rows:
+            code = str(row.get("symbol", "")).zfill(6)
+            val = pe_lookup.get(code)
+            row["pe_pct"] = round(float(val), 1) if val is not None and not _pd.isna(val) else None
+    except Exception:
+        pass
+
+
+def _compute_forecast_3d_returns(rows: list) -> None:
+    """计算业绩预告的3日涨跌幅：预告日收盘买入，T+3日收盘卖出"""
+    import pandas as pd
+    from mootdx.reader import Reader
+
+    reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
+
+    for row in rows:
+        sym = row["symbol"]
+        fcast_date = row.get("forecast_date", "")
+        if not fcast_date:
+            row["return_3d"] = None
+            continue
+
+        try:
+            daily = reader.daily(symbol=sym)
+        except Exception:
+            row["return_3d"] = None
+            continue
+        if daily is None or daily.empty:
+            row["return_3d"] = None
+            row["current_price"] = None
+            continue
+
+        daily = daily.sort_index()
+        # 当前股价 = 最新收盘价
+        row["current_price"] = float(daily.iloc[-1]["close"])
+
+        # 预告日期格式: "YY-MM-DD" → "20YY-MM-DD"
+        parts = fcast_date.split("-")
+        if len(parts) != 3:
+            row["return_3d"] = None
+            continue
+        full_date = f"20{parts[0]}-{parts[1]}-{parts[2]}"
+        try:
+            fcast_ts = pd.Timestamp(full_date)
+        except Exception:
+            row["return_3d"] = None
+            continue
+
+        # 找预告日当天或之前最近的一个交易日作为入场日
+        up_to = daily[daily.index <= fcast_ts]
+        if len(up_to) == 0:
+            row["return_3d"] = None
+            continue
+
+        entry_bar = up_to.iloc[-1]  # 最近交易日
+        entry = float(entry_bar["close"])
+        entry_date = entry_bar.name
+
+        # 从入场日开始往后找3个交易日
+        after_entry = daily[daily.index > entry_date]
+        if len(after_entry) >= 3:
+            exit_p = float(after_entry.iloc[2]["close"])  # T+3 收盘
+        elif len(after_entry) > 0:
+            exit_p = float(daily.iloc[-1]["close"])  # 未满3日，用最新收盘价
+        else:
+            exit_p = entry  # 无后续数据
+
+        if entry == 0:
+            row["return_3d"] = None
+        else:
+            row["return_3d"] = round((exit_p - entry) / entry * 100, 2)
+
+
+def _compute_returns(rows: list, current_period: str) -> None:
+    """计算每只股票的收益率：公告日后第2个交易日开盘买入，下期公告日收盘或当前价卖出"""
+    import pandas as pd
+    from pathlib import Path
+    from mootdx.reader import Reader
+
+    next_pd = _next_period(current_period)
+    ds_dir = Path("data/derived/financial_ts/by_quarter")
+
+    # 加载下一期公告日期
+    next_announce = {}
+    np_path = ds_dir / f"{next_pd}.parquet"
+    if np_path.exists():
+        ndf = pd.read_parquet(np_path)
+        ndf["ad"] = ndf["announce_date"].astype("Int64")
+        for code in ndf.index:
+            ad = ndf.loc[code, "ad"]
+            if pd.notna(ad):
+                next_announce[str(code).zfill(6)] = str(int(ad))
+
+    reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
+    today_str = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+
+    for row in rows:
+        sym = row["symbol"]
+        ad_str = row.get("announce_date", "")
+        if not ad_str:
+            row["return_pct"] = None
+            continue
+
+        try:
+            daily = reader.daily(symbol=sym)
+        except Exception:
+            row["return_pct"] = None
+            continue
+        if daily is None or daily.empty:
+            row["return_pct"] = None
+            continue
+
+        daily = daily.sort_index()
+        ad_ts = pd.Timestamp(ad_str)
+
+        # 找公告日后第2个交易日
+        after = daily[daily.index > ad_ts]
+        if len(after) < 2:
+            row["return_pct"] = None
+            continue
+        entry = float(after.iloc[1]["open"])  # 第2个交易日开盘价
+
+        # 找卖出价：下一期公告日收盘 或 当前最新收盘
+        exit_price = None
+        nxt = next_announce.get(sym)
+        if nxt:
+            nxt_ts = pd.Timestamp(f"{nxt[:4]}-{nxt[4:6]}-{nxt[6:]}")
+            nxt_bars = daily[daily.index == nxt_ts]
+            if len(nxt_bars) > 0:
+                exit_price = float(nxt_bars.iloc[0]["close"])
+
+        if exit_price is None:
+            exit_price = float(daily.iloc[-1]["close"])
+
+        pct = round((exit_price - entry) / entry * 100, 2)
+        row["return_pct"] = pct
+
+
 class StockDashboardHandler(BaseHTTPRequestHandler):
     server_version = "StockDashboard/0.1"
 
@@ -335,6 +505,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/competitive-edge":
             self.handle_competitive_edge(parsed.query)
+            return
+        if parsed.path == "/api/stock-buyback":
+            self.handle_stock_buyback(parsed.query)
             return
         if parsed.path == "/api/data-update-status":
             self.handle_data_update_status(parsed.query)
@@ -402,6 +575,18 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/bottleneck/reports":
             self.handle_bottleneck_list_reports(parsed.query)
+            return
+        if parsed.path == "/api/financial-periods":
+            self.handle_financial_periods()
+            return
+        if parsed.path == "/api/financial-upcoming":
+            self.handle_financial_upcoming(parsed.query)
+            return
+        if parsed.path == "/api/financial-published":
+            self.handle_financial_published(parsed.query)
+            return
+        if parsed.path == "/api/financial-forecast":
+            self.handle_financial_forecast(parsed.query)
             return
         if parsed.path == "/api/bottleneck/report":
             self.handle_bottleneck_load_report(parsed.query)
@@ -571,7 +756,15 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 self.respond_json(HTTPStatus.OK, {"ok": False, "error": "PE database not found"})
                 return
             pe_db = pd.read_parquet(db_path)
-            stock_data = pe_db[pe_db["code"] == symbol].sort_values("period").copy()
+            stock_data = pe_db[pe_db["code"] == symbol].copy()
+            # Sort chronologically: Q1(1) < Q2(2) < Q3(3) < A(4)
+            def _period_sort_key(p):
+                year = int(p[:4])
+                suffix = p[4:]
+                q = {"Q1": 1, "Q2": 2, "Q3": 3, "A": 4}.get(suffix, 0)
+                return year * 10 + q
+            stock_data["_sort_key"] = stock_data["period"].apply(_period_sort_key)
+            stock_data = stock_data.sort_values("_sort_key").drop(columns=["_sort_key"])
             if stock_data.empty:
                 self.respond_json(HTTPStatus.OK, {"ok": True, "symbol": symbol, "history": []})
                 return
@@ -646,6 +839,329 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
                            {"ok": False, "error": str(exc)})
+
+    def handle_financial_periods(self) -> None:
+        """返回可选的财报期列表"""
+        import os
+        from pathlib import Path
+        p = Path("data/derived/financial_ts/by_quarter")
+        periods = sorted(
+            [f.stem for f in p.glob("*.parquet") if f.stem != "latest"],
+            reverse=True
+        )
+        periods = [p for p in periods if len(p) >= 5 and (p.endswith("A") or p.endswith(("1", "2", "3")))]
+        self.respond_json(HTTPStatus.OK, {"ok": True, "periods": periods})
+
+    def handle_financial_upcoming(self, query: str) -> None:
+        """未来3天将公布财报的股票"""
+        import pandas as pd
+        from datetime import datetime, timedelta
+        from app.search.index import load_security_rows
+
+        params = parse_qs(query)
+        period = params.get("period", [""])[0].strip()
+        if not period:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "缺少period参数"})
+            return
+
+        path = f"data/derived/financial_ts/by_quarter/{period}.parquet"
+        df = pd.read_parquet(path)
+        df["ann_date_int"] = df["announce_date"].astype("Int64")
+
+        today = datetime.now()
+        cutoff = int((today + timedelta(days=3)).strftime("%Y%m%d"))
+        today_int = int(today.strftime("%Y%m%d"))
+
+        upcoming = df[(df["ann_date_int"] >= today_int) & (df["ann_date_int"] <= cutoff)]
+        if upcoming.empty:
+            self.respond_json(HTTPStatus.OK, {"ok": True, "rows": []})
+            return
+
+        securities = {str(s.get("symbol")).strip(): str(s.get("stock_name", "")).strip()
+                      for s in load_security_rows()}
+        rows = []
+        for code in upcoming.index:
+            name = securities.get(str(code).zfill(6), code)
+            ad = upcoming.loc[code, "ann_date_int"]
+            if pd.isna(ad):
+                continue
+            ad_str = str(int(ad))
+            rows.append({
+                "symbol": str(code).zfill(6),
+                "stock_name": name,
+                "announce_date": f"{ad_str[:4]}-{ad_str[4:6]}-{ad_str[6:]}",
+            })
+        self.respond_json(HTTPStatus.OK, {"ok": True, "rows": rows})
+
+    def handle_financial_published(self, query: str) -> None:
+        """已公布财报列表，支持排序和分页"""
+        import pandas as pd
+        from app.search.index import load_security_rows
+
+        params = parse_qs(query)
+        period = params.get("period", [""])[0].strip()
+        sort_by = params.get("sort", ["deducted_roe"])[0].strip()
+        order = params.get("order", ["desc"])[0].strip()
+        compute_return = params.get("compute_return", ["0"])[0].strip() == "1"
+        page = int(params.get("page", ["1"])[0].strip())
+        page_size = min(int(params.get("page_size", ["100"])[0].strip()), 200)
+        if page < 1:
+            page = 1
+
+        if not period:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "缺少period参数"})
+            return
+
+        path = f"data/derived/financial_ts/by_quarter/{period}.parquet"
+        df = pd.read_parquet(path)
+        df["ann_date_int"] = df["announce_date"].astype("Int64")
+
+        # Only stocks that have announced (announce_date <= today)
+        today_int = int(__import__("datetime").datetime.now().strftime("%Y%m%d"))
+        published = df[df["ann_date_int"] <= today_int]
+
+        securities = {str(s.get("symbol")).strip(): str(s.get("stock_name", "")).strip()
+                      for s in load_security_rows()}
+
+        # Load same period last year for YoY comparison
+        prev_period = _prev_year_period(period)
+        prev_path = f"data/derived/financial_ts/by_quarter/{prev_period}.parquet"
+        prev_df = None
+        try:
+            prev_df = pd.read_parquet(prev_path)
+        except Exception:
+            pass
+
+        rows = []
+        for code in published.index:
+            name = securities.get(str(code).zfill(6), str(code))
+            row = published.loc[code]
+
+            # 扣非ROE = 扣非净利润 / 归母权益 * 100
+            deducted_np = float(row.get("扣除非经常性损益后的净利润", 0) or 0)
+            equity = float(row.get("归属于母公司股东权益(资产负债表)", 0) or 0)
+            deducted_roe = round(deducted_np / equity * 100, 2) if equity else None
+
+            # 归母净利润
+            net_profit = float(row.get("归属于母公司所有者的净利润", 0) or 0)
+
+            # 扣非净利润同比
+            deducted_np_yoy = float(row.get("扣非净利润同比(%)", 0) or 0)
+
+            # YoY comparison
+            prev_deducted_roe = None
+            prev_net_profit = None
+            prev_deducted_np_yoy = None
+            if prev_df is not None and code in prev_df.index:
+                pr = prev_df.loc[code]
+                p_dnp = float(pr.get("扣除非经常性损益后的净利润", 0) or 0)
+                p_eq = float(pr.get("归属于母公司股东权益(资产负债表)", 0) or 0)
+                prev_deducted_roe = round(p_dnp / p_eq * 100, 2) if p_eq else None
+                prev_net_profit = float(pr.get("归属于母公司所有者的净利润", 0) or 0)
+                prev_deducted_np_yoy = float(pr.get("扣非净利润同比(%)", 0) or 0)
+
+            ad = row.get("ann_date_int")
+            ad_str = f"{str(int(ad))[:4]}-{str(int(ad))[4:6]}-{str(int(ad))[6:]}" if pd.notna(ad) else ""
+
+            rows.append({
+                "symbol": str(code).zfill(6),
+                "stock_name": name,
+                "announce_date": ad_str,
+                "deducted_roe": deducted_roe,
+                "deducted_roe_prev": prev_deducted_roe,
+                "net_profit": round(net_profit / 10000, 2),  # 转为亿
+                "net_profit_prev": round(prev_net_profit / 10000, 2) if prev_net_profit else None,
+                "deducted_np_yoy": round(deducted_np_yoy, 2),
+                "deducted_np_yoy_prev": round(prev_deducted_np_yoy, 2) if prev_deducted_np_yoy else None,
+            })
+
+        # Sort
+        if sort_by == "deducted_roe":
+            rows.sort(key=lambda r: r["deducted_roe"] or -9999, reverse=(order == "desc"))
+        elif sort_by == "net_profit":
+            rows.sort(key=lambda r: r["net_profit"] or -9999, reverse=(order == "desc"))
+        elif sort_by == "deducted_np_yoy":
+            rows.sort(key=lambda r: r["deducted_np_yoy"] or -9999, reverse=(order == "desc"))
+        elif sort_by == "return_pct":
+            rows.sort(key=lambda r: r["return_pct"] if r["return_pct"] is not None else -9999, reverse=(order == "desc"))
+        elif sort_by == "pe_pct":
+            rows.sort(key=lambda r: r.get("pe_pct") if r.get("pe_pct") is not None else -1, reverse=(order == "desc"))
+
+        # ── 计算收益率（按需）──
+        if compute_return:
+            _compute_returns(rows, period)
+            # 如果按收益率排序，需要重排
+            if sort_by == "return_pct":
+                rows.sort(key=lambda r: r.get("return_pct") if r.get("return_pct") is not None else -9999, reverse=(order == "desc"))
+
+        # PE分位 enrichment
+        _enrich_rows_pe_pct(rows)
+
+        total = len(rows)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        if page > total_pages:
+            page = total_pages
+        start = (page - 1) * page_size
+        end = start + page_size
+        paged_rows = rows[start:end]
+
+        self.respond_json(HTTPStatus.OK, {
+            "ok": True,
+            "rows": paged_rows,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        })
+
+    def handle_financial_forecast(self, query: str) -> None:
+        """返回最新业绩预告列表（基于监控快照），支持分页"""
+        import json
+        import pandas as pd
+        from pathlib import Path
+        from app.search.index import load_security_rows
+
+        params = parse_qs(query)
+        page = int(params.get("page", ["1"])[0].strip())
+        page_size = min(int(params.get("page_size", ["50"])[0].strip()), 200)
+        if page < 1:
+            page = 1
+        sort_by = params.get("sort", ["forecast_date"])[0].strip()
+        order = params.get("order", ["desc"])[0].strip()
+        # 过滤参数
+        growth_min = params.get("growth_min", [""])[0].strip()
+        profit_min_yi = params.get("profit_min", [""])[0].strip()  # 亿
+        date_from = params.get("date_from", [""])[0].strip()
+
+        snapshot_dir = Path("data/derived/financial_ts/forecast_snapshots")
+        if not snapshot_dir.exists():
+            self.respond_json(HTTPStatus.OK, {"ok": True, "rows": [], "total": 0,
+                                              "message": "暂无业绩预告快照"})
+            return
+
+        snapshots = sorted(snapshot_dir.glob("forecast_*.parquet"))
+        if not snapshots:
+            self.respond_json(HTTPStatus.OK, {"ok": True, "rows": [], "total": 0,
+                                              "message": "暂无业绩预告快照"})
+            return
+
+        df = pd.read_parquet(snapshots[-1])
+
+        securities = {str(s.get("symbol")).strip(): str(s.get("stock_name", "")).strip()
+                      for s in load_security_rows()}
+
+        # 加载行业映射
+        import json as _json
+        industry_map = {}
+        try:
+            ind_data = _json.loads(Path("data/derived/datasets/final/dataset_stock_industry_current.json").read_text())
+            for item in ind_data:
+                sym = str(item.get("symbol", "")).strip()
+                l2 = item.get("industry_level_2_name", "")
+                if sym and l2:
+                    industry_map[sym] = l2
+        except Exception:
+            pass
+
+        # 加载细分龙头映射
+        niche_map = {}  # code -> niche_category
+        try:
+            niche_path = Path("data/derived/datasets/final/dataset_niche_leaders.parquet")
+            if niche_path.exists():
+                niche_df = pd.read_parquet(niche_path)
+                for _, nr in niche_df.iterrows():
+                    if nr.get("is_niche_leader"):
+                        code = str(nr.get("symbol", "")).zfill(6)
+                        cat = str(nr.get("niche_category", ""))
+                        if code and cat and cat != "未明确":
+                            niche_map[code] = cat
+        except Exception:
+            pass
+
+        rows = []
+        for code in df.index:
+            name = df.loc[code, "name"] if "name" in df.columns and pd.notna(df.loc[code, "name"]) and str(df.loc[code, "name"]).strip() else ""
+            if not name:
+                name = securities.get(str(code).zfill(6), str(code))
+
+            fcast_date = str(df.loc[code, "预告日期"]) if "预告日期" in df.columns else ""
+            lo_pct = float(df.loc[code, "业绩预告-本期净利润同比增幅下限%"]) if "业绩预告-本期净利润同比增幅下限%" in df.columns and pd.notna(df.loc[code, "业绩预告-本期净利润同比增幅下限%"]) else None
+            hi_pct = float(df.loc[code, "业绩预告-本期净利润同比增幅上限%"]) if "业绩预告-本期净利润同比增幅上限%" in df.columns and pd.notna(df.loc[code, "业绩预告-本期净利润同比增幅上限%"]) else None
+            lo_amt = float(df.loc[code, "业绩预告-本期净利润下限(万元)"]) if "业绩预告-本期净利润下限(万元)" in df.columns and pd.notna(df.loc[code, "业绩预告-本期净利润下限(万元)"]) else None
+            hi_amt = float(df.loc[code, "业绩预告-本期净利润上限(万元)"]) if "业绩预告-本期净利润上限(万元)" in df.columns and pd.notna(df.loc[code, "业绩预告-本期净利润上限(万元)"]) else None
+
+            rows.append({
+                "symbol": str(code).zfill(6),
+                "stock_name": name,
+                "forecast_date": fcast_date,
+                "profit_growth_lo": round(lo_pct, 1) if lo_pct is not None else None,
+                "profit_growth_hi": round(hi_pct, 1) if hi_pct is not None else None,
+                "net_profit_lo": lo_amt,
+                "net_profit_hi": hi_amt,
+                "industry_l2": industry_map.get(str(code).zfill(6), ""),
+                "current_price": None,
+                "niche_leader": niche_map.get(str(code).zfill(6), ""),
+            })
+
+        # ── 计算3日涨跌幅和当前股价 ──
+        _compute_forecast_3d_returns(rows)
+
+        # 排序
+        reverse = order == "desc"
+        if sort_by == "forecast_date":
+            rows.sort(key=lambda r: r["forecast_date"] or "", reverse=reverse)
+        elif sort_by == "profit_growth":
+            rows.sort(key=lambda r: r["profit_growth_lo"] if r["profit_growth_lo"] is not None else -99999, reverse=reverse)
+        elif sort_by == "net_profit":
+            def _avg_np(r):
+                lo = r["net_profit_lo"] or 0
+                hi = r["net_profit_hi"] or 0
+                return (lo + hi) / 2
+            rows.sort(key=_avg_np, reverse=reverse)
+        elif sort_by == "return_3d":
+            rows.sort(key=lambda r: r.get("return_3d") if r.get("return_3d") is not None else -99999, reverse=reverse)
+        elif sort_by == "current_price":
+            rows.sort(key=lambda r: r.get("current_price") if r.get("current_price") is not None else -1, reverse=reverse)
+        elif sort_by == "pe_pct":
+            rows.sort(key=lambda r: r.get("pe_pct") if r.get("pe_pct") is not None else -1, reverse=reverse)
+        else:
+            rows.sort(key=lambda r: r["forecast_date"] or "", reverse=reverse)
+
+        # 过滤
+        if growth_min:
+            try:
+                gmin = float(growth_min)
+                rows = [r for r in rows if r["profit_growth_lo"] is not None and r["profit_growth_lo"] >= gmin]
+            except ValueError:
+                pass
+        if profit_min_yi:
+            try:
+                pmin = float(profit_min_yi) * 10000  # 亿→万
+                rows = [r for r in rows if r["net_profit_lo"] is not None and r["net_profit_lo"] >= pmin]
+            except ValueError:
+                pass
+        if date_from:
+            rows = [r for r in rows if r.get("forecast_date", "") >= date_from]
+
+        # PE分位 enrichment
+        _enrich_rows_pe_pct(rows)
+
+        total = len(rows)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        if page > total_pages:
+            page = total_pages
+        start = (page - 1) * page_size
+        end = start + page_size
+        paged_rows = rows[start:end]
+
+        self.respond_json(HTTPStatus.OK, {
+            "ok": True,
+            "rows": paged_rows,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        })
 
     def handle_stock_rps_history(self, query: str) -> None:
         params = parse_qs(query)
@@ -918,6 +1434,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             # Augment with PE分位 from quarterly database + apply filter
             if result.get("rows"):
                 self._enrich_pe_percentile(result, params)
+            # Apply 股价新高 filter
+            new_high = params.get("price_new_high", "").strip()
+            if new_high and result.get("rows"):
+                result["rows"] = self._filter_price_new_high(result["rows"], new_high, TONGDAXIN_DIR, as_of_date)
+                result["total"] = len(result["rows"])
+                result["total_pages"] = max(1, (result["total"] + int(params.get("page_size", "50") or "50") - 1) // int(params.get("page_size", "50") or "50"))
             self.respond_json(HTTPStatus.OK, result)
         except Exception as exc:
             self.respond_json(
@@ -926,6 +1448,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             )
 
     @staticmethod
+
     def _enrich_pe_percentile(result: dict, params: dict) -> None:
         """Load PE分位 data and enrich screener rows. Apply min/max pe_pct filter."""
         import pandas as pd
@@ -1005,6 +1528,37 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             result["total"] = len(filtered)
         except Exception:
             pass
+
+    @staticmethod
+    def _filter_price_new_high(rows: list, mode: str, tdxdir: str, as_of_date: str) -> list:
+        """Filter rows to only those at a price new high (1y/2y/3y/all)."""
+        from mootdx.reader import Reader
+        reader = Reader.factory(market="std", tdxdir=tdxdir)
+        days_map = {"1y": 250, "2y": 500, "3y": 750}
+        lookback = days_map.get(mode, None)  # None = all history
+        filtered = []
+        for row in rows:
+            try:
+                daily = reader.daily(symbol=row["symbol"])
+                if daily is None or daily.empty:
+                    continue
+                daily = daily.sort_index()
+                if as_of_date:
+                    daily = daily[daily.index <= as_of_date]
+                closes = daily["close"].astype(float).values
+                if len(closes) < 2:
+                    filtered.append(row)
+                    continue
+                current = closes[-1]
+                if lookback:
+                    window = closes[-(lookback + 1):-1] if len(closes) > lookback else closes[:-1]
+                else:
+                    window = closes[:-1]  # all history except today
+                if len(window) == 0 or current >= window.max():
+                    filtered.append(row)
+            except Exception:
+                pass  # skip stocks we can't read
+        return filtered
 
     def handle_kronos_predict(self) -> None:
         """On-demand Kronos prediction for a single stock. Body: {market, symbol}"""
@@ -1627,6 +2181,67 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
 
+    def handle_stock_buyback(self, query: str) -> None:
+        """返回股票的回购/增持记录"""
+        import json as _json
+        from pathlib import Path
+        params = parse_qs(query)
+        symbol = str(params.get("symbol", [""])[0]).strip()
+        if not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing symbol"})
+            return
+        symbol = symbol.zfill(6)
+
+        # Load buyback dataset
+        ds_path = Path("data/derived/datasets/final/dataset_stock_buyback.json")
+        if not ds_path.exists():
+            self.respond_json(HTTPStatus.OK, {"ok": True, "has_buyback": False, "has_increase": False, "records": []})
+            return
+
+        data = _json.loads(ds_path.read_text(encoding="utf-8"))
+        match = None
+        for r in data:
+            if r.get("symbol") == symbol:
+                match = r
+                break
+
+        if not match:
+            self.respond_json(HTTPStatus.OK, {"ok": True, "has_buyback": False, "has_increase": False, "records": []})
+            return
+
+        # Get detailed concept records from extern_sys.txt
+        detail_records = []
+        try:
+            with open("/mnt/c/new_tdx64/T0002/signals/extern_sys.txt", "r", encoding="gbk", errors="ignore") as f:
+                for line in f:
+                    parts = line.strip().split("|")
+                    if len(parts) < 4:
+                        continue
+                    if parts[1] != symbol:
+                        continue
+                    concepts = parts[3]
+                    if "回购" not in concepts and "增持" not in concepts:
+                        continue
+                    if "股票质押回购" in concepts or "卖出回购" in concepts or "约定购回" in concepts:
+                        if "回购计划" not in concepts and "回购注销" not in concepts and "股份回购" not in concepts:
+                            continue
+                    # Skip analyst ratings
+                    import re
+                    if re.match(r'^\S+证券\s+增持\s+(维持|首次|调低|调高|未知)\s+目标价:', concepts):
+                        continue
+                    detail_records.append(concepts)
+        except Exception:
+            pass
+
+        self.respond_json(HTTPStatus.OK, {
+            "ok": True,
+            "has_buyback": match.get("has_buyback", False),
+            "has_increase": match.get("has_increase", False),
+            "buyback_types": match.get("buyback_types", []),
+            "increase_count": match.get("increase_count", 0),
+            "records": detail_records,
+        })
+
     def handle_data_update_plan(self) -> None:
         """Return data freshness + pending task list with descriptions."""
         status = load_data_update_status()
@@ -1645,11 +2260,13 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             })
         tasks.extend([
             {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
+            {'id': 'fetch_financial_online', 'name': '在线获取最新财报', 'desc': '从新浪财经接口拉取最新财报数据（含 Q2 季报）'},
             {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
             {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
             {'id': 'build_rps_history', 'name': '构建 RPS 历史', 'desc': '计算全市场截面 RPS20/50/120/250，回溯 120 天'},
             {'id': 'update_rps_current', 'name': '更新当前 RPS', 'desc': '从历史 RPS 提取最新交易日数据'},
             {'id': 'rebuild_screener_rps_first', 'name': '重建 RPS首次 策略', 'desc': '重建 RPS首次进入前50 的选股策略结果'},
+            {'id': 'rebuild_screener_ath', 'name': '重建 历史新高 策略', 'desc': '重建 历史新高 + RPS>360 选股策略结果'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ])
 
