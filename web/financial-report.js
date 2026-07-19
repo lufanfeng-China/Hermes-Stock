@@ -141,15 +141,15 @@ document.getElementById('fr-compute-return').addEventListener('click', async () 
 
 // ── Published ──
 async function loadPublished() {
-  publishedTbody.innerHTML = '<tr><td colspan="10" class="fr-status">加载中...</td></tr>';
+  publishedTbody.innerHTML = '<tr><td colspan="11" class="fr-status">加载中...</td></tr>';
   try {
     const resp = await fetch(
       `/api/financial-published?period=${encodeURIComponent(currentPeriod)}&sort=${currentSort}&order=${currentOrder}&page=${currentPage}&page_size=${PAGE_SIZE}`
     );
     const data = await resp.json();
-    if (!data.ok) { publishedTbody.innerHTML = '<tr><td colspan="10" class="fr-status">加载失败</td></tr>'; updatePagination(0, 1, 1); return; }
-    if (!data.rows.length) {
-      publishedTbody.innerHTML = '<tr><td colspan="10" class="fr-status">暂无数据</td></tr>';
+    if (!data.ok) { publishedTbody.innerHTML = '<tr><td colspan="11" class="fr-status">加载失败</td></tr>'; updatePagination(0, 1, 1); return; }
+    if (data.total === 0) {
+      publishedTbody.innerHTML = '<tr><td colspan="11" class="fr-status">暂无数据</td></tr>';
       updatePagination(0, 1, 1);
       return;
     }
@@ -158,7 +158,7 @@ async function loadPublished() {
     updatePagination(totalRows, data.page || 1, totalPages);
     renderPublished(data);
   } catch (e) {
-    publishedTbody.innerHTML = '<tr><td colspan="10" class="fr-status">加载失败</td></tr>';
+    publishedTbody.innerHTML = '<tr><td colspan="11" class="fr-status">加载失败</td></tr>';
     updatePagination(0, 1, 1);
   }
 }
@@ -176,6 +176,7 @@ function renderPublished(data) {
         <td class="num">${fmt(r.deducted_np_yoy, 2)}</td>
         <td class="delta">${deltaHtml(r.deducted_np_yoy, r.deducted_np_yoy_prev, 2)}</td>
         <td class="num">${retHtml(r.return_pct)}</td>
+        <td class="num">${gapHtml(r.gap_up)}</td>
       </tr>`;
     }).join('');
 }
@@ -203,6 +204,13 @@ function pePctHtml(v) {
   // 分位越低(低估)越绿, 分位越高(高估)越红
   const cls = v <= 30 ? 'fr-down' : v >= 70 ? 'fr-up' : '';
   return `<span class="${cls}">${v.toFixed(1)}%</span>`;
+}
+
+function gapHtml(v) {
+  if (!v || v === 'N') return 'N';
+  if (v === 'Y-未补') return '<span style="color:#4ade80;font-weight:600;">Y-未补</span>';
+  if (v === 'Y-已补') return '<span style="color:#f0a040;font-weight:600;">Y-已补</span>';
+  return v;
 }
 
 function fmtRangeWan(lo, hi) {

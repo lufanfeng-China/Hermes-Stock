@@ -314,6 +314,74 @@ def _enrich_rows_pe_pct(rows: list) -> None:
         pass
 
 
+def _enrich_rows_gap_up(rows: list) -> None:
+    """给rows列表中的每行添加gap_up字段：
+    Y-未补: 公告日后第一个交易日跳空高开（最低价 > 前日最高价），至今未回补
+    Y-已补: 公告日后第一个交易日跳空高开，但后续有交易日最低价 <= 前日最高价
+    N: 未跳空高开（最低价 <= 前日最高价）
+    """
+    import pandas as pd
+    from mootdx.reader import Reader
+
+    reader = Reader.factory(market="std", tdxdir="/home/lufanfeng/tdx_data")
+
+    for row in rows:
+        sym = row["symbol"]
+        ad_str = row.get("announce_date", "")
+        if not ad_str:
+            row["gap_up"] = "N"
+            continue
+
+        try:
+            daily = reader.daily(symbol=sym)
+        except Exception:
+            row["gap_up"] = "N"
+            continue
+        if daily is None or daily.empty:
+            row["gap_up"] = "N"
+            continue
+
+        daily = daily.sort_index()
+        try:
+            ad_ts = pd.Timestamp(ad_str)
+        except Exception:
+            row["gap_up"] = "N"
+            continue
+
+        # 找公告日之后的第一个交易日
+        after = daily[daily.index > ad_ts]
+        if len(after) == 0:
+            row["gap_up"] = "N"
+            continue
+
+        post_day = after.iloc[0]
+        post_day_ts = after.index[0]
+        post_low = float(post_day["low"])
+
+        # 找post_day之前的那个交易日
+        before = daily[daily.index < post_day_ts]
+        if len(before) == 0:
+            row["gap_up"] = "N"
+            continue
+        prev_high = float(before.iloc[-1]["high"])
+
+        # 判断是否跳空高开：后一日最低价 > 前一日最高价
+        if post_low <= prev_high:
+            row["gap_up"] = "N"
+            continue
+
+        # 跳空高开，检查后续是否有交易日回补（最低价 <= 前日最高价即回补）
+        after_post = daily[daily.index > post_day_ts]
+        filled = False
+        for i in range(len(after_post)):
+            day_low = float(after_post.iloc[i]["low"])
+            if day_low <= prev_high:
+                filled = True
+                break
+
+        row["gap_up"] = "Y-已补" if filled else "Y-未补"
+
+
 def _compute_forecast_3d_returns(rows: list) -> None:
     """计算业绩预告的3日涨跌幅：预告日收盘买入，T+3日收盘卖出"""
     import pandas as pd
@@ -1004,6 +1072,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         start = (page - 1) * page_size
         end = start + page_size
         paged_rows = rows[start:end]
+
+        # 高开 enrichment（仅当前页，避免全量加载日线超时）
+        _enrich_rows_gap_up(paged_rows)
 
         self.respond_json(HTTPStatus.OK, {
             "ok": True,
