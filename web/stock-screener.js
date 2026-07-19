@@ -16,7 +16,7 @@ const STRATEGY_PRESETS = {
   },
   duotou: {
     strategy: 'duotou',
-    description: 'MA10/20/30 > MA60 + MA60近60日单调(至多1次例外，前后10日干净)',
+    description: 'MA10/20/30 > MA60 + MA60近60日单调(至多1次例外) + 最近3日MA10连续上升',
   },
   ath_rps360: {
     strategy: 'ath_rps360',

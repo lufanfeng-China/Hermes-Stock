@@ -770,7 +770,7 @@ def build_ath_rps360_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "
 
 
 def build_duotou_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
-    """多头策略：MA10/20/30 > MA60 + MA60近60日单调(至多1次例外，前后10日干净)。"""
+    """多头策略：MA10/20/30 > MA60 + MA60近60日单调(至多1次例外，前后10日干净) + 最近3日MA10连续上升。"""
     import pandas as pd
     from app.search.index import load_security_rows
     reader = Reader.factory(market="std", tdxdir=tdxdir)
@@ -834,6 +834,15 @@ def build_duotou_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
         if not ok:
             continue
 
+        # Cond 3: 最近3日MA10连续上升 (ma10[-3] < ma10[-2] < ma10[-1])
+        if pd.isna(ma10.iloc[-3]):
+            continue
+        ma10_d3 = float(ma10.iloc[-3])
+        ma10_d2 = float(ma10.iloc[-2])
+        ma10_d1 = float(ma10.iloc[-1])
+        if not (ma10_d3 < ma10_d2 < ma10_d1):
+            continue
+
         results.append({
             "trading_day": str(daily.index[-1])[:10],
             "market": market_val,
@@ -847,6 +856,7 @@ def build_duotou_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
                 "ma30": round(ma30_now, 2),
                 "ma60": round(ma60_now, 2),
                 "ma60_violations": len(violations),
+                "ma10_rise_3d": True,
             },
             "generated_at": generated_at,
             "data_source": "local_tongdaxin_daily",
