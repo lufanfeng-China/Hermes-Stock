@@ -331,7 +331,7 @@ function renderScreenerRows(rows) {
       })()}</td>
       <td class="num">${formatRank(row.market_total_rank)} / ${formatRank(row.industry_total_rank)}</td>
       <td class="num">${formatPercentile(row.primary_percentile)}</td>
-      <td>${escapeHtml(row.industry_temperature_label || '—')}<span class="stock-screener-symbol">${escapeHtml(formatPercentile(row.industry_temperature_percentile_since_2022))}</span></td>
+      <td class="num">${row.duotou_days != null ? row.duotou_days + '天' : '—'}</td>
       <td>${escapeHtml(industryText)}</td>
       <td class="num">${formatNumber(row.industry_total_score, 1)}</td>
     </tr>`;

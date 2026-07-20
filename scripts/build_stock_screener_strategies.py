@@ -843,6 +843,43 @@ def build_duotou_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
         if not (ma10_d3 < ma10_d2 < ma10_d1):
             continue
 
+        # Cond 4 (meta): 计算连续满足多头条件的天数（从当天往回数）
+        consecutive = 1
+        for i in range(-2, -n, -1):
+            # Check Cond 1
+            if not (float(ma10.iloc[i]) > float(ma60.iloc[i])
+                    and float(ma20.iloc[i]) > float(ma60.iloc[i])
+                    and float(ma30.iloc[i]) > float(ma60.iloc[i])):
+                break
+            # Check Cond 2 (MA60 monotonic, 60-day window ending at i)
+            i_start = max(i - 59, -n)
+            violations_i = []
+            for j in range(i_start + 1, i + 1):
+                if float(ma60.iloc[j]) < float(ma60.iloc[j-1]):
+                    violations_i.append(j)
+            ok_i = False
+            if len(violations_i) == 0:
+                ok_i = True
+            elif len(violations_i) == 1:
+                v = violations_i[0]
+                before_ok_i = all(
+                    float(ma60.iloc[j]) >= float(ma60.iloc[j-1])
+                    for j in range(v - 10, v) if j > i_start
+                )
+                after_ok_i = all(
+                    float(ma60.iloc[j]) >= float(ma60.iloc[j-1])
+                    for j in range(v + 1, min(v + 11, i + 1))
+                )
+                ok_i = before_ok_i and after_ok_i
+            if not ok_i:
+                break
+            # Check Cond 3 (MA10 3-day rise ending at i)
+            if pd.isna(ma10.iloc[i-2]):
+                break
+            if not (float(ma10.iloc[i-2]) < float(ma10.iloc[i-1]) < float(ma10.iloc[i])):
+                break
+            consecutive += 1
+
         results.append({
             "trading_day": str(daily.index[-1])[:10],
             "market": market_val,
@@ -857,6 +894,7 @@ def build_duotou_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
                 "ma60": round(ma60_now, 2),
                 "ma60_violations": len(violations),
                 "ma10_rise_3d": True,
+                "duotou_days": consecutive,
             },
             "generated_at": generated_at,
             "data_source": "local_tongdaxin_daily",

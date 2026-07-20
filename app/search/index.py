@@ -2039,6 +2039,8 @@ def build_stock_screener_response(params: dict[str, str]) -> dict[str, object]:
                     row["slingshot_gap"] = gap_total
                 # Expose days_since_last_ath for ath_rps360 strategy
                 row["days_since_last_ath"] = _coerce_int(strategy_entry.get("days_since_last_ath"))
+                # Expose duotou_days for duotou strategy
+                row["duotou_days"] = _coerce_int(strategy_conditions.get("duotou_days"))
         rows.append(row)
 
     text_filters = {
