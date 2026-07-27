@@ -4,11 +4,11 @@
     { href: '/stock-score.html', label: '财务评分' },
     { href: '/stock-screener.html', label: '股票筛选' },
     { href: '/financial-report.html', label: '财报分析' },
-    { href: '/realtime-screener.html', label: '实时选股' },
     { href: '/rps-pool.html', label: 'RPS' },
     { href: '/watchlist.html', label: '自选股' },
     { href: '/concept-analysis.html', label: '概念分析' },
     { href: '/bottleneck.html', label: '瓶颈股发现' },
+    { href: '/macd-extreme-gc.html', label: '极值金叉' },
   ];
 
   const currentPath = location.pathname.replace(/\/$/, '') || '/';

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>极值金叉</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@320;330;340;480;540;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #000;
+      --canvas: #fff;
+      --inverse: #000;
+      --inverse-ink: #fff;
+      --hairline: #e6e6e6;
+      --surface-soft: #f7f7f5;
+      --block-lime: #dceeb1;
+      --block-lilac: #c5b0f4;
+      --block-coral: #f3c9b6;
+      --block-mint: #c8e6cd;
+      --block-pink: #efd4d4;
+      --block-cream: #f4ecd6;
+      --block-navy: #1f1d3d;
+      --accent-magenta: #ff3d8b;
+      --success: #1ea64a;
+      --danger: #e03e2d;
+
+      --font-sans: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      font-weight: 320;
+      font-size: 15px;
+      line-height: 1.45;
+      color: var(--ink);
+      background: var(--canvas);
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.12px;
+    }
+
+    main { max-width: 1280px; margin: 0 auto; padding: 32px 32px 96px; }
+
+    /* --- Top Bar --- */
+    .topbar {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      margin-bottom: 24px; padding-bottom: 12px;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .eyebrow {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 400;
+      text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink);
+      margin-bottom: 4px;
+    }
+    h1 { font-size: 26px; font-weight: 540; letter-spacing: -0.26px; line-height: 1.35; }
+
+    /* --- Config Row --- */
+    .config-row {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .config-row label {
+      font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.6px; display: flex; align-items: center; gap: 4px;
+    }
+    .config-row input[type="number"] {
+      width: 72px; padding: 8px 10px; border: 1px solid var(--hairline);
+      border-radius: 8px; font-family: var(--font-sans); font-size: 14px; font-weight: 340;
+      background: var(--canvas); color: var(--ink);
+    }
+    .config-row input[type="date"] {
+      padding: 8px 10px; border: 1px solid var(--hairline);
+      border-radius: 8px; font-family: var(--font-sans); font-size: 14px; font-weight: 340;
+      background: var(--canvas); color: var(--ink);
+    }
+    .config-row input:focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+    .btn {
+      font-family: var(--font-sans); font-size: 14px; font-weight: 480;
+      padding: 8px 20px; border-radius: 50px; border: none; cursor: pointer;
+      letter-spacing: -0.1px; transition: opacity 0.15s;
+    }
+    .btn-primary { background: var(--ink); color: var(--canvas); }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary { background: var(--canvas); color: var(--ink); border: 1px solid var(--hairline); }
+    .btn-sm { font-size: 12px; padding: 4px 14px; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+
+    /* --- Summary Strip --- */
+    .summary-strip {
+      display: flex; gap: 80px; margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface-soft); border-radius: 8px; padding: 14px 16px;
+      flex: 1; min-width: 0; text-align: center;
+    }
+    .stat-card .val { font-size: 22px; font-weight: 540; letter-spacing: -0.26px; }
+    .stat-card .lbl {
+      font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.6px; margin-top: 2px;
+    }
+    .stat-card .pos { color: var(--success); }
+    .stat-card .neg { color: var(--danger); }
+
+    /* --- Color Block Sections --- */
+    .color-block {
+      border-radius: 24px; padding: 24px 28px; margin-bottom: 24px;
+    }
+    .block-buy { background: var(--block-lime); }
+    .block-rep { background: var(--block-coral); }
+    .block-sell { background: var(--block-pink); }
+    .block-pos { background: var(--block-mint); }
+    .block-hist { background: var(--surface-soft); }
+
+    .block-header {
+      display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+      margin-bottom: 16px;
+    }
+    .block-header h2 { font-size: 18px; font-weight: 540; letter-spacing: -0.18px; }
+    .badge {
+      background: var(--ink); color: var(--canvas); font-family: var(--font-mono);
+      font-size: 11px; padding: 2px 10px; border-radius: 50px; letter-spacing: 0.6px;
+    }
+    .arrow { font-size: 14px; transition: transform 0.2s; }
+    .color-block.collapsed .block-body { display: none; }
+    .color-block.collapsed .arrow { transform: rotate(-90deg); }
+
+    /* --- Tables --- */
+    .block-body { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 340; }
+    th {
+      font-family: var(--font-sans); font-size: 12px; font-weight: 480;
+      letter-spacing: -0.1px; text-align: left;
+      padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    td { padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    tr:hover { background: rgba(0,0,0,0.03); }
+    .empty-row td {
+      text-align: center; padding: 24px; color: rgba(0,0,0,0.4);
+      font-size: 13px; font-weight: 330;
+    }
+
+    .warn { color: #b86e00; font-weight: 480; }
+    .danger { color: var(--danger); font-weight: 480; }
+    .green { color: var(--success); font-weight: 480; }
+    .muted { color: rgba(0,0,0,0.45); font-size: 12px; }
+
+    /* --- Detail Row --- */
+    .entry-detail { margin-top: 8px; padding: 12px 16px; background: rgba(0,0,0,0.04); border-radius: 8px; }
+    .entry-detail table { font-size: 12px; }
+    .entry-detail td { padding: 3px 8px; border: none; }
+    .entry-detail input {
+      width: 68px; padding: 3px 6px; border: 1px solid var(--hairline);
+      border-radius: 6px; font-family: var(--font-sans); font-size: 12px;
+      background: var(--canvas);
+    }
+
+    .status-meta {
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.6px;
+      color: rgba(0,0,0,0.5); margin-left: 8px;
+    }
+
+    /* Nav links */
+    .nav-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .nav-links a {
+      font-size: 13px; font-weight: 480; color: var(--ink); text-decoration: none;
+      padding: 4px 12px; border-radius: 50px; transition: background 0.15s;
+    }
+    .nav-links a:hover { background: var(--surface-soft); }
+    .nav-links a.active { background: var(--ink); color: var(--canvas); }
+  </style>
+</head>
+<body>
+<main>
+
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">MACD EXTREME GC</p>
+      <h1>极值金叉</h1>
+    </div>
+    <nav class="nav-links" id="global-nav"></nav>
+  </header>
+
+  <!-- Config -->
+  <section>
+    <div class="config-row">
+      <label>资金(万)<input id="gc-capital" type="number" value="1000" min="1"></label>
+      <label>每份(万)<input id="gc-lot" type="number" value="5" min="1"></label>
+      <span style="margin:0 4px;color:var(--hairline)">|</span>
+      <label>回测起点<input id="gc-bt-start" type="date"></label>
+      <button id="gc-backtest" class="btn btn-secondary" style="font-size:13px;padding:6px 14px">历史回测</button>
+      <span style="margin:0 4px;color:var(--hairline)">|</span>
+      <label>从<input id="gc-date-from" type="date"></label>
+      <label>到<input id="gc-date-to" type="date"></label>
+      <label>股票<input id="gc-stock" type="text" placeholder="代码" style="width:72px"></label>
+      <button id="gc-scan" class="btn btn-primary">扫描</button>
+      <span id="gc-status" class="status-meta"></span>
+    </div>
+    <div class="summary-strip" id="gc-summary"></div>
+  </section>
+
+  <!-- Buy -->
+  <section class="color-block block-buy" id="sec-buy">
+    <div class="block-header" onclick="document.getElementById('sec-buy').classList.toggle('collapsed')">
+      <span class="arrow">▾</span><h2>待开仓</h2><span class="badge" id="buy-count">0</span>
+    </div>
+    <div class="block-body">
+      <table><thead><tr>
+        <th>日期</th><th>股票</th><th>信号价</th><th>现价</th><th>预计涨幅</th><th>NDIF</th><th>MA10↑天</th><th>T+1开盘</th><th>股数</th><th>操作</th>
+      </tr></thead><tbody id="buy-tbody"><tr class="empty-row"><td colspan="10">点击「扫描」</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- Replenish -->
+  <section class="color-block block-rep" id="sec-rep">
+    <div class="block-header" onclick="document.getElementById('sec-rep').classList.toggle('collapsed')">
+      <span class="arrow">▾</span><h2>待补仓</h2><span class="badge" id="rep-count">0</span>
+    </div>
+    <div class="block-body">
+      <table><thead><tr>
+        <th>日期</th><th>股票</th><th>现价</th><th>亏损</th><th>NDIF</th><th>持仓成本</th><th>补仓股数</th><th>T+1开盘</th><th>操作</th>
+      </tr></thead><tbody id="rep-tbody"><tr class="empty-row"><td colspan="9">点击「扫描」</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- Sell -->
+  <section class="color-block block-sell" id="sec-sell">
+    <div class="block-header" onclick="document.getElementById('sec-sell').classList.toggle('collapsed')">
+      <span class="arrow">▾</span><h2>待卖出</h2><span class="badge" id="sell-count">0</span>
+    </div>
+    <div class="block-body">
+      <table><thead><tr>
+        <th>开仓日期</th><th>股票</th><th>现价</th><th>盈利</th><th>待机天数</th><th>状态</th><th>持仓成本</th><th>市值</th><th>操作</th>
+      </tr></thead><tbody id="sell-tbody"><tr class="empty-row"><td colspan="9">点击「扫描」</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- Positions -->
+  <section class="color-block block-pos" id="sec-pos">
+    <div class="block-header" onclick="document.getElementById('sec-pos').classList.toggle('collapsed')">
+      <span class="arrow">▾</span><h2>当前持仓</h2>
+      <input type="date" id="pos-filter-from" onchange="renderPositions(cachedData?.positions||[])" style="margin-left:8px;padding:3px 8px;font-size:12px;border:1px solid var(--hairline);border-radius:6px;width:120px">
+      <span style="font-size:12px;margin:0 4px">-</span>
+      <input type="date" id="pos-filter-to" onchange="renderPositions(cachedData?.positions||[])" style="padding:3px 8px;font-size:12px;border:1px solid var(--hairline);border-radius:6px;width:120px">
+      <span class="badge" id="pos-count">0</span>
+    </div>
+    <div class="block-body">
+      <table><thead><tr>
+        <th>股票</th><th>日期</th><th>份数</th><th>总股数</th><th>均价</th><th>现价</th><th>盈亏</th><th>市值</th><th>5年分位</th><th>明细</th>
+      </tr></thead><tbody id="pos-tbody"><tr class="empty-row"><td colspan="10">点击「扫描」</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- History (collapsed by default) -->
+  <section class="color-block block-hist collapsed" id="sec-hist">
+    <div class="block-header" onclick="document.getElementById('sec-hist').classList.toggle('collapsed')">
+      <span class="arrow">▾</span><h2>已平仓历史</h2>
+      <input type="date" id="hist-filter-from" onchange="renderHistory(cachedData?.history||[])" style="margin-left:8px;padding:3px 8px;font-size:12px;border:1px solid var(--hairline);border-radius:6px;width:120px">
+      <span style="font-size:12px;margin:0 4px">-</span>
+      <input type="date" id="hist-filter-to" onchange="renderHistory(cachedData?.history||[])" style="padding:3px 8px;font-size:12px;border:1px solid var(--hairline);border-radius:6px;width:120px">
+      <span class="badge" id="hist-count">0</span>
+    </div>
+    <div class="block-body">
+      <table><thead><tr>
+        <th>开仓日期</th><th>卖出日期</th><th>股票</th><th>类型</th><th>买入成本</th><th>卖出收入</th><th>盈亏</th><th>5年分位</th>
+      </tr></thead><tbody id="hist-tbody"></tbody></table>
+    </div>
+  </section>
+
+  <!-- Industry Distribution -->
+  <section class="color-block block-lilac" id="sec-ind" style="background:var(--block-cream)">
+    <div class="block-header">
+      <span class="arrow">▾</span><h2>行业分布</h2>
+      <select id="ind-mode" onchange="renderIndustry()" style="margin-left:12px;padding:4px 10px;border:1px solid var(--hairline);border-radius:8px;font-size:13px;font-family:var(--font-sans)">
+        <option value="positions">当前持仓</option>
+        <option value="history">已平仓</option>
+      </select>
+      <span class="badge" id="ind-count">0</span>
+    </div>
+    <div class="block-body">
+      <div id="ind-dist" style="display:flex;flex-wrap:wrap;gap:12px"></div>
+    </div>
+  </section>
+
+</main>
+
+<script src="/nav.js"></script>
+<script src="/macd-extreme-gc.js"></script>
+</body>
+</html>

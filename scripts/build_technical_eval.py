@@ -322,6 +322,7 @@ def detect_golden_crosses(closes, available):
         ("5/20", 5, 20),
         ("20/60", 20, 60),
         ("5/60", 5, 60),
+        ("10/60", 10, 60),
     ]
     crosses = []
     cross_labels = []

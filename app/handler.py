@@ -56,10 +56,13 @@ from app.search.index import (
     industry_hierarchy_response,
     concept_list_response,
     load_stock_screener_strategy_rows,
-    realtime_screener_response,
 )
 from app.industry.heatmap import DEFAULT_INDUSTRY_LIMIT, industry_heatmap_response
 from app.relative_valuation.service import build_relative_valuation_result
+from app.search.macd_gc import (  # MACD Extreme Golden Cross
+    scan_all, handle_open, handle_replenish, handle_sell, handle_edit_entry, handle_config,
+    _load_state, _init_if_needed,
+)
 from app.valuation.models import (
     calc_intrinsic_value_dcf,
     calc_gordon_growth,
@@ -613,11 +616,15 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/watchlist":
             self.handle_watchlist_get()
             return
-        if parsed.path == "/api/realtime-screener":
-            self.handle_realtime_screener(parsed.query)
-            return
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
+            return
+        # ── MACD Extreme Golden Cross ──
+        if parsed.path == "/api/macd-extreme-gc":
+            self.handle_macd_gc_scan(parsed.query)
+            return
+        if parsed.path == "/api/macd-extreme-gc/equity-history":
+            self.handle_macd_gc_equity_history()
             return
         # ── Bottleneck Discovery ──
         if parsed.path == "/api/bottleneck/step1":
@@ -727,6 +734,29 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/competitive-edge":
             self.handle_competitive_edge("")
+            return
+        # ── MACD Extreme Golden Cross ──
+        if parsed.path == "/api/macd-extreme-gc/open":
+            self.handle_macd_gc_open()
+            return
+        if parsed.path == "/api/macd-extreme-gc/replenish":
+            self.handle_macd_gc_replenish()
+            return
+        if parsed.path == "/api/macd-extreme-gc/sell":
+            self.handle_macd_gc_sell()
+            return
+        if parsed.path == "/api/macd-extreme-gc/entry":
+            self.handle_macd_gc_edit_entry()
+            return
+        if parsed.path == "/api/macd-extreme-gc/config":
+            self.handle_macd_gc_config()
+            return
+        if parsed.path == "/api/macd-extreme-gc/backtest":
+            self.handle_macd_gc_backtest()
+            return
+        # ── MACD Extreme Golden Cross ──
+        if parsed.path == "/api/macd-extreme-gc/equity-history":
+            self.handle_macd_gc_equity_history()
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -2081,22 +2111,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         _save_watchlist({"stocks": []})
         self.respond_json(HTTPStatus.OK, {"ok": True})
 
-    def handle_realtime_screener(self, query: str) -> None:
-        params = {
-            key: values[0].strip()
-            for key, values in parse_qs(query, keep_blank_values=True).items()
-            if values
-        }
-        try:
-            if params.get("scenario", "").strip() == "rps_pullback":
-                ensure_stock_screener_strategy_dataset("rps_pullback")
-            self.respond_json(HTTPStatus.OK, realtime_screener_response(params))
-        except Exception as exc:
-            self.respond_json(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"ok": False, "error": {"code": "realtime_screener_error", "message": str(exc)}},
-            )
-
     def handle_stock_score(self, query: str) -> None:
         from app.search.index import compute_financial_scores, compute_stock_score
         params = parse_qs(query)
@@ -3160,6 +3174,102 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
 
     # ── End Bottleneck Handlers ──────────────────────────────
 
+    # ── MACD Extreme Golden Cross Handlers ────────────────────
+
+    def handle_macd_gc_scan(self, query: str) -> None:
+        import json as _json
+        params = {k: v[0] for k, v in parse_qs(query).items()}
+        capital = int(params.get("capital", 3000000))
+        lot = int(params.get("lot", 50000))
+        df_param = params.get("date_from", "")
+        dt_param = params.get("date_to", "")
+        stock = params.get("stock", "")
+
+        state = _load_state()
+        _init_if_needed(state)
+        state["config"]["capital"] = capital
+        state["config"]["lot"] = lot
+        if state.get("cash") is None or state["cash"] > capital:
+            state["cash"] = capital
+
+        try:
+            result = scan_all(state, df_param, dt_param, stock)
+            self.respond_json(HTTPStatus.OK, result)
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": str(exc)})
+
+    def handle_macd_gc_open(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        result = handle_open(body["code"], body["shares"], body["price"],
+                             body.get("signal_date", ""), body.get("ndif"))
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_macd_gc_replenish(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        result = handle_replenish(body["code"], body["shares"], body["price"])
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_macd_gc_sell(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        result = handle_sell(body["code"])
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_macd_gc_edit_entry(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        result = handle_edit_entry(body["code"], body["index"], body["price"], body["shares"],
+                                   body.get("date", ""))
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_macd_gc_config(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        result = handle_config(body["capital"], body["lot"])
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_macd_gc_equity_history(self) -> None:
+        from app.search.macd_gc import compute_equity_history
+        result = compute_equity_history()
+        self.respond_json(HTTPStatus.OK, {"ok": True, "history": result})
+
+    def handle_macd_gc_backtest(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        start = body.get("start", "2024-01-01")
+        capital = int(body.get("capital", 10_000_000))
+        lot = int(body.get("lot", 50_000))
+
+        import subprocess, os
+        # Clear old equity cache
+        eq_path = "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_equity_weekly.json"
+        if os.path.exists(eq_path): os.remove(eq_path)
+        
+        # Run backtest
+        result = subprocess.run(
+            ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python3",
+             "/home/lufanfeng/Project-Hermes-Stock/scripts/run_macd_backtest.py",
+             json.dumps({"start": start, "capital": capital, "lot": lot})],
+            capture_output=True, text=True, timeout=600
+        )
+        if result.returncode == 0 and "OK" in result.stdout:
+            parts = result.stdout.strip().split("|")
+            self.respond_json(HTTPStatus.OK, {
+                "ok": True,
+                "positions": int(parts[1]),
+                "history": int(parts[2]),
+                "executed": int(parts[3]),
+                "rejected": int(parts[4]),
+                "equity": int(parts[5]),
+            })
+        else:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"ok": False, "error": result.stderr or result.stdout})
+
+    # ── End MACD GC Handlers ──────────────────────────────────
     def respond_json(self, status: HTTPStatus, payload: dict[str, object]) -> bool:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         try:
