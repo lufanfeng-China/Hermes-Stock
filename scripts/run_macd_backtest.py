@@ -2,6 +2,7 @@
 """Run backtest + generate FULL mark-to-market weekly equity curve"""
 import json, numpy as np, pandas as pd, os, sys
 from collections import defaultdict
+from pathlib import Path
 from mootdx.reader import Reader
 
 args = json.loads(sys.argv[1])
@@ -13,8 +14,18 @@ LOOKBACK = f"{int(START[:4])-1}-07-01" if int(START[:4]) > 2011 else "2011-12-01
 STATE_FILE = "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_state.json"
 MTM_FILE = "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_equity_weekly.json"
 
-with open("/tmp/csi300_constituents.json") as f:
-    codes = sorted(set(str(c) for c in json.load(f)))
+CONSTITUENT_FILES = (
+    Path("/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/csi300_constituents_current_20260728.json"),
+    Path("/tmp/csi300_constituents.json"),  # legacy temporary cache fallback
+)
+constituent_file = next((path for path in CONSTITUENT_FILES if path.is_file()), None)
+if constituent_file is None:
+    searched = ", ".join(str(path) for path in CONSTITUENT_FILES)
+    raise FileNotFoundError(f"CSI300 constituent list is unavailable; searched: {searched}")
+with constituent_file.open(encoding="utf-8") as f:
+    codes = sorted(set(str(c).zfill(6) for c in json.load(f)))
+if len(codes) != 300:
+    raise ValueError(f"Expected 300 CSI300 constituents in {constituent_file}; got {len(codes)}")
 reader = Reader.factory(market="std", tdxdir="/mnt/c/new_tdx64")
 
 # ── Step 1: generate all signals ──

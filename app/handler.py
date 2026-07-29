@@ -3177,20 +3177,13 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
     # ── MACD Extreme Golden Cross Handlers ────────────────────
 
     def handle_macd_gc_scan(self, query: str) -> None:
-        import json as _json
         params = {k: v[0] for k, v in parse_qs(query).items()}
-        capital = int(params.get("capital", 3000000))
-        lot = int(params.get("lot", 50000))
         df_param = params.get("date_from", "")
         dt_param = params.get("date_to", "")
         stock = params.get("stock", "")
 
         state = _load_state()
         _init_if_needed(state)
-        state["config"]["capital"] = capital
-        state["config"]["lot"] = lot
-        if state.get("cash") is None or state["cash"] > capital:
-            state["cash"] = capital
 
         try:
             result = scan_all(state, df_param, dt_param, stock)
@@ -3251,7 +3244,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         # Run backtest
         result = subprocess.run(
             ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python3",
-             "/home/lufanfeng/Project-Hermes-Stock/scripts/run_macd_backtest.py",
+             "/home/lufanfeng/Project-Hermes-Stock/scripts/run_macd_backtest_v2_cash_mtm.py",
              json.dumps({"start": start, "capital": capital, "lot": lot})],
             capture_output=True, text=True, timeout=600
         )

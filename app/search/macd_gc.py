@@ -25,7 +25,10 @@ NDIF_TIGHT = -3.0
 PROFIT_TARGET = 0.20
 REPLENISH_LOSS = -0.20
 FLOOR_PCT = 0.15
-CSI300_CACHE = "/tmp/csi300_constituents.json"
+CSI300_FILES = (
+    DERIVED_FINAL_DIR / "csi300_constituents_current_20260728.json",
+    Path("/tmp/csi300_constituents.json"),  # legacy temporary cache fallback
+)
 STATE_FILE = str(DERIVED_FINAL_DIR / "macd_gc_state.json")
 DEFAULT_CAPITAL = 3_000_000
 DEFAULT_LOT = 50_000
@@ -65,9 +68,62 @@ def _init_if_needed(state: dict[str, Any]) -> None:
 
 # ── Data helpers ────────────────────────────────────────────────
 
+def _entry_price_percentile(
+    frame: pd.DataFrame,
+    entry_date: str | pd.Timestamp,
+    *,
+    window: int = 1200,
+    min_periods: int = 240,
+) -> float | None:
+    """Return the entry-close rank in the trailing 5-year price window.
+
+    The current-position table describes the *first entry's* price percentile,
+    so it must be calculated as of that historical entry date rather than from
+    today's close.  It matches the strategy's rolling-rank convention and
+    returns None when too little price history exists.
+    """
+    try:
+        as_of = pd.Timestamp(entry_date).normalize()
+    except (TypeError, ValueError):
+        return None
+    closes = frame.loc[frame.index <= as_of, "close"].dropna().astype(float).tail(window)
+    if len(closes) < min_periods:
+        return None
+    return round(float(closes.rank(pct=True).iloc[-1] * 100.0), 2)
+
+
+def _history_rows_with_entry_percentiles(
+    rows: list[dict[str, Any]],
+    frame: pd.DataFrame,
+    *,
+    window: int = 1200,
+    min_periods: int = 240,
+) -> list[dict[str, Any]]:
+    """Return API-only history rows enriched with their entry-day percentile.
+
+    Historical state remains immutable: the percentile is a view field computed
+    from the source daily bars whenever the scan endpoint is requested.
+    """
+    enriched = []
+    for row in rows:
+        copy = dict(row)
+        copy["pct5y"] = _entry_price_percentile(
+            frame, copy.get("entry_date"), window=window, min_periods=min_periods
+        )
+        enriched.append(copy)
+    return enriched
+
+
 def _load_csi300_codes() -> list[str]:
-    with open(CSI300_CACHE) as f:
-        return sorted(set(str(c) for c in json.load(f)))
+    constituent_file = next((path for path in CSI300_FILES if path.is_file()), None)
+    if constituent_file is None:
+        searched = ", ".join(str(path) for path in CSI300_FILES)
+        raise FileNotFoundError(f"CSI300 constituent list is unavailable; searched: {searched}")
+    with constituent_file.open(encoding="utf-8") as f:
+        codes = sorted(set(str(c).zfill(6) for c in json.load(f)))
+    if len(codes) != 300:
+        raise ValueError(f"Expected 300 CSI300 constituents in {constituent_file}; got {len(codes)}")
+    return codes
 
 
 def _compute_indicators(c: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -250,6 +306,10 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
         codes = [stock_code]
     else:
         codes = _load_csi300_codes()
+        # Historical rows may include a former constituent.  Include it so the
+        # page can still derive its entry-date percentile when local data exists.
+        history_codes = {str(h.get("code", "")).zfill(6) for h in state.get("history", []) if h.get("code")}
+        codes = sorted(set(codes) | history_codes)
     reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
 
     # Parse dates
@@ -268,6 +328,12 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
     all_replenish = []
     all_sell = []
     positions_summary = []
+    history_summary = [dict(row) for row in state.get("history", [])]
+    history_indexes_by_code: dict[str, list[int]] = defaultdict(list)
+    for index, row in enumerate(history_summary):
+        code = str(row.get("code", "")).zfill(6)
+        if code:
+            history_indexes_by_code[code].append(index)
 
     # Load industry map once
     from app.search.index import _load_industry_map as _load_ind_map
@@ -283,6 +349,12 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
 
         df = df.sort_index()
         latest_close = float(df["close"].iloc[-1])
+        history_indexes = history_indexes_by_code.get(code, [])
+        if history_indexes:
+            history_rows = [history_summary[index] for index in history_indexes]
+            enriched_rows = _history_rows_with_entry_percentiles(history_rows, df)
+            for index, enriched in zip(history_indexes, enriched_rows):
+                history_summary[index] = enriched
         # Truncate to the end of range if specified
         end_date = dt_ts or df_ts  # use date_to, fallback to date_from
         if end_date is not None:
@@ -313,12 +385,15 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
             current_value = cp * total_shares
             pnl_pct = (current_value / total_cost - 1) * 100 if total_cost > 0 else 0
 
+            entry_date = entries[0].get("date") if entries else None
+            entry_pct5y = _entry_price_percentile(df, entry_date) if entry_date else None
             p_market = "sh" if code.startswith(("6", "9")) else "sz"
             positions_summary.append({
                 "code": code,
                 "name": pos.get("name", _get_stock_name(code)),
                 "industry": industry_map.get((p_market, code), ("", ""))[0] or "其他",
                 "entries": entries,
+                "entry_pct5y": entry_pct5y,
                 "total_cost": round(total_cost, 2),
                 "total_shares": total_shares,
                 "avg_cost": round(total_cost / total_shares, 2) if total_shares > 0 else 0,
@@ -387,7 +462,7 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
         "replenish_signals": all_replenish,
         "sell_candidates": all_sell,
         "positions": positions_summary,
-        "history": state.get("history", []),
+        "history": history_summary,
         "industry_distribution": industry_dist,
         "history_industry_distribution": history_industry_dist,
         "summary": {

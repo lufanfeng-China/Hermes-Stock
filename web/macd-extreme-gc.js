@@ -176,16 +176,34 @@ async function saveEdit(code, index) {
   if (result.ok) { await scan(); } else { alert(result.error); }
 }
 
+function readEntryPctRange(prefix) {
+  const minRaw = document.getElementById(`${prefix}-filter-pct-min`)?.value ?? '';
+  const maxRaw = document.getElementById(`${prefix}-filter-pct-max`)?.value ?? '';
+  const min = minRaw === '' ? null : Number(minRaw);
+  const max = maxRaw === '' ? null : Number(maxRaw);
+  return { min, max, active: min !== null || max !== null };
+}
+
+function matchesEntryPct(value, range) {
+  if (!range.active) return true;
+  if (value == null || !Number.isFinite(Number(value))) return false;
+  const pct = Number(value);
+  return (range.min === null || pct >= range.min) && (range.max === null || pct <= range.max);
+}
+
 function renderPositions(positions) {
   const from = document.getElementById('pos-filter-from')?.value || '';
   const to = document.getElementById('pos-filter-to')?.value || '';
+  const pctRange = readEntryPctRange('pos');
   
   let filtered = positions;
-  if (from || to) {
+  if (from || to || pctRange.active) {
     filtered = positions.filter(p => {
       const ed = p.entries && p.entries.length ? p.entries[0].date : '';
       if (from && ed < from) return false;
       if (to && ed > to) return false;
+      const pct5y = p.entry_pct5y ?? (p.entries && p.entries[0] ? p.entries[0].pct5y : null);
+      if (!matchesEntryPct(pct5y, pctRange)) return false;
       return true;
     });
   }
@@ -203,7 +221,8 @@ function renderPositions(positions) {
     const cls = p.pnl_pct >= 0 ? 'green' : 'danger';
     const entryDate = p.entries && p.entries.length ? p.entries[0].date : '-';
     const lots = p.entries ? p.entries.length : 0;
-    const pct5y = p.entries && p.entries[0].pct5y != null ? p.entries[0].pct5y + '%' : '-';
+    const pct5yValue = p.entry_pct5y ?? (p.entries && p.entries[0] ? p.entries[0].pct5y : null);
+    const pct5y = pct5yValue != null ? pct5yValue + '%' : '<span class="muted">历史不足</span>';
     return `<tr id="pos-${p.code}">
       <td>${p.name || p.code} <span class="muted">${p.code}</span></td>
       <td>${entryDate}</td>
@@ -222,13 +241,15 @@ function renderPositions(positions) {
 function renderHistory(history) {
   const from = document.getElementById('hist-filter-from')?.value || '';
   const to = document.getElementById('hist-filter-to')?.value || '';
+  const pctRange = readEntryPctRange('hist');
   
   let filtered = history;
-  if (from || to) {
+  if (from || to || pctRange.active) {
     filtered = history.filter(h => {
       const ed = h.entry_date || h.date || '';
       if (from && ed < from) return false;
       if (to && ed > to) return false;
+      if (!matchesEntryPct(h.pct5y, pctRange)) return false;
       return true;
     });
   }
@@ -238,7 +259,7 @@ function renderHistory(history) {
   if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-row">无记录</td></tr>'; return; }
   tbody.innerHTML = [...filtered].sort((a,b) => (b.entry_date||'').localeCompare(a.entry_date||'')).map(h => {
     const cls = h.pnl >= 0 ? 'green' : 'danger';
-    const pct5y = h.pct5y != null ? h.pct5y + '%' : '-';
+    const pct5y = h.pct5y != null ? h.pct5y + '%' : '<span class="muted">历史不足</span>';
     const entryD = h.entry_date ? h.entry_date.slice(0,10) : '-';
     const exitD = h.date ? h.date.slice(0,10) : '-';
     return `<tr>
