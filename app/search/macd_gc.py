@@ -92,6 +92,22 @@ def _entry_price_percentile(
     return round(float(closes.rank(pct=True).iloc[-1] * 100.0), 2)
 
 
+def _signal_price_percentile(
+    closes: np.ndarray | list[float],
+    index: int,
+    *,
+    window: int = 1200,
+    min_periods: int = 240,
+) -> float | None:
+    """Close-time trailing percentile for a signal; never reads a future bar."""
+    if index < 0:
+        return None
+    values = pd.Series(closes[: index + 1], dtype="float64").dropna().tail(window)
+    if len(values) < min_periods:
+        return None
+    return round(float(values.rank(pct=True).iloc[-1] * 100.0), 2)
+
+
 def _history_rows_with_entry_percentiles(
     rows: list[dict[str, Any]],
     frame: pd.DataFrame,
@@ -200,7 +216,8 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
             is_golden = ndif_i > ndea_i and ndif_prev <= ndea_prev
             ma10_ok = (not np.isnan(ma10[i]) and not np.isnan(ma10[i - 1])
                        and ma10[i] > ma10[i - 1])
-            if is_golden and ndif_i < NDIF_LOOSE and ma10_ok:
+            signal_pct5y = _signal_price_percentile(c, i)
+            if is_golden and ndif_i < NDIF_LOOSE and ma10_ok and signal_pct5y is not None and signal_pct5y < 50.0:
                 tomorrow_open = o[i + 1] if i + 1 < n else None
                 signal_date = str(dates[i].date()) if hasattr(dates[i], 'date') else str(dates[i])
                 # Count consecutive MA10 rising days
@@ -216,6 +233,7 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
                     "signal_date": signal_date,
                     "close": round(float(cp), 2),
                     "ndif": round(float(ndif_i), 2),
+                    "signal_pct5y": signal_pct5y,
                     "ma10_rise_days": rise_days,
                     "tomorrow_open": round(float(tomorrow_open), 2) if tomorrow_open else None,
                     "lot": positions_state.get("config", {}).get("lot", DEFAULT_LOT),

@@ -4,7 +4,11 @@ import unittest
 import pandas as pd
 
 sys.path.insert(0, "/home/lufanfeng/Project-Hermes-Stock")
-from app.search.macd_gc import _entry_price_percentile, _history_rows_with_entry_percentiles
+from app.search.macd_gc import (
+    _entry_price_percentile,
+    _history_rows_with_entry_percentiles,
+    _signal_price_percentile,
+)
 
 
 class EntryPricePercentileTests(unittest.TestCase):
@@ -31,6 +35,13 @@ class EntryPricePercentileTests(unittest.TestCase):
 
         self.assertEqual(62.5, enriched[0]["pct5y"])
         self.assertNotIn("pct5y", original[0])
+
+    def test_signal_percentile_uses_only_bars_available_at_signal_close(self):
+        closes = [10.0, 20.0, 30.0, 20.0, 1000.0]
+
+        percentile = _signal_price_percentile(closes, 3, window=4, min_periods=4)
+
+        self.assertEqual(62.5, percentile)
 
 
 if __name__ == "__main__":
