@@ -61,7 +61,11 @@ class TdxQfqKlineTests(unittest.TestCase):
         bars = align_qfq_signal_with_raw_execution(raw, qfq)
 
         self.assertEqual(list(dates[:2]), list(bars.index))
+        self.assertEqual(195.0, bars.loc[dates[1], "signal_open"])
+        self.assertEqual(200.0, bars.loc[dates[1], "signal_high"])
+        self.assertEqual(194.0, bars.loc[dates[1], "signal_low"])
         self.assertEqual(196.0, bars.loc[dates[1], "signal_close"])
+        self.assertEqual(2.0, bars.loc[dates[1], "signal_volume"])
         self.assertEqual(260.0, bars.loc[dates[1], "raw_open"])
         self.assertEqual(255.0, bars.loc[dates[1], "raw_close"])
         self.assertEqual("tdx_export_qfq", bars.attrs["signal_price_basis"])

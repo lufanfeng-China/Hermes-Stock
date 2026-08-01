@@ -76,11 +76,10 @@ def align_qfq_signal_with_raw_execution(raw: pd.DataFrame, qfq: pd.DataFrame) ->
     if "close" not in qfq.columns:
         raise ValueError("QFQ daily frame is missing close")
 
-    raw_frame = raw[raw_required].copy().rename(columns={
-        "open": "raw_open", "high": "raw_high", "low": "raw_low", "close": "raw_close",
-        "volume": "raw_volume", "amount": "raw_amount",
-    })
-    qfq_frame = qfq[["close"]].copy().rename(columns={"close": "signal_close"})
+    raw_columns = [column for column in ("open", "high", "low", "close", "volume", "amount") if column in raw]
+    qfq_columns = [column for column in ("open", "high", "low", "close", "volume", "amount") if column in qfq]
+    raw_frame = raw[raw_columns].copy().rename(columns={column: f"raw_{column}" for column in raw_columns})
+    qfq_frame = qfq[qfq_columns].copy().rename(columns={column: f"signal_{column}" for column in qfq_columns})
     bars = raw_frame.join(qfq_frame, how="inner").sort_index()
     if bars.empty:
         raise ValueError("Raw and QFQ daily frames have no overlapping dates")

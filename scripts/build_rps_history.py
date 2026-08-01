@@ -17,6 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.tdx.qfq_kline import load_tdx_qfq_daily
+
 DEFAULT_TDX_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_OUTPUT = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.json"
 DEFAULT_NDAYS = 120
@@ -37,7 +39,6 @@ def main() -> None:
                         help="Number of past trading days to include (default: 120)")
     args = parser.parse_args()
 
-    reader = Reader.factory(market="std", tdxdir=args.tdxdir)
     ndays = max(1, args.ndays)
 
     # Step 1: Load close history for ALL stocks
@@ -54,8 +55,8 @@ def main() -> None:
             continue
         key = f"{market_val}:{symbol_val}"
         try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
+            daily = load_tdx_qfq_daily(symbol_val)
+        except (FileNotFoundError, ValueError):
             continue
         if daily is None or daily.empty:
             continue
@@ -147,6 +148,7 @@ def main() -> None:
                 "trading_day": trading_day,
                 "market": row["market"],
                 "symbol": row["symbol"],
+                "price_basis": "tdx_export_qfq",
                 "rps_20": rps20_map.get(key),
                 "rps_50": rps50_map.get(key),
                 "rps_120": rps120_map.get(key),

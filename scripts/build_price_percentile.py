@@ -14,6 +14,9 @@ import pandas as pd
 from mootdx.reader import Reader
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+from app.tdx.qfq_kline import load_tdx_qfq_daily
 DATA_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 TDX_DIR = r"/home/lufanfeng/tdx_data"  # WSL path
 
@@ -58,7 +61,7 @@ def compute_percentile(close_prices: list[float]) -> dict:
 
 def main():
     t0 = time.time()
-    reader = Reader.factory(market="std", tdxdir=TDX_DIR)
+    # Raw .day files only provide the security universe; percentile is QFQ-based.
 
     # Get all .day file symbols by scanning TDX directory
     symbols = set()
@@ -82,7 +85,7 @@ def main():
 
     for symbol in sorted(symbols):
         try:
-            daily = reader.daily(symbol=symbol)
+            daily = load_tdx_qfq_daily(symbol)
             if daily is None or daily.empty:
                 errors += 1
                 continue
@@ -98,6 +101,7 @@ def main():
             closes = recent["close"].dropna().tolist()
             result = compute_percentile(closes)
             if result:
+                result["price_basis"] = "tdx_export_qfq"
                 results[symbol] = result
 
             done += 1

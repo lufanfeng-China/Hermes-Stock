@@ -22,6 +22,9 @@ import pandas as pd
 from mootdx.reader import Reader
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+from app.tdx.qfq_kline import load_tdx_qfq_daily
 TDX_DIR = "/home/lufanfeng/tdx_data"
 DATA_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 OUTPUT = DATA_DIR / "dataset_technical_eval.json"
@@ -715,7 +718,7 @@ def main(trading_day: str | None = None):
     print(f"Price percentile loaded: {len(pct_data)} entries")
 
     # Scan symbols
-    reader = Reader.factory(market="std", tdxdir=TDX_DIR)
+    # Raw .day files provide the universe; all technical indicators use QFQ exports.
     symbols = set()
     for market_dir in ("sh", "sz", "bj"):
         mdir = Path(TDX_DIR) / "vipdoc" / market_dir / "lday"
@@ -735,7 +738,7 @@ def main(trading_day: str | None = None):
 
     for symbol in symbols:
         try:
-            daily = reader.daily(symbol=symbol)
+            daily = load_tdx_qfq_daily(symbol)
             if daily is None or daily.empty:
                 errors += 1; continue
 

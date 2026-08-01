@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.search.index import DEFAULT_DATASET_DIR, load_rps_rows
+from app.tdx.qfq_kline import load_tdx_qfq_daily
 
 DEFAULT_TDX_DIR = "/home/lufanfeng/tdx_data"
 DEFAULT_OUTPUT = DEFAULT_DATASET_DIR / "dataset_macd_signals_current.json"
@@ -211,12 +212,14 @@ def build_macd_signals(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") 
             continue
 
         try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
+            daily = load_tdx_qfq_daily(symbol_val)
+        except (FileNotFoundError, ValueError):
             continue
         if daily is None or daily.empty:
             continue
         daily = daily.sort_index()
+        if trading_day:
+            daily = daily.loc[daily.index <= trading_day]
 
         closes = daily["close"].astype(float).tolist()
         volumes = daily["volume"].astype(float).tolist()
@@ -233,7 +236,7 @@ def build_macd_signals(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "") 
                 "symbol": symbol_val,
                 "macd_signal": signal,
                 "generated_at": generated_at,
-                "data_source": "local_tongdaxin_daily",
+                "data_source": "tdx_export_qfq",
             })
 
     results.sort(key=lambda r: (r["macd_signal"], r["market"], r["symbol"]))
