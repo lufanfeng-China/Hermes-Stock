@@ -67,12 +67,40 @@ def _temperature(score_percentile: float, median_return: float, breadth: float, 
     return 4, "热门"
 
 
-def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    """Build concept heat rows and concept-member lists from already-loaded QFQ frames."""
+def attach_temperature_streaks(current_rows: list[dict[str, Any]], history_newest_first: list[dict[str, int | None]]) -> None:
+    """Add consecutive trading-day streaks for the row's current temperature.
+
+    Each history item maps concept code to its temperature for one trading day,
+    ordered from the current day backwards. A missing/insufficient-data state
+    deliberately has no numerical streak.
+    """
+    for row in current_rows:
+        current = row.get("temperature")
+        if current is None:
+            row["temperature_streak_days"] = None
+            continue
+        days = 0
+        for levels in history_newest_first:
+            if levels.get(row["concept_code"]) != current:
+                break
+            days += 1
+        row["temperature_streak_days"] = days
+
+
+def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10, as_of: pd.Timestamp | None = None, include_members: bool = True) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """Build concept heat rows at ``as_of`` (or current frame end) from QFQ bars."""
+    if as_of is not None:
+        frames = {
+            symbol: clipped
+            for symbol, frame in frames.items()
+            if not (clipped := frame.loc[frame.index <= as_of]).empty and clipped.index.max() == as_of
+        }
+
     groups: dict[str, list[dict[str, str]]] = defaultdict(list)
+    metrics = {symbol: _return_and_volume(frame, window) for symbol, frame in frames.items()}
     all_member_returns: list[float] = []
     for entry in mapping:
-        metric = _return_and_volume(frames.get(entry["symbol"]), window)
+        metric = metrics.get(entry["symbol"])
         if metric is None:
             continue
         ret, close, volume_ratio = metric
@@ -81,15 +109,16 @@ def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.D
         all_member_returns.append(ret)
 
     market_median = float(median(all_member_returns)) if all_member_returns else 0.0
+    strong_cutoff = float(pd.Series(all_member_returns).quantile(.75)) if all_member_returns else 0.0
     drafts: list[dict[str, Any]] = []
     members_out: dict[str, list[dict[str, Any]]] = {}
     for concept_code, members in groups.items():
         members.sort(key=lambda row: (-row["return_pct"], row["symbol"]))
-        members_out[concept_code] = members
+        if include_members:
+            members_out[concept_code] = members
         returns = [row["return_pct"] for row in members]
         med = float(median(returns))
         breadth = sum(value > 0 for value in returns) / len(returns) * 100
-        strong_cutoff = float(pd.Series(all_member_returns).quantile(.75)) if all_member_returns else 0.0
         strong = sum(value > strong_cutoff for value in returns) / len(returns) * 100
         active = sum(row["volume_ratio_5d_20d"] > 1.20 for row in members) / len(members) * 100
         drafts.append({"concept_code": concept_code, "concept_name": members[0]["concept_name"], "member_count": len(members), "median_return_pct": med, "breadth_pct": breadth, "excess_return_pct": med - market_median, "strong_stock_pct": strong, "active_volume_pct": active})

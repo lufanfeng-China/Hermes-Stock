@@ -58,6 +58,20 @@ class ConceptTemperatureTests(unittest.TestCase):
         )
         self.assertEqual("数据不足", rows[0]["temperature_label"])
         self.assertIsNone(rows[0]["temperature"])
+    def test_temperature_streak_counts_only_identical_consecutive_levels(self):
+        from app.concept_temperature import attach_temperature_streaks
+
+        current = [{"concept_code": "a", "temperature": 5}, {"concept_code": "b", "temperature": 4}, {"concept_code": "c", "temperature": None}]
+        history_newest_first = [
+            {"a": 5, "b": 4, "c": None},
+            {"a": 5, "b": 4, "c": None},
+            {"a": 4, "b": 4, "c": None},
+            {"a": 5, "b": 3, "c": None},
+        ]
+        attach_temperature_streaks(current, history_newest_first)
+        self.assertEqual(2, current[0]["temperature_streak_days"])
+        self.assertEqual(3, current[1]["temperature_streak_days"])
+        self.assertIsNone(current[2]["temperature_streak_days"])
 
 
 if __name__ == "__main__":

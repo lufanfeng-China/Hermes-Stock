@@ -30,6 +30,10 @@
     if (row.temperature == null) return '<span class="pill t2">数据不足</span>';
     return '<span class="pill t' + row.temperature + '">' + row.temperature + ' ' + esc(row.temperature_label) + '</span>';
   }
+  function streak(row) {
+    if (row.temperature_streak_days == null) return '—';
+    return String(row.temperature_streak_days) + (row.temperature_streak_capped ? '+' : '') + '天';
+  }
   function renderSummary(data) {
     var rows = data.concepts || [];
     var counts = [0,1,2,3,4,5].map(function (level) {
@@ -60,12 +64,12 @@
     var start = (currentPage - 1) * PAGE_SIZE;
     var visible = conceptRows.slice(start, start + PAGE_SIZE);
     if (!visible.length) {
-      conceptsEl.innerHTML = '<tr><td colspan="7" class="empty">没有符合该温度的概念</td></tr>';
+      conceptsEl.innerHTML = '<tr><td colspan="8" class="empty">没有符合该温度的概念</td></tr>';
       pagerEl.innerHTML = '';
       return;
     }
     conceptsEl.innerHTML = visible.map(function (row) {
-      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td>' + Number(row.heat_score).toFixed(1) + '</td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + row.member_count + '</td></tr>';
+      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td>' + Number(row.heat_score).toFixed(1) + '</td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + streak(row) + '</td><td>' + row.member_count + '</td></tr>';
     }).join('');
     conceptsEl.querySelectorAll('.concept-row').forEach(function (row) {
       row.addEventListener('click', function () {
@@ -77,7 +81,7 @@
     renderPager();
   }
   async function loadConcepts() {
-    conceptsEl.innerHTML = '<tr><td colspan="7" class="empty">加载中…</td></tr>';
+    conceptsEl.innerHTML = '<tr><td colspan="8" class="empty">加载中…</td></tr>';
     pagerEl.innerHTML = '';
     try {
       var url = '/api/concept-temperature?window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '');
@@ -91,7 +95,7 @@
       renderConceptPage();
     } catch (err) {
       conceptMeta.textContent = '加载失败：' + err.message;
-      conceptsEl.innerHTML = '<tr><td colspan="7" class="empty">无法加载概念温度数据</td></tr>';
+      conceptsEl.innerHTML = '<tr><td colspan="8" class="empty">无法加载概念温度数据</td></tr>';
     }
   }
   async function loadMembers() {
