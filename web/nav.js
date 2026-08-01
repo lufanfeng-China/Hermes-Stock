@@ -7,6 +7,7 @@
     { href: '/rps-pool.html', label: 'RPS' },
     { href: '/watchlist.html', label: '自选股' },
     { href: '/concept-analysis.html', label: '概念分析' },
+    { href: '/concept-temperature.html', label: '概念温度' },
     { href: '/bottleneck.html', label: '瓶颈股发现' },
     { href: '/macd-extreme-gc.html', label: '极值金叉' },
   ];
