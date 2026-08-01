@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.tdx.qfq_kline import load_tdx_qfq_daily
 from app.search.index import (
     DEFAULT_DATASET_DIR,
     load_industry_valuation_rows,
@@ -233,8 +234,8 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
 
         # ── Condition 4: 距MA10 < 10% ──
         try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
+            daily = load_tdx_qfq_daily(symbol_val)
+        except (FileNotFoundError, ValueError):
             continue
         if daily is None or daily.empty:
             continue
@@ -308,7 +309,7 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             "passed": crossed and is_true_first,
             "conditions": conditions,
             "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
+            "data_source": "tdx_export_qfq+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
@@ -365,8 +366,8 @@ def build_rps_first_macd_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str
         conditions["from_past_signal"] = from_past
 
         try:
-            daily = reader.daily(symbol=symbol)
-        except Exception:
+            daily = load_tdx_qfq_daily(symbol)
+        except (FileNotFoundError, ValueError):
             continue
         if daily is None or daily.empty:
             continue
@@ -399,7 +400,7 @@ def build_rps_first_macd_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str
             "passed": is_golden,
             "conditions": conditions,
             "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
+            "data_source": "tdx_export_qfq+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
@@ -421,8 +422,8 @@ def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[st
         market_val = str(sec.get("market", "")).strip().lower()
 
         try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
+            daily = load_tdx_qfq_daily(symbol_val)
+        except (FileNotFoundError, ValueError):
             continue
         if daily is None or daily.empty:
             continue
@@ -669,7 +670,7 @@ def build_slingshot_trend_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[st
                 "gap_days": gap_days,
             },
             "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily",
+            "data_source": "tdx_export_qfq",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
@@ -711,8 +712,8 @@ def build_ath_rps360_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "
 
         # ATH check: read daily bars
         try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
+            daily = load_tdx_qfq_daily(symbol_val)
+        except (FileNotFoundError, ValueError):
             continue
         if daily is None or daily.empty:
             continue
@@ -762,7 +763,7 @@ def build_ath_rps360_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = "
             "conditions": conditions,
             "days_since_last_ath": days_since_last_ath,
             "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily",
+            "data_source": "tdx_export_qfq",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
@@ -784,8 +785,8 @@ def build_duotou_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
             continue
         market_val = str(sec.get("market", "")).strip().lower()
         try:
-            daily = reader.daily(symbol=symbol_val)
-        except Exception:
+            daily = load_tdx_qfq_daily(symbol_val)
+        except (FileNotFoundError, ValueError):
             continue
         if daily is None or daily.empty:
             continue
@@ -897,7 +898,7 @@ def build_duotou_rows(*, tdxdir: str = DEFAULT_TDX_DIR) -> list[dict[str, Any]]:
                 "duotou_days": consecutive,
             },
             "generated_at": generated_at,
-            "data_source": "local_tongdaxin_daily",
+            "data_source": "tdx_export_qfq",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
