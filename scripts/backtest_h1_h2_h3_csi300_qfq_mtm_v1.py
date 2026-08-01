@@ -10,6 +10,9 @@ from mootdx.reader import Reader
 
 ROOT=Path('/home/lufanfeng/Project-Hermes-Stock')
 import sys; sys.path.insert(0,str(ROOT))
+TAKE_PROFIT = float(sys.argv[1]) if len(sys.argv) > 1 else 0.40
+if not 0 < TAKE_PROFIT < 1:
+    raise ValueError('take-profit threshold must be in (0, 1)')
 from app.tdx.qfq_kline import load_tdx_qfq_daily, align_qfq_signal_with_raw_execution
 
 START=pd.Timestamp('2015-01-01'); END=pd.Timestamp('2026-07-24')
@@ -63,9 +66,9 @@ def run(variant, frames):
             if variant=='v1' and p['below_h3_days']>=2: reason='H3连续两日失守'
             elif variant=='v2':
                 if h3_break: reason='H3严格跌破止损'
-                elif float(r.h3_distance)>.40: reason='H3乖离>40%止盈'
+                elif float(r.h3_distance)>TAKE_PROFIT: reason=f'H3乖离>{TAKE_PROFIT:.0%}止盈'
             elif variant=='v3':
-                if float(r.h3_distance)>.40: reason='H3乖离>40%止盈'
+                if float(r.h3_distance)>TAKE_PROFIT: reason=f'H3乖离>{TAKE_PROFIT:.0%}止盈'
                 elif h3_break and pnl>=0: reason='跌破H3且非亏损退出'
             if reason and ('exit',c) not in pending_keys:
                 ix=days.index(day)+1
@@ -86,6 +89,6 @@ def run(variant, frames):
 reader=Reader.factory(market='std',tdxdir='/home/lufanfeng/tdx_data')
 frames={c.zfill(6):b for c in CODES if (b:=bars_for(c.zfill(6),reader)) is not None}
 results=[run(v,frames) for v in ('v1','v2','v3')]
-payload={'data_basis':{'signal':'tdx_export_qfq','execution':'tdx_raw','valuation':'tdx_raw'},'universe':'CSI300 current constituents (survivorship bias)','codes_loaded':len(frames),'rules':{'v1':'signal_close <= H3 连续2日，T+1卖出','v2':'signal_close < H3 止损，或 signal_close/H3-1 > 40% 止盈，T+1卖出','v3':'signal_close/H3-1 > 40%止盈，或 signal_close < H3 且 raw MTM非亏损，T+1卖出'},'results':results}
-OUT.mkdir(parents=True,exist_ok=True); out=OUT/'H1_H2_H3_CSI300_QFQ_strict_MTM_2015_20260731_v1.json'; out.write_text(json.dumps(payload,ensure_ascii=False,indent=2))
+payload={'data_basis':{'signal':'tdx_export_qfq','execution':'tdx_raw','valuation':'tdx_raw'},'universe':'CSI300 current constituents (survivorship bias)','codes_loaded':len(frames),'take_profit_threshold_pct': TAKE_PROFIT * 100, 'rules':{'v1':'signal_close <= H3 连续2日，T+1卖出','v2':f'signal_close < H3 止损，或 signal_close/H3-1 > {TAKE_PROFIT:.0%} 止盈，T+1卖出','v3':f'signal_close/H3-1 > {TAKE_PROFIT:.0%}止盈，或 signal_close < H3 且 raw MTM非亏损，T+1卖出'},'results':results}
+OUT.mkdir(parents=True,exist_ok=True); out=OUT/f'H1_H2_H3_CSI300_QFQ_strict_MTM_2015_20260731_tp{TAKE_PROFIT:.0%}_v2.json'; out.write_text(json.dumps(payload,ensure_ascii=False,indent=2))
 print(json.dumps(payload,ensure_ascii=False,indent=2)); print(out)
