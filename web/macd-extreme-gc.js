@@ -33,7 +33,7 @@ function renderSummary(data) {
 function renderBuySignals(buys) {
   document.getElementById('buy-count').textContent = buys.length;
   const tbody = document.getElementById('buy-tbody');
-  if (!buys.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="10">无待开仓信号</td></tr>'; return; }
+  if (!buys.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="11">无待开仓信号</td></tr>'; return; }
   tbody.innerHTML = buys.map(b => {
     const price = b.tomorrow_open || b.close;
     const qty = Math.floor(b.lot / price);
@@ -46,6 +46,7 @@ function renderBuySignals(buys) {
       <td>${b.signal_date || '-'}</td>
       <td>${b.name || b.code} <span class="muted">${b.code}</span></td>
       <td>${fmtPrice(b.close)}</td>
+      <td>${b.signal_pct5y != null ? Number(b.signal_pct5y).toFixed(1) + '%' : '-'}</td>
       <td>${b.latest_close ? fmtPrice(b.latest_close) : fmtPrice(b.close)}</td>
       <td class="${gapPct>=0?'green':'danger'}">${fmtPct(gapPct)}</td>
       <td class="${b.ndif < -3 ? 'warn' : ''}">${fmtPct(b.ndif)}</td>
