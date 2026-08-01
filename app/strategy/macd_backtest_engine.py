@@ -37,6 +37,8 @@ def simulate_portfolio(
     *,
     initial_capital: float,
     lot_cash: float,
+    profit_target: float = 0.20,
+    retrace_floor: float = 0.15,
 ) -> dict[str, Any]:
     """Execute precomputed daily MACD signals with actual cash and T+1 orders.
 
@@ -47,6 +49,8 @@ def simulate_portfolio(
     """
     if initial_capital <= 0 or lot_cash <= 0:
         raise ValueError("initial_capital and lot_cash must be positive")
+    if profit_target <= 0 or retrace_floor < 0 or retrace_floor >= profit_target:
+        raise ValueError("require profit_target > retrace_floor >= 0")
 
     frames = {
         code: frame.sort_index().copy()
@@ -173,15 +177,15 @@ def simulate_portfolio(
                 cost = _position_cost(position)
                 value = _position_value(position, close)
                 profit_rate = value / cost - 1 if cost > 0 else 0.0
-                if profit_rate > 0.20:
+                if profit_rate > profit_target:
                     if not position.get("armed"):
                         position["armed_date"] = str(day.date())
                     position["armed"] = True
                 if position.get("armed") and not position.get("exit_pending"):
-                    if _as_bool(row.get("dead_cross")) or profit_rate < 0.15:
-                        reason = "死叉卖出" if _as_bool(row.get("dead_cross")) else "止盈卖出(破15%)"
-                        if _as_bool(row.get("dead_cross")) and profit_rate < 0.15:
-                            reason = "死叉+破15%卖出"
+                    if _as_bool(row.get("dead_cross")) or profit_rate < retrace_floor:
+                        reason = "死叉卖出" if _as_bool(row.get("dead_cross")) else f"止盈卖出(破{retrace_floor * 100:g}%)"
+                        if _as_bool(row.get("dead_cross")) and profit_rate < retrace_floor:
+                            reason = f"死叉+破{retrace_floor * 100:g}%卖出"
                         if schedule_next(day, {"kind": "exit", "code": code, "reason": reason}):
                             position["exit_pending"] = True
                 elif (not position.get("exit_pending") and _as_bool(row.get("replenish_signal"))

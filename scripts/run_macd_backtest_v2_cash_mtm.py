@@ -21,6 +21,9 @@ args = json.loads(sys.argv[1])
 START = args["start"]
 INIT = float(args["capital"])
 LOT = float(args["lot"])
+PROFIT_TARGET = float(args.get("profit_target", 20)) / 100.0
+RETRACE_FLOOR = float(args.get("retrace_floor", 15)) / 100.0
+WRITE_OUTPUT = bool(args.get("write_output", True))
 END = "2026-07-25"
 LOOKBACK = f"{int(START[:4]) - 1}-07-01" if int(START[:4]) > 2011 else "2011-12-01"
 STATE_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_qfq_state.json"
@@ -104,7 +107,13 @@ for code in load_codes():
     if len(bars) >= 2:
         bars_by_code[code] = bars
 
-result = simulate_portfolio(bars_by_code, initial_capital=INIT, lot_cash=LOT)
+result = simulate_portfolio(
+    bars_by_code,
+    initial_capital=INIT,
+    lot_cash=LOT,
+    profit_target=PROFIT_TARGET,
+    retrace_floor=RETRACE_FLOOR,
+)
 
 from app.search.index import _stock_name_lookup
 name_lookup = _stock_name_lookup()
@@ -131,17 +140,18 @@ for code, position in result["positions"].items():
     }
 
 state = {
-    "config": {"capital": int(INIT), "lot": int(LOT)},
+    "config": {"capital": int(INIT), "lot": int(LOT), "profit_target": PROFIT_TARGET * 100, "retrace_floor": RETRACE_FLOOR * 100},
     "cash": round(float(result["cash"]), 2),
     "positions": positions,
     "history": result["history"],
 }
-STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 weekly = build_weekly_mtm(result["daily_equity"])
 monthly = build_monthly_mtm(result["daily_equity"])
-MTM_FILE.write_text(json.dumps(weekly, ensure_ascii=False), encoding="utf-8")
-MONTHLY_MTM_FILE.write_text(json.dumps(monthly, ensure_ascii=False), encoding="utf-8")
+if WRITE_OUTPUT:
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    MTM_FILE.write_text(json.dumps(weekly, ensure_ascii=False), encoding="utf-8")
+    MONTHLY_MTM_FILE.write_text(json.dumps(monthly, ensure_ascii=False), encoding="utf-8")
 
 summary = result["summary"]
 print(

@@ -751,6 +751,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/macd-extreme-gc/config":
             self.handle_macd_gc_config()
             return
+        if parsed.path == "/api/macd-extreme-gc/backtest-summary":
+            self.handle_macd_gc_backtest_summary()
+            return
         if parsed.path == "/api/macd-extreme-gc/backtest":
             self.handle_macd_gc_backtest()
             return
@@ -3229,12 +3232,56 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         result = compute_equity_history()
         self.respond_json(HTTPStatus.OK, {"ok": True, "history": result})
 
+    def handle_macd_gc_backtest_summary(self) -> None:
+        """Run isolated QFQ backtests for the page's exit parameters and three capital tiers."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        start = str(body.get("start") or "2012-01-01")
+        lot = int(body.get("lot", 50_000))
+        profit_target = float(body.get("profit_target", 20))
+        retrace_floor = float(body.get("retrace_floor", 15))
+        if lot <= 0 or profit_target <= 0 or retrace_floor < 0 or retrace_floor >= profit_target:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "参数无效：卖出触发必须大于回撤触发"})
+            return
+        import subprocess
+        from datetime import date as _date
+        rows = []
+        for capital in (3_000_000, 6_000_000, 10_000_000):
+            payload = {"start": start, "capital": capital, "lot": lot,
+                       "profit_target": profit_target, "retrace_floor": retrace_floor,
+                       "write_output": False}
+            result = subprocess.run(
+                ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python3",
+                 "/home/lufanfeng/Project-Hermes-Stock/scripts/run_macd_backtest_v2_cash_mtm.py",
+                 json.dumps(payload)], capture_output=True, text=True, timeout=600,
+            )
+            if result.returncode != 0 or "OK|" not in result.stdout:
+                self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": result.stderr or result.stdout})
+                return
+            parts = next(line for line in result.stdout.splitlines() if line.startswith("OK|")).split("|")
+            equity = float(parts[5])
+            years = max((_date(2026, 7, 24) - _date.fromisoformat(start)).days / 365.25, 1 / 365.25)
+            rows.append({"capital": capital, "finalEquity": round(equity, 2),
+                         "totalReturnPct": round((equity / capital - 1) * 100, 2),
+                         "annualizedReturnPct": round(((equity / capital) ** (1 / years) - 1) * 100, 2),
+                         "openPositions": int(parts[1]), "closedPositions": int(parts[2]),
+                         "executed": int(parts[3]), "rejectedForCash": int(parts[4])})
+        self.respond_json(HTTPStatus.OK, {"ok": True, "start": start, "asOf": "2026-07-24", "lotCash": lot,
+                                          "profitTarget": profit_target, "retraceFloor": retrace_floor,
+                                          "entryRule": f"NDIF<-1% + MACD金叉 + MA10上升；浮盈>{profit_target:g}%后，回撤<{retrace_floor:g}%或死叉卖出",
+                                          "method": "QFQ 信号 + 原始价成交/严格 MTM", "rows": rows})
+
     def handle_macd_gc_backtest(self) -> None:
         content_len = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(content_len).decode("utf-8"))
         start = body.get("start", "2024-01-01")
         capital = int(body.get("capital", 10_000_000))
         lot = int(body.get("lot", 50_000))
+        profit_target = float(body.get("profit_target", 20))
+        retrace_floor = float(body.get("retrace_floor", 15))
+        if profit_target <= 0 or retrace_floor < 0 or retrace_floor >= profit_target:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "卖出触发必须大于回撤触发，且回撤触发不能为负数"})
+            return
 
         import subprocess, os
         # Clear old MTM caches
@@ -3250,7 +3297,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         result = subprocess.run(
             ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python3",
              "/home/lufanfeng/Project-Hermes-Stock/scripts/run_macd_backtest_v2_cash_mtm.py",
-             json.dumps({"start": start, "capital": capital, "lot": lot})],
+             json.dumps({"start": start, "capital": capital, "lot": lot,
+                         "profit_target": profit_target, "retrace_floor": retrace_floor})],
             capture_output=True, text=True, timeout=600
         )
         if result.returncode == 0 and "OK" in result.stdout:

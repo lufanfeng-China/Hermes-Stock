@@ -291,6 +291,14 @@ function renderHistory(history) {
 
 function getCapital() { return parseInt(document.getElementById('gc-capital').value) * 10000 || 3000000; }
 function getLot() { return parseInt(document.getElementById('gc-lot').value) * 10000 || 50000; }
+function getExitParams() {
+  const profit_target = Number(document.getElementById('gc-profit-target').value);
+  const retrace_floor = Number(document.getElementById('gc-retrace-floor').value);
+  if (!Number.isFinite(profit_target) || !Number.isFinite(retrace_floor) || profit_target <= 0 || retrace_floor < 0 || retrace_floor >= profit_target) {
+    throw new Error('卖出触发必须大于回撤触发，且回撤触发不能为负数');
+  }
+  return { profit_target, retrace_floor };
+}
 function getDateFrom() { return document.getElementById('gc-date-from').value || ''; }
 function getDateTo() { return document.getElementById('gc-date-to').value || ''; }
 function getStock() { return document.getElementById('gc-stock').value.trim(); }
@@ -375,8 +383,24 @@ function showStrategyPlan() {
   document.body.appendChild(modal);
 }
 
-function showBacktestSummary() {
-  const summary = MacdExtremeGcUtils.getMacdBacktestSummary();
+async function showBacktestSummary() {
+  const button = document.getElementById('gc-backtest-summary');
+  button.disabled = true;
+  button.textContent = '计算中...';
+  let summary;
+  try {
+    summary = await api('POST', API + '/backtest-summary', {
+      start: document.getElementById('gc-bt-start').value || '2012-01-01',
+      lot: getLot(), ...getExitParams(),
+    });
+    if (!summary.ok) throw new Error(summary.error || '总结回测失败');
+  } catch (error) {
+    alert(error.message || String(error));
+    return;
+  } finally {
+    button.disabled = false;
+    button.textContent = '总结';
+  }
   const rows = summary.rows.map(row => {
     const returnClass = row.totalReturnPct >= 0 ? 'green' : 'danger';
     return `<tr>
@@ -395,7 +419,7 @@ function showBacktestSummary() {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
   modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="极值金叉回测总结" style="background:var(--canvas);border-radius:24px;padding:28px;max-width:980px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.28)">
     <header style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px">
-      <div><p class="eyebrow">BACKTEST SUMMARY · MTM</p><h2 style="font-size:22px">极值金叉：2012年至今资金对比</h2></div>
+      <div><p class="eyebrow">BACKTEST SUMMARY · MTM</p><h2 style="font-size:22px">极值金叉：${summary.start} 至今资金对比</h2></div>
       <button class="btn btn-sm btn-secondary" type="button" aria-label="关闭">✕</button>
     </header>
     <p class="muted" style="margin-bottom:16px">${summary.start} 至 ${summary.asOf}（2026 为 YTD） · 每份 ${fmtWan(summary.lotCash)} · 开仓：${summary.entryRule} · ${summary.method}</p>
@@ -488,7 +512,7 @@ document.getElementById('gc-backtest').addEventListener('click', async () => {
   document.getElementById('gc-backtest').textContent = '运行中...';
   try {
     const result = await api('POST', API + '/backtest', {
-      start, capital: getCapital(), lot: getLot()
+      start, capital: getCapital(), lot: getLot(), ...getExitParams()
     });
     if (result.ok) {
       await scan();
