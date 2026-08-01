@@ -3237,9 +3237,14 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         lot = int(body.get("lot", 50_000))
 
         import subprocess, os
-        # Clear old equity cache
-        eq_path = "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_equity_weekly.json"
-        if os.path.exists(eq_path): os.remove(eq_path)
+        # Clear old MTM caches
+        eq_paths = (
+            "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_equity_weekly.json",
+            "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_equity_monthly.json",
+        )
+        for eq_path in eq_paths:
+            if os.path.exists(eq_path):
+                os.remove(eq_path)
         
         # Run backtest
         result = subprocess.run(

@@ -14,6 +14,7 @@ from mootdx.reader import Reader
 PROJECT_ROOT = Path("/home/lufanfeng/Project-Hermes-Stock")
 sys.path.insert(0, str(PROJECT_ROOT))
 from app.strategy.macd_backtest_engine import simulate_portfolio
+from app.search.macd_gc import build_monthly_mtm
 
 args = json.loads(sys.argv[1])
 START = args["start"]
@@ -23,6 +24,7 @@ END = "2026-07-25"
 LOOKBACK = f"{int(START[:4]) - 1}-07-01" if int(START[:4]) > 2011 else "2011-12-01"
 STATE_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_state.json"
 MTM_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_equity_weekly.json"
+MONTHLY_MTM_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_equity_monthly.json"
 CONSTITUENT_FILES = (
     PROJECT_ROOT / "data/derived/datasets/final/csi300_constituents_current_20260728.json",
     Path("/tmp/csi300_constituents.json"),  # legacy fallback only
@@ -127,7 +129,9 @@ state = {
 STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
 STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 weekly = build_weekly_mtm(result["daily_equity"])
+monthly = build_monthly_mtm(result["daily_equity"])
 MTM_FILE.write_text(json.dumps(weekly, ensure_ascii=False), encoding="utf-8")
+MONTHLY_MTM_FILE.write_text(json.dumps(monthly, ensure_ascii=False), encoding="utf-8")
 
 summary = result["summary"]
 print(

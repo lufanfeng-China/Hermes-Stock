@@ -194,7 +194,12 @@ def simulate_portfolio(
             _position_value(position, last_close.get(code, 0.0))
             for code, position in positions.items()
         )
-        daily_equity.append({"date": str(day.date()), "equity": cash + market_value})
+        daily_equity.append({
+            "date": str(day.date()),
+            "cash": cash,
+            "market_value": market_value,
+            "equity": cash + market_value,
+        })
 
     market_value = sum(
         _position_value(position, last_close.get(code, 0.0))

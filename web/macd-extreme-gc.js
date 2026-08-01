@@ -19,9 +19,9 @@ function renderSummary(data) {
   const s = data.summary;
   const el = document.getElementById('gc-summary');
   el.innerHTML = `
-    <div class="gc-stat"><div class="val">${fmt(s.equity)}</div><div class="lbl">总权益</div></div>
-    <div class="gc-stat"><div class="val">${fmt(s.deployed)}</div><div class="lbl">持仓市值</div></div>
-    <div class="gc-stat"><div class="val">${fmt(s.cash)}</div><div class="lbl">闲置资金</div></div>
+    <button class="gc-stat trend-trigger" type="button" onclick="showMonthlyMtmTrend()"><div class="val">${fmt(s.equity)}</div><div class="lbl">总权益</div></button>
+    <button class="gc-stat trend-trigger" type="button" onclick="showMonthlyMtmTrend()"><div class="val">${fmt(s.deployed)}</div><div class="lbl">持仓市值</div></button>
+    <button class="gc-stat trend-trigger" type="button" onclick="showMonthlyMtmTrend()"><div class="val">${fmt(s.cash)}</div><div class="lbl">闲置资金</div></button>
     <div class="gc-stat"><div class="val" style="color:${s.unrealized_pnl>=0?'#10b981':'#ef4444'}">${s.unrealized_pnl ? fmtPct(s.unrealized_pnl/(s.deployed-s.unrealized_pnl||1)*100) : '+0.00%'}</div><div class="lbl">持仓盈亏</div></div>
     <div class="gc-stat"><div class="val" style="color:${s.unrealized_pnl>=0?'#10b981':'#ef4444'}">${fmt(s.unrealized_pnl)}</div><div class="lbl">持仓盈亏金额</div></div>
     <div class="gc-stat"><div class="val" style="color:${s.realized_pnl>=0?'#10b981':'#ef4444'}">${fmtPct(s.realized_pnl_pct)}</div><div class="lbl">平仓盈亏</div></div>
@@ -209,6 +209,12 @@ function renderPositions(positions) {
   }
   
   document.getElementById('pos-count').textContent = filtered.length;
+  const stats = MacdExtremeGcUtils.calculatePositionFilterStats(filtered);
+  const statsEl = document.getElementById('pos-filter-stats');
+  if (statsEl) {
+    const cls = stats.pnl >= 0 ? 'green' : 'danger';
+    statsEl.innerHTML = `持仓盈亏 <span class="${cls}">${fmt(stats.pnl)}（${fmtPct(stats.pnlPct)}）</span>`;
+  }
   const tbody = document.getElementById('pos-tbody');
   if (!filtered.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="10">无持仓</td></tr>'; return; }
   // Sort by entry date descending
@@ -255,8 +261,15 @@ function renderHistory(history) {
   }
   
   document.getElementById('hist-count').textContent = filtered.length;
+  const stats = MacdExtremeGcUtils.calculateHistoryFilterStats(filtered);
+  const statsEl = document.getElementById('hist-filter-stats');
+  if (statsEl) {
+    const cls = stats.pnl >= 0 ? 'green' : 'danger';
+    const averageDays = stats.averageHoldingDays == null ? '—' : `${stats.averageHoldingDays.toFixed(1)}天`;
+    statsEl.innerHTML = `平仓盈亏 <span class="${cls}">${fmt(stats.pnl)}（${fmtPct(stats.pnlPct)}）</span> · 平均持仓 ${averageDays}`;
+  }
   const tbody = document.getElementById('hist-tbody');
-  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-row">无记录</td></tr>'; return; }
+  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-row">无记录</td></tr>'; return; }
   tbody.innerHTML = [...filtered].sort((a,b) => (b.entry_date||'').localeCompare(a.entry_date||'')).map(h => {
     const cls = h.pnl >= 0 ? 'green' : 'danger';
     const pct5y = h.pct5y != null ? h.pct5y + '%' : '<span class="muted">历史不足</span>';
@@ -333,30 +346,134 @@ function renderIndustry() {
   ).join('');
 }
 
-async function showEquityHistory() {
-  const data = await api('GET', API + '/equity-history');
-  if (!data || !data.history) return;
-  const rows = data.history.map(h => {
-    const last = data.history[0]; 
-    const pct = h.equity / (cachedData?.summary?.total_capital || 3000000);
-    return `<tr><td>${h.week}</td><td style="text-align:right">${fmt(h.equity)}</td><td style="text-align:right;color:${pct>=1?'#10b981':'#ef4444'}">${fmtPct((pct-1)*100)}</td></tr>`;
-  }).join('');
-  
+function fmtWan(n) { return n == null ? '-' : `${(Number(n) / 10000).toFixed(2)}万`; }
+
+function showStrategyPlan() {
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999';
-  modal.innerHTML = `<div style="background:var(--canvas);border-radius:24px;padding:24px;max-width:500px;max-height:70vh;overflow-y:auto;width:90%">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h3 style="margin:0">权益趋势（周）</h3>
-      <button class="btn btn-sm btn-secondary" onclick="this.closest('div').parentElement.remove()">✕</button>
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="极值金叉方案" style="background:var(--canvas);border-radius:24px;padding:28px;max-width:760px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.28)">
+    <header style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px">
+      <div><p class="eyebrow">STRATEGY SPECIFICATION</p><h2 style="font-size:22px">极值金叉 · 方案说明</h2></div>
+      <button class="btn btn-sm btn-secondary" type="button" aria-label="关闭">✕</button>
+    </header>
+    <div style="display:grid;gap:16px;line-height:1.7">
+      <div><strong>标的与周期</strong><br><span class="muted">当前 CSI300 固定成分股，日线；MACD 参数 12 / 26 / 9。NDIF 为 DIF ÷ 收盘价。</span></div>
+      <div><strong>开仓</strong><br><span class="muted">收盘确认 MACD 金叉、NDIF &lt; -1%、MA10 上升；下一交易日开盘买入 1 份。每份金额由页面“每份(万)”设定，默认 5 万。</span></div>
+      <div><strong>补仓</strong><br><span class="muted">已持仓标的再次满足开仓信号，且持仓亏损超过 20%、NDIF &lt; -3%，下一交易日开盘补 1 份。</span></div>
+      <div><strong>卖出</strong><br><span class="muted">浮盈超过 20% 后进入等待；出现 MACD 死叉或盈利回落至低于 +15% 时，下一交易日开盘卖出。</span></div>
+      <div><strong>组合与回测</strong><br><span class="muted">按信号日收盘判定、T+1 开盘成交；逐日现金不透支。权益采用严格 MTM：真实现金 + 未平仓每日收盘市值。开仓 5 年价格分位仅用于页面筛选和观察，不参与任何交易条件。</span></div>
     </div>
-    <table class="gc-table"><thead><tr><th>周</th><th style="text-align:right">权益</th><th style="text-align:right">累计</th></tr></thead>
-    <tbody>${rows}</tbody></table>
-  </div>`;
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  </section>`;
+  const close = () => modal.remove();
+  modal.querySelector('button').addEventListener('click', close);
+  modal.addEventListener('click', event => { if (event.target === modal) close(); });
   document.body.appendChild(modal);
 }
 
+function showBacktestSummary() {
+  const summary = MacdExtremeGcUtils.getMacdBacktestSummary();
+  const rows = summary.rows.map(row => {
+    const returnClass = row.totalReturnPct >= 0 ? 'green' : 'danger';
+    return `<tr>
+      <td>${fmtWan(row.capital)}</td>
+      <td>${fmtWan(row.finalEquity)}</td>
+      <td class="${returnClass}">${fmtPct(row.totalReturnPct)}</td>
+      <td class="${returnClass}">${fmtPct(row.annualizedReturnPct)}</td>
+      <td>${fmt(row.executed)}</td>
+      <td>${fmt(row.closedPositions)}</td>
+      <td>${fmt(row.openPositions)}</td>
+      <td>${fmt(row.rejectedForCash)}</td>
+    </tr>`;
+  }).join('');
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="极值金叉回测总结" style="background:var(--canvas);border-radius:24px;padding:28px;max-width:980px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.28)">
+    <header style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px">
+      <div><p class="eyebrow">BACKTEST SUMMARY · MTM</p><h2 style="font-size:22px">极值金叉：2012年至今资金对比</h2></div>
+      <button class="btn btn-sm btn-secondary" type="button" aria-label="关闭">✕</button>
+    </header>
+    <p class="muted" style="margin-bottom:16px">${summary.start} 至 ${summary.asOf}（2026 为 YTD） · 每份 ${fmtWan(summary.lotCash)} · 开仓：${summary.entryRule} · ${summary.method}</p>
+    <div style="overflow-x:auto"><table><thead><tr>
+      <th>初始资金</th><th>期末权益</th><th>累计MTM收益</th><th>年化</th><th>已执行</th><th>已平仓</th><th>期末持仓</th><th>现金拒绝</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="margin-top:16px;line-height:1.65">权益 = 真实现金 + 未平仓按每日收盘价计算的市值（严格 MTM）；信号收盘确认、T+1 开盘成交、逐日现金不透支。使用当前 CSI300 固定成分股，存在幸存者偏差；未计佣金、印花税与滑点。</p>
+  </section>`;
+  const close = () => modal.remove();
+  modal.querySelector('button').addEventListener('click', close);
+  modal.addEventListener('click', event => { if (event.target === modal) close(); });
+  document.body.appendChild(modal);
+}
+
+function fmtTrendValue(value) {
+  return `${(Number(value) / 10000).toFixed(0)}万`;
+}
+
+function renderMonthlyTrendSvg(rows, key, label, color) {
+  const width = 720;
+  const height = 190;
+  const pad = 34;
+  const chart = MacdExtremeGcTrendUtils.buildMonthlyLineGeometry(rows, key, { width, height, pad });
+  const grid = Array.from({ length: 4 }, (_, index) => {
+    const y = pad + (height - pad * 2) * index / 3;
+    const value = chart.max - (chart.max - chart.min) * index / 3;
+    return `<line x1="${pad}" x2="${width - pad}" y1="${y}" y2="${y}" stroke="#e6e6e6"/><text x="${width - 4}" y="${y + 4}" text-anchor="end" fill="#777" font-size="10">${fmtTrendValue(value)}</text>`;
+  }).join('');
+  const ticks = [0, Math.floor((rows.length - 1) / 2), rows.length - 1]
+    .filter((value, index, list) => list.indexOf(value) === index)
+    .map(index => `<text x="${chart.points[index].x}" y="${height - 7}" text-anchor="middle" fill="#777" font-size="10">${rows[index].month}</text>`)
+    .join('');
+  const latest = chart.latest;
+  return `<article style="border:1px solid var(--hairline);border-radius:14px;padding:14px 12px;background:var(--surface-soft)">
+    <div style="display:flex;justify-content:space-between;gap:12px;margin:0 6px 6px"><strong>${label}</strong><span class="muted">${latest.month} · ${fmtTrendValue(latest.value)}</span></div>
+    <svg viewBox="0 0 ${width} ${height}" width="100%" height="190" role="img" aria-label="${label}走势">
+      ${grid}<path d="${chart.path}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${latest.x}" cy="${latest.y}" r="4" fill="${color}" stroke="#fff" stroke-width="2"/>${ticks}
+    </svg>
+  </article>`;
+}
+
+async function showMonthlyMtmTrend() {
+  const data = await api('GET', API + '/equity-history');
+  const rows = (data?.history || []).filter(row => row.month && ["cash", "market_value", "equity"].every(key => Number.isFinite(Number(row[key]))));
+  if (!rows.length) {
+    alert('暂无月度 MTM 趋势数据。请先运行历史回测生成数据。');
+    return;
+  }
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="极值金叉资金走势" style="background:var(--canvas);border-radius:24px;padding:28px;max-width:880px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.28)">
+    <header style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px">
+      <div><p class="eyebrow">MONTHLY MTM</p><h2 style="font-size:22px">资金走势</h2><p class="muted">每月最后一个交易日 · 严格 MTM</p></div>
+      <button class="btn btn-sm btn-secondary" type="button" aria-label="关闭">✕</button>
+    </header>
+    <div style="display:grid;gap:14px">
+      ${renderMonthlyTrendSvg(rows, 'equity', '总权益', '#111')}
+      ${renderMonthlyTrendSvg(rows, 'market_value', '持仓市值', '#1ea64a')}
+      ${renderMonthlyTrendSvg(rows, 'cash', '闲置资金', '#7a5af8')}
+    </div>
+    <p class="muted" style="margin-top:14px">总权益 = 持仓市值 + 闲置资金。走势以每月最后一个交易日收盘后的真实现金与未平仓市值计算。</p>
+  </section>`;
+  const close = () => modal.remove();
+  modal.querySelector('button').addEventListener('click', close);
+  modal.addEventListener('click', event => { if (event.target === modal) close(); });
+  document.body.appendChild(modal);
+}
+
+async function showEquityHistory() {
+  return showMonthlyMtmTrend();
+}
+
 document.getElementById('gc-scan').addEventListener('click', scan);
+document.getElementById('gc-backtest-summary').addEventListener('click', showBacktestSummary);
+const planTitle = document.getElementById('gc-plan-title');
+planTitle.addEventListener('click', showStrategyPlan);
+planTitle.addEventListener('keydown', event => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    showStrategyPlan();
+  }
+});
 
 // Backtest button
 document.getElementById('gc-backtest').addEventListener('click', async () => {

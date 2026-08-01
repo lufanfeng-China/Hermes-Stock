@@ -40,6 +40,10 @@ class TestMacdBacktestCashAccounting(unittest.TestCase):
         self.assertEqual(result["summary"]["cash"], 12_000)
         self.assertEqual(result["positions"], {})
         self.assert_accounting(result, 10_000)
+        final_day = result["daily_equity"][-1]
+        self.assertEqual(final_day["cash"], 12_000)
+        self.assertEqual(final_day["market_value"], 0)
+        self.assertEqual(final_day["equity"], final_day["cash"] + final_day["market_value"])
 
     def test_t1_replenish_is_debited_and_included_in_exit_pnl(self):
         bars = _bars([

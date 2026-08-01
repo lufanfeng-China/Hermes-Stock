@@ -105,6 +105,9 @@
     }
     .stat-card .pos { color: var(--success); }
     .stat-card .neg { color: var(--danger); }
+    .trend-trigger { appearance:none; background:transparent; border:0; color:inherit; cursor:pointer; font:inherit; padding:0; text-align:inherit; }
+    .trend-trigger:hover .lbl { text-decoration: underline; }
+    .trend-trigger:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 4px; }
 
     /* --- Color Block Sections --- */
     .color-block {
@@ -163,6 +166,10 @@
       font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.6px;
       color: rgba(0,0,0,0.5); margin-left: 8px;
     }
+    .filtered-stats {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 400;
+      letter-spacing: 0.1px; margin-left: 10px; white-space: nowrap;
+    }
 
     /* Nav links */
     .nav-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
@@ -180,7 +187,7 @@
   <header class="topbar">
     <div>
       <p class="eyebrow">MACD EXTREME GC</p>
-      <h1>极值金叉</h1>
+      <h1 id="gc-plan-title" role="button" tabindex="0" aria-label="查看极值金叉方案" style="cursor:pointer" title="点击查看方案">极值金叉</h1>
     </div>
     <nav class="nav-links" id="global-nav"></nav>
   </header>
@@ -198,6 +205,7 @@
       <label>到<input id="gc-date-to" type="date"></label>
       <label>股票<input id="gc-stock" type="text" placeholder="代码" style="width:72px"></label>
       <button id="gc-scan" class="btn btn-primary">扫描</button>
+      <button id="gc-backtest-summary" class="btn btn-secondary" style="font-size:13px;padding:6px 14px">总结</button>
       <span id="gc-status" class="status-meta"></span>
     </div>
     <div class="summary-strip" id="gc-summary"></div>
@@ -251,6 +259,7 @@
       <span style="font-size:12px;margin:0 3px">-</span>
       <input type="number" id="pos-filter-pct-max" min="0" max="100" step="0.01" placeholder="最大" oninput="renderPositions(cachedData?.positions||[])" onclick="event.stopPropagation()" style="padding:3px 6px;font-size:12px;border:1px solid var(--hairline);border-radius:6px;width:56px">
       <span style="font-size:12px">%</span>
+      <span class="filtered-stats" id="pos-filter-stats">持仓盈亏 —</span>
       <span class="badge" id="pos-count">0</span>
     </div>
     <div class="block-body">
@@ -272,6 +281,7 @@
       <span style="font-size:12px;margin:0 3px">-</span>
       <input type="number" id="hist-filter-pct-max" min="0" max="100" step="0.01" placeholder="最大" oninput="renderHistory(cachedData?.history||[])" onclick="event.stopPropagation()" style="padding:3px 6px;font-size:12px;border:1px solid var(--hairline);border-radius:6px;width:56px">
       <span style="font-size:12px">%</span>
+      <span class="filtered-stats" id="hist-filter-stats">平仓盈亏 — · 平均持仓 —</span>
       <span class="badge" id="hist-count">0</span>
     </div>
     <div class="block-body">
@@ -299,6 +309,8 @@
 </main>
 
 <script src="/nav.js"></script>
+<script src="/macd-extreme-gc-utils.js"></script>
+<script src="/macd-extreme-gc-trend-utils.js"></script>
 <script src="/macd-extreme-gc.js"></script>
 </body>
 </html>

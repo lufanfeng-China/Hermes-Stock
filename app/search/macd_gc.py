@@ -217,7 +217,7 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
             ma10_ok = (not np.isnan(ma10[i]) and not np.isnan(ma10[i - 1])
                        and ma10[i] > ma10[i - 1])
             signal_pct5y = _signal_price_percentile(c, i)
-            if is_golden and ndif_i < NDIF_LOOSE and ma10_ok and signal_pct5y is not None and signal_pct5y < 50.0:
+            if is_golden and ndif_i < NDIF_LOOSE and ma10_ok:
                 tomorrow_open = o[i + 1] if i + 1 < n else None
                 signal_date = str(dates[i].date()) if hasattr(dates[i], 'date') else str(dates[i])
                 # Count consecutive MA10 rising days
@@ -660,17 +660,39 @@ def handle_config(capital: int, lot: int) -> dict[str, Any]:
     return {"ok": True, "config": state["config"]}
 
 
+def build_monthly_mtm(daily_equity: list[dict]) -> list[dict]:
+    """Compress strict daily MTM components to the last trading day of each month."""
+    if not daily_equity:
+        return []
+    frame = pd.DataFrame(daily_equity)
+    required = {"date", "cash", "market_value", "equity"}
+    if not required.issubset(frame.columns):
+        return []
+    frame["date"] = pd.to_datetime(frame["date"])
+    frame = frame.sort_values("date").set_index("date")
+    monthly = frame[["cash", "market_value", "equity"]].resample("ME").last().dropna()
+    return [
+        {
+            "month": index.strftime("%Y-%m"),
+            "cash": round(float(row.cash), 2),
+            "market_value": round(float(row.market_value), 2),
+            "equity": round(float(row.equity), 2),
+        }
+        for index, row in monthly.iterrows()
+    ]
+
+
 def compute_equity_history() -> list[dict]:
-    """Return weekly mark-to-market equity curve. Reads cached MTM or computes cost-basis."""
-    import json, os
-    from pathlib import Path
-    cache_path = str(Path(__file__).resolve().parent.parent.parent / "data" / "derived" / "datasets" / "final" / "macd_gc_equity_weekly.json")
-    if os.path.exists(cache_path):
+    """Return monthly strict-MTM cash, market value, and equity trend data."""
+    import json
+
+    monthly_path = Path(__file__).resolve().parent.parent.parent / "data" / "derived" / "datasets" / "final" / "macd_gc_equity_monthly.json"
+    if monthly_path.exists():
         try:
-            with open(cache_path) as f:
-                return json.load(f)
-        except: pass
-    # Fallback: cheap cost-basis
-    state = _load_state()
-    _init_if_needed(state)
-    return [{"week": str(date.today()), "equity": state["config"]["capital"]}]
+            with monthly_path.open(encoding="utf-8") as handle:
+                history = json.load(handle)
+            if isinstance(history, list) and history:
+                return history
+        except (OSError, json.JSONDecodeError):
+            pass
+    return []

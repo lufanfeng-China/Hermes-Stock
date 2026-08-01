@@ -1,12 +1,14 @@
 import sys
 import unittest
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, "/home/lufanfeng/Project-Hermes-Stock")
 from app.search.macd_gc import (
     _entry_price_percentile,
     _history_rows_with_entry_percentiles,
+    _scan_stock,
     _signal_price_percentile,
 )
 
@@ -42,6 +44,25 @@ class EntryPricePercentileTests(unittest.TestCase):
         percentile = _signal_price_percentile(closes, 3, window=4, min_periods=4)
 
         self.assertEqual(62.5, percentile)
+
+    def test_buy_signal_does_not_require_a_five_year_percentile(self):
+        dates = pd.date_range("2026-01-02", periods=100, freq="B")
+        closes = np.full(100, 100.0)
+        opens = np.full(100, 100.0)
+        ndif = np.full(100, -3.0)
+        ndea = np.full(100, -2.5)
+        ma10 = np.full(100, 100.0)
+        ndif[-1] = -2.0
+        ma10[-1] = 101.0
+
+        buys, replenishes, sells = _scan_stock(
+            "000001", dates, closes, opens, ndif, ndea, ma10,
+            {"config": {"lot": 50_000}, "positions": {}},
+        )
+
+        self.assertEqual(1, len(buys))
+        self.assertEqual([], replenishes)
+        self.assertEqual([], sells)
 
 
 if __name__ == "__main__":
