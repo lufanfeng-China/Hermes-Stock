@@ -139,8 +139,9 @@ for code, position in result["positions"].items():
         "trigger_date": position.get("armed_date", ""),
     }
 
+as_of_date = result["daily_equity"][-1]["date"] if result["daily_equity"] else END
 state = {
-    "config": {"capital": int(INIT), "lot": int(LOT), "profit_target": PROFIT_TARGET * 100, "retrace_floor": RETRACE_FLOOR * 100},
+    "config": {"capital": int(INIT), "lot": int(LOT), "profit_target": PROFIT_TARGET * 100, "retrace_floor": RETRACE_FLOOR * 100, "as_of": as_of_date},
     "cash": round(float(result["cash"]), 2),
     "positions": positions,
     "history": result["history"],

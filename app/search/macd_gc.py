@@ -353,6 +353,16 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
         try: dt_ts = pd.Timestamp(date_to)
         except Exception: pass
 
+    # A persisted historical backtest must be valued at its own last MTM date,
+    # not silently repriced with later daily bars.
+    state_as_of = str(state.get("config", {}).get("as_of", "")).strip()
+    state_as_of_ts = None
+    if state_as_of:
+        try:
+            state_as_of_ts = pd.Timestamp(state_as_of)
+        except Exception:
+            state_as_of_ts = None
+
     has_range = df_ts is not None or dt_ts is not None or bool(stock_code)  # stock mode = scan all
 
     all_buy = []
@@ -396,7 +406,7 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
             for index, enriched in zip(history_indexes, enriched_rows):
                 history_summary[index] = enriched
         # Truncate to the end of range if specified
-        end_date = dt_ts or df_ts  # use date_to, fallback to date_from
+        end_date = dt_ts or df_ts or state_as_of_ts
         if end_date is not None:
             df = df[df.index <= end_date]
             if len(df) < 100:
@@ -497,7 +507,7 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
     history_industry_dist = [{"name": k, "count": v} for k, v in sorted(history_industry_counts.items(), key=lambda x: -x[1])]
 
     return {
-        "today": str(date.today()),
+        "today": state_as_of or str(date.today()),
         "data_basis": {
             "signal": "tdx_export_qfq",
             "execution": "tdx_raw",
