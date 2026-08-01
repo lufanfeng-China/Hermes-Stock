@@ -11,11 +11,12 @@ from mootdx.reader import Reader
 ROOT=Path('/home/lufanfeng/Project-Hermes-Stock')
 import sys; sys.path.insert(0,str(ROOT))
 TAKE_PROFIT = float(sys.argv[1]) if len(sys.argv) > 1 else 0.40
+START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else pd.Timestamp('2015-01-01')
 if not 0 < TAKE_PROFIT < 1:
     raise ValueError('take-profit threshold must be in (0, 1)')
 from app.tdx.qfq_kline import load_tdx_qfq_daily, align_qfq_signal_with_raw_execution
 
-START=pd.Timestamp('2015-01-01'); END=pd.Timestamp('2026-07-24')
+END=pd.Timestamp('2026-07-31')
 CAPITAL=10_000_000.; LOT=50_000.
 CODES=json.loads((ROOT/'data/derived/datasets/final/csi300_constituents_current_20260728.json').read_text())
 OUT=Path('/mnt/c/Users/Sky.Lu/Desktop/output')
@@ -84,11 +85,17 @@ def run(variant, frames):
         mv=sum(sum(e['shares'] for e in p['entries'])*last.get(c,0) for c,p in pos.items()); equity.append((day,cash+mv))
     vals=np.array([v for _,v in equity]); peak=np.maximum.accumulate(vals); dd=(vals/peak-1).min()*100
     rets=[h['pnl']/h['cost']*100 for h in hist]; days_held=[h['days'] for h in hist]; wins=[x for x in rets if x>0]
-    return {'variant':variant,'start':str(START.date()),'end':str(equity[-1][0].date()),'capital':CAPITAL,'lot':LOT,'final_equity':round(float(vals[-1]),2),'return_pct':round((vals[-1]/CAPITAL-1)*100,2),'max_drawdown_pct':round(float(dd),2),'executed':executed,'rejected_cash':rejected,'open_positions':len(pos),'closed_trades':len(hist),'win_rate_pct':round(100*len(wins)/len(rets),2) if rets else None,'closed_avg_return_pct':round(float(np.mean(rets)),2) if rets else None,'closed_median_return_pct':round(float(np.median(rets)),2) if rets else None,'closed_avg_holding_days':round(float(np.mean(days_held)),1) if days_held else None,'closed_median_holding_days':round(float(np.median(days_held)),1) if days_held else None,'exit_reasons':{str(k): int(v) for k,v in pd.Series([h['reason'] for h in hist]).value_counts().items()} if hist else {},'mtm_identity':round(float(vals[-1]-(cash+sum(sum(e['shares'] for e in p['entries'])*last.get(c,0) for c,p in pos.items()))),6)}
+    annual=[]; prior=CAPITAL
+    equity_frame=pd.DataFrame(equity,columns=['date','equity']).set_index('date')
+    for year, group in equity_frame.groupby(equity_frame.index.year):
+        end_equity=float(group['equity'].iloc[-1])
+        annual.append({'year':int(year),'as_of':str(group.index[-1].date()),'equity':round(end_equity,2),'return_pct':round((end_equity/prior-1)*100,2)})
+        prior=end_equity
+    return {'variant':variant,'start':str(START.date()),'end':str(equity[-1][0].date()),'capital':CAPITAL,'lot':LOT,'final_equity':round(float(vals[-1]),2),'return_pct':round((vals[-1]/CAPITAL-1)*100,2),'max_drawdown_pct':round(float(dd),2),'executed':executed,'rejected_cash':rejected,'open_positions':len(pos),'closed_trades':len(hist),'win_rate_pct':round(100*len(wins)/len(rets),2) if rets else None,'closed_avg_return_pct':round(float(np.mean(rets)),2) if rets else None,'closed_median_return_pct':round(float(np.median(rets)),2) if rets else None,'closed_avg_holding_days':round(float(np.mean(days_held)),1) if days_held else None,'closed_median_holding_days':round(float(np.median(days_held)),1) if days_held else None,'exit_reasons':{str(k): int(v) for k,v in pd.Series([h['reason'] for h in hist]).value_counts().items()} if hist else {},'annual_mtm':annual,'mtm_identity':round(float(vals[-1]-(cash+sum(sum(e['shares'] for e in p['entries'])*last.get(c,0) for c,p in pos.items()))),6)}
 
 reader=Reader.factory(market='std',tdxdir='/home/lufanfeng/tdx_data')
 frames={c.zfill(6):b for c in CODES if (b:=bars_for(c.zfill(6),reader)) is not None}
 results=[run(v,frames) for v in ('v1','v2','v3')]
 payload={'data_basis':{'signal':'tdx_export_qfq','execution':'tdx_raw','valuation':'tdx_raw'},'universe':'CSI300 current constituents (survivorship bias)','codes_loaded':len(frames),'take_profit_threshold_pct': TAKE_PROFIT * 100, 'rules':{'v1':'signal_close <= H3 连续2日，T+1卖出','v2':f'signal_close < H3 止损，或 signal_close/H3-1 > {TAKE_PROFIT:.0%} 止盈，T+1卖出','v3':f'signal_close/H3-1 > {TAKE_PROFIT:.0%}止盈，或 signal_close < H3 且 raw MTM非亏损，T+1卖出'},'results':results}
-OUT.mkdir(parents=True,exist_ok=True); out=OUT/f'H1_H2_H3_CSI300_QFQ_strict_MTM_2015_20260731_tp{TAKE_PROFIT:.0%}_v2.json'; out.write_text(json.dumps(payload,ensure_ascii=False,indent=2))
+OUT.mkdir(parents=True,exist_ok=True); out=OUT/f'H1_H2_H3_CSI300_QFQ_strict_MTM_{START:%Y%m%d}_20260731_tp{TAKE_PROFIT:.0%}_v3.json'; out.write_text(json.dumps(payload,ensure_ascii=False,indent=2))
 print(json.dumps(payload,ensure_ascii=False,indent=2)); print(out)
