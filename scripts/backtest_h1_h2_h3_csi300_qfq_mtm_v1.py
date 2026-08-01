@@ -13,6 +13,7 @@ import sys; sys.path.insert(0,str(ROOT))
 TAKE_PROFIT = float(sys.argv[1]) if len(sys.argv) > 1 else 0.40
 START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else pd.Timestamp('2015-01-01')
 ANNUAL_RESET = (sys.argv[3].strip().lower() in {'1', 'true', 'yes', 'annual-reset'}) if len(sys.argv) > 3 else False
+RUN_LABEL = sys.argv[4].strip() if len(sys.argv) > 4 else ''
 if not 0 < TAKE_PROFIT < 1:
     raise ValueError('take-profit threshold must be in (0, 1)')
 from app.tdx.qfq_kline import load_tdx_qfq_daily, align_qfq_signal_with_raw_execution
@@ -110,6 +111,6 @@ reader=Reader.factory(market='std',tdxdir='/home/lufanfeng/tdx_data')
 frames={c.zfill(6):b for c in CODES if (b:=bars_for(c.zfill(6),reader)) is not None}
 results=[run(v,frames) for v in ('v1','v2','v3')]
 payload={'data_basis':{'signal':'tdx_export_qfq','execution':'tdx_raw','valuation':'tdx_raw'},'universe':'CSI300 current constituents (survivorship bias)','codes_loaded':len(frames),'take_profit_threshold_pct': TAKE_PROFIT * 100, 'annual_reset': ANNUAL_RESET, 'annual_reset_rule': '每年最后交易日原始收盘价强制平仓，跨年订单取消' if ANNUAL_RESET else None, 'rules':{'v1':'signal_close <= H3 连续2日，T+1卖出','v2':f'signal_close < H3 止损，或 signal_close/H3-1 > {TAKE_PROFIT:.0%} 止盈，T+1卖出','v3':f'signal_close/H3-1 > {TAKE_PROFIT:.0%}止盈，或 signal_close < H3 且 raw MTM非亏损，T+1卖出'},'results':results}
-suffix = '_annual_reset_v4' if ANNUAL_RESET else '_v3'
+suffix = f"_{'annual_reset' if ANNUAL_RESET else 'no_reset'}_{RUN_LABEL}" if RUN_LABEL else ('_annual_reset_v4' if ANNUAL_RESET else '_v3')
 OUT.mkdir(parents=True,exist_ok=True); out=OUT/f'H1_H2_H3_CSI300_QFQ_strict_MTM_{START:%Y%m%d}_20260731_tp{TAKE_PROFIT:.0%}{suffix}.json'; out.write_text(json.dumps(payload,ensure_ascii=False,indent=2))
 print(json.dumps(payload,ensure_ascii=False,indent=2)); print(out)
