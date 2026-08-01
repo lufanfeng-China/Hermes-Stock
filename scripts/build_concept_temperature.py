@@ -2,6 +2,7 @@
 """Build the QFQ-based current concept-temperature dataset, including temperature streaks."""
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ OUT_PATH = PROJECT_ROOT / 'data/derived/datasets/final/dataset_concept_temperatu
 WINDOWS = (3, 5, 10, 20, 60)
 MIN_MEMBERS = 10
 STREAK_LOOKBACK = 20
+HEAT_TREND_DAYS = 126
 
 
 def add_streaks(mapping, frames, window, concepts, as_of):
@@ -43,7 +45,23 @@ def add_streaks(mapping, frames, window, concepts, as_of):
         row['temperature_streak_capped'] = row['concept_code'] in unresolved
 
 
+def build_heat_history(mapping, frames, window, as_of):
+    """Return six-month heat-score series for every concept at the selected window."""
+    dates = sorted({date for frame in frames.values() for date in frame.index if date <= as_of})[-HEAT_TREND_DAYS:]
+    history = {}
+    for date in dates:
+        rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=MIN_MEMBERS, as_of=date, include_members=False)
+        for row in rows:
+            history.setdefault(row['concept_code'], []).append({'date': date.strftime('%Y-%m-%d'), 'heat_score': row['heat_score']})
+    return history
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--window', type=int, choices=WINDOWS, help='build only one window, for parallel builds')
+    parser.add_argument('--output', type=Path, help='write to an alternate JSON output path')
+    args = parser.parse_args()
+    target_windows = (args.window,) if args.window else WINDOWS
     mapping = parse_tdx_concept_mapping(MAPPING_PATH.read_text(encoding='gb18030'))
     frames = {}
     skipped = 0
@@ -57,10 +75,11 @@ def main() -> None:
     as_of = max(frame.index.max() for frame in frames.values())
     frames = {symbol: frame for symbol, frame in frames.items() if frame.index.max() == as_of}
     windows = {}
-    for window in WINDOWS:
+    for window in target_windows:
         concepts, members = build_temperature_rows(mapping, frames, window=window, min_members=MIN_MEMBERS)
         add_streaks(mapping, frames, window, concepts, as_of)
-        windows[str(window)] = {'concepts': concepts, 'members': members}
+        heat_history = build_heat_history(mapping, frames, window, as_of)
+        windows[str(window)] = {'concepts': concepts, 'members': members, 'heat_history': heat_history}
     payload = {
         'dataset_name': 'dataset_concept_temperature_current',
         'generated_at': datetime.now(timezone.utc).isoformat(),
@@ -77,9 +96,10 @@ def main() -> None:
         'temperature_streak_lookback': STREAK_LOOKBACK,
         'windows': windows,
     }
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    print(json.dumps({'path': str(OUT_PATH), 'as_of_date': payload['as_of_date'], 'concepts': len(windows['10']['concepts']), 'stocks': len(frames)}, ensure_ascii=False))
+    output_path = args.output or OUT_PATH
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    print(json.dumps({'path': str(output_path), 'as_of_date': payload['as_of_date'], 'windows': sorted(windows), 'concepts': sum(len(section['concepts']) for section in windows.values()), 'stocks': len(frames)}, ensure_ascii=False))
 
 
 if __name__ == '__main__':

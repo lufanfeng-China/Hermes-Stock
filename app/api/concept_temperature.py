@@ -35,6 +35,24 @@ def handle_concept_temperature(query: str) -> dict:
         return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}
 
 
+def handle_concept_temperature_trend(query: str) -> dict:
+    params = {key: values[0] for key, values in parse_qs(query).items() if values}
+    window = str(params.get('window', '10')); concept_code = str(params.get('concept_code', '')).strip()
+    if window not in VALID_WINDOWS or not concept_code:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'window and concept_code required'}
+    try:
+        data = _load(); section = data['windows'][window]
+        concept = next((row for row in section['concepts'] if row['concept_code'] == concept_code), None)
+        if not concept:
+            return {'ok': False, 'status': HTTPStatus.NOT_FOUND, 'error': 'concept not found'}
+        points = section.get('heat_history', {}).get(concept_code)
+        if not points:
+            return {'ok': False, 'status': HTTPStatus.NOT_FOUND, 'error': '热度趋势数据尚未构建，请运行 build_concept_temperature.py'}
+        return {'ok': True, 'as_of_date': data['as_of_date'], 'window': int(window), 'concept': concept, 'points': points}
+    except Exception as exc:
+        return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}
+
+
 def handle_concept_temperature_members(query: str) -> dict:
     params = {key: values[0] for key, values in parse_qs(query).items() if values}
     window = str(params.get('window', '10')); concept_code = str(params.get('concept_code', '')).strip()

@@ -544,6 +544,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/concept-temperature":
             self.handle_concept_temperature(parsed.query)
             return
+        if parsed.path == "/api/concept-temperature/trend":
+            self.handle_concept_temperature_trend(parsed.query)
+            return
         if parsed.path == "/api/concept-temperature/members":
             self.handle_concept_temperature_members(parsed.query)
             return
@@ -1774,6 +1777,16 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         """Return precomputed concept heat rows, optionally filtered by temperature."""
         try:
             from app.api.concept_temperature import handle_concept_temperature as _handle
+            result = _handle(query)
+            status = result.pop('status', HTTPStatus.OK)
+            self.respond_json(status, result)
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {'ok': False, 'error': str(exc)})
+
+    def handle_concept_temperature_trend(self, query: str) -> None:
+        """Return the selected concept's precomputed half-year heat-score series."""
+        try:
+            from app.api.concept_temperature import handle_concept_temperature_trend as _handle
             result = _handle(query)
             status = result.pop('status', HTTPStatus.OK)
             self.respond_json(status, result)
