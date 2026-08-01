@@ -44,19 +44,19 @@ test("filter stats safely handle an empty filtered list and incomplete history d
   );
 });
 
-test("getMacdBacktestSummary exposes the verified unfiltered 2012-to-2026 strict-MTM comparison", () => {
+test("getMacdBacktestSummary exposes the verified QFQ-signal strict-MTM comparison", () => {
   const summary = getMacdBacktestSummary();
 
   assert.equal(summary.asOf, "2026-07-24");
-  assert.equal(summary.method, "严格现金守恒 MTM");
+  assert.equal(summary.method, "QFQ 信号 + 原始价成交/严格 MTM");
   assert.equal(summary.entryRule, "NDIF<-1% + MACD金叉 + MA10上升");
   assert.deepEqual(summary.rows.map((row) => [row.capital, row.finalEquity, row.totalReturnPct]), [
-    [3_000_000, 12_144_586.37, 304.82],
-    [6_000_000, 24_910_440.64, 315.17],
-    [10_000_000, 31_265_194.46, 212.65],
+    [3_000_000, 13_309_694.57, 343.66],
+    [6_000_000, 26_264_974.92, 337.75],
+    [10_000_000, 34_634_445.73, 246.34],
   ]);
-  assert.equal(summary.rows[0].executed, 2308);
-  assert.equal(summary.rows[2].executed, 4110);
+  assert.equal(summary.rows[0].executed, 2533);
+  assert.equal(summary.rows[2].executed, 4486);
 });
 
 test("MACD page exposes unfiltered MTM summary and a clickable strategy plan", () => {

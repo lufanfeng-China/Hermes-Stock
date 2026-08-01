@@ -401,7 +401,7 @@ function showBacktestSummary() {
     <div style="overflow-x:auto"><table><thead><tr>
       <th>初始资金</th><th>期末权益</th><th>累计MTM收益</th><th>年化</th><th>已执行</th><th>已平仓</th><th>期末持仓</th><th>现金拒绝</th>
     </tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="muted" style="margin-top:16px;line-height:1.65">权益 = 真实现金 + 未平仓按每日收盘价计算的市值（严格 MTM）；信号收盘确认、T+1 开盘成交、逐日现金不透支。使用当前 CSI300 固定成分股，存在幸存者偏差；未计佣金、印花税与滑点。</p>
+    <p class="muted" style="margin-top:16px;line-height:1.65">信号使用通达信前复权日线；成交使用原始 T+1 开盘价，权益 = 真实现金 + 未平仓按原始收盘价计算的市值（严格 MTM）。信号收盘确认、逐日现金不透支。使用当前 CSI300 固定成分股，存在幸存者偏差；未计佣金、印花税与滑点。</p>
   </section>`;
   const close = () => modal.remove();
   modal.querySelector('button').addEventListener('click', close);

@@ -46,24 +46,24 @@
     return {
       start: "2012-01-01",
       asOf: "2026-07-24",
-      method: "严格现金守恒 MTM",
+      method: "QFQ 信号 + 原始价成交/严格 MTM",
       entryRule: "NDIF<-1% + MACD金叉 + MA10上升",
       lotCash: 50_000,
       rows: [
         {
-          capital: 3_000_000, finalEquity: 12_144_586.37, totalReturnPct: 304.82,
-          annualizedReturnPct: 10.08, openPositions: 222, closedPositions: 954,
-          executed: 2308, rejectedForCash: 1864,
+          capital: 3_000_000, finalEquity: 13_309_694.57, totalReturnPct: 343.66,
+          annualizedReturnPct: 11.0, openPositions: 225, closedPositions: 1038,
+          executed: 2533, rejectedForCash: 2156,
         },
         {
-          capital: 6_000_000, finalEquity: 24_910_440.64, totalReturnPct: 315.17,
-          annualizedReturnPct: 10.27, openPositions: 224, closedPositions: 1479,
-          executed: 3745, rejectedForCash: 298,
+          capital: 6_000_000, finalEquity: 26_264_974.92, totalReturnPct: 337.75,
+          annualizedReturnPct: 10.89, openPositions: 218, closedPositions: 1564,
+          executed: 3993, rejectedForCash: 522,
         },
         {
-          capital: 10_000_000, finalEquity: 31_265_194.46, totalReturnPct: 212.65,
-          annualizedReturnPct: 8.14, openPositions: 223, closedPositions: 1624,
-          executed: 4110, rejectedForCash: 7,
+          capital: 10_000_000, finalEquity: 34_634_445.73, totalReturnPct: 246.34,
+          annualizedReturnPct: 9.09, openPositions: 217, closedPositions: 1740,
+          executed: 4486, rejectedForCash: 19,
         },
       ],
     };
