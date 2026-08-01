@@ -64,6 +64,30 @@ class EntryPricePercentileTests(unittest.TestCase):
         self.assertEqual([], replenishes)
         self.assertEqual([], sells)
 
+    def test_position_pnl_uses_raw_price_while_macd_uses_signal_price(self):
+        dates = pd.date_range("2026-01-02", periods=100, freq="B")
+        signal_closes = np.full(100, 10.0)
+        raw_closes = np.full(100, 100.0)
+        raw_opens = np.full(100, 100.0)
+        ndif = np.full(100, -3.0)
+        ndea = np.full(100, -2.5)
+        ma10 = np.full(100, 10.0)
+        ndif[-1] = -2.0
+        ma10[-1] = 11.0
+        state = {
+            "config": {"lot": 50_000},
+            "positions": {"000001": {"entries": [{"date": "2026-01-02", "price": 50.0, "shares": 100}]}},
+        }
+
+        _, _, sells = _scan_stock(
+            "000001", dates, signal_closes, raw_opens, ndif, ndea, ma10, state,
+            raw_closes=raw_closes,
+        )
+
+        self.assertEqual(1, len(sells))
+        self.assertEqual(10_000.0, sells[0]["current_value"])
+        self.assertEqual(100.0, sells[0]["pnl_pct"])
+
 
 if __name__ == "__main__":
     unittest.main()

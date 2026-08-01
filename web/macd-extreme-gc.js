@@ -313,7 +313,11 @@ async function scan() {
     renderPositions(data.positions || []);
     renderHistory(data.history || []);
     renderIndustry();
-    document.getElementById('gc-status').textContent = '✓ ' + (data.today || '');
+    const basis = data.data_basis || {};
+    const basisLabel = basis.signal === 'tdx_export_qfq'
+      ? ' · 信号：通达信前复权；成交/盯市：原始价'
+      : '';
+    document.getElementById('gc-status').textContent = '✓ ' + (data.today || '') + basisLabel;
   } catch (e) {
     document.getElementById('gc-status').textContent = '✗ 扫描失败: ' + e.message;
   }

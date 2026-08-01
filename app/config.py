@@ -13,6 +13,8 @@ if str(PROJECT_ROOT) not in sys.path:
 # Paths
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
+# Daily OHLCV exported by Tongdaxin with the client set to 前复权.
+TDX_QFQ_EXPORT_DIR = Path("/mnt/c/new_tdx64/T0002/export")
 WEB_ROOT = PROJECT_ROOT / "web"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 WATCHLIST_PATH = PROJECT_ROOT / "data" / "derived" / "watchlist.json"

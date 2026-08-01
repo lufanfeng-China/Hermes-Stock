@@ -29,7 +29,8 @@ CSI300_FILES = (
     DERIVED_FINAL_DIR / "csi300_constituents_current_20260728.json",
     Path("/tmp/csi300_constituents.json"),  # legacy temporary cache fallback
 )
-STATE_FILE = str(DERIVED_FINAL_DIR / "macd_gc_state.json")
+# v2 state: QFQ-generated signals must never share positions/history with legacy raw signals.
+STATE_FILE = str(DERIVED_FINAL_DIR / "macd_gc_qfq_state.json")
 DEFAULT_CAPITAL = 3_000_000
 DEFAULT_LOT = 50_000
 
@@ -148,8 +149,12 @@ def _compute_indicators(c: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarr
     ema26 = pd.Series(c).ewm(span=26, adjust=False).mean().values
     dif = ema12 - ema26
     dea = pd.Series(dif).ewm(span=9, adjust=False).mean().values
-    ndif = np.where(c != 0, dif / c * 100, 0.0)
-    ndea = np.where(c != 0, dea / c * 100, 0.0)
+    ndif = np.zeros_like(c, dtype=float)
+    ndea = np.zeros_like(c, dtype=float)
+    np.divide(dif, c, out=ndif, where=c != 0)
+    np.divide(dea, c, out=ndea, where=c != 0)
+    ndif *= 100.0
+    ndea *= 100.0
     n = len(c)
     ma10 = np.full(n, np.nan)
     for i in range(9, n):
@@ -176,13 +181,17 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
                 c: np.ndarray, o: np.ndarray,
                 ndif: np.ndarray, ndea: np.ndarray, ma10: np.ndarray,
                 positions_state: dict[str, Any],
+                raw_closes: np.ndarray | None = None,
                 date_from: pd.Timestamp | None = None,
                 date_to: pd.Timestamp | None = None,
                 ) -> tuple[list[dict], list[dict], list[dict]]:
-    """Scan one stock. If date range given, scan all bars in range; else scan last bar."""
+    """Scan one stock using QFQ signal prices and raw execution/valuation prices."""
     n = len(c)
     if n < 61:
         return [], [], []
+    raw_c = c if raw_closes is None else raw_closes
+    if len(raw_c) != n:
+        raise ValueError("raw_closes must have the same length as signal closes")
 
     name = _get_stock_name(code)
     buy_signals = []
@@ -203,8 +212,9 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
         if date_to is not None and dates[i] > date_to:
             continue
 
-        cp = c[i]
-        if np.isnan(cp) or cp <= 0:
+        signal_cp = c[i]
+        raw_cp = raw_c[i]
+        if np.isnan(signal_cp) or signal_cp <= 0 or np.isnan(raw_cp) or raw_cp <= 0:
             continue
 
         ndif_i, ndea_i = ndif[i], ndea[i]
@@ -231,7 +241,8 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
                     "code": code,
                     "name": name,
                     "signal_date": signal_date,
-                    "close": round(float(cp), 2),
+                    "close": round(float(raw_cp), 2),
+                    "signal_close": round(float(signal_cp), 2),
                     "ndif": round(float(ndif_i), 2),
                     "signal_pct5y": signal_pct5y,
                     "ma10_rise_days": rise_days,
@@ -251,14 +262,15 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
                         entries = pos.get("entries", [])
                         total_cost = sum(e["price"] * e["shares"] for e in entries)
                         total_shares = sum(e["shares"] for e in entries)
-                        loss_pct = (cp * total_shares / total_cost - 1) * 100 if total_cost > 0 else 0
+                        loss_pct = (raw_cp * total_shares / total_cost - 1) * 100 if total_cost > 0 else 0
                         if loss_pct < REPLENISH_LOSS * 100 and ndif_i < NDIF_TIGHT:
                             lot = positions_state.get("config", {}).get("lot", DEFAULT_LOT)
                             replenish_signals.append({
                             "code": code,
                             "name": name,
                             "signal_date": signal_date,
-                            "close": round(float(cp), 2),
+                            "close": round(float(raw_cp), 2),
+                            "signal_close": round(float(signal_cp), 2),
                             "loss_pct": 0,  # will be filled below
                             "ndif": round(float(ndif_i), 2),
                             "total_cost": 0,
@@ -275,7 +287,7 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
             entries = pos.get("entries", [])
             total_cost = sum(e["price"] * e["shares"] for e in entries)
             total_shares = sum(e["shares"] for e in entries)
-            current_value = cp * total_shares
+            current_value = raw_cp * total_shares
             pnl_pct = (current_value / total_cost - 1) * 100 if total_cost > 0 else 0
 
             # Sell candidates
@@ -299,7 +311,8 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
                     "code": code,
                     "name": name,
                     "entry_date": earliest,
-                    "close": round(float(cp), 2),
+                    "close": round(float(raw_cp), 2),
+                    "signal_close": round(float(signal_cp), 2),
                     "pnl_pct": round(float(pnl_pct), 2),
                     "total_cost": round(float(total_cost), 2),
                     "total_shares": total_shares,
@@ -315,9 +328,9 @@ def _scan_stock(code: str, dates: pd.DatetimeIndex,
 
 
 def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stock_code: str = "") -> dict[str, Any]:
-    """Full scan of CSI300 for signals + position summary.
-    If stock_code provided, scan only that stock with all signals in range."""
+    """Full scan with TDX-QFQ indicators and raw-price execution/MTM."""
     from mootdx.reader import Reader
+    from app.tdx.qfq_kline import align_qfq_signal_with_raw_execution, load_tdx_qfq_daily
 
     # Determine codes to scan
     if stock_code:
@@ -357,20 +370,29 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
     from app.search.index import _load_industry_map as _load_ind_map
     industry_map = _load_ind_map()
 
+    qfq_missing_codes: list[str] = []
     for code in codes:
         try:
-            df = reader.daily(code)
-            if df is None or len(df) < 100:
+            raw_df = reader.daily(code)
+            if raw_df is None or len(raw_df) < 100:
                 continue
+            raw_df = raw_df.sort_index()
+            qfq_df = load_tdx_qfq_daily(code)
+            df = align_qfq_signal_with_raw_execution(raw_df, qfq_df)
+            if len(df) < 100:
+                continue
+        except FileNotFoundError:
+            qfq_missing_codes.append(code)
+            continue
         except Exception:
             continue
 
-        df = df.sort_index()
-        latest_close = float(df["close"].iloc[-1])
+        latest_close = float(df["raw_close"].iloc[-1])
         history_indexes = history_indexes_by_code.get(code, [])
+        signal_frame = df[["signal_close"]].rename(columns={"signal_close": "close"})
         if history_indexes:
             history_rows = [history_summary[index] for index in history_indexes]
-            enriched_rows = _history_rows_with_entry_percentiles(history_rows, df)
+            enriched_rows = _history_rows_with_entry_percentiles(history_rows, signal_frame)
             for index, enriched in zip(history_indexes, enriched_rows):
                 history_summary[index] = enriched
         # Truncate to the end of range if specified
@@ -379,13 +401,14 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
             df = df[df.index <= end_date]
             if len(df) < 100:
                 continue
-        c = df["close"].values.astype(np.float64)
-        o = df["open"].values.astype(np.float64)
+        c = df["signal_close"].values.astype(np.float64)
+        o = df["raw_open"].values.astype(np.float64)
+        raw_c = df["raw_close"].values.astype(np.float64)
         dates = pd.DatetimeIndex(df.index)
         ndif, ndea, ma10 = _compute_indicators(c)
 
         buys, reps, sells = _scan_stock(code, dates, c, o, ndif, ndea, ma10, state,
-                                         date_from=df_ts, date_to=dt_ts)
+                                         raw_closes=raw_c, date_from=df_ts, date_to=dt_ts)
         # Add latest_close to buy signals
         for b in buys:
             b["latest_close"] = round(latest_close, 2)
@@ -399,12 +422,12 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
             entries = pos.get("entries", [])
             total_cost = sum(e["price"] * e["shares"] for e in entries)
             total_shares = sum(e["shares"] for e in entries)
-            cp = float(c[-1]) if len(c) > 0 else 0
+            cp = float(raw_c[-1]) if len(raw_c) > 0 else 0
             current_value = cp * total_shares
             pnl_pct = (current_value / total_cost - 1) * 100 if total_cost > 0 else 0
 
             entry_date = entries[0].get("date") if entries else None
-            entry_pct5y = _entry_price_percentile(df, entry_date) if entry_date else None
+            entry_pct5y = _entry_price_percentile(signal_frame, entry_date) if entry_date else None
             p_market = "sh" if code.startswith(("6", "9")) else "sz"
             positions_summary.append({
                 "code": code,
@@ -475,6 +498,12 @@ def scan_all(state: dict[str, Any], date_from: str = "", date_to: str = "", stoc
 
     return {
         "today": str(date.today()),
+        "data_basis": {
+            "signal": "tdx_export_qfq",
+            "execution": "tdx_raw",
+            "valuation": "tdx_raw",
+            "missing_qfq_codes": qfq_missing_codes,
+        },
         "config": state.get("config", {}),
         "buy_signals": all_buy,
         "replenish_signals": all_replenish,

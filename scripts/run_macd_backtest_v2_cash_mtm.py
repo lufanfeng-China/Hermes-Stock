@@ -15,6 +15,7 @@ PROJECT_ROOT = Path("/home/lufanfeng/Project-Hermes-Stock")
 sys.path.insert(0, str(PROJECT_ROOT))
 from app.strategy.macd_backtest_engine import simulate_portfolio
 from app.search.macd_gc import build_monthly_mtm
+from app.tdx.qfq_kline import align_qfq_signal_with_raw_execution, load_tdx_qfq_daily
 
 args = json.loads(sys.argv[1])
 START = args["start"]
@@ -22,7 +23,7 @@ INIT = float(args["capital"])
 LOT = float(args["lot"])
 END = "2026-07-25"
 LOOKBACK = f"{int(START[:4]) - 1}-07-01" if int(START[:4]) > 2011 else "2011-12-01"
-STATE_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_state.json"
+STATE_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_qfq_state.json"
 MTM_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_equity_weekly.json"
 MONTHLY_MTM_FILE = PROJECT_ROOT / "data/derived/datasets/final/macd_gc_equity_monthly.json"
 CONSTITUENT_FILES = (
@@ -43,14 +44,18 @@ def load_codes() -> list[str]:
     return codes
 
 
-def build_signal_bars(df: pd.DataFrame) -> pd.DataFrame:
-    bars = df[["open", "close"]].copy()
-    close = bars["close"].astype(float)
-    dif = close.ewm(span=12, adjust=False).mean() - close.ewm(span=26, adjust=False).mean()
+def build_signal_bars(raw_daily: pd.DataFrame, qfq_daily: pd.DataFrame) -> pd.DataFrame:
+    """Compute MACD signals on TDX-QFQ closes; execute and mark to raw prices."""
+    aligned = align_qfq_signal_with_raw_execution(raw_daily, qfq_daily)
+    bars = aligned[["raw_open", "raw_close", "signal_close"]].rename(
+        columns={"raw_open": "open", "raw_close": "close"}
+    ).copy()
+    signal_close = bars["signal_close"].astype(float)
+    dif = signal_close.ewm(span=12, adjust=False).mean() - signal_close.ewm(span=26, adjust=False).mean()
     dea = dif.ewm(span=9, adjust=False).mean()
-    bars["ndif"] = np.where(close != 0, dif / close * 100, 0.0)
-    bars["ndea"] = np.where(close != 0, dea / close * 100, 0.0)
-    ma10 = close.rolling(10).mean()
+    bars["ndif"] = np.divide(dif, signal_close, out=np.zeros(len(bars)), where=signal_close != 0) * 100.0
+    bars["ndea"] = np.divide(dea, signal_close, out=np.zeros(len(bars)), where=signal_close != 0) * 100.0
+    ma10 = signal_close.rolling(10).mean()
     golden = (bars["ndif"] > bars["ndea"]) & (bars["ndif"].shift(1) <= bars["ndea"].shift(1))
     dead = (bars["ndif"] < bars["ndea"]) & (bars["ndif"].shift(1) >= bars["ndea"].shift(1))
     buy = golden & (bars["ndif"] < -1.0) & (ma10 > ma10.shift(1))
@@ -86,10 +91,15 @@ for code in load_codes():
     if daily is None or len(daily) < 100:
         continue
     daily = daily.sort_index()
-    daily = daily[(daily.index >= LOOKBACK) & (daily.index <= END)]
-    if len(daily) < 100:
+    try:
+        qfq_daily = load_tdx_qfq_daily(code)
+    except (FileNotFoundError, ValueError):
         continue
-    bars = build_signal_bars(daily)
+    daily = daily[(daily.index >= LOOKBACK) & (daily.index <= END)]
+    qfq_daily = qfq_daily[(qfq_daily.index >= LOOKBACK) & (qfq_daily.index <= END)]
+    if len(daily) < 100 or len(qfq_daily) < 100:
+        continue
+    bars = build_signal_bars(daily, qfq_daily)
     bars = bars[bars.index >= pd.Timestamp(START)]
     if len(bars) >= 2:
         bars_by_code[code] = bars
