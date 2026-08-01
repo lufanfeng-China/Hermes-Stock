@@ -12,6 +12,7 @@ ROOT=Path('/home/lufanfeng/Project-Hermes-Stock')
 import sys; sys.path.insert(0,str(ROOT))
 TAKE_PROFIT = float(sys.argv[1]) if len(sys.argv) > 1 else 0.40
 START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else pd.Timestamp('2015-01-01')
+ANNUAL_RESET = (sys.argv[3].strip().lower() in {'1', 'true', 'yes', 'annual-reset'}) if len(sys.argv) > 3 else False
 if not 0 < TAKE_PROFIT < 1:
     raise ValueError('take-profit threshold must be in (0, 1)')
 from app.tdx.qfq_kline import load_tdx_qfq_daily, align_qfq_signal_with_raw_execution
@@ -39,7 +40,7 @@ def bars_for(code, reader):
 def run(variant, frames):
     days=sorted({d for f in frames.values() for d in f.index}); lookup={c:{d:r for d,r in f.iterrows()} for c,f in frames.items()}
     cash=CAPITAL; pos={}; hist=[]; pending=defaultdict(list); pending_keys=set(); last={}; equity=[]; executed=rejected=0
-    for day in days:
+    for day_i, day in enumerate(days):
         for order in sorted(pending.pop(day,[]),key=lambda o:0 if o['kind']=='exit' else 1):
             pending_keys.discard((order['kind'],order['code'])); c=order['code']; r=lookup[c].get(day); op=float(r.raw_open) if r is not None else 0
             if op<=0: rejected+=1; continue
@@ -78,6 +79,18 @@ def run(variant, frames):
             elif bool(r.entry) and pnl<-.30 and ('replenish',c) not in pending_keys:
                 ix=days.index(day)+1
                 if ix<len(days): pending[days[ix]].append({'kind':'replenish','code':c}); pending_keys.add(('replenish',c))
+        # At the final trading day of each year, liquidate at that day's raw close.
+        # This is an explicit annual rebalance exception to the normal T+1 rule.
+        is_year_end = day_i + 1 == len(days) or days[day_i + 1].year != day.year
+        if ANNUAL_RESET and is_year_end:
+            for c, p in list(pos.items()):
+                shares=sum(e['shares'] for e in p['entries']); cost=sum(e['price']*e['shares'] for e in p['entries'])
+                close=last.get(c, 0.0); revenue=shares*close; cash += revenue
+                hist.append({'code':c,'entry_date':p['entries'][0]['date'],'exit_date':str(day.date()),'reason':'年末强制平仓','cost':cost,'revenue':revenue,'pnl':revenue-cost,'days':(day-p['entries'][0]['ts']).days})
+                del pos[c]; executed += 1
+            pending.clear(); pending_keys.clear()
+            equity.append((day,cash))
+            continue
         for c,r in ((c,rows.get(day)) for c,rows in lookup.items()):
             if r is not None and c not in pos and bool(r.entry) and ('entry',c) not in pending_keys:
                 ix=days.index(day)+1
@@ -96,6 +109,7 @@ def run(variant, frames):
 reader=Reader.factory(market='std',tdxdir='/home/lufanfeng/tdx_data')
 frames={c.zfill(6):b for c in CODES if (b:=bars_for(c.zfill(6),reader)) is not None}
 results=[run(v,frames) for v in ('v1','v2','v3')]
-payload={'data_basis':{'signal':'tdx_export_qfq','execution':'tdx_raw','valuation':'tdx_raw'},'universe':'CSI300 current constituents (survivorship bias)','codes_loaded':len(frames),'take_profit_threshold_pct': TAKE_PROFIT * 100, 'rules':{'v1':'signal_close <= H3 连续2日，T+1卖出','v2':f'signal_close < H3 止损，或 signal_close/H3-1 > {TAKE_PROFIT:.0%} 止盈，T+1卖出','v3':f'signal_close/H3-1 > {TAKE_PROFIT:.0%}止盈，或 signal_close < H3 且 raw MTM非亏损，T+1卖出'},'results':results}
-OUT.mkdir(parents=True,exist_ok=True); out=OUT/f'H1_H2_H3_CSI300_QFQ_strict_MTM_{START:%Y%m%d}_20260731_tp{TAKE_PROFIT:.0%}_v3.json'; out.write_text(json.dumps(payload,ensure_ascii=False,indent=2))
+payload={'data_basis':{'signal':'tdx_export_qfq','execution':'tdx_raw','valuation':'tdx_raw'},'universe':'CSI300 current constituents (survivorship bias)','codes_loaded':len(frames),'take_profit_threshold_pct': TAKE_PROFIT * 100, 'annual_reset': ANNUAL_RESET, 'annual_reset_rule': '每年最后交易日原始收盘价强制平仓，跨年订单取消' if ANNUAL_RESET else None, 'rules':{'v1':'signal_close <= H3 连续2日，T+1卖出','v2':f'signal_close < H3 止损，或 signal_close/H3-1 > {TAKE_PROFIT:.0%} 止盈，T+1卖出','v3':f'signal_close/H3-1 > {TAKE_PROFIT:.0%}止盈，或 signal_close < H3 且 raw MTM非亏损，T+1卖出'},'results':results}
+suffix = '_annual_reset_v4' if ANNUAL_RESET else '_v3'
+OUT.mkdir(parents=True,exist_ok=True); out=OUT/f'H1_H2_H3_CSI300_QFQ_strict_MTM_{START:%Y%m%d}_20260731_tp{TAKE_PROFIT:.0%}{suffix}.json'; out.write_text(json.dumps(payload,ensure_ascii=False,indent=2))
 print(json.dumps(payload,ensure_ascii=False,indent=2)); print(out)
