@@ -5,6 +5,7 @@ Current Tongdaxin concept membership is used throughout, so results have explici
 current-taxonomy survivorship bias and are research-only.
 """
 from __future__ import annotations
+import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -92,6 +93,13 @@ def summarize(values):
 
 
 def main():
+    global START
+    parser=argparse.ArgumentParser(description='Weekly CT-Rotation exploratory research')
+    parser.add_argument('--start', default=str(START.date()), help='inclusive signal start date, YYYY-MM-DD')
+    parser.add_argument('--label', default='20260801', help='new output filename label; never overwrites prior report names')
+    args=parser.parse_args()
+    START=pd.Timestamp(args.start)
+    label=args.label
     from mootdx.reader import Reader
     mapping=parse_tdx_concept_mapping(MAPPING.read_text(encoding='gb18030'))
     grouped=defaultdict(list)
@@ -150,7 +158,7 @@ def main():
         if no%100==0: print('progress',no,'/',len(dates),'trades',len(trades),flush=True)
     out=Path('/mnt/c/Users/Sky.Lu/Desktop/output')
     out.mkdir(parents=True,exist_ok=True)
-    stamp='20260801'
+    stamp=label
     pd.DataFrame(observations).to_parquet(out/f'concept_temperature_weekly_observations_{stamp}.parquet',index=False)
     pd.DataFrame(trades).to_csv(out/f'concept_temperature_ct_rotation_trades_{stamp}.csv',index=False,encoding='utf-8-sig')
     report={'date_range':[str(dates[0].date()),str(dates[-1].date())],'decision_frequency':'weekly Friday close; QFQ signal, raw T+1 open entry, raw close MTM horizon exit','taxonomy':'current 2026 Tongdaxin concept mapping (survivorship-biased)','qfq_symbols':len(frames),'skipped':skipped,'weeks':len(dates),'trades':{}}
