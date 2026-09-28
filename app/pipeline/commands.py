@@ -16,7 +16,7 @@ TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 STOCK_SCREENER_STRATEGY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_screener_strategies_current.json"
-STOCK_RPS_CURRENT_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_current.json"
+STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.parquet"
 DEFAULT_SYMBOL = "601600"
 
 def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
@@ -27,8 +27,8 @@ def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
     dataset_is_current = (
         STOCK_SCREENER_STRATEGY_DATASET.exists()
         and (
-            not STOCK_RPS_CURRENT_DATASET.exists()
-            or STOCK_SCREENER_STRATEGY_DATASET.stat().st_mtime >= STOCK_RPS_CURRENT_DATASET.stat().st_mtime
+            not STOCK_RPS_HISTORY_DATASET.exists()
+            or STOCK_SCREENER_STRATEGY_DATASET.stat().st_mtime >= STOCK_RPS_HISTORY_DATASET.stat().st_mtime
         )
     )
     dataset_has_strategy = False

@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 from app.config import (
     PROJECT_ROOT, WEB_ROOT, TONGDAXIN_PYTHON, TONGDAXIN_DIR,
     DEFAULT_SYMBOL, DEFAULT_HERMES_MODEL, DERIVED_FINAL_DIR,
-    STOCK_SCREENER_STRATEGY_DATASET, STOCK_RPS_CURRENT_DATASET,
+    STOCK_SCREENER_STRATEGY_DATASET, STOCK_RPS_HISTORY_DATASET,
 )
 from app.data.watchlist import _load_watchlist, _save_watchlist
 from app.data.tech_eval import _load_tech_eval, _load_prev_tech_evals

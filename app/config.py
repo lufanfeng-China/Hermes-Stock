@@ -19,7 +19,7 @@ WEB_ROOT = PROJECT_ROOT / "web"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 WATCHLIST_PATH = PROJECT_ROOT / "data" / "derived" / "watchlist.json"
 STOCK_SCREENER_STRATEGY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_screener_strategies_current.json"
-STOCK_RPS_CURRENT_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_current.json"
+STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.parquet"
 CAPITAL_FLOW_CACHE = PROJECT_ROOT / "data" / "derived" / "cache" / "capital_flow" / "capital_flow_full.json"
 
 # Defaults

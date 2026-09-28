@@ -13,6 +13,18 @@ import argparse, sys
 BASE = Path('/home/lufanfeng/Project-Hermes-Stock')
 sys.path.insert(0, str(BASE))
 
+
+def load_latest_rps_stock_pool(rps_parquet: Path) -> list[str]:
+    """Return unique symbols from the latest day in authoritative RPS history."""
+    if not rps_parquet.exists():
+        return []
+    rps = pd.read_parquet(rps_parquet, columns=["trading_day", "symbol"])
+    if rps.empty:
+        return []
+    latest_day = rps["trading_day"].astype(str).max()
+    return sorted(rps.loc[rps["trading_day"].astype(str) == latest_day, "symbol"].astype(str).str.zfill(6).unique())
+
+
 # ── 参数 ──
 ap = argparse.ArgumentParser()
 ap.add_argument('--pe-filter', action='store_true', help='启用 PE 预过滤')
@@ -40,17 +52,10 @@ for _, row in pe_db.iterrows():
 reader = Reader.factory(market='std', tdxdir='/home/lufanfeng/tdx_data')
 pe_db_index = pe_db.set_index(['code', 'period'])
 
-# ── 股票池：加载 RPS 筛选出的活跃股票 ──
-rps_path = BASE / 'data/derived/datasets/final/dataset_stock_rps_current.json'
-if rps_path.exists():
-    import json
-    with open(rps_path) as f:
-        rps_data = json.load(f)
-    if isinstance(rps_data, list):
-        stock_pool = [str(r.get('symbol','')) for r in rps_data if r.get('symbol')]
-    else:
-        stock_pool = list(rps_data.keys())
-else:
+# ── 股票池：加载 authoritative RPS Parquet 最新交易日 ──
+rps_path = BASE / 'data/derived/datasets/final/dataset_stock_rps_history.parquet'
+stock_pool = load_latest_rps_stock_pool(rps_path)
+if not stock_pool:
     # 退而求其次：用前 1000 只
     stock_pool = pe_db['code'].unique()[:1000].tolist()
 

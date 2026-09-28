@@ -850,52 +850,56 @@ def load_industry_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[di
     return _load_json_rows(Path(dataset_dir) / "dataset_stock_industry_current.json")
 
 
+RPS_HISTORY_DATASET = "dataset_stock_rps_history.parquet"
+
+
+def _rps_records(frame) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for row in frame.to_dict(orient="records"):
+        records.append({
+            "trading_day": str(row.get("trading_day", "")),
+            "market": _normalize_text(row.get("market")),
+            "symbol": _normalize_text(row.get("symbol")),
+            "rps_20": row.get("rps_20"),
+            "rps_50": row.get("rps_50"),
+            "rps_120": row.get("rps_120"),
+            "rps_250": row.get("rps_250"),
+        })
+    return records
+
+
 @lru_cache(maxsize=1)
 def load_rps_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
-    from app.data.rps_paths import resolve_rps_dataset_path
+    """Load all rows for the latest trading day from authoritative RPS Parquet."""
+    import pandas as pd
 
-    return _load_json_rows(resolve_rps_dataset_path(Path(dataset_dir), "dataset_stock_rps_current.json"))
+    path = Path(dataset_dir) / RPS_HISTORY_DATASET
+    if not path.exists():
+        return []
+    frame = pd.read_parquet(path)
+    if frame.empty:
+        return []
+    frame["trading_day"] = frame["trading_day"].astype(str)
+    return _rps_records(frame[frame["trading_day"] == frame["trading_day"].max()])
 
 
 def load_rps_rows_as_of(as_of_date: str, dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
-    """Load RPS data as of a historical date using the precomputed history dataset.
+    """Return each symbol's most recent authoritative RPS row on or before a date."""
+    import pandas as pd
 
-    For each (market, symbol), returns the latest record with trading_day <= as_of_date.
-    Returns list in the same format as load_rps_rows().
-    """
-    from app.data.rps_paths import resolve_rps_dataset_path
-
-    history_path = resolve_rps_dataset_path(Path(dataset_dir), "dataset_stock_rps_history.json")
-    if not history_path.exists():
-        return load_rps_rows(dataset_dir)
-
-    all_history = _load_json_rows(history_path)
-    if not all_history:
-        return load_rps_rows(dataset_dir)
-
-    # Group by (market, symbol), keep latest record <= as_of_date
-    best: dict[tuple[str, str], dict[str, object]] = {}
-    for record in all_history:
-        td = str(record.get("trading_day", ""))
-        if td > as_of_date:
-            continue
-        key = (_normalize_text(record.get("market")), _normalize_text(record.get("symbol")))
-        if key not in best or td > str(best[key].get("trading_day", "")):
-            best[key] = record
-
-    # Return as list with consistent keys matching load_rps_rows format
-    result: list[dict[str, object]] = []
-    for record in best.values():
-        result.append({
-            "trading_day": str(record.get("trading_day", "")),
-            "market": _normalize_text(record.get("market")),
-            "symbol": _normalize_text(record.get("symbol")),
-            "rps_20": record.get("rps_20"),
-            "rps_50": record.get("rps_50"),
-            "rps_120": record.get("rps_120"),
-            "rps_250": record.get("rps_250"),
-        })
-    return result
+    path = Path(dataset_dir) / RPS_HISTORY_DATASET
+    if not path.exists():
+        return []
+    frame = pd.read_parquet(path)
+    if frame.empty:
+        return []
+    frame["trading_day"] = frame["trading_day"].astype(str)
+    frame = frame[frame["trading_day"] <= str(as_of_date)]
+    if frame.empty:
+        return []
+    frame = frame.sort_values(["trading_day", "market", "symbol"], kind="stable")
+    latest = frame.groupby(["market", "symbol"], as_index=False).tail(1)
+    return _rps_records(latest)
 
 
 @lru_cache(maxsize=1)

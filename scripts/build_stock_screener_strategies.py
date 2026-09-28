@@ -74,16 +74,13 @@ def _compute_past_days_rps(reader, rps_rows, ndays=5, as_of: str = ""):
     Returns a list of dicts, one per past day (index 0 = yesterday relative to as_of).
     Each dict maps (market, symbol) → {rps_20, rps_50, rps_120, rps_250}.
     """
-    import json as _json
-    
-    from app.data.rps_paths import resolve_rps_dataset_path
+    import pandas as pd
 
     final_dir = PROJECT_ROOT / "data/derived/datasets/final"
-    history_path = resolve_rps_dataset_path(final_dir, "dataset_stock_rps_history.json")
+    history_path = final_dir / "dataset_stock_rps_history.parquet"
     if not history_path.exists():
         return []
-    
-    all_history = _json.loads(history_path.read_text(encoding="utf-8"))
+    all_history = pd.read_parquet(history_path).to_dict(orient="records")
     
     # Get unique trading days sorted
     trading_days = sorted(set(str(h.get("trading_day", "")) for h in all_history if h.get("trading_day")))
@@ -138,10 +135,8 @@ def _load_past_rps_first_signals(trading_day: str, ndays: int = 60) -> set[tuple
     """
     import pandas as pd
 
-    from app.data.rps_paths import resolve_rps_dataset_path
-
     final_dir = PROJECT_ROOT / "data/derived/datasets/final"
-    parquet_path = resolve_rps_dataset_path(final_dir, "dataset_stock_rps_history.parquet")
+    parquet_path = final_dir / "dataset_stock_rps_history.parquet"
     if not parquet_path.exists():
         return set()
 
@@ -315,7 +310,7 @@ def build_rps_first_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str = ""
             "passed": crossed and is_true_first,
             "conditions": conditions,
             "generated_at": generated_at,
-            "data_source": "tdx_export_qfq+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
+            "data_source": "tdx_export_qfq+dataset_stock_rps_history.parquet+dataset_technical_eval",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))
@@ -406,7 +401,7 @@ def build_rps_first_macd_rows(*, tdxdir: str = DEFAULT_TDX_DIR, trading_day: str
             "passed": is_golden,
             "conditions": conditions,
             "generated_at": generated_at,
-            "data_source": "tdx_export_qfq+dataset_stock_rps_current+dataset_stock_rps_history+dataset_technical_eval",
+            "data_source": "tdx_export_qfq+dataset_stock_rps_history.parquet+dataset_technical_eval",
         })
 
     results.sort(key=lambda item: (not bool(item.get("passed")), item.get("market", ""), item.get("symbol", "")))

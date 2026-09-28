@@ -28,7 +28,7 @@ from app.tdx.qfq_kline import load_tdx_qfq_daily
 TDX_DIR = "/home/lufanfeng/tdx_data"
 DATA_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 OUTPUT = DATA_DIR / "dataset_technical_eval.json"
-RPS_PATH = DATA_DIR / "dataset_stock_rps_history.json"
+RPS_PATH = DATA_DIR / "dataset_stock_rps_history.parquet"
 PCT_PATH = DATA_DIR / "dataset_price_percentile_5y.json"
 
 YEARS = 5
@@ -687,9 +687,8 @@ def main(trading_day: str | None = None):
     # Load RPS data (array of records → dict keyed by symbol)
     rps_data = {}
     if RPS_PATH.is_file():
-        with open(RPS_PATH) as f:
-            raw = json.load(f)
-        if isinstance(raw, list):
+        raw = pd.read_parquet(RPS_PATH).to_dict(orient="records")
+        if raw:
             # Filter by trading_day if specified
             by_symbol: dict[str, list] = {}
             for row in raw:
