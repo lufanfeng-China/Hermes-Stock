@@ -852,7 +852,9 @@ def load_industry_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[di
 
 @lru_cache(maxsize=1)
 def load_rps_rows(dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
-    return _load_json_rows(Path(dataset_dir) / "dataset_stock_rps_current.json")
+    from app.data.rps_paths import resolve_rps_dataset_path
+
+    return _load_json_rows(resolve_rps_dataset_path(Path(dataset_dir), "dataset_stock_rps_current.json"))
 
 
 def load_rps_rows_as_of(as_of_date: str, dataset_dir: str | Path = DEFAULT_DATASET_DIR) -> list[dict[str, object]]:
@@ -861,7 +863,9 @@ def load_rps_rows_as_of(as_of_date: str, dataset_dir: str | Path = DEFAULT_DATAS
     For each (market, symbol), returns the latest record with trading_day <= as_of_date.
     Returns list in the same format as load_rps_rows().
     """
-    history_path = Path(dataset_dir) / "dataset_stock_rps_history.json"
+    from app.data.rps_paths import resolve_rps_dataset_path
+
+    history_path = resolve_rps_dataset_path(Path(dataset_dir), "dataset_stock_rps_history.json")
     if not history_path.exists():
         return load_rps_rows(dataset_dir)
 

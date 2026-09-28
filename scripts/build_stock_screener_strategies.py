@@ -76,7 +76,10 @@ def _compute_past_days_rps(reader, rps_rows, ndays=5, as_of: str = ""):
     """
     import json as _json
     
-    history_path = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.json"
+    from app.data.rps_paths import resolve_rps_dataset_path
+
+    final_dir = PROJECT_ROOT / "data/derived/datasets/final"
+    history_path = resolve_rps_dataset_path(final_dir, "dataset_stock_rps_history.json")
     if not history_path.exists():
         return []
     
@@ -135,7 +138,10 @@ def _load_past_rps_first_signals(trading_day: str, ndays: int = 60) -> set[tuple
     """
     import pandas as pd
 
-    parquet_path = PROJECT_ROOT / "data/derived/datasets/final/dataset_stock_rps_history.parquet"
+    from app.data.rps_paths import resolve_rps_dataset_path
+
+    final_dir = PROJECT_ROOT / "data/derived/datasets/final"
+    parquet_path = resolve_rps_dataset_path(final_dir, "dataset_stock_rps_history.parquet")
     if not parquet_path.exists():
         return set()
 

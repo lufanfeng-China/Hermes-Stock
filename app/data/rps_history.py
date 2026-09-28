@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from app.tdx.kline import infer_market
+from app.data.rps_paths import resolve_rps_dataset_path
 
 DERIVED_FINAL_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "derived" / "datasets" / "final"
 STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.json"
@@ -12,9 +13,10 @@ STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.json"
 @functools.lru_cache(maxsize=1)
 def _load_rps_history_dataset() -> list[dict[str, object]]:
     """Load the precomputed cross-sectional RPS history dataset (cached in memory)."""
-    if not STOCK_RPS_HISTORY_DATASET.exists():
+    dataset_path = resolve_rps_dataset_path(DERIVED_FINAL_DIR, STOCK_RPS_HISTORY_DATASET.name)
+    if not dataset_path.exists():
         return []
-    return json.loads(STOCK_RPS_HISTORY_DATASET.read_text(encoding="utf-8"))
+    return json.loads(dataset_path.read_text(encoding="utf-8"))
 
 
 def load_stock_rps_history(symbol: str) -> dict[str, object]:

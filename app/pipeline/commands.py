@@ -165,21 +165,8 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
         (
-            'build_rps_history',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_rps_history.py'), '--ndays', '120'],
-        ),
-        (
-            'update_rps_current',
-            [TONGDAXIN_PYTHON, '-c',
-             'import json, sys;'
-             'from pathlib import Path;'
-             f'hist_path = Path(r\"{DERIVED_FINAL_DIR}/dataset_stock_rps_history.json\");'
-             f'curr_path = Path(r\"{DERIVED_FINAL_DIR}/dataset_stock_rps_current.json\");'
-             'all_rows = json.loads(hist_path.read_text(encoding=\"utf-8\"));'
-             'latest = max(r[\"trading_day\"] for r in all_rows if r.get(\"trading_day\"));'
-             'current = [r for r in all_rows if r.get(\"trading_day\") == latest];'
-             'curr_path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding=\"utf-8\");'
-             f'print(f\"RPS current updated to {{latest}} ({{len(current)}} rows)\")'],
+            'refresh_rps_daily',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/refresh_rps_daily.py'), '--ndays', '120'],
         ),
         (
             'rebuild_screener_first',
