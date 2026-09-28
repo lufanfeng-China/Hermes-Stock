@@ -95,6 +95,34 @@ class SingleParquetRpsTests(unittest.TestCase):
             finally:
                 rps_history._load_rps_trading_days.cache_clear()
 
+    def test_pipeline_cache_clear_invalidates_cached_symbol_history(self) -> None:
+        from app.data import rps_history
+        from app.pipeline import runner
+
+        with TemporaryDirectory() as temporary_dir:
+            final_dir = Path(temporary_dir)
+            parquet = final_dir / "dataset_stock_rps_history.parquet"
+            rps_history._load_stock_rps_history_dataset.cache_clear()
+            try:
+                pd.DataFrame([rps_row("2026-07-30", "sh", "600001", 80)]).to_parquet(parquet, index=False)
+                with patch.object(rps_history, "DERIVED_FINAL_DIR", final_dir):
+                    self.assertEqual(rps_history.load_stock_rps_history("600001")["history"][-1]["rps_20"], 80)
+                    pd.DataFrame([rps_row("2026-07-31", "sh", "600001", 99)]).to_parquet(parquet, index=False)
+                    runner._clear_rps_cache()
+                    refreshed = rps_history.load_stock_rps_history("600001")
+                self.assertEqual(refreshed["history"][-1]["rps_20"], 99)
+            finally:
+                rps_history._load_stock_rps_history_dataset.cache_clear()
+
+    def test_obsolete_rps_writers_are_retired(self) -> None:
+        scripts_dir = PROJECT_ROOT / "scripts"
+        for name in (
+            "build_rps_history_adaptive.py",
+            "build_rps_history_gapfill_2022.py",
+            "check_and_build_rps_2020.py",
+        ):
+            self.assertFalse((scripts_dir / name).exists(), name)
+
     def test_refresh_atomically_replaces_only_authoritative_parquet(self) -> None:
         refresh = load_refresh_module()
         with TemporaryDirectory() as temporary_dir:

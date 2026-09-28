@@ -19,7 +19,7 @@
 | 数据 | 来源 | 说明 |
 |------|------|------|
 | 日线 OHLCV | 通达信 `vipdoc/*/lday/*.day` | 250 个交易日 |
-| RPS20/50/120/250 | `dataset_stock_rps_history.json` | 已有全市场截面排名 |
+| RPS20/50/120/250 | `dataset_stock_rps_history.parquet` | 唯一权威的全市场截面排名（QFQ） |
 | 5年价格分位 | `dataset_price_percentile_5y.json` | 上一轮刚建的 |
 | 均线 MA20/50/120/250 | 日线 close 计算 | 实时算，不存储 |
 

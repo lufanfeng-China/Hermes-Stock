@@ -13,7 +13,7 @@ from app.pipeline.state import (
 )
 from app.pipeline.commands import _data_update_commands, _latest_trading_day_for_refresh, clear_runtime_data_caches
 
-from app.data.rps_history import _load_rps_history_dataset, _load_rps_trading_days
+from app.data.rps_history import _load_rps_history_dataset, _load_rps_trading_days, _load_stock_rps_history_dataset
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
@@ -102,6 +102,7 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
     clear_runtime_data_caches()
     _load_rps_history_dataset.cache_clear()
     _load_rps_trading_days.cache_clear()
+    _load_stock_rps_history_dataset.cache_clear()
     return {
         'ok': True,
         'steps': steps,
@@ -172,6 +173,7 @@ def start_data_update_job(retry_failed: bool = False) -> dict[str, object]:
 
 # Imported at bottom to avoid circular import
 def _clear_rps_cache():
-    from app.data.rps_history import _load_rps_history_dataset, _load_rps_trading_days
+    from app.data.rps_history import _load_rps_history_dataset, _load_rps_trading_days, _load_stock_rps_history_dataset
     _load_rps_history_dataset.cache_clear()
     _load_rps_trading_days.cache_clear()
+    _load_stock_rps_history_dataset.cache_clear()
