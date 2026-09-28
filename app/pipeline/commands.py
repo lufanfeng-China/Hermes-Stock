@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 from threading import Thread
@@ -74,6 +75,41 @@ def _latest_trading_day_for_refresh() -> str | None:
     return None
 
 
+@lru_cache(maxsize=1)
+def _latest_minute_trading_day() -> str | None:
+    """Return the newest locally available 1-minute date for the archive symbol.
+
+    Daily snapshots can be newer than the locally synced minute files.  The
+    archive requires complete minute bars, so it must not run ahead of this
+    source.
+    """
+    script = (
+        'from mootdx.reader import Reader; '
+        f'r=Reader.factory(market="std", tdxdir=r"{TONGDAXIN_DIR}"); '
+        f'f=r.minute(symbol="{DEFAULT_SYMBOL}", suffix=1); '
+        'print(f.index.max().date().isoformat() if not f.empty else "")'
+    )
+    try:
+        result = subprocess.run(
+            [TONGDAXIN_PYTHON, '-c', script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        latest_day = result.stdout.strip()
+        return latest_day if result.returncode == 0 and latest_day else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def archive_daily_is_ready(trading_day: str | None) -> bool:
+    """Whether local minute data covers the day requested by archive_daily."""
+    latest_minute_day = _latest_minute_trading_day()
+    return bool(trading_day and latest_minute_day and latest_minute_day >= trading_day)
+
+
 def clear_runtime_data_caches() -> None:
     module_names = [
         'app.search.index',
@@ -108,8 +144,9 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         )]
     commands: list[tuple[str, list[str]]] = []
     today = datetime.now().strftime('%Y-%m-%d')
-    # Skip archive_daily when trading day is today — minute data may not yet be synced
-    if trading_day and trading_day != today:
+    # archive_daily needs complete local minute bars; daily snapshots may update
+    # before minute data has been exported/synced from Tongdaxin.
+    if trading_day and trading_day != today and archive_daily_is_ready(trading_day):
         commands.append((
             'archive_daily',
             [

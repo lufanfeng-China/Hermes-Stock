@@ -32,7 +32,7 @@ from app.pipeline.state import (
     _update_data_update_job_state, _append_data_update_job_output,
     _record_data_update_progress, DataUpdateStepError, _format_timestamp,
 )
-from app.pipeline.commands import ensure_stock_screener_strategy_dataset, _latest_trading_day_for_refresh
+from app.pipeline.commands import ensure_stock_screener_strategy_dataset, _latest_trading_day_for_refresh, archive_daily_is_ready, _latest_minute_trading_day
 from app.pipeline.runner import start_data_update_job, run_full_data_update
 from app.industry.templates import _industry_template_tags, _build_industry_valuation_percentile_payload
 
@@ -2379,11 +2379,19 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         today_str = datetime.now().strftime('%Y-%m-%d')
         tasks = []
 
-        if trading_day and trading_day != today_str:
+        if trading_day and trading_day != today_str and archive_daily_is_ready(trading_day):
             tasks.append({
                 'id': 'archive_daily',
                 'name': '归档每日数据',
                 'desc': f'归档交易日 {trading_day} 的日线/分钟线/快照数据',
+            })
+        elif trading_day and trading_day != today_str:
+            latest_minute_day = _latest_minute_trading_day() or '未检测到'
+            tasks.append({
+                'id': 'archive_daily',
+                'name': '归档每日数据（等待分钟数据）',
+                'desc': f'跳过 {trading_day}：本地分钟数据仅到 {latest_minute_day}，同步通达信分钟线后将自动归档',
+                'skipped': True,
             })
         tasks.extend([
             {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
