@@ -78,6 +78,23 @@ class SingleParquetRpsTests(unittest.TestCase):
                 rps_history._load_rps_history_dataset.cache_clear()
             self.assertEqual(payload["history"][0]["rps_20"], 99)
 
+    def test_history_trading_days_are_read_from_authoritative_parquet(self) -> None:
+        from app.data import rps_history
+
+        with TemporaryDirectory() as temporary_dir:
+            final_dir = Path(temporary_dir)
+            pd.DataFrame([
+                rps_row("2026-07-30", "sh", "600001", 80),
+                rps_row("2026-07-31", "sh", "600001", 90),
+                rps_row("2026-07-31", "sz", "000001", 70),
+            ]).to_parquet(final_dir / "dataset_stock_rps_history.parquet", index=False)
+            rps_history._load_rps_trading_days.cache_clear()
+            try:
+                with patch.object(rps_history, "DERIVED_FINAL_DIR", final_dir):
+                    self.assertEqual(rps_history.load_rps_trading_days(), ["2026-07-30", "2026-07-31"])
+            finally:
+                rps_history._load_rps_trading_days.cache_clear()
+
     def test_refresh_atomically_replaces_only_authoritative_parquet(self) -> None:
         refresh = load_refresh_module()
         with TemporaryDirectory() as temporary_dir:

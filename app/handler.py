@@ -22,7 +22,7 @@ from app.config import (
 from app.data.watchlist import _load_watchlist, _save_watchlist
 from app.data.tech_eval import _load_tech_eval, _load_prev_tech_evals
 from app.data.industry_temp import _load_industry_temp
-from app.data.rps_history import load_stock_rps_history, _load_rps_history_dataset
+from app.data.rps_history import load_rps_trading_days, load_stock_rps_history, _load_rps_history_dataset
 from app.tdx.kline import load_stock_history, load_stock_kline, infer_market
 from app.tdx.percentile import compute_stock_price_percentile
 from app.financial.reports import load_recent_three_year_financial_reports
@@ -1816,9 +1816,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
     def handle_rps_trading_days(self) -> None:
         """Return sorted list of unique trading days from RPS history dataset."""
         try:
-            history = _load_rps_history_dataset()
-            days = sorted({str(r.get("trading_day", "")) for r in history if r.get("trading_day")})
-            self.respond_json(HTTPStatus.OK, {"ok": True, "trading_days": days})
+            self.respond_json(HTTPStatus.OK, {"ok": True, "trading_days": load_rps_trading_days()})
         except Exception as exc:
             self.respond_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
