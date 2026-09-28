@@ -33,6 +33,7 @@ MIN_ELIGIBLE_UNIVERSE = 2
 LEGACY_RPS_FILENAMES = (
     "dataset_stock_rps_history.json",
     "dataset_stock_rps_current.json",
+    "dataset_stock_rps_current.parquet",
     "dataset_stock_rps_manifest.json",
 )
 

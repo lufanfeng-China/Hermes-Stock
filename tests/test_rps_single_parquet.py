@@ -177,6 +177,8 @@ class SingleParquetRpsTests(unittest.TestCase):
             pd.DataFrame([rps_row("2026-06-18", "sh", "600001", 10)]).to_parquet(parquet, index=False)
             legacy.write_text(json.dumps([rps_row("2026-07-31", "sh", "600001", 99)]), encoding="utf-8")
             current.write_text("[]", encoding="utf-8")
+            legacy_current_parquet = final_dir / "dataset_stock_rps_current.parquet"
+            legacy_current_parquet.write_bytes(b"obsolete placeholder")
             (final_dir / "rps_generations" / "obsolete").mkdir(parents=True)
 
             summary = refresh.migrate_legacy_history_if_newer(parquet, legacy)
@@ -185,6 +187,7 @@ class SingleParquetRpsTests(unittest.TestCase):
             self.assertEqual(pd.read_parquet(parquet)["trading_day"].tolist(), ["2026-06-18", "2026-07-31"])
             self.assertFalse(legacy.exists())
             self.assertFalse(current.exists())
+            self.assertFalse(legacy_current_parquet.exists())
             self.assertFalse((final_dir / "rps_generations").exists())
 
     def test_one_time_migration_promotes_active_generation_when_top_level_json_is_absent(self) -> None:
