@@ -33,6 +33,12 @@ def _future_high_excluding_signal_day(high: pd.Series, days: int = FUTURE_DAYS) 
     return pd.concat([high.shift(-offset) for offset in range(1, days + 1)], axis=1).max(axis=1)
 
 
+def first_breakout_cross(close: pd.Series, prior_high: pd.Series) -> pd.Series:
+    """True only on the first close crossing a rolling prior-window high."""
+    above = close > prior_high
+    return above & ~above.shift(1, fill_value=False)
+
+
 def compute_confirmation_rows(
     frame: pd.DataFrame, symbol: str, start_day: str, raw_frame: pd.DataFrame | None = None
 ) -> list[dict[str, Any]]:
@@ -63,7 +69,7 @@ def compute_confirmation_rows(
     raw_future_max_return = raw_future_high / raw_entry_open - 1.0
 
     signal = (
-        (bars["close"] > prior_20_high)
+        first_breakout_cross(bars["close"], prior_20_high)
         & (body_ratio >= 0.60)
         & (close_location >= 0.80)
         & (volume_ratio >= 1.50)
@@ -128,7 +134,7 @@ def compute_funnel_counts(frame: pd.DataFrame, raw_frame: pd.DataFrame, start_da
         & (bars.index >= pd.Timestamp(start_day))
     )
     trend = complete_executable & (bars["close"] > ma20) & (ma20 > ma60) & (ma20 > ma20.shift(5))
-    breakout = trend & (bars["close"] > prior_20_high)
+    breakout = trend & first_breakout_cross(bars["close"], prior_20_high)
     strong_candle = breakout & (body_ratio >= 0.60) & (close_location >= 0.80) & (bars["close"] <= ma20 * 1.12)
     volume_confirmed = strong_candle & (volume_ratio >= 1.50) & (volume_ratio <= 3.50)
 

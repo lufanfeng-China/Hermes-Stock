@@ -63,6 +63,12 @@ class PreSurgeConfirmationResearchTests(unittest.TestCase):
         row = next(item for item in rows if item["trading_day"] == "2025-04-09")
         self.assertLess(row["future_20_max_return"], 0.30)
         self.assertFalse(row["is_surge_30pct"])
+    def test_breakout_is_first_cross_not_each_day_above_prior_high(self) -> None:
+        research = load_module()
+        close = pd.Series([9.8, 10.1, 10.3, 9.9, 10.2])
+        prior_high = pd.Series([10.0, 10.0, 10.0, 10.0, 10.0])
+        self.assertEqual(research.first_breakout_cross(close, prior_high).tolist(), [False, True, False, False, True])
+
     def test_funnel_reports_incremental_stages_with_raw_outcomes(self) -> None:
         research = load_module()
         dates = pd.bdate_range("2025-01-01", periods=91)
