@@ -39,8 +39,18 @@ def first_breakout_cross(close: pd.Series, prior_high: pd.Series) -> pd.Series:
     return above & ~above.shift(1, fill_value=False)
 
 
-def compute_confirmation_rows(
-    frame: pd.DataFrame, symbol: str, start_day: str, raw_frame: pd.DataFrame | None = None
+def compact_pb20_mask(events: pd.DataFrame) -> pd.Series:
+    """Frozen compact-pool rule selected in 2025 H1 and checked on later cohorts."""
+    return (
+        (events["breakout_pct"] > 0.02)
+        & (events["ma20_gap"] > 0.30)
+        & (events["volume_ratio"] > 1.00)
+        & (events["volume_ratio"] <= 1.70)
+    )
+
+
+def _compute_rows(
+    frame: pd.DataFrame, symbol: str, start_day: str, raw_frame: pd.DataFrame | None = None, require_confirmation: bool = True
 ) -> list[dict[str, Any]]:
     """Return QFQ T-close signals with raw-price T+1..T+20 research labels."""
     required = {"open", "high", "low", "close", "volume"}
@@ -70,11 +80,6 @@ def compute_confirmation_rows(
 
     signal = (
         first_breakout_cross(bars["close"], prior_20_high)
-        & (body_ratio >= 0.60)
-        & (close_location >= 0.80)
-        & (volume_ratio >= 1.50)
-        & (volume_ratio <= 3.50)
-        & (bars["close"] <= ma20 * 1.12)
         & (bars["close"] > ma20)
         & (ma20 > ma60)
         & (ma20 > ma20.shift(5))
@@ -84,6 +89,14 @@ def compute_confirmation_rows(
         & (raw["volume"].shift(-1) > 0)
         & (bars.index >= pd.Timestamp(start_day))
     )
+    if require_confirmation:
+        signal &= (
+            (body_ratio >= 0.60)
+            & (close_location >= 0.80)
+            & (volume_ratio >= 1.50)
+            & (volume_ratio <= 3.50)
+            & (bars["close"] <= ma20 * 1.12)
+        )
 
     rows: list[dict[str, Any]] = []
     for position in bars.index[signal]:
@@ -109,6 +122,19 @@ def compute_confirmation_rows(
             }
         )
     return rows
+
+
+def compute_confirmation_rows(
+    frame: pd.DataFrame, symbol: str, start_day: str, raw_frame: pd.DataFrame | None = None
+) -> list[dict[str, Any]]:
+    return _compute_rows(frame, symbol, start_day, raw_frame=raw_frame, require_confirmation=True)
+
+
+def compute_pb20_rows(
+    frame: pd.DataFrame, symbol: str, start_day: str, raw_frame: pd.DataFrame | None = None
+) -> list[dict[str, Any]]:
+    """Export every executable first PB20 event, retaining features for OOS filter research."""
+    return _compute_rows(frame, symbol, start_day, raw_frame=raw_frame, require_confirmation=False)
 
 
 def compute_funnel_counts(frame: pd.DataFrame, raw_frame: pd.DataFrame, start_day: str) -> dict[str, dict[str, int]]:
@@ -232,6 +258,7 @@ def main() -> int:
     parser.add_argument("--qfq-export-dir", type=Path, default=TDX_QFQ_EXPORT_DIR)
     parser.add_argument("--tdxdir", default=TONGDAXIN_DIR)
     parser.add_argument("--start", default="2025-01-01")
+    parser.add_argument("--mode", choices=("confirmation", "pb20"), default="confirmation")
     parser.add_argument("--output-dir", type=Path, default=Path("/mnt/c/Users/Sky.Lu/Desktop/output"))
     parser.add_argument("--limit", type=int, default=0, help="Process only first N symbols; 0 means all.")
     args = parser.parse_args()
@@ -249,7 +276,8 @@ def main() -> int:
             raw = reader.daily(symbol)
             if raw is None or raw.empty:
                 raise ValueError("raw daily data is absent")
-            rows.extend(compute_confirmation_rows(qfq, symbol, args.start, raw_frame=raw))
+            row_builder = compute_pb20_rows if args.mode == "pb20" else compute_confirmation_rows
+            rows.extend(row_builder(qfq, symbol, args.start, raw_frame=raw))
             for name, values in compute_funnel_counts(qfq, raw_frame=raw, start_day=args.start).items():
                 funnel[name]["candidates"] += values["candidates"]
                 funnel[name]["surges"] += values["surges"]
@@ -260,7 +288,7 @@ def main() -> int:
 
     summary = _summary(rows, len(symbols), failures, funnel)
     stamp = date.today().strftime("%Y%m%d")
-    stem = f"暴涨前确认K线_QFQ研究_{args.start}_至当前_{stamp}"
+    stem = f"暴涨前确认K线_{args.mode}_{args.start}_至当前_{stamp}"
     json_path = versioned_output_path(args.output_dir, stem, ".json")
     json_path.write_text(json.dumps({"summary": summary, "candidates": rows}, ensure_ascii=False, indent=2), encoding="utf-8")
     report_path = versioned_output_path(args.output_dir, stem, ".txt")

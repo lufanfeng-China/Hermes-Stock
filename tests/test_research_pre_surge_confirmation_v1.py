@@ -63,6 +63,35 @@ class PreSurgeConfirmationResearchTests(unittest.TestCase):
         row = next(item for item in rows if item["trading_day"] == "2025-04-09")
         self.assertLess(row["future_20_max_return"], 0.30)
         self.assertFalse(row["is_surge_30pct"])
+    def test_compact_pb20_rule_has_strict_boundaries(self) -> None:
+        research = load_module()
+        frame = pd.DataFrame(
+            {
+                "breakout_pct": [0.0200, 0.0201, 0.0201, 0.06, 0.06],
+                "ma20_gap": [0.31, 0.26, 0.3001, 0.3001, 0.32],
+                "volume_ratio": [1.20, 1.20, 1.20, 1.00, 1.70],
+            }
+        )
+        self.assertEqual(research.compact_pb20_mask(frame).tolist(), [False, False, True, False, True])
+
+    def test_pb20_export_keeps_first_breakout_without_volume_confirmation(self) -> None:
+        research = load_module()
+        dates = pd.bdate_range("2025-01-01", periods=91)
+        close = np.full(91, 9.0)
+        close[50:70] = np.linspace(9.6, 10.0, 20)
+        close[70] = 10.9
+        signal = pd.DataFrame(
+            {"open": 10.0, "high": 10.1, "low": 9.9, "close": close, "volume": 100.0}, index=dates
+        )
+        signal.loc[dates[70], ["open", "high", "low", "close", "volume"]] = [10.0, 11.1, 9.9, 10.9, 120.0]
+        raw = signal.copy()
+        raw.loc[dates[71:91], "high"] = 14.0
+
+        rows = research.compute_pb20_rows(signal, "000001", "2025-01-01", raw_frame=raw)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["trading_day"], "2025-04-09")
+        self.assertLess(rows[0]["volume_ratio"], 1.5)
+
     def test_breakout_is_first_cross_not_each_day_above_prior_high(self) -> None:
         research = load_module()
         close = pd.Series([9.8, 10.1, 10.3, 9.9, 10.2])
