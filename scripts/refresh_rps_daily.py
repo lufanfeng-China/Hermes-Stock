@@ -73,6 +73,14 @@ def reference_qfq_calendar(
     return dates
 
 
+def publishable_reference_dates(reference_dates: list[str], raw_latest_day: str) -> list[str]:
+    """Cap QFQ-derived signals at the latest raw day eligible for publication."""
+    dates = [day for day in reference_dates if day <= raw_latest_day]
+    if not dates:
+        raise QfqCoverageError(f"No QFQ reference dates are publishable through raw latest trading day {raw_latest_day}")
+    return dates
+
+
 def _market_for_export(path: Path) -> str:
     prefix = path.name.split("#", 1)[0].lower()
     return {"sh": "sh", "sz": "sz", "bj": "bj"}.get(prefix, prefix)
@@ -303,10 +311,11 @@ def main() -> int:
             return 0
         raw_latest = _latest_raw_trading_day(args.tdxdir, args.reference_symbol)
         qfq_series = load_qfq_series(Path(args.qfq_export_dir))
-        reference_dates = reference_qfq_calendar(qfq_series, args.reference_symbol, raw_latest)
+        source_reference_dates = reference_qfq_calendar(qfq_series, args.reference_symbol, raw_latest)
+        reference_dates = publishable_reference_dates(source_reference_dates, raw_latest)
         target_dates = reference_dates[-max(1, args.ndays):]
         summary = refresh_from_computed_rows(compute_rps_rows(qfq_series, args.ndays, reference_dates), history_parquet, eligible_universe_by_day(qfq_series, target_dates))
-        summary.update({"raw_latest_trading_day": raw_latest, "qfq_latest_trading_day": reference_dates[-1], "legacy_migration": migration})
+        summary.update({"raw_latest_trading_day": raw_latest, "qfq_latest_trading_day": source_reference_dates[-1], "published_through_trading_day": reference_dates[-1], "legacy_migration": migration})
         print(json.dumps(summary, ensure_ascii=False))
         return 0
     except Exception as exc:

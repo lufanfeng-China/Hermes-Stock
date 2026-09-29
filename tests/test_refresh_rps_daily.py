@@ -43,6 +43,13 @@ class RefreshRpsDailyTests(unittest.TestCase):
         with self.assertRaisesRegex(refresh.QfqCoverageError, r"eligible universe.*at least 2"):
             refresh.compute_rps_rows(series, 1, dates)
 
+    def test_refresh_caps_reference_calendar_at_latest_raw_day(self) -> None:
+        refresh = load_refresh_module()
+        self.assertEqual(
+            refresh.publishable_reference_dates(["2026-09-23", "2026-09-24", "2026-09-25"], "2026-09-24"),
+            ["2026-09-23", "2026-09-24"],
+        )
+
     def test_daily_pipeline_uses_single_rps_refresh_command(self) -> None:
         from app.pipeline.commands import _data_update_commands
         commands = dict(_data_update_commands(trading_day=None))
