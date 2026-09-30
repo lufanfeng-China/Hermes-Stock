@@ -43,9 +43,10 @@ def compact_pb20_mask(events: pd.DataFrame) -> pd.Series:
     """Frozen compact-pool rule selected in 2025 H1 and checked on later cohorts."""
     return (
         (events["breakout_pct"] > 0.02)
-        & (events["ma20_gap"] > 0.30)
-        & (events["volume_ratio"] > 1.00)
+        & (events["ma20_gap"] > 0.35)
+        & (events["volume_ratio"] > 0.80)
         & (events["volume_ratio"] <= 1.70)
+        & (events["body_ratio"] > 0.60)
     )
 
 

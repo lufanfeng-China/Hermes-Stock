@@ -67,12 +67,13 @@ class PreSurgeConfirmationResearchTests(unittest.TestCase):
         research = load_module()
         frame = pd.DataFrame(
             {
-                "breakout_pct": [0.0200, 0.0201, 0.0201, 0.06, 0.06],
-                "ma20_gap": [0.31, 0.26, 0.3001, 0.3001, 0.32],
-                "volume_ratio": [1.20, 1.20, 1.20, 1.00, 1.70],
+                "breakout_pct": [0.0200, 0.0201, 0.0201, 0.0201, 0.06],
+                "ma20_gap": [0.40, 0.34, 0.3501, 0.3501, 0.36],
+                "volume_ratio": [1.20, 1.20, 0.80, 0.8001, 1.70],
+                "body_ratio": [0.80, 0.80, 0.80, 0.60, 0.6001],
             }
         )
-        self.assertEqual(research.compact_pb20_mask(frame).tolist(), [False, False, True, False, True])
+        self.assertEqual(research.compact_pb20_mask(frame).tolist(), [False, False, False, False, True])
 
     def test_pb20_export_keeps_first_breakout_without_volume_confirmation(self) -> None:
         research = load_module()
