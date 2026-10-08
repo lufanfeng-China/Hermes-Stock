@@ -8,12 +8,25 @@
 </head>
 <body>
   <main class="app-shell stock-score-shell">
-    <form class="search-form stock-score-search-form" onsubmit="return false;">
-      <div class="search-input-wrap">
-        <input type="text" id="stock-input" placeholder="600519 / sh:600519 / 贵州茅台" autocomplete="off">
-        <div class="search-dropdown" id="stock-dropdown"></div>
-      </div>
-    </form>
+    <header class="topbar">
+      <form class="search-form stock-score-search-form" onsubmit="return false;">
+        <div class="search-input-wrap">
+          <input type="text" id="stock-input" placeholder="600519 / sh:600519 / 贵州茅台" autocomplete="off">
+          <div class="search-dropdown" id="stock-dropdown"></div>
+        </div>
+      </form>
+      <nav class="topbar-actions" aria-label="主菜单">
+        <a href="/rps-pool.html" class="nav-link stock-score-topbar-action">RPS</a>
+        <a href="/stock-score.html" class="nav-link stock-score-topbar-action">财务评分</a>
+        <a href="/stock-analysis.html" class="nav-link stock-score-topbar-action active">股票分析</a>
+        <a href="/stock-screener.html" class="nav-link stock-score-topbar-action">股票筛选</a>
+        <a href="/financial-report.html" class="nav-link stock-score-topbar-action">财报分析</a>
+        <a href="/macd-extreme-gc.html" class="nav-link stock-score-topbar-action">极值金叉</a>
+        <a href="/watchlist.html" class="nav-link stock-score-topbar-action">自选股</a>
+        <a href="/bottleneck.html" class="nav-link stock-score-topbar-action">瓶颈股发现</a>
+        <a href="/data-update.html" class="nav-link stock-score-topbar-action">数据更新</a>
+      </nav>
+    </header>
   </main>
 </body>
 </html>
