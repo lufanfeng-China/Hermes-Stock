@@ -2,6 +2,7 @@
 (function () {
   const PAGES = [
     { href: '/stock-score.html', label: '财务评分' },
+    { href: '/stock-analysis.html', label: '股票分析' },
     { href: '/stock-screener-v2.html', label: '股票筛选' },
     { href: '/financial-report.html', label: '财报分析' },
     { href: '/rps-pool.html', label: 'RPS' },
