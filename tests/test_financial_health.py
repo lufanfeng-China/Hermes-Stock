@@ -35,6 +35,24 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_loss_narrowing_does_not_trigger_profit_decline_red_flag(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=value, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=5, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, value in enumerate([-80, -70, -60, -50, -40])]
+        health = build_financial_health(reports)
+        self.assertEqual(health['derived']['ex_net_profit_path'], 'loss_narrowing')
+        self.assertNotIn('revenue_up_ex_profit_down', [item['code'] for item in health['red_flags']])
+
+    def test_zero_comparison_base_marks_red_flag_rule_unavailable(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=5, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i in range(5)]
+        reports[-2]['metrics']['revenue'] = 0
+        health = build_financial_health(reports)
+        self.assertIn('revenue_up_ex_profit_down', health['red_flag_coverage']['unavailable'])
+
+    def test_missing_capex_or_debt_makes_capital_leverage_conclusion_insufficient(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=5, debt_ratio=None, accounts_receivable=10, inventory=10, capex=None, goodwill=0, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        conclusion = next(item for item in health['conclusions'] if item['code'] == 'capital_leverage')
+        self.assertEqual(conclusion['status'], 'insufficient')
+
     def test_builds_six_framework_conclusions(self):
         reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 3, ocf=15 + i * 4, free_cf=8 + i * 2, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=50 - i, accounts_receivable=10 + i, inventory=12 + i, capex=4 + i, goodwill=0, equity=60 + i, total_assets=100 + i * 10) for i in range(5)]
         health = build_financial_health(reports)

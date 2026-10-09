@@ -308,10 +308,11 @@ def build_financial_health(
     result["investigation_items"] = investigations
 
     flags: list[dict[str, str]] = []
-    if revenue_growth is not None and revenue_growth > 0 and _growth(values["ex_net_profit"][-2], values["ex_net_profit"][-1]) is not None and _growth(values["ex_net_profit"][-2], values["ex_net_profit"][-1]) < 0:
-        flags.append(_flag("revenue_up_ex_profit_down", "营收增长但扣非归母净利润下降", f"最新年度营收同比 {revenue_growth:.1f}%，扣非归母净利润同比下降。"))
     ex_growth = _growth(values["ex_net_profit"][-2], values["ex_net_profit"][-1])
     ocf_growth = _growth(values["ocf"][-2], values["ocf"][-1])
+    profit_declined = (values["ex_net_profit"][-2] is not None and values["ex_net_profit"][-1] is not None and values["ex_net_profit"][-1] < values["ex_net_profit"][-2])
+    if revenue_growth is not None and revenue_growth > 0 and profit_declined:
+        flags.append(_flag("revenue_up_ex_profit_down", "营收增长但扣非归母净利润下降", f"最新年度营收同比 {revenue_growth:.1f}%，扣非归母净利润绝对额下降。"))
     if ex_growth is not None and ex_growth > 0 and ocf_growth is not None and ocf_growth < 0:
         flags.append(_flag("ex_profit_up_ocf_down", "扣非归母净利润增长但 CFO 下降", f"扣非归母净利润同比 {ex_growth:.1f}%，CFO 同比 {ocf_growth:.1f}%。"))
     if receivable_gap is not None and receivable_gap > 15:
@@ -348,7 +349,19 @@ def build_financial_health(
         "fcf_two_year_negative": values["free_cf"][-2:],
         "goodwill_up_profit_not": values["goodwill"][-2:] + values["ex_net_profit"][-2:],
     }
-    unavailable = [code for code, inputs in rule_inputs.items() if any(value is None for value in inputs)]
+    rule_available = {
+        "revenue_up_ex_profit_down": revenue_growth is not None and all(value is not None for value in values["ex_net_profit"][-2:]),
+        "ex_profit_up_ocf_down": ex_growth is not None and ocf_growth is not None,
+        "receivables_growth_gap": receivable_gap is not None,
+        "inventory_growth_gap": inventory_gap is not None,
+        "gross_margin_two_year_decline": all(value is not None for value in values["gross_margin"][-3:]),
+        "roe_ex_decline": all(value is not None for value in values["roe_ex"][-3:]),
+        "debt_ratio_rising": all(value is not None for value in values["debt_ratio"][-3:]),
+        "capex_up_revenue_growth_down": all(value is not None for value in recent_capex) and all(value is not None for value in recent_revenue_growths),
+        "fcf_two_year_negative": all(value is not None for value in values["free_cf"][-2:]),
+        "goodwill_up_profit_not": goodwill_growth is not None and ex_growth is not None,
+    }
+    unavailable = [code for code, available in rule_available.items() if not available]
     result["red_flag_coverage"] = {"evaluated": 10 - len(unavailable), "total": 10, "unavailable": unavailable}
     def conclusion(code: str, question: str, status: str, detail: str) -> dict[str, str]:
         return {"code": code, "question": question, "status": status, "detail": detail}
@@ -356,7 +369,8 @@ def build_financial_health(
     profitability_status = "improving" if all(value is not None and value >= 0 for value in profit_metrics[:2]) and profit_metrics[2] == "up" else "watch" if any(value is None or value < 0 for value in profit_metrics[:2]) or profit_metrics[2] == "down" else "stable"
     cash_status = "improving" if cash_profit_ratio is not None and cash_profit_ratio >= .8 and fcf_margin is not None and fcf_margin >= 0 else "watch" if cash_profit_ratio is None or fcf_margin is None or cash_profit_ratio < .5 or fcf_margin < 0 else "stable"
     working_status = "watch" if (receivable_gap is not None and receivable_gap > 15) or (inventory_gap is not None and inventory_gap > 15) else "insufficient" if receivable_gap is None or inventory_gap is None else "stable"
-    leverage_status = "watch" if (capex_intensities[-1] is not None and capex_intensities[0] is not None and capex_intensities[-1] > capex_intensities[0] and debt_change is not None and debt_change > 3) else "stable"
+    leverage_inputs_available = all(value is not None for value in capex_intensities) and debt_change is not None and all(value is not None for value in fcf_margins) and all(value is not None for value in revenue_growths)
+    leverage_status = "insufficient" if not leverage_inputs_available else "watch" if (capex_intensities[-1] > capex_intensities[0] and debt_change > 3 and _series_trend(revenue_growths, 1) == "down") else "improving" if (capex_intensities[-1] <= capex_intensities[0] and debt_change <= 0 and _series_trend(fcf_margins) == "up") else "stable"
     result["conclusions"] = [
         conclusion("growth", "过去五年是否持续增长？", "improving" if revenue_cagr is not None and revenue_cagr > 0 and ex_profit_path == "profitable" else "watch" if revenue_cagr is not None else "insufficient", f"营收 CAGR {revenue_cagr:.1f}%；扣非利润路径：{ex_profit_path}。" if revenue_cagr is not None else "缺少可比增长数据。"),
         conclusion("profit_premium", "利润增长是否快于收入增长？", "improving" if premium is not None and premium > 0 else "watch" if premium is not None else "insufficient", f"利润增长溢价 {premium:.1f}pct。" if premium is not None else "扣非利润 CAGR 不适用或数据不足。"),

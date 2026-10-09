@@ -243,8 +243,10 @@
       const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
       renderFinancialHealth(payload.health);
-      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, payload.reports, metric, variant, display);
-      renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue');
+      const annualPeriods = new Set(payload.health?.periods || []);
+      const evidenceReports = annualPeriods.size ? payload.reports.filter((row) => annualPeriods.has(String(row.period))) : payload.reports;
+      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, evidenceReports, metric, variant, display);
+      renderYoYGrowthBars('revenue-growth-chart', evidenceReports, 'revenue');
     } catch (error) {
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
