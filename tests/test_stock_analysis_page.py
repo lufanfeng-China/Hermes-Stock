@@ -14,7 +14,7 @@ class StockAnalysisPageTests(unittest.TestCase):
             ("毛利率", "gross-margin-chart"), ("净利率", "net-margin-chart"),
             ("扣非ROE", "roe-ex-chart"), ("资产负债率", "debt-ratio-chart"),
             ("经营现金流", "ocf-chart"), ("自由现金流", "free-cf-chart"),
-            ("固定资产投资", "capex-chart"), ("商誉", "goodwill-chart"),
+            ("资本开支（CapEx）", "capex-chart"), ("商誉", "goodwill-chart"),
             ("应收账款", "accounts-receivable-chart"), ("库存", "inventory-chart"),
         ]
         self.assertEqual(html.count('<article class="analysis-metric-card">'), 14)
@@ -41,6 +41,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('not_applicable', js)
         self.assertIn('annual_reports_not_contiguous', js)
         self.assertIn('red_flags', js)
+        for token in ('health-red-flag-panel', 'health-investigation-panel', 'health-unavailable-panel', 'health-series', 'rule_results', 'score_breakdown', '资本开支（CapEx）'):
+            self.assertIn(token, html if token.startswith('health-') or token == '资本开支（CapEx）' else js)
 
     def test_chart_configuration_has_all_requested_data_fields_and_units(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
