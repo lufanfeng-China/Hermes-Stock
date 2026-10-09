@@ -112,15 +112,15 @@
     const max = Math.max(0, ...numeric);
     const range = Math.max(max - min, 1);
     const zero = max / range * 100;
-    const isGrowth = variant === 'growth';
+    const needsZeroAxis = variant === 'growth' || numeric.some((value) => value < 0);
     target.className = 'analysis-bar-chart';
     target.innerHTML = rows.map((row, index) => {
       const value = values[index];
       const label = Number.isFinite(value) ? formatter(value) : '—';
-      if (isGrowth) {
+      if (needsZeroAxis) {
         const direction = value < 0 ? 'negative' : 'positive';
         const barSize = Number.isFinite(value) ? Math.max(3, Math.abs(value) / range * 100) : 3;
-        return `<div class="analysis-bar-item analysis-growth-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar-plot" style="--zero:${zero}%"><span class="analysis-zero-axis"></span><div class="analysis-bar growth ${direction}" style="--bar-size:${barSize}%"></div></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
+        return `<div class="analysis-bar-item analysis-growth-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar-plot" style="--zero:${zero}%"><span class="analysis-zero-axis"></span><div class="analysis-bar zero-axis ${variant} ${direction}" style="--bar-size:${barSize}%"></div></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
       }
       const height = Number.isFinite(value) ? Math.max(3, Math.abs(value) / maxAbs * 100) : 3;
       return `<div class="analysis-bar-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar ${variant}" style="height:${height}%"></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;

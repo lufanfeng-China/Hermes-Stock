@@ -25,6 +25,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertNotIn('归母净利润增速', html)
         self.assertNotIn('净利润增速', html)
+        self.assertIn('.analysis-bar.zero-axis.negative', html)
+        self.assertIn('#70d6a8', html)
 
     def test_chart_configuration_has_all_requested_data_fields_and_units(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -39,6 +41,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         ):
             self.assertIn(f"['{chart_id}', '{field}'", js)
         self.assertIn("renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue')", js)
+        self.assertIn("const needsZeroAxis = variant === 'growth' || numeric.some((value) => value < 0);", js)
+        self.assertIn('analysis-bar zero-axis ${variant} ${direction}', js)
         self.assertIn("display === 'percent'", js)
 
     def test_financial_report_materializes_requested_data_and_same_period_cashflow(self):
