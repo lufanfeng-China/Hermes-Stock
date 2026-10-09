@@ -160,6 +160,44 @@
     return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}${suffix}` : '—';
   }
 
+  function healthEvidenceList(items, emptyMessage) {
+    return items.length
+      ? `<ul>${items.map((item) => `<li><strong>${escapeHTML(item.title || item.code || '未命名规则')}</strong>${item.detail || item.reason ? `：${escapeHTML(item.detail || item.reason)}` : ''}</li>`).join('')}</ul>`
+      : `<p class="health-evidence-empty">${escapeHTML(emptyMessage)}</p>`;
+  }
+
+  function renderHealthEvidencePanels(health) {
+    const redPanel = document.getElementById('health-red-flag-panel');
+    const investigationPanel = document.getElementById('health-investigation-panel');
+    const unavailablePanel = document.getElementById('health-unavailable-panel');
+    const coverageDisclosure = document.getElementById('health-coverage-disclosure');
+    const coverageInfo = health?.red_flag_coverage || {};
+    const rules = health?.rule_results || [];
+    const scoreBreakdown = health?.score_breakdown || [];
+    const unavailable = [
+      ...rules.filter((item) => item.status === 'unavailable').map((item) => ({ code: item.code, title: item.code, reason: item.reason || '比较数据不可用' })),
+      ...scoreBreakdown.filter((item) => item.available === false).map((item) => ({ code: `score-${item.code}`, title: item.title, reason: item.reason || '评分所需指标不可用' })),
+    ];
+    redPanel.innerHTML = healthEvidenceList(health?.red_flags || [], '未触发红旗规则。');
+    investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
+    unavailablePanel.innerHTML = healthEvidenceList(unavailable, '全部红旗规则及评分维度均有可用数据。');
+    coverageDisclosure.textContent = `红旗规则覆盖度：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
+  }
+
+  function renderHealthSeries(health) {
+    const target = document.getElementById('health-series');
+    const series = health?.series || {};
+    const years = series.years || [];
+    const rows = [
+      ['现金利润比', 'annual_cash_profit_ratio', ''], ['FCF Margin', 'fcf_margin', '%'],
+      ['应收增速差', 'receivable_growth_gap', 'pct'], ['存货增速差', 'inventory_growth_gap', 'pct'],
+      ['CapEx 强度', 'capex_intensity', '%'], ['扣非 ROE', 'roe_ex', '%'],
+      ['资产负债率', 'debt_ratio', '%'], ['商誉 / 权益', 'goodwill_equity_ratio', '%'],
+    ];
+    if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
+    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix]) => `<tr><th>${label}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+
   function renderFinancialHealth(health) {
     const period = document.getElementById('health-period');
     const score = document.getElementById('health-score');
@@ -167,25 +205,24 @@
     const coverage = document.getElementById('health-coverage');
     const dimensions = document.getElementById('health-dimensions');
     const derived = document.getElementById('health-derived');
-    const flagDetail = document.getElementById('health-flag-detail');
     const conclusionPanel = document.getElementById('health-conclusions');
     if (!health) {
       period.textContent = '需要最近五个完整年度的财报数据';
       score.innerHTML = '数据不足 <small>/ 100</small>';
-      flags.textContent = '—'; coverage.textContent = '—'; derived.textContent = '暂无可用 KPI 数据'; flagDetail.textContent = '数据不足，暂不生成红旗。'; return;
+      flags.textContent = '—'; coverage.textContent = '—'; derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(null); conclusionPanel.textContent = '暂无可用结论。'; return;
     }
     if (health.status === 'not_applicable') {
       const industry = [health?.industry?.level_1, health?.industry?.level_2].filter(Boolean).join(' · ');
       period.textContent = industry ? `行业：${industry}` : '行业适用性检查';
       score.innerHTML = '不适用 <small>通用规则</small>';
       flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '该行业须使用专用财务指标和阈值。';
-      flagDetail.className = 'health-clean'; flagDetail.textContent = health.reason || '银行、保险、证券及房地产不适用通用工商企业健康度评分。'; return;
+      renderHealthSeries(null); renderHealthEvidencePanels(null); conclusionPanel.textContent = health.reason || '银行、保险、证券及房地产不适用通用工商企业健康度评分。'; return;
     }
     if (!Array.isArray(health.periods) || health.periods.length < 5 || health.status === 'insufficient_data') {
       const reason = health.reason === 'annual_reports_not_contiguous' ? '最近五个年报不连续，不能按五年口径计算。' : '需要最近五个连续完整年度的财报数据。';
       period.textContent = reason;
       score.innerHTML = '数据不足 <small>/ 100</small>';
-      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '暂无可用 KPI 数据'; flagDetail.textContent = '数据不足，暂不生成红旗。'; return;
+      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(null); conclusionPanel.textContent = '暂无可用结论。'; return;
     }
     period.textContent = `计算区间：${health.periods.join(' / ')}`;
     score.innerHTML = `${healthValue(health.score)} <small>/ 100</small>`;
@@ -201,13 +238,8 @@
       ['FCF Margin', d.fcf_margin, '%'], ['应收增速差', d.receivable_growth_gap, 'pct'], ['存货增速差', d.inventory_growth_gap, 'pct'], ['CapEx 强度', d.capex_intensity, '%'], ['商誉 / 权益', d.goodwill_equity_ratio, '%'], ['商誉 / 资产', d.goodwill_assets_ratio, '%'],
     ];
     derived.innerHTML = fields.map(([label, value, suffix]) => `<div class="health-derived-item"><span class="health-derived-label">${label}</span><strong class="health-derived-value">${healthValue(value, suffix)}</strong></div>`).join('');
-    const redFlags = health.red_flags || [];
-    const coverageInfo = health.red_flag_coverage || {};
-    const investigations = health.investigation_items || [];
-    const notices = [...investigations, ...redFlags];
-    flagDetail.className = notices.length ? '' : 'health-clean';
-    const coverageText = `红旗规则覆盖：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}`;
-    flagDetail.innerHTML = notices.length ? `<p class="health-coverage-note">${coverageText}</p><ul class="health-flag-list">${notices.map((item) => `<li><strong>${escapeHTML(item.title)}</strong>：${escapeHTML(item.detail)}</li>`).join('')}</ul>` : `${coverageText}；未触发财务红旗。`;
+    renderHealthSeries(health);
+    renderHealthEvidencePanels(health);
     const conclusionLabel = { improving: '改善', stable: '平稳', watch: '需关注', insufficient: '数据不足' };
     conclusionPanel.innerHTML = (health.conclusions || []).map((item) => `<article class="health-conclusion ${escapeHTML(item.status)}"><strong>${escapeHTML(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHTML(item.detail)}</p></article>`).join('') || '暂无可用结论。';
   }
