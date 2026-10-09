@@ -339,8 +339,10 @@ def build_financial_health(
         flags.append(_flag("gross_margin_two_year_decline", "毛利率连续两年下降", "最新三个完整年度毛利率连续下降。"))
     if all(a is not None and b is not None and a > b for a, b in zip(values["roe_ex"][-3:], values["roe_ex"][-2:])):
         flags.append(_flag("roe_ex_decline", "扣非 ROE 连续下降", "最新三个完整年度扣非 ROE 连续下降。"))
-    if all(a is not None and b is not None and a < b for a, b in zip(values["debt_ratio"][-3:], values["debt_ratio"][-2:])):
-        flags.append(_flag("debt_ratio_rising", "资产负债率连续上升", "最新三个完整年度资产负债率连续上升。"))
+    recent_debt = values["debt_ratio"][-3:]
+    if (all(a is not None and b is not None and a < b for a, b in zip(recent_debt, recent_debt[1:]))
+            and recent_debt[0] is not None and recent_debt[-1] is not None and recent_debt[-1] - recent_debt[0] >= 3):
+        flags.append(_flag("debt_ratio_rising", "资产负债率连续明显上升", f"最新三个完整年度资产负债率连续上升，累计增加 {recent_debt[-1] - recent_debt[0]:.1f}pct（筛查阈值 3pct）。"))
     recent_capex = values["capex"][-3:]
     recent_revenue_growths = revenue_growths[-3:]
     if (all(a is not None and b is not None and a < b for a, b in zip(recent_capex, recent_capex[1:]))

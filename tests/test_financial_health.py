@@ -35,6 +35,11 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_debt_red_flag_requires_material_cumulative_rise(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40 + i * .1, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertNotIn('debt_ratio_rising', [item['code'] for item in health['red_flags']])
+
     def test_deteriorating_cash_reinvestment_and_risk_trends_reduce_dimension_scores(self):
         stable = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=15 + i, free_cf=10 + i, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=60, total_assets=100) for i in range(5)]
         worsening = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=20 - i * 3, free_cf=15 - i * 5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=35 + i * 4, accounts_receivable=10 + i * 5, inventory=10 + i * 5, capex=3 + i * 3, goodwill=i * 3, equity=60, total_assets=100) for i in range(5)]
