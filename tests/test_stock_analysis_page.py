@@ -33,6 +33,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('years: int = 3', source)
         self.assertIn('if not 1 <= years <= 5', source)
         self.assertIn('latest_year - years + 1', source)
+        self.assertIn('其中：营业收入', source)
+        self.assertIn('营业收入"))', source)
 
 
 if __name__ == '__main__':

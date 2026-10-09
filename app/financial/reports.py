@@ -132,8 +132,14 @@ def _extract_period_quarter(period_label: str) -> str:
 def _materialize_financial_report(search_index, seed: dict[str, object]) -> dict[str, object]:
     matched_row = seed.get("row")
     derived = search_index._derive_sub_fields(matched_row, None)
+    # TDX exposes ``营业收入`` as a period-only value in some reports (notably Q4),
+    # while ``其中：营业收入`` is the cumulative statutory line comparable across years.
+    getter = getattr(matched_row, "get", lambda _key: None)
+    revenue = search_index._pick(getter("其中：营业收入"))
+    if revenue is None:
+        revenue = search_index._pick(getter("营业收入"))
     metrics = {
-        "revenue": search_index._pick(matched_row.get("营业收入")),
+        "revenue": revenue,
         "net_profit": search_index._pick(matched_row.get("归属于母公司所有者的净利润")),
         "ex_net_profit": search_index._pick(matched_row.get("扣除非经常性损益后的净利润")),
         "ocf": search_index._pick(matched_row.get("经营活动产生的现金流量净额")),
