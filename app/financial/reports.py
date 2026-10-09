@@ -93,6 +93,19 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
     reports = [_materialize_financial_report(search_index, row) for row in filtered_rows]
     reports.sort(key=lambda row: str(row.get("report_date") or ""))
     latest_report = reports[-1] if reports else None
+    industry_row = next(
+        (row for row in search_index.load_industry_rows() if str(row.get("market") or "").lower() == market and str(row.get("symbol") or "").zfill(6) == symbol),
+        {},
+    )
+    industry = {
+        "level_1": str(industry_row.get("industry_level_1_name") or "").strip() or None,
+        "level_2": str(industry_row.get("industry_level_2_name") or "").strip() or None,
+    }
+    health = build_financial_health(
+        reports,
+        industry_level_1=industry["level_1"],
+        industry_level_2=industry["level_2"],
+    )
 
     return {
         "ok": True,
@@ -102,7 +115,8 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "latest_report": latest_report,
         "latest_period_label": latest_period_label,
         "reports": reports,
-        "health": build_financial_health(reports),
+        "industry": industry,
+        "health": health,
     }
 
 

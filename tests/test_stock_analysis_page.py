@@ -38,6 +38,8 @@ class StockAnalysisPageTests(unittest.TestCase):
             self.assertIn(label, html)
         self.assertIn('renderFinancialHealth(payload.health)', js)
         self.assertIn('five_year_cash_profit_ratio', js)
+        self.assertIn('not_applicable', js)
+        self.assertIn('annual_reports_not_contiguous', js)
         self.assertIn('red_flags', js)
 
     def test_chart_configuration_has_all_requested_data_fields_and_units(self):

@@ -168,10 +168,23 @@
     const dimensions = document.getElementById('health-dimensions');
     const derived = document.getElementById('health-derived');
     const flagDetail = document.getElementById('health-flag-detail');
-    if (!health || !Array.isArray(health.periods) || health.periods.length < 5) {
+    if (!health) {
       period.textContent = '需要最近五个完整年度的财报数据';
       score.innerHTML = '数据不足 <small>/ 100</small>';
       flags.textContent = '—'; coverage.textContent = '—'; derived.textContent = '暂无可用 KPI 数据'; flagDetail.textContent = '数据不足，暂不生成红旗。'; return;
+    }
+    if (health.status === 'not_applicable') {
+      const industry = [health?.industry?.level_1, health?.industry?.level_2].filter(Boolean).join(' · ');
+      period.textContent = industry ? `行业：${industry}` : '行业适用性检查';
+      score.innerHTML = '不适用 <small>通用规则</small>';
+      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '该行业须使用专用财务指标和阈值。';
+      flagDetail.className = 'health-clean'; flagDetail.textContent = health.reason || '银行、保险、证券及房地产不适用通用工商企业健康度评分。'; return;
+    }
+    if (!Array.isArray(health.periods) || health.periods.length < 5 || health.status === 'insufficient_data') {
+      const reason = health.reason === 'annual_reports_not_contiguous' ? '最近五个年报不连续，不能按五年口径计算。' : '需要最近五个连续完整年度的财报数据。';
+      period.textContent = reason;
+      score.innerHTML = '数据不足 <small>/ 100</small>';
+      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '暂无可用 KPI 数据'; flagDetail.textContent = '数据不足，暂不生成红旗。'; return;
     }
     period.textContent = `计算区间：${health.periods.join(' / ')}`;
     score.innerHTML = `${healthValue(health.score)} <small>/ 100</small>`;

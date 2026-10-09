@@ -18,6 +18,10 @@ DIMENSIONS = (
     ("financial_risk", "财务风险", 15),
 )
 
+# The framework covers general industrial and commercial companies.  These Shenwan
+# level-1 groups need their own capital, leverage and cash-flow definitions.
+SPECIAL_INDUSTRY_L1 = frozenset({"银行", "非银金融", "房地产"})
+
 
 def _number(value: Any) -> float | None:
     try:
@@ -47,10 +51,23 @@ def _sum(values: list[float | None]) -> float | None:
     return sum(values) if values and all(value is not None for value in values) else None
 
 
+def _annual_year(row: dict[str, Any]) -> int | None:
+    period = str(row.get("period") or "")
+    try:
+        return int(period[:4]) if period.endswith("A") else None
+    except ValueError:
+        return None
+
+
 def _recent_annual_reports(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    annual = [row for row in reports if str(row.get("period") or "").endswith("A")]
-    annual.sort(key=lambda row: str(row.get("report_date") or ""))
+    annual = [row for row in reports if _annual_year(row) is not None]
+    annual.sort(key=lambda row: _annual_year(row) or 0)
     return annual[-5:]
+
+
+def _are_contiguous_annuals(rows: list[dict[str, Any]]) -> bool:
+    years = [_annual_year(row) for row in rows]
+    return len(years) == 5 and all(year is not None for year in years) and all(b == a + 1 for a, b in zip(years, years[1:]))
 
 
 def _score_band(value: float | None, bands: tuple[tuple[float, float], ...]) -> float | None:
@@ -67,18 +84,50 @@ def _status(score: float, weight: float) -> str:
     return "green" if ratio >= .75 else "yellow" if ratio >= .45 else "red"
 
 
-def _trend(first: float | None, last: float | None, neutral: float = 0.5) -> str:
+def _trend(first: float | None, last: float | None, neutral: float = 0.5, inverse: bool = False) -> str:
     if first is None or last is None:
         return "unknown"
     delta = last - first
+    if inverse:
+        delta = -delta
     return "up" if delta > neutral else "down" if delta < -neutral else "flat"
+
+
+def _series_trend(values: list[float | None], neutral: float = 0.5, inverse: bool = False) -> str:
+    """Compare early and late two-year averages for one homogeneous time series."""
+    if len(values) < 4 or any(value is None for value in values):
+        return "unknown"
+    early = sum(values[:2]) / 2
+    late = sum(values[-2:]) / 2
+    return _trend(early, late, neutral, inverse)
+
+
+def _combined_trend(*trends: str) -> str:
+    directions = [1 if trend == "up" else -1 if trend == "down" else 0 for trend in trends if trend != "unknown"]
+    if not directions:
+        return "unknown"
+    total = sum(directions)
+    return "up" if total > 0 else "down" if total < 0 else "flat"
+
+
+def _growth_series(values: list[float | None]) -> list[float | None]:
+    return [_growth(previous, current) for previous, current in zip(values, values[1:])]
+
+
+def _ratio_series(numerators: list[float | None], denominators: list[float | None], multiplier: float = 1.0) -> list[float | None]:
+    return [numerator / denominator * multiplier if numerator is not None and denominator not in (None, 0) else None for numerator, denominator in zip(numerators, denominators)]
 
 
 def _flag(code: str, title: str, detail: str) -> dict[str, str]:
     return {"code": code, "title": title, "detail": detail}
 
 
-def build_financial_health(reports: list[dict[str, Any]]) -> dict[str, Any]:
+def build_financial_health(
+    reports: list[dict[str, Any]],
+    *,
+    industry_level_1: str | None = None,
+    industry_level_2: str | None = None,
+) -> dict[str, Any]:
     """Build a transparent health score and independent red-flag list.
 
     The score is a screening aid only. Red flags are intentionally returned as an
@@ -94,8 +143,18 @@ def build_financial_health(reports: list[dict[str, Any]]) -> dict[str, Any]:
         "derived": {},
         "red_flags": [],
         "red_flag_count": 0,
+        "reason": None,
+        "industry": {"level_1": industry_level_1, "level_2": industry_level_2},
     }
+    if industry_level_1 in SPECIAL_INDUSTRY_L1:
+        result["status"] = "not_applicable"
+        result["reason"] = f"{industry_level_1}行业不适用通用工商企业五年财务健康度评分规则"
+        return result
     if len(rows) < 5:
+        result["reason"] = "annual_reports_insufficient"
+        return result
+    if not _are_contiguous_annuals(rows):
+        result["reason"] = "annual_reports_not_contiguous"
         return result
 
     values = {name: [_metric(row, name) for row in rows] for name in (
@@ -106,8 +165,10 @@ def build_financial_health(reports: list[dict[str, Any]]) -> dict[str, Any]:
     revenue_cagr = _cagr(values["revenue"][0], values["revenue"][-1])
     ex_profit_cagr = _cagr(values["ex_net_profit"][0], values["ex_net_profit"][-1])
     premium = ex_profit_cagr - revenue_cagr if revenue_cagr is not None and ex_profit_cagr is not None else None
-    cash_profit_ratio = (_sum(values["ocf"]) / _sum(values["ex_net_profit"])
-                         if _sum(values["ocf"]) is not None and _sum(values["ex_net_profit"]) not in (None, 0) else None)
+    total_ocf = _sum(values["ocf"])
+    total_ex_profit = _sum(values["ex_net_profit"])
+    cash_profit_ratio = (total_ocf / total_ex_profit
+                         if total_ocf is not None and total_ex_profit is not None and total_ex_profit > 0 else None)
     fcf_margin = (values["free_cf"][-1] / values["revenue"][-1] * 100
                   if values["free_cf"][-1] is not None and values["revenue"][-1] not in (None, 0) else None)
     capex_intensity = (values["capex"][-1] / values["revenue"][-1] * 100
@@ -162,13 +223,27 @@ def build_financial_health(reports: list[dict[str, Any]]) -> dict[str, Any]:
     risk = None if None in (debt_score, goodwill_score, risk_fcf_score) else debt_score + goodwill_score + risk_fcf_score
 
     scores = (growth, profitability, cash, working, reinvest, risk)
+    revenue_growths = _growth_series(values["revenue"])
+    ex_profit_growths = _growth_series(values["ex_net_profit"])
+    cash_profit_ratios = _ratio_series(values["ocf"], values["ex_net_profit"])
+    fcf_margins = _ratio_series(values["free_cf"], values["revenue"], 100)
+    capex_intensities = _ratio_series(values["capex"], values["revenue"], 100)
+    receivable_gaps = [
+        receivable_growth - revenue_growth_item if receivable_growth is not None and revenue_growth_item is not None else None
+        for receivable_growth, revenue_growth_item in zip(_growth_series(values["accounts_receivable"]), revenue_growths)
+    ]
+    inventory_gaps = [
+        inventory_growth - revenue_growth_item if inventory_growth is not None and revenue_growth_item is not None else None
+        for inventory_growth, revenue_growth_item in zip(_growth_series(values["inventory"]), revenue_growths)
+    ]
+    goodwill_equities = _ratio_series(values["goodwill"], values["equity"], 100)
     trends = (
-        _trend(revenue_cagr, ex_profit_cagr, 1),
-        _trend(values["roe_ex"][0], values["roe_ex"][-1]),
-        _trend(cash_profit_ratio, fcf_margin / 10 if fcf_margin is not None else None, .1),
-        _trend(receivable_gap, inventory_gap, 1),
-        _trend(values["capex"][0], values["capex"][-1]),
-        _trend(values["debt_ratio"][0], values["debt_ratio"][-1]),
+        _combined_trend(_series_trend(revenue_growths, 1), _series_trend(ex_profit_growths, 1)),
+        _combined_trend(_series_trend(values["gross_margin"]), _series_trend(values["net_margin"]), _series_trend(values["roe_ex"])),
+        _combined_trend(_series_trend(cash_profit_ratios, .1), _series_trend(fcf_margins)),
+        _combined_trend(_series_trend(receivable_gaps, 1, inverse=True), _series_trend(inventory_gaps, 1, inverse=True)),
+        _combined_trend(_series_trend(capex_intensities, .5, inverse=True), _series_trend(fcf_margins), _series_trend(revenue_growths, 1)),
+        _combined_trend(_series_trend(values["debt_ratio"], .5, inverse=True), _series_trend(goodwill_equities, .5, inverse=True), _series_trend(fcf_margins)),
     )
     dimensions = []
     for (code, title, weight), score, trend in zip(DIMENSIONS, scores, trends):
@@ -198,6 +273,11 @@ def build_financial_health(reports: list[dict[str, Any]]) -> dict[str, Any]:
         flags.append(_flag("roe_ex_decline", "扣非 ROE 连续下降", "最新三个完整年度扣非 ROE 连续下降。"))
     if all(a is not None and b is not None and a < b for a, b in zip(values["debt_ratio"][-3:], values["debt_ratio"][-2:])):
         flags.append(_flag("debt_ratio_rising", "资产负债率连续上升", "最新三个完整年度资产负债率连续上升。"))
+    recent_capex = values["capex"][-3:]
+    recent_revenue_growths = revenue_growths[-3:]
+    if (all(a is not None and b is not None and a < b for a, b in zip(recent_capex, recent_capex[1:]))
+            and all(a is not None and b is not None and a > b for a, b in zip(recent_revenue_growths, recent_revenue_growths[1:]))):
+        flags.append(_flag("capex_up_revenue_growth_down", "资本开支持续增加但营收增速持续下降", "最新三个完整年度 CapEx 持续增加，营收同比增速持续下降。"))
     if all(value is not None and value < 0 for value in values["free_cf"][-2:]):
         flags.append(_flag("fcf_two_year_negative", "自由现金流连续两年为负", "最新两个完整年度 FCF 均为负。"))
     goodwill_growth = _growth(values["goodwill"][-2], values["goodwill"][-1])

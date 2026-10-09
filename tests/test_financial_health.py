@@ -35,6 +35,36 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_risk_trend_marks_deleveraging_as_improvement(self):
+        reports = [annual(2021 + index, revenue=100 + index * 10, ex_net_profit=10 + index, ocf=12 + index, free_cf=5 + index, gross_margin=30, net_margin=10, roe_ex=12, debt_ratio=60 - index * 5, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=50, total_assets=100) for index in range(5)]
+        health = build_financial_health(reports)
+        risk = next(item for item in health["dimensions"] if item["code"] == "financial_risk")
+        self.assertEqual(risk["trend"], "up")
+
+    def test_flags_capex_increase_with_revenue_growth_deceleration(self):
+        reports = [
+            annual(2021, revenue=100, ex_net_profit=20, ocf=20, free_cf=19, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=1, goodwill=0, equity=60, total_assets=100),
+            annual(2022, revenue=130, ex_net_profit=21, ocf=21, free_cf=19, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=2, goodwill=0, equity=60, total_assets=100),
+            annual(2023, revenue=150, ex_net_profit=22, ocf=22, free_cf=19, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100),
+            annual(2024, revenue=165, ex_net_profit=23, ocf=23, free_cf=19, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=4, goodwill=0, equity=60, total_assets=100),
+            annual(2025, revenue=170, ex_net_profit=24, ocf=24, free_cf=19, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=60, total_assets=100),
+        ]
+        health = build_financial_health(reports)
+        self.assertIn("capex_up_revenue_growth_down", {flag["code"] for flag in health["red_flags"]})
+
+    def test_rejects_non_contiguous_annual_periods(self):
+        reports = [annual(year, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=60, total_assets=100) for year in (2018, 2019, 2021, 2023, 2025)]
+        health = build_financial_health(reports)
+        self.assertEqual(health["status"], "insufficient_data")
+        self.assertEqual(health["reason"], "annual_reports_not_contiguous")
+
+    def test_marks_special_industry_as_not_applicable(self):
+        reports = [annual(2021 + index, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=60, total_assets=100) for index in range(5)]
+        health = build_financial_health(reports, industry_level_1="银行", industry_level_2="全国性银行")
+        self.assertEqual(health["status"], "not_applicable")
+        self.assertIsNone(health["score"])
+        self.assertIn("银行", health["reason"])
+
     def test_reports_red_flags_without_allowing_score_to_hide_them(self):
         reports = [
             annual(2021, revenue=100, ex_net_profit=20, ocf=25, free_cf=5, gross_margin=40, net_margin=20, roe_ex=20, debt_ratio=30, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=70, total_assets=100),
