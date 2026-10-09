@@ -35,6 +35,21 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_low_dimension_coverage_withholds_composite_score(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=None, ocf=10, free_cf=5, gross_margin=30, net_margin=None, roe_ex=None, debt_ratio=None, accounts_receivable=None, inventory=None, capex=None, goodwill=None, equity=None, total_assets=None) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertLess(health['coverage_weight'], 85)
+        self.assertIsNone(health['score'])
+        self.assertEqual(health['reason'], 'score_coverage_insufficient')
+
+    def test_returns_auditable_score_and_rule_contract(self):
+        reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 2, ocf=12 + i * 2, free_cf=8 + i, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=50 - i, accounts_receivable=10 + i, inventory=10 + i, capex=3 + i, goodwill=0, equity=60 + i, total_assets=100 + i * 10) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertEqual(health['score_version'], 'financial-health-v2')
+        self.assertEqual(len(health['rule_results']), 10)
+        self.assertTrue(all(item['status'] in {'triggered', 'not_triggered', 'unavailable'} for item in health['rule_results']))
+        self.assertGreater(len(health['score_breakdown']), 0)
+
     def test_loss_narrowing_does_not_trigger_profit_decline_red_flag(self):
         reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=value, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=5, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, value in enumerate([-80, -70, -60, -50, -40])]
         health = build_financial_health(reports)

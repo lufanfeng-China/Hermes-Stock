@@ -150,6 +150,9 @@ def build_financial_health(
     """
     rows = _recent_annual_reports(reports)
     result: dict[str, Any] = {
+        "score_version": "financial-health-v2",
+        "score_breakdown": [],
+        "rule_results": [],
         "periods": [str(row.get("period")) for row in rows],
         "score": None,
         "status": "insufficient_data",
@@ -287,11 +290,15 @@ def build_financial_health(
         available = score is not None
         dimensions.append({"code": code, "title": title, "weight": weight, "score": score, "trend": trend, "status": _status(score, weight) if available else "unknown", "available": available})
     result["dimensions"] = dimensions
+    result["score_breakdown"] = [{"code": item["code"], "title": item["title"], "points": item["score"], "weight": item["weight"], "available": item["available"], "trend": item["trend"], "reason": None if item["available"] else "required_metric_unavailable"} for item in dimensions]
     coverage = sum(item["weight"] for item in dimensions if item["available"])
     raw_total = sum(item["score"] for item in dimensions if item["available"])
     result["coverage_weight"] = coverage
-    result["score"] = round(raw_total / coverage * 100, 1) if coverage else None
+    score_eligible = coverage >= 85
+    result["score"] = round(raw_total / coverage * 100, 1) if score_eligible else None
     result["status"] = _status(result["score"], 100) if result["score"] is not None else "insufficient_data"
+    if not score_eligible:
+        result["reason"] = "score_coverage_insufficient"
 
     investigations: list[dict[str, str]] = []
     if ex_profit_path in {"turnaround", "loss_narrowing", "loss_widening"}:
@@ -363,6 +370,8 @@ def build_financial_health(
     }
     unavailable = [code for code, available in rule_available.items() if not available]
     result["red_flag_coverage"] = {"evaluated": 10 - len(unavailable), "total": 10, "unavailable": unavailable}
+    triggered_codes = {item["code"] for item in flags}
+    result["rule_results"] = [{"code": code, "status": "unavailable" if code in unavailable else "triggered" if code in triggered_codes else "not_triggered", "reason": "missing_or_invalid_comparison_input" if code in unavailable else None} for code in rule_available]
     def conclusion(code: str, question: str, status: str, detail: str) -> dict[str, str]:
         return {"code": code, "question": question, "status": status, "detail": detail}
     profit_metrics = [result["derived"]["gross_margin_change"], result["derived"]["net_margin_change"], result["derived"]["roe_ex_trend"]]
