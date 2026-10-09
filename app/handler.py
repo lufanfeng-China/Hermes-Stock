@@ -3084,7 +3084,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         params = parse_qs(query)
         market = params.get("market", [""])[0].strip().lower()
         symbol = params.get("symbol", [""])[0].strip()
-        years_raw = params.get("years", ["3"])[0]
+        years_raw = params.get("years", ["6"])[0]
         try:
             years = int(years_raw)
         except (TypeError, ValueError):

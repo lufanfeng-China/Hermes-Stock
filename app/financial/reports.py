@@ -5,7 +5,7 @@ import re
 
 from app.financial.health import build_financial_health
 
-def load_recent_three_year_financial_reports(market: str, symbol: str, years: int = 3) -> dict[str, object]:
+def load_recent_three_year_financial_reports(market: str, symbol: str, years: int = 6) -> dict[str, object]:
     """Load annual/quarterly reports covering the most recent ``years`` fiscal years."""
     search_index = importlib.import_module("app.search.index")
 

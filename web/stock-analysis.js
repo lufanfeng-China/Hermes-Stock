@@ -178,7 +178,9 @@
       ...rules.filter((item) => item.status === 'unavailable').map((item) => ({ code: item.code, title: item.code, reason: item.reason || '比较数据不可用' })),
       ...scoreBreakdown.filter((item) => item.available === false).map((item) => ({ code: `score-${item.code}`, title: item.title, reason: item.reason || '评分所需指标不可用' })),
     ];
-    redPanel.innerHTML = healthEvidenceList(health?.red_flags || [], '未触发红旗规则。');
+    const evaluated = coverageInfo.evaluated ?? 0;
+    const total = coverageInfo.total ?? 10;
+    redPanel.innerHTML = healthEvidenceList(health?.red_flags || [], evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
     investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
     unavailablePanel.innerHTML = healthEvidenceList(unavailable, '全部红旗规则及评分维度均有可用数据。');
     coverageDisclosure.textContent = `红旗规则覆盖度：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;

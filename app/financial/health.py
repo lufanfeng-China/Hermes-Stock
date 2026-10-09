@@ -21,6 +21,7 @@ DIMENSIONS = (
 # The framework covers general industrial and commercial companies.  These Shenwan
 # level-1 groups need their own capital, leverage and cash-flow definitions.
 SPECIAL_INDUSTRY_L1 = frozenset({"银行", "非银金融", "房地产"})
+RULE_CODES = ("revenue_up_ex_profit_down", "ex_profit_up_ocf_down", "receivables_growth_gap", "inventory_growth_gap", "gross_margin_two_year_decline", "roe_ex_decline", "debt_ratio_rising", "capex_up_revenue_growth_down", "fcf_two_year_negative", "goodwill_up_profit_not")
 
 
 def _number(value: Any) -> float | None:
@@ -161,22 +162,27 @@ def build_financial_health(
         "derived": {},
         "red_flags": [],
         "red_flag_count": 0,
-        "red_flag_coverage": {"evaluated": 0, "total": 10, "unavailable": []},
+        "red_flag_coverage": {"evaluated": 0, "total": 10, "unavailable": list(RULE_CODES)},
         "investigation_items": [],
         "conclusions": [],
         "series": {},
         "reason": None,
         "industry": {"level_1": industry_level_1, "level_2": industry_level_2},
     }
+    def mark_all_rules_unavailable(reason: str) -> None:
+        result["rule_results"] = [{"code": code, "status": "unavailable", "reason": reason} for code in RULE_CODES]
     if industry_level_1 in SPECIAL_INDUSTRY_L1:
         result["status"] = "not_applicable"
         result["reason"] = f"{industry_level_1}行业不适用通用工商企业五年财务健康度评分规则"
+        mark_all_rules_unavailable("not_applicable")
         return result
     if len(rows) < 5:
         result["reason"] = "annual_reports_insufficient"
+        mark_all_rules_unavailable("annual_reports_insufficient")
         return result
     if not _are_contiguous_annuals(rows):
         result["reason"] = "annual_reports_not_contiguous"
+        mark_all_rules_unavailable("annual_reports_not_contiguous")
         return result
 
     values = {name: [_metric(row, name) for row in rows] for name in (
@@ -326,11 +332,12 @@ def build_financial_health(
     flags: list[dict[str, str]] = []
     ex_growth = _growth(values["ex_net_profit"][-2], values["ex_net_profit"][-1])
     ocf_growth = _growth(values["ocf"][-2], values["ocf"][-1])
+    profit_improved = (values["ex_net_profit"][-2] is not None and values["ex_net_profit"][-1] is not None and values["ex_net_profit"][-1] > values["ex_net_profit"][-2])
     profit_declined = (values["ex_net_profit"][-2] is not None and values["ex_net_profit"][-1] is not None and values["ex_net_profit"][-1] < values["ex_net_profit"][-2])
     if revenue_growth is not None and revenue_growth > 0 and profit_declined:
         flags.append(_flag("revenue_up_ex_profit_down", "营收增长但扣非归母净利润下降", f"最新年度营收同比 {revenue_growth:.1f}%，扣非归母净利润绝对额下降。"))
-    if ex_growth is not None and ex_growth > 0 and ocf_growth is not None and ocf_growth < 0:
-        flags.append(_flag("ex_profit_up_ocf_down", "扣非归母净利润增长但 CFO 下降", f"扣非归母净利润同比 {ex_growth:.1f}%，CFO 同比 {ocf_growth:.1f}%。"))
+    if profit_improved and ocf_growth is not None and ocf_growth < 0:
+        flags.append(_flag("ex_profit_up_ocf_down", "扣非归母净利润改善但 CFO 下降", f"扣非归母净利润绝对额改善，CFO 同比 {ocf_growth:.1f}%。"))
     if receivable_gap is not None and receivable_gap > 15:
         flags.append(_flag("receivables_growth_gap", "应收账款增长明显快于营收", f"应收增速较营收高 {receivable_gap:.1f}pct。"))
     if inventory_gap is not None and inventory_gap > 15:
@@ -351,8 +358,8 @@ def build_financial_health(
     if all(value is not None and value < 0 for value in values["free_cf"][-2:]):
         flags.append(_flag("fcf_two_year_negative", "自由现金流连续两年为负", "最新两个完整年度 FCF 均为负。"))
     goodwill_growth = _growth(values["goodwill"][-2], values["goodwill"][-1])
-    if goodwill_growth is not None and goodwill_growth > 20 and ex_growth is not None and ex_growth <= 0:
-        flags.append(_flag("goodwill_up_profit_not", "商誉增长但扣非利润未同步增长", f"商誉同比增长 {goodwill_growth:.1f}%，扣非归母净利润未增长。"))
+    if goodwill_growth is not None and goodwill_growth > 20 and not profit_improved:
+        flags.append(_flag("goodwill_up_profit_not", "商誉增长但扣非利润未同步改善", f"商誉同比增长 {goodwill_growth:.1f}%，扣非归母净利润绝对额未改善。"))
     result["red_flags"] = flags
     result["red_flag_count"] = len(flags)
     rule_inputs = {
