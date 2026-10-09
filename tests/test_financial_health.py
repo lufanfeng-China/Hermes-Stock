@@ -35,6 +35,17 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_deteriorating_cash_reinvestment_and_risk_trends_reduce_dimension_scores(self):
+        stable = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=15 + i, free_cf=10 + i, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=60, total_assets=100) for i in range(5)]
+        worsening = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=20 - i * 3, free_cf=15 - i * 5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=35 + i * 4, accounts_receivable=10 + i * 5, inventory=10 + i * 5, capex=3 + i * 3, goodwill=i * 3, equity=60, total_assets=100) for i in range(5)]
+        stable_health = build_financial_health(stable)
+        worsening_health = build_financial_health(worsening)
+        stable_scores = {item['code']: item['score'] for item in stable_health['dimensions']}
+        worsening_scores = {item['code']: item['score'] for item in worsening_health['dimensions']}
+        self.assertLess(worsening_scores['cash_quality'], stable_scores['cash_quality'])
+        self.assertLess(worsening_scores['reinvestment'], stable_scores['reinvestment'])
+        self.assertLess(worsening_scores['financial_risk'], stable_scores['financial_risk'])
+
     def test_low_dimension_coverage_withholds_composite_score(self):
         reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=None, ocf=10, free_cf=5, gross_margin=30, net_margin=None, roe_ex=None, debt_ratio=None, accounts_receivable=None, inventory=None, capex=None, goodwill=None, equity=None, total_assets=None) for i in range(5)]
         health = build_financial_health(reports)
@@ -49,6 +60,7 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertEqual(len(health['rule_results']), 10)
         self.assertTrue(all(item['status'] in {'triggered', 'not_triggered', 'unavailable'} for item in health['rule_results']))
         self.assertGreater(len(health['score_breakdown']), 0)
+        self.assertTrue(all('trend_adjustment' in item for item in health['score_breakdown']))
 
     def test_loss_narrowing_does_not_trigger_profit_decline_red_flag(self):
         reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=value, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=5, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, value in enumerate([-80, -70, -60, -50, -40])]

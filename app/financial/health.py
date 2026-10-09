@@ -262,7 +262,16 @@ def build_financial_health(
     risk_fcf_score = _score_band(fcf_margin, ((0, 3), (-5, 1)))
     risk = None if None in (debt_score, goodwill_score, risk_fcf_score) else debt_score + goodwill_score + risk_fcf_score
 
-    scores = (growth, profitability, cash, working, reinvest, risk)
+    trend_basis = (
+        _combined_trend(_series_trend(revenue_growths, 1), _series_trend(ex_profit_growths, 1)),
+        _combined_trend(_series_trend(values["gross_margin"]), _series_trend(values["net_margin"]), _series_trend(values["roe_ex"])),
+        _combined_trend(_series_trend(annual_cash_profit_ratios, .1), _series_trend(fcf_margins)),
+        _combined_trend(_series_trend(receivable_gaps, 1, inverse=True), _series_trend(inventory_gaps, 1, inverse=True)),
+        _combined_trend(_series_trend(capex_intensities, .5, inverse=True), _series_trend(fcf_margins), _series_trend(revenue_growths, 1)),
+        _combined_trend(_series_trend(values["debt_ratio"], .5, inverse=True), _series_trend(goodwill_equities, .5, inverse=True), _series_trend(fcf_margins)),
+    )
+    trend_adjustments = tuple(2 if trend == "up" else -2 if trend == "down" else 0 for trend in trend_basis)
+    scores = tuple(None if score is None else max(0, min(weight, score + adjustment)) for score, adjustment, (_, _, weight) in zip((growth, profitability, cash, working, reinvest, risk), trend_adjustments, DIMENSIONS))
     revenue_growths = _growth_series(values["revenue"])
     ex_profit_growths = _growth_series(values["ex_net_profit"])
     cash_profit_ratios = _ratio_series(values["ocf"], values["ex_net_profit"])
@@ -290,7 +299,7 @@ def build_financial_health(
         available = score is not None
         dimensions.append({"code": code, "title": title, "weight": weight, "score": score, "trend": trend, "status": _status(score, weight) if available else "unknown", "available": available})
     result["dimensions"] = dimensions
-    result["score_breakdown"] = [{"code": item["code"], "title": item["title"], "points": item["score"], "weight": item["weight"], "available": item["available"], "trend": item["trend"], "reason": None if item["available"] else "required_metric_unavailable"} for item in dimensions]
+    result["score_breakdown"] = [{"code": item["code"], "title": item["title"], "points": item["score"], "weight": item["weight"], "available": item["available"], "trend": item["trend"], "trend_adjustment": adjustment, "reason": None if item["available"] else "required_metric_unavailable"} for item, adjustment in zip(dimensions, trend_adjustments)]
     coverage = sum(item["weight"] for item in dimensions if item["available"])
     raw_total = sum(item["score"] for item in dimensions if item["available"])
     result["coverage_weight"] = coverage
