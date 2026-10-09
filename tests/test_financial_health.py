@@ -35,6 +35,51 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_leverage_goodwill_and_cashflow_combination_creates_investigation(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=20 - i * 3, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40 + i * 5, accounts_receivable=10, inventory=10, capex=3, goodwill=1 + i * 2, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertIn('leverage_goodwill_cashflow_risk', [item['code'] for item in health['investigation_items']])
+
+    def test_capex_growth_without_revenue_and_fcf_realization_creates_investigation(self):
+        reports = [annual(2021 + i, revenue=100 + i, ex_net_profit=10, ocf=15, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3 + i * 4, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertIn('capex_realization_risk', [item['code'] for item in health['investigation_items']])
+
+    def test_goodwill_growth_without_cash_realization_creates_investigation(self):
+        reports = [annual(2021 + i, revenue=100 + i * 5, ex_net_profit=10 + i, ocf=20 - i * 3, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1 + i * 2, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertIn('goodwill_cash_realization_risk', [item['code'] for item in health['investigation_items']])
+
+    def test_earnings_quality_combination_creates_investigation(self):
+        reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 3, ocf=20 - i * 3, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10 + i * 20, inventory=10 + i * 20, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertIn('earnings_quality_combination', [item['code'] for item in health['investigation_items']])
+
+    def test_growth_conclusion_requires_consistent_growth_path_for_improving(self):
+        revenues = [100, 160, 80, 170, 200]
+        reports = [annual(2021 + i, revenue=revenue, ex_net_profit=10 + i, ocf=12, free_cf=8, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i, revenue in enumerate(revenues)]
+        health = build_financial_health(reports)
+        conclusion = next(item for item in health['conclusions'] if item['code'] == 'growth')
+        self.assertNotEqual(conclusion['status'], 'improving')
+
+    def test_zero_to_loss_has_explicit_path_and_investigation(self):
+        profits = [0, -1, -2, -3, -4]
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=profit, ocf=5, free_cf=1, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i, profit in enumerate(profits)]
+        health = build_financial_health(reports)
+        self.assertEqual(health['derived']['ex_net_profit_path'], 'break_even_to_loss')
+        self.assertIn('ex_net_profit_break_even_to_loss', [item['code'] for item in health['investigation_items']])
+
+    def test_marks_explicit_insurance_and_securities_as_not_applicable(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i in range(5)]
+        for industry in ('保险', '证券'):
+            self.assertEqual(build_financial_health(reports, industry_level_1=industry)['status'], 'not_applicable')
+
+    def test_cash_conclusion_does_not_call_volatile_declining_cash_trend_improving(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=value, free_cf=value - 5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i, value in enumerate([18, 14, 12, 10, 7])]
+        health = build_financial_health(reports)
+        conclusion = next(item for item in health['conclusions'] if item['code'] == 'cash_conversion')
+        self.assertNotEqual(conclusion['status'], 'improving')
+
     def test_debt_red_flag_requires_material_cumulative_rise(self):
         reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40 + i * .1, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i in range(5)]
         health = build_financial_health(reports)
