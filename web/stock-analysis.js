@@ -108,11 +108,22 @@
     const numeric = values.filter(Number.isFinite);
     if (!rows.length || !numeric.length) { target.textContent = '暂无可用数据'; return; }
     const maxAbs = Math.max(...numeric.map((value) => Math.abs(value)), 1);
+    const min = Math.min(0, ...numeric);
+    const max = Math.max(0, ...numeric);
+    const range = Math.max(max - min, 1);
+    const zero = max / range * 100;
+    const isGrowth = variant === 'growth';
     target.className = 'analysis-bar-chart';
     target.innerHTML = rows.map((row, index) => {
       const value = values[index];
+      const label = Number.isFinite(value) ? formatter(value) : '—';
+      if (isGrowth) {
+        const direction = value < 0 ? 'negative' : 'positive';
+        const barSize = Number.isFinite(value) ? Math.max(3, Math.abs(value) / range * 100) : 3;
+        return `<div class="analysis-bar-item analysis-growth-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar-plot" style="--zero:${zero}%"><span class="analysis-zero-axis"></span><div class="analysis-bar growth ${direction}" style="--bar-size:${barSize}%"></div></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
+      }
       const height = Number.isFinite(value) ? Math.max(3, Math.abs(value) / maxAbs * 100) : 3;
-      return `<div class="analysis-bar-item"><span class="analysis-bar-value">${Number.isFinite(value) ? formatter(value) : '—'}</span><div class="analysis-bar ${variant}" style="height:${height}%"></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
+      return `<div class="analysis-bar-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar ${variant}" style="height:${height}%"></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
     }).join('');
   }
 

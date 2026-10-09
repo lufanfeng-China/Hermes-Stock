@@ -20,6 +20,9 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('height:154px', html)
         self.assertIn('#ff6b6b', html)
         self.assertIn('#9f2634', html)
+        self.assertIn('.analysis-zero-axis', html)
+        self.assertIn('#70d6a8', html)
+        self.assertIn('.analysis-bar.growth.negative', html)
 
     def test_chart_loader_uses_extra_prior_year_for_same_period_yoy(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -28,6 +31,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("byPeriod.get(`${year - 1}${period.slice(4)}`)", js)
         self.assertIn("renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue')", js)
         self.assertIn("renderYoYGrowthBars('ex-profit-growth-chart', payload.reports, 'ex_net_profit')", js)
+        self.assertIn("const direction = value < 0 ? 'negative' : 'positive'", js)
+        self.assertIn('analysis-zero-axis', js)
 
     def test_financial_loader_supports_six_year_lookback_for_five_year_yoy(self):
         source = (ROOT / "app" / "financial" / "reports.py").read_text(encoding="utf-8")
