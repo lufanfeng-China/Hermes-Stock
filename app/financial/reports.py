@@ -138,21 +138,25 @@ def _materialize_financial_report(search_index, seed: dict[str, object]) -> dict
     revenue = search_index._pick(getter("其中：营业收入"))
     if revenue is None:
         revenue = search_index._pick(getter("营业收入"))
+    capex = search_index._pick(getter("购建固定资产、无形资产和其他长期资产支付的现金"))
+    ocf = search_index._pick(getter("经营活动产生的现金流量净额"))
     metrics = {
         "revenue": revenue,
         "profit": search_index._pick(getter("净利润")),
-        "net_profit": search_index._pick(matched_row.get("归属于母公司所有者的净利润")),
-        "ex_net_profit": search_index._pick(matched_row.get("扣除非经常性损益后的净利润")),
-        "ocf": search_index._pick(matched_row.get("经营活动产生的现金流量净额")),
+        "net_profit": search_index._pick(getter("归属于母公司所有者的净利润")),
+        "ex_net_profit": search_index._pick(getter("扣除非经常性损益后的净利润")),
+        "gross_margin": search_index._pick(getter("销售毛利率(%)(非金融类指标)")),
+        "net_margin": search_index._pick(getter("销售净利率(%)")),
         "roe_ex": derived.get("roe_ex"),
-        "debt_ratio": derived.get("debt_ratio"),
-        "current_ratio": derived.get("current_ratio"),
-        "quick_ratio": derived.get("quick_ratio"),
-        "profit_growth": derived.get("profit_growth"),
-        "revenue_growth": derived.get("revenue_growth"),
-        "ex_profit_growth": derived.get("ex_profit_growth"),
-        "ocf_to_profit": derived.get("ocf_to_profit"),
-        "free_cf": derived.get("free_cf"),
+        "debt_ratio": search_index._pick(getter("资产负债率(%)")),
+        "ocf": ocf,
+        # Free cash flow uses the same report-period cumulative cash flows:
+        # operating cash flow minus capital expenditure.
+        "free_cf": ocf - capex if ocf is not None and capex is not None else None,
+        "capex": capex,
+        "goodwill": search_index._pick(getter("商誉")),
+        "accounts_receivable": search_index._pick(getter("应收账款")),
+        "inventory": search_index._pick(getter("存货")),
     }
     return {
         "report_date": seed.get("report_date"),

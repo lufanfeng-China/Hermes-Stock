@@ -127,9 +127,12 @@
     }).join('');
   }
 
-  function renderAnnualBars(targetId, reports, metricKey, variant) {
+  function renderAnnualBars(targetId, reports, metricKey, variant, display = 'amount') {
     const rows = latestRowsByYear(reports);
-    renderBars(targetId, rows, rows.map((row) => Number(row?.metrics?.[metricKey])), (value) => (value / 1e8).toFixed(1), variant);
+    const formatter = display === 'percent'
+      ? (value) => `${value.toFixed(1)}%`
+      : (value) => (value / 1e8).toFixed(1);
+    renderBars(targetId, rows, rows.map((row) => Number(row?.metrics?.[metricKey])), formatter, variant);
   }
 
   function renderYoYGrowthBars(targetId, reports, metricKey) {
@@ -147,11 +150,28 @@
     renderBars(targetId, rows, values, (value) => `${value.toFixed(1)}%`, 'growth');
   }
 
+  const METRIC_CHARTS = [
+    ['revenue-chart', 'revenue', 'revenue', 'amount'],
+    ['net-profit-chart', 'net_profit', 'profit', 'amount'],
+    ['ex-net-profit-chart', 'ex_net_profit', 'profit', 'amount'],
+    ['gross-margin-chart', 'gross_margin', 'ratio', 'percent'],
+    ['net-margin-chart', 'net_margin', 'ratio', 'percent'],
+    ['roe-ex-chart', 'roe_ex', 'ratio', 'percent'],
+    ['debt-ratio-chart', 'debt_ratio', 'ratio', 'percent'],
+    ['ocf-chart', 'ocf', 'cash', 'amount'],
+    ['free-cf-chart', 'free_cf', 'cash', 'amount'],
+    ['capex-chart', 'capex', 'cash', 'amount'],
+    ['goodwill-chart', 'goodwill', 'asset', 'amount'],
+    ['accounts-receivable-chart', 'accounts_receivable', 'asset', 'amount'],
+    ['inventory-chart', 'inventory', 'asset', 'amount'],
+  ];
+
   async function loadAnnualFinancials(stock) {
-    for (const id of ['revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart', 'total-profit-chart', 'total-profit-growth-chart']) {
+    const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
+    for (const id of chartIds) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
-      el.textContent = '加载最近五年年度数据…';
+      el.textContent = '加载最近五年财报数据…';
     }
     try {
       // Request one extra year so the earliest displayed point can be compared
@@ -159,14 +179,10 @@
       const response = await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`);
       const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
-      renderAnnualBars('revenue-chart', payload.reports, 'revenue', 'revenue');
+      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, payload.reports, metric, variant, display);
       renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue');
-      renderAnnualBars('profit-chart', payload.reports, 'net_profit', 'profit');
-      renderYoYGrowthBars('net-profit-growth-chart', payload.reports, 'net_profit');
-      renderAnnualBars('total-profit-chart', payload.reports, 'profit', 'profit');
-      renderYoYGrowthBars('total-profit-growth-chart', payload.reports, 'profit');
     } catch (error) {
-      for (const id of ['revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart', 'total-profit-chart', 'total-profit-growth-chart']) document.getElementById(id).textContent = `加载失败：${error.message}`;
+      for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
   }
 

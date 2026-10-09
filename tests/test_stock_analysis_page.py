@@ -6,45 +6,51 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class StockAnalysisPageTests(unittest.TestCase):
-    def test_two_rows_have_revenue_growth_and_profit_growth_cards(self):
+    def test_requested_seven_metric_rows_exist_in_order(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
-        self.assertIn('class="analysis-metric-grid"', html)
-        self.assertEqual(html.count('<article class="analysis-metric-card">'), 6)
-        for chart_id in ('revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart', 'total-profit-chart', 'total-profit-growth-chart'):
+        expected = [
+            ("营业收入", "revenue-chart"), ("营收增长率", "revenue-growth-chart"),
+            ("归母净利润", "net-profit-chart"), ("扣非归母净利润", "ex-net-profit-chart"),
+            ("毛利率", "gross-margin-chart"), ("净利率", "net-margin-chart"),
+            ("扣非ROE", "roe-ex-chart"), ("资产负债率", "debt-ratio-chart"),
+            ("经营现金流", "ocf-chart"), ("自由现金流", "free-cf-chart"),
+            ("固定资产投资", "capex-chart"), ("商誉", "goodwill-chart"),
+            ("应收账款", "accounts-receivable-chart"), ("库存", "inventory-chart"),
+        ]
+        self.assertEqual(html.count('<article class="analysis-metric-card">'), 14)
+        positions = []
+        for label, chart_id in expected:
+            positions.append(html.index(f'>{label}<'))
             self.assertIn(f'id="{chart_id}"', html)
-        for label in ('营业收入', '营收增速', '归母净利润', '归母净利润增速', '净利润', '净利润增速'):
-            self.assertIn(f'>{label}<', html)
-        self.assertEqual(html.count('单位：亿元'), 3)
-        self.assertEqual(html.count('单位：%'), 3)
-        self.assertIn('grid-template-columns:repeat(2,minmax(0,1fr))', html)
-        self.assertIn('height:154px', html)
-        self.assertIn('#ff6b6b', html)
-        self.assertIn('#9f2634', html)
-        self.assertIn('.analysis-zero-axis', html)
-        self.assertIn('#70d6a8', html)
-        self.assertIn('.analysis-bar.growth.negative', html)
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn('归母净利润增速', html)
+        self.assertNotIn('净利润增速', html)
 
-    def test_chart_loader_uses_extra_prior_year_for_same_period_yoy(self):
+    def test_chart_configuration_has_all_requested_data_fields_and_units(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        self.assertIn('&years=6', js)
-        self.assertIn('const latestByYear = new Map()', js)
-        self.assertIn("byPeriod.get(`${year - 1}${period.slice(4)}`)", js)
+        for chart_id, field in (
+            ('revenue-chart', 'revenue'), ('net-profit-chart', 'net_profit'),
+            ('ex-net-profit-chart', 'ex_net_profit'), ('gross-margin-chart', 'gross_margin'),
+            ('net-margin-chart', 'net_margin'), ('roe-ex-chart', 'roe_ex'),
+            ('debt-ratio-chart', 'debt_ratio'), ('ocf-chart', 'ocf'),
+            ('free-cf-chart', 'free_cf'), ('capex-chart', 'capex'),
+            ('goodwill-chart', 'goodwill'), ('accounts-receivable-chart', 'accounts_receivable'),
+            ('inventory-chart', 'inventory'),
+        ):
+            self.assertIn(f"['{chart_id}', '{field}'", js)
         self.assertIn("renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue')", js)
-        self.assertIn("renderYoYGrowthBars('net-profit-growth-chart', payload.reports, 'net_profit')", js)
-        self.assertNotIn('ex-profit-growth-chart', js)
-        self.assertIn("renderAnnualBars('total-profit-chart', payload.reports, 'profit', 'profit')", js)
-        self.assertIn("renderYoYGrowthBars('total-profit-growth-chart', payload.reports, 'profit')", js)
-        self.assertIn("const direction = value < 0 ? 'negative' : 'positive'", js)
-        self.assertIn('analysis-zero-axis', js)
+        self.assertIn("display === 'percent'", js)
 
-    def test_financial_loader_supports_six_year_lookback_for_five_year_yoy(self):
+    def test_financial_report_materializes_requested_data_and_same_period_cashflow(self):
         source = (ROOT / "app" / "financial" / "reports.py").read_text(encoding="utf-8")
-        self.assertIn('years: int = 3', source)
-        self.assertIn('if not 1 <= years <= 6', source)
-        self.assertIn('latest_year - years + 1', source)
-        self.assertIn('其中：营业收入', source)
-        self.assertIn('"profit": search_index._pick(getter("净利润"))', source)
-        self.assertIn('营业收入"))', source)
+        for field in (
+            'gross_margin', 'net_margin', 'roe_ex', 'debt_ratio', 'ocf', 'free_cf',
+            'capex', 'goodwill', 'accounts_receivable', 'inventory',
+        ):
+            self.assertIn(f'"{field}"', source)
+        self.assertIn('ocf - capex if ocf is not None and capex is not None else None', source)
+        self.assertIn('销售毛利率(%)(非金融类指标)', source)
+        self.assertIn('销售净利率(%)', source)
 
 
 if __name__ == '__main__':
