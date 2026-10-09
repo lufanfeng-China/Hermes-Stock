@@ -35,6 +35,12 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_builds_six_framework_conclusions(self):
+        reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 3, ocf=15 + i * 4, free_cf=8 + i * 2, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=50 - i, accounts_receivable=10 + i, inventory=12 + i, capex=4 + i, goodwill=0, equity=60 + i, total_assets=100 + i * 10) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertEqual([item['code'] for item in health['conclusions']], ['growth', 'profit_premium', 'profitability', 'cash_conversion', 'working_capital', 'capital_leverage'])
+        self.assertTrue(all(item['status'] in {'improving', 'stable', 'watch', 'insufficient'} for item in health['conclusions']))
+
     def test_exposes_full_derived_kpi_contract_and_red_flag_coverage(self):
         reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 2, ocf=12 + i * 3, free_cf=8 + i, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=50 - i, accounts_receivable=10 + i, inventory=15 + i, capex=4 + i, goodwill=i, equity=60 + i * 2, total_assets=100 + i * 10) for i in range(5)]
         health = build_financial_health(reports)

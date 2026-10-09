@@ -168,6 +168,7 @@
     const dimensions = document.getElementById('health-dimensions');
     const derived = document.getElementById('health-derived');
     const flagDetail = document.getElementById('health-flag-detail');
+    const conclusionPanel = document.getElementById('health-conclusions');
     if (!health) {
       period.textContent = '需要最近五个完整年度的财报数据';
       score.innerHTML = '数据不足 <small>/ 100</small>';
@@ -207,6 +208,8 @@
     flagDetail.className = notices.length ? '' : 'health-clean';
     const coverageText = `红旗规则覆盖：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}`;
     flagDetail.innerHTML = notices.length ? `<p class="health-coverage-note">${coverageText}</p><ul class="health-flag-list">${notices.map((item) => `<li><strong>${escapeHTML(item.title)}</strong>：${escapeHTML(item.detail)}</li>`).join('')}</ul>` : `${coverageText}；未触发财务红旗。`;
+    const conclusionLabel = { improving: '改善', stable: '平稳', watch: '需关注', insufficient: '数据不足' };
+    conclusionPanel.innerHTML = (health.conclusions || []).map((item) => `<article class="health-conclusion ${escapeHTML(item.status)}"><strong>${escapeHTML(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHTML(item.detail)}</p></article>`).join('') || '暂无可用结论。';
   }
 
   const METRIC_CHARTS = [

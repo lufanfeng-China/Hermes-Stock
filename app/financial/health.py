@@ -160,6 +160,7 @@ def build_financial_health(
         "red_flag_count": 0,
         "red_flag_coverage": {"evaluated": 0, "total": 10, "unavailable": []},
         "investigation_items": [],
+        "conclusions": [],
         "series": {},
         "reason": None,
         "industry": {"level_1": industry_level_1, "level_2": industry_level_2},
@@ -349,4 +350,19 @@ def build_financial_health(
     }
     unavailable = [code for code, inputs in rule_inputs.items() if any(value is None for value in inputs)]
     result["red_flag_coverage"] = {"evaluated": 10 - len(unavailable), "total": 10, "unavailable": unavailable}
+    def conclusion(code: str, question: str, status: str, detail: str) -> dict[str, str]:
+        return {"code": code, "question": question, "status": status, "detail": detail}
+    profit_metrics = [result["derived"]["gross_margin_change"], result["derived"]["net_margin_change"], result["derived"]["roe_ex_trend"]]
+    profitability_status = "improving" if all(value is not None and value >= 0 for value in profit_metrics[:2]) and profit_metrics[2] == "up" else "watch" if any(value is None or value < 0 for value in profit_metrics[:2]) or profit_metrics[2] == "down" else "stable"
+    cash_status = "improving" if cash_profit_ratio is not None and cash_profit_ratio >= .8 and fcf_margin is not None and fcf_margin >= 0 else "watch" if cash_profit_ratio is None or fcf_margin is None or cash_profit_ratio < .5 or fcf_margin < 0 else "stable"
+    working_status = "watch" if (receivable_gap is not None and receivable_gap > 15) or (inventory_gap is not None and inventory_gap > 15) else "insufficient" if receivable_gap is None or inventory_gap is None else "stable"
+    leverage_status = "watch" if (capex_intensities[-1] is not None and capex_intensities[0] is not None and capex_intensities[-1] > capex_intensities[0] and debt_change is not None and debt_change > 3) else "stable"
+    result["conclusions"] = [
+        conclusion("growth", "过去五年是否持续增长？", "improving" if revenue_cagr is not None and revenue_cagr > 0 and ex_profit_path == "profitable" else "watch" if revenue_cagr is not None else "insufficient", f"营收 CAGR {revenue_cagr:.1f}%；扣非利润路径：{ex_profit_path}。" if revenue_cagr is not None else "缺少可比增长数据。"),
+        conclusion("profit_premium", "利润增长是否快于收入增长？", "improving" if premium is not None and premium > 0 else "watch" if premium is not None else "insufficient", f"利润增长溢价 {premium:.1f}pct。" if premium is not None else "扣非利润 CAGR 不适用或数据不足。"),
+        conclusion("profitability", "毛利率、净利率和 ROE 是否在改善？", profitability_status, "结合五年毛利率、净利率变化和扣非 ROE 趋势判断。"),
+        conclusion("cash_conversion", "利润是否真正转化成了现金？", cash_status, f"五年现金利润比 {cash_profit_ratio:.2f}，最新 FCF Margin {fcf_margin:.1f}% 。" if cash_profit_ratio is not None and fcf_margin is not None else "现金转化数据不足或亏损期不适用。"),
+        conclusion("working_capital", "应收和库存是否出现异常增长？", working_status, "以最新年度应收、存货相对营收增速差判断。"),
+        conclusion("capital_leverage", "增长是否依赖越来越高的资本投入和财务杠杆？", leverage_status, "结合 CapEx 强度和资产负债率五年趋势判断。"),
+    ]
     return result
