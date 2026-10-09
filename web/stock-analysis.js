@@ -152,6 +152,44 @@
     renderBars(targetId, rows, values, (value) => `${value.toFixed(1)}%`, 'growth');
   }
 
+  function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  }
+
+  function healthValue(value, suffix = '') {
+    return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}${suffix}` : '—';
+  }
+
+  function renderFinancialHealth(health) {
+    const period = document.getElementById('health-period');
+    const score = document.getElementById('health-score');
+    const flags = document.getElementById('health-red-flags');
+    const coverage = document.getElementById('health-coverage');
+    const dimensions = document.getElementById('health-dimensions');
+    const derived = document.getElementById('health-derived');
+    const flagDetail = document.getElementById('health-flag-detail');
+    if (!health || !Array.isArray(health.periods) || health.periods.length < 5) {
+      period.textContent = '需要最近五个完整年度的财报数据';
+      score.innerHTML = '数据不足 <small>/ 100</small>';
+      flags.textContent = '—'; coverage.textContent = '—'; derived.textContent = '暂无可用 KPI 数据'; flagDetail.textContent = '数据不足，暂不生成红旗。'; return;
+    }
+    period.textContent = `计算区间：${health.periods.join(' / ')}`;
+    score.innerHTML = `${healthValue(health.score)} <small>/ 100</small>`;
+    flags.textContent = `${health.red_flag_count || 0} 项`;
+    coverage.textContent = `${health.coverage_weight || 0} / 100`;
+    const trendLabel = { up: '↑ 改善', down: '↓ 走弱', flat: '→ 平稳', unknown: '—' };
+    dimensions.innerHTML = (health.dimensions || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div></article>`).join('');
+    const d = health.derived || {};
+    const fields = [
+      ['营收 CAGR', d.revenue_cagr, '%'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%'], ['利润增长溢价', d.profit_growth_premium, 'pct'], ['五年现金利润比', d.five_year_cash_profit_ratio, ''],
+      ['FCF Margin', d.fcf_margin, '%'], ['应收增速差', d.receivable_growth_gap, 'pct'], ['存货增速差', d.inventory_growth_gap, 'pct'], ['CapEx 强度', d.capex_intensity, '%'],
+    ];
+    derived.innerHTML = fields.map(([label, value, suffix]) => `<div class="health-derived-item"><span class="health-derived-label">${label}</span><strong class="health-derived-value">${healthValue(value, suffix)}</strong></div>`).join('');
+    const redFlags = health.red_flags || [];
+    flagDetail.className = redFlags.length ? '' : 'health-clean';
+    flagDetail.innerHTML = redFlags.length ? `<ul class="health-flag-list">${redFlags.map((item) => `<li><strong>${escapeHTML(item.title)}</strong>：${escapeHTML(item.detail)}</li>`).join('')}</ul>` : '未触发财务红旗。';
+  }
+
   const METRIC_CHARTS = [
     ['revenue-chart', 'revenue', 'revenue', 'amount'],
     ['net-profit-chart', 'net_profit', 'profit', 'amount'],
@@ -170,6 +208,7 @@
 
   async function loadAnnualFinancials(stock) {
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
+    renderFinancialHealth(null);
     for (const id of chartIds) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
@@ -181,6 +220,7 @@
       const response = await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`);
       const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+      renderFinancialHealth(payload.health);
       for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, payload.reports, metric, variant, display);
       renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue');
     } catch (error) {

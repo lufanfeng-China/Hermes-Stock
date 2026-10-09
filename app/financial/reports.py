@@ -3,6 +3,8 @@ import importlib
 import json
 import re
 
+from app.financial.health import build_financial_health
+
 def load_recent_three_year_financial_reports(market: str, symbol: str, years: int = 3) -> dict[str, object]:
     """Load annual/quarterly reports covering the most recent ``years`` fiscal years."""
     search_index = importlib.import_module("app.search.index")
@@ -100,6 +102,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "latest_report": latest_report,
         "latest_period_label": latest_period_label,
         "reports": reports,
+        "health": build_financial_health(reports),
     }
 
 
@@ -155,6 +158,8 @@ def _materialize_financial_report(search_index, seed: dict[str, object]) -> dict
         "free_cf": ocf - capex if ocf is not None and capex is not None else None,
         "capex": capex,
         "goodwill": search_index._pick(getter("商誉")),
+        "equity": search_index._pick(getter("归属于母公司股东权益(资产负债表)")),
+        "total_assets": search_index._pick(getter("资产总计")),
         "accounts_receivable": search_index._pick(getter("应收账款")),
         "inventory": search_index._pick(getter("存货")),
     }

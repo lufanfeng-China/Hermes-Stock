@@ -29,6 +29,17 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('.analysis-bar.zero-value', html)
         self.assertIn('#70d6a8', html)
 
+    def test_health_kpi_section_precedes_raw_metric_charts(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="financial-health-kpi"', html)
+        self.assertLess(html.index('id="financial-health-kpi"'), html.index('aria-label="五年经营指标"'))
+        for label in ('综合健康度', '财务红旗', '核心增长质量', '盈利能力', '现金含金量', '营运资本健康度', '再投资效率', '财务风险'):
+            self.assertIn(label, html)
+        self.assertIn('renderFinancialHealth(payload.health)', js)
+        self.assertIn('five_year_cash_profit_ratio', js)
+        self.assertIn('red_flags', js)
+
     def test_chart_configuration_has_all_requested_data_fields_and_units(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         for chart_id, field in (
@@ -51,7 +62,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         source = (ROOT / "app" / "financial" / "reports.py").read_text(encoding="utf-8")
         for field in (
             'gross_margin', 'net_margin', 'roe_ex', 'debt_ratio', 'ocf', 'free_cf',
-            'capex', 'goodwill', 'accounts_receivable', 'inventory',
+            'capex', 'goodwill', 'accounts_receivable', 'inventory', 'equity', 'total_assets',
         ):
             self.assertIn(f'"{field}"', source)
         self.assertIn('ocf - capex if ocf is not None and capex is not None else None', source)

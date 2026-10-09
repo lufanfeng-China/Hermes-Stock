@@ -23,7 +23,19 @@
     .analysis-bar.zero-axis.negative { top:var(--zero); border-radius:1px 1px 4px 4px; background:linear-gradient(180deg,#70d6a8,#257451); }
     .analysis-bar-year { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
     .analysis-metric-status { flex:1; display:flex; align-items:center; color:var(--muted); font-size:12px; }
-    @media (max-width:760px) { .analysis-metric-grid { grid-template-columns:1fr; } .analysis-metric-card { height:154px; } }
+    .financial-health-kpi { margin-top:14px; padding:16px; border:1px solid rgba(124,224,195,.22); border-radius:12px; background:linear-gradient(135deg,rgba(124,224,195,.09),rgba(34,45,60,.18)); }
+    .health-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .health-heading h2 { margin:0; font-size:17px; } .health-period { color:var(--muted); font-size:12px; }
+    .health-summary { display:grid; grid-template-columns:150px repeat(2,minmax(0,1fr)); gap:12px; align-items:stretch; }
+    .health-score { display:flex; flex-direction:column; justify-content:center; padding:12px; border-radius:10px; background:rgba(13,24,33,.54); }
+    .health-score-label,.health-stat-label,.health-derived-label { color:var(--muted); font-size:11px; } .health-score-value { margin-top:4px; font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; } .health-score-value small { font-size:13px; font-weight:500; color:var(--muted); }
+    .health-stat { padding:12px; border-radius:10px; background:rgba(13,24,33,.36); } .health-stat-value { margin-top:7px; font-size:18px; font-weight:650; }
+    .health-dimension-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; }
+    .health-dimension { padding:10px; border:1px solid rgba(174,190,206,.12); border-left:3px solid var(--muted); border-radius:8px; background:rgba(13,24,33,.28); } .health-dimension.green { border-left-color:#70d6a8; } .health-dimension.yellow { border-left-color:#f2c14e; } .health-dimension.red { border-left-color:#ff6b6b; }
+    .health-dimension-top { display:flex; justify-content:space-between; gap:6px; font-size:12px; color:var(--text); } .health-dimension-score { font-variant-numeric:tabular-nums; font-weight:650; } .health-dimension-trend { margin-top:6px; font-size:11px; color:var(--muted); }
+    .health-derived { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:12px; } .health-derived-item { padding:8px 10px; border-radius:7px; background:rgba(13,24,33,.28); } .health-derived-value { display:block; margin-top:3px; color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+    .health-flags { margin-top:12px; padding-top:10px; border-top:1px solid rgba(174,190,206,.12); } .health-flags-title { font-size:12px; color:var(--muted); } .health-flag-list { margin:7px 0 0; padding-left:18px; color:#f2c14e; font-size:12px; } .health-flag-list li { margin:4px 0; } .health-clean { color:#70d6a8; font-size:12px; }
+    @media (max-width:760px) { .analysis-metric-grid { grid-template-columns:1fr; } .analysis-metric-card { height:154px; } .health-summary { grid-template-columns:1fr 1fr; } .health-score { grid-column:1 / -1; } .health-dimension-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .health-derived { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   </style>
 </head>
 <body>
@@ -39,6 +51,20 @@
         <div class="search-dropdown" id="stock-dropdown"></div>
       </div>
     </form>
+
+    <section class="financial-health-kpi" id="financial-health-kpi" aria-label="五年财务健康度 KPI">
+      <div class="health-heading"><h2>财务健康度 KPI</h2><span class="health-period" id="health-period">选择股票后按最近五个完整年度计算</span></div>
+      <div class="health-summary">
+        <div class="health-score"><span class="health-score-label">综合健康度</span><strong class="health-score-value" id="health-score">— <small>/ 100</small></strong></div>
+        <div class="health-stat"><span class="health-stat-label">财务红旗</span><div class="health-stat-value" id="health-red-flags">—</div></div>
+        <div class="health-stat"><span class="health-stat-label">评分覆盖度</span><div class="health-stat-value" id="health-coverage">—</div></div>
+      </div>
+      <div class="health-dimension-grid" id="health-dimensions">
+        <div class="health-dimension"><div class="health-dimension-top"><span>核心增长质量</span><span>—</span></div></div><div class="health-dimension"><div class="health-dimension-top"><span>盈利能力</span><span>—</span></div></div><div class="health-dimension"><div class="health-dimension-top"><span>现金含金量</span><span>—</span></div></div><div class="health-dimension"><div class="health-dimension-top"><span>营运资本健康度</span><span>—</span></div></div><div class="health-dimension"><div class="health-dimension-top"><span>再投资效率</span><span>—</span></div></div><div class="health-dimension"><div class="health-dimension-top"><span>财务风险</span><span>—</span></div></div>
+      </div>
+      <div class="health-derived" id="health-derived"></div>
+      <div class="health-flags"><span class="health-flags-title">风险调查清单</span><div id="health-flag-detail" class="health-clean">选择股票后加载。</div></div>
+    </section>
 
     <section class="analysis-metric-grid" aria-label="五年经营指标">
       <article class="analysis-metric-card"><div class="analysis-metric-heading"><h2>营业收入</h2><span class="analysis-metric-unit">单位：亿元</span></div><div class="analysis-metric-status" id="revenue-chart">选择股票后加载最近五年财报数据</div></article>
@@ -58,6 +84,6 @@
     </section>
   </main>
   <script src="/nav.js?v=20261008-stock-analysis-v1"></script>
-  <script src="/stock-analysis.js?v=20261009-zero-values-v8"></script>
+  <script src="/stock-analysis.js?v=20261009-financial-health-kpi-v9"></script>
 </body>
 </html>
