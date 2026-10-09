@@ -118,6 +118,21 @@ def _ratio_series(numerators: list[float | None], denominators: list[float | Non
     return [numerator / denominator * multiplier if numerator is not None and denominator not in (None, 0) else None for numerator, denominator in zip(numerators, denominators)]
 
 
+def _profit_path(values: list[float | None]) -> str:
+    if any(value is None for value in values):
+        return "unknown"
+    first, last = values[0], values[-1]
+    if first <= 0 < last:
+        return "turnaround"
+    if first < 0 and last < 0:
+        return "loss_narrowing" if last > first else "loss_widening" if last < first else "loss_flat"
+    return "profitable" if first > 0 and last > 0 else "unknown"
+
+
+def _average(values: list[float | None]) -> float | None:
+    return sum(values) / len(values) if values and all(value is not None for value in values) else None
+
+
 def _flag(code: str, title: str, detail: str) -> dict[str, str]:
     return {"code": code, "title": title, "detail": detail}
 
@@ -143,6 +158,9 @@ def build_financial_health(
         "derived": {},
         "red_flags": [],
         "red_flag_count": 0,
+        "red_flag_coverage": {"evaluated": 0, "total": 10, "unavailable": []},
+        "investigation_items": [],
+        "series": {},
         "reason": None,
         "industry": {"level_1": industry_level_1, "level_2": industry_level_2},
     }
@@ -182,15 +200,33 @@ def build_financial_health(
                        if values["goodwill"][-1] is not None and values["equity"][-1] not in (None, 0) else None)
     goodwill_assets = (values["goodwill"][-1] / values["total_assets"][-1] * 100
                        if values["goodwill"][-1] is not None and values["total_assets"][-1] not in (None, 0) else None)
+    revenue_growths = _growth_series(values["revenue"])
+    ex_profit_growths = _growth_series(values["ex_net_profit"])
+    annual_cash_profit_ratios = _ratio_series(values["ocf"], values["ex_net_profit"])
+    fcf_margins = _ratio_series(values["free_cf"], values["revenue"], 100)
+    capex_intensities = _ratio_series(values["capex"], values["revenue"], 100)
+    receivable_gaps = [a - b if a is not None and b is not None else None for a, b in zip(_growth_series(values["accounts_receivable"]), revenue_growths)]
+    inventory_gaps = [a - b if a is not None and b is not None else None for a, b in zip(_growth_series(values["inventory"]), revenue_growths)]
+    goodwill_equities = _ratio_series(values["goodwill"], values["equity"], 100)
+    ex_profit_path = _profit_path(values["ex_net_profit"])
+    result["series"] = {"years": [str(row.get("period")) for row in rows], "annual_cash_profit_ratio": annual_cash_profit_ratios, "fcf_margin": fcf_margins, "receivable_growth_gap": receivable_gaps, "inventory_growth_gap": inventory_gaps, "capex_intensity": capex_intensities, "roe_ex": values["roe_ex"], "debt_ratio": values["debt_ratio"], "goodwill_equity_ratio": goodwill_equities}
     result["derived"] = {
         "revenue_cagr": revenue_cagr,
         "ex_net_profit_cagr": ex_profit_cagr,
         "profit_growth_premium": premium,
+        "gross_margin_change": values["gross_margin"][-1] - values["gross_margin"][0] if None not in (values["gross_margin"][-1], values["gross_margin"][0]) else None,
+        "net_margin_change": values["net_margin"][-1] - values["net_margin"][0] if None not in (values["net_margin"][-1], values["net_margin"][0]) else None,
+        "roe_ex_average": _average(values["roe_ex"]),
+        "roe_ex_trend": _series_trend(values["roe_ex"]),
+        "ex_net_profit_path": ex_profit_path,
+        "annual_cash_profit_ratio": annual_cash_profit_ratios[-1],
         "five_year_cash_profit_ratio": cash_profit_ratio,
         "fcf_margin": fcf_margin,
         "receivable_growth_gap": receivable_gap,
         "inventory_growth_gap": inventory_gap,
         "capex_intensity": capex_intensity,
+        "debt_ratio_trend": _series_trend(values["debt_ratio"], .5, inverse=True),
+        "goodwill_trend": _series_trend(goodwill_equities, .5, inverse=True),
         "goodwill_equity_ratio": goodwill_equity,
         "goodwill_assets_ratio": goodwill_assets,
     }
@@ -256,6 +292,20 @@ def build_financial_health(
     result["score"] = round(raw_total / coverage * 100, 1) if coverage else None
     result["status"] = _status(result["score"], 100) if result["score"] is not None else "insufficient_data"
 
+    investigations: list[dict[str, str]] = []
+    if ex_profit_path in {"turnaround", "loss_narrowing", "loss_widening"}:
+        labels = {"turnaround": "扣非利润已扭亏", "loss_narrowing": "扣非亏损正在收窄", "loss_widening": "扣非亏损正在扩大"}
+        investigations.append(_flag(f"ex_net_profit_{ex_profit_path}", labels[ex_profit_path], "扣非利润存在亏损期，CAGR 不适用；请结合绝对利润路径判断。"))
+    gross_change = result["derived"]["gross_margin_change"]
+    net_change = result["derived"]["net_margin_change"]
+    if gross_change is not None and net_change is not None and gross_change * net_change < 0:
+        investigations.append(_flag("margin_divergence", "毛利率与净利率方向背离", "请结合费用、投资收益、补助和税率变化调查利润率背离原因。"))
+    roe_change = values["roe_ex"][-1] - values["roe_ex"][0] if None not in (values["roe_ex"][-1], values["roe_ex"][0]) else None
+    debt_change = values["debt_ratio"][-1] - values["debt_ratio"][0] if None not in (values["debt_ratio"][-1], values["debt_ratio"][0]) else None
+    if roe_change is not None and debt_change is not None and roe_change > 1 and debt_change > 3:
+        investigations.append(_flag("roe_leverage", "ROE 改善可能受杠杆驱动", "扣非 ROE 上升同时资产负债率明显上升，应区分经营改善与杠杆效应。"))
+    result["investigation_items"] = investigations
+
     flags: list[dict[str, str]] = []
     if revenue_growth is not None and revenue_growth > 0 and _growth(values["ex_net_profit"][-2], values["ex_net_profit"][-1]) is not None and _growth(values["ex_net_profit"][-2], values["ex_net_profit"][-1]) < 0:
         flags.append(_flag("revenue_up_ex_profit_down", "营收增长但扣非归母净利润下降", f"最新年度营收同比 {revenue_growth:.1f}%，扣非归母净利润同比下降。"))
@@ -285,4 +335,18 @@ def build_financial_health(
         flags.append(_flag("goodwill_up_profit_not", "商誉增长但扣非利润未同步增长", f"商誉同比增长 {goodwill_growth:.1f}%，扣非归母净利润未增长。"))
     result["red_flags"] = flags
     result["red_flag_count"] = len(flags)
+    rule_inputs = {
+        "revenue_up_ex_profit_down": values["revenue"][-2:] + values["ex_net_profit"][-2:],
+        "ex_profit_up_ocf_down": values["ex_net_profit"][-2:] + values["ocf"][-2:],
+        "receivables_growth_gap": values["accounts_receivable"][-2:] + values["revenue"][-2:],
+        "inventory_growth_gap": values["inventory"][-2:] + values["revenue"][-2:],
+        "gross_margin_two_year_decline": values["gross_margin"][-3:],
+        "roe_ex_decline": values["roe_ex"][-3:],
+        "debt_ratio_rising": values["debt_ratio"][-3:],
+        "capex_up_revenue_growth_down": values["capex"][-3:] + values["revenue"][-4:],
+        "fcf_two_year_negative": values["free_cf"][-2:],
+        "goodwill_up_profit_not": values["goodwill"][-2:] + values["ex_net_profit"][-2:],
+    }
+    unavailable = [code for code, inputs in rule_inputs.items() if any(value is None for value in inputs)]
+    result["red_flag_coverage"] = {"evaluated": 10 - len(unavailable), "total": 10, "unavailable": unavailable}
     return result

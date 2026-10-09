@@ -193,14 +193,20 @@
     const trendLabel = { up: '↑ 改善', down: '↓ 走弱', flat: '→ 平稳', unknown: '—' };
     dimensions.innerHTML = (health.dimensions || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div></article>`).join('');
     const d = health.derived || {};
+    const latest = (health.series || {});
     const fields = [
-      ['营收 CAGR', d.revenue_cagr, '%'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%'], ['利润增长溢价', d.profit_growth_premium, 'pct'], ['五年现金利润比', d.five_year_cash_profit_ratio, ''],
-      ['FCF Margin', d.fcf_margin, '%'], ['应收增速差', d.receivable_growth_gap, 'pct'], ['存货增速差', d.inventory_growth_gap, 'pct'], ['CapEx 强度', d.capex_intensity, '%'],
+      ['营收 CAGR', d.revenue_cagr, '%'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%'], ['利润增长溢价', d.profit_growth_premium, 'pct'], ['毛利率五年变化', d.gross_margin_change, 'pct'], ['净利率五年变化', d.net_margin_change, 'pct'],
+      ['扣非 ROE 五年均值', d.roe_ex_average, '%'], ['最新扣非 ROE', latest.roe_ex?.at?.(-1), '%'], ['最新资产负债率', latest.debt_ratio?.at?.(-1), '%'], ['最新现金利润比', d.annual_cash_profit_ratio, ''], ['五年现金利润比', d.five_year_cash_profit_ratio, ''],
+      ['FCF Margin', d.fcf_margin, '%'], ['应收增速差', d.receivable_growth_gap, 'pct'], ['存货增速差', d.inventory_growth_gap, 'pct'], ['CapEx 强度', d.capex_intensity, '%'], ['商誉 / 权益', d.goodwill_equity_ratio, '%'], ['商誉 / 资产', d.goodwill_assets_ratio, '%'],
     ];
     derived.innerHTML = fields.map(([label, value, suffix]) => `<div class="health-derived-item"><span class="health-derived-label">${label}</span><strong class="health-derived-value">${healthValue(value, suffix)}</strong></div>`).join('');
     const redFlags = health.red_flags || [];
-    flagDetail.className = redFlags.length ? '' : 'health-clean';
-    flagDetail.innerHTML = redFlags.length ? `<ul class="health-flag-list">${redFlags.map((item) => `<li><strong>${escapeHTML(item.title)}</strong>：${escapeHTML(item.detail)}</li>`).join('')}</ul>` : '未触发财务红旗。';
+    const coverageInfo = health.red_flag_coverage || {};
+    const investigations = health.investigation_items || [];
+    const notices = [...investigations, ...redFlags];
+    flagDetail.className = notices.length ? '' : 'health-clean';
+    const coverageText = `红旗规则覆盖：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}`;
+    flagDetail.innerHTML = notices.length ? `<p class="health-coverage-note">${coverageText}</p><ul class="health-flag-list">${notices.map((item) => `<li><strong>${escapeHTML(item.title)}</strong>：${escapeHTML(item.detail)}</li>`).join('')}</ul>` : `${coverageText}；未触发财务红旗。`;
   }
 
   const METRIC_CHARTS = [

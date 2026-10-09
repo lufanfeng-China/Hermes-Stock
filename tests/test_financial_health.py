@@ -35,6 +35,23 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_exposes_full_derived_kpi_contract_and_red_flag_coverage(self):
+        reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 2, ocf=12 + i * 3, free_cf=8 + i, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=50 - i, accounts_receivable=10 + i, inventory=15 + i, capex=4 + i, goodwill=i, equity=60 + i * 2, total_assets=100 + i * 10) for i in range(5)]
+        health = build_financial_health(reports)
+        expected = {'revenue_cagr', 'ex_net_profit_cagr', 'profit_growth_premium', 'gross_margin_change', 'net_margin_change', 'roe_ex_average', 'roe_ex_trend', 'annual_cash_profit_ratio', 'five_year_cash_profit_ratio', 'fcf_margin', 'receivable_growth_gap', 'inventory_growth_gap', 'capex_intensity', 'debt_ratio_trend', 'goodwill_trend'}
+        self.assertTrue(expected.issubset(health['derived']))
+        self.assertEqual(len(health['series']['years']), 5)
+        self.assertEqual(len(health['series']['annual_cash_profit_ratio']), 5)
+        self.assertEqual(health['red_flag_coverage']['total'], 10)
+        self.assertEqual(health['red_flag_coverage']['evaluated'], 10)
+
+    def test_loss_turnaround_is_explained_instead_of_being_data_missing(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=value, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, value in enumerate((-20, -12, -4, 3, 8))]
+        health = build_financial_health(reports)
+        self.assertEqual(health['derived']['ex_net_profit_path'], 'turnaround')
+        self.assertIsNone(health['derived']['ex_net_profit_cagr'])
+        self.assertTrue(any(item['code'] == 'ex_net_profit_turnaround' for item in health['investigation_items']))
+
     def test_risk_trend_marks_deleveraging_as_improvement(self):
         reports = [annual(2021 + index, revenue=100 + index * 10, ex_net_profit=10 + index, ocf=12 + index, free_cf=5 + index, gross_margin=30, net_margin=10, roe_ex=12, debt_ratio=60 - index * 5, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=50, total_assets=100) for index in range(5)]
         health = build_financial_health(reports)
