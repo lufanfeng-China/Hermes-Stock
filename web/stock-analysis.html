@@ -17,6 +17,7 @@
     .analysis-zero-axis { position:absolute; left:0; right:0; top:var(--zero); border-top:1px solid rgba(174,190,206,.48); z-index:0; }
     .analysis-bar-value { font-size:11px; color:var(--text); white-space:nowrap; font-variant-numeric:tabular-nums; }
     .analysis-bar, .analysis-bar.profit { width:min(38px,75%); min-height:2px; border-radius:4px 4px 1px 1px; background:linear-gradient(180deg,#ff6b6b,#9f2634); }
+    .analysis-bar.zero-value { min-height:0; height:0 !important; }
     .analysis-bar.zero-axis { position:absolute; left:50%; transform:translateX(-50%); height:var(--bar-size); min-height:2px; z-index:1; }
     .analysis-bar.zero-axis.positive { bottom:calc(100% - var(--zero)); }
     .analysis-bar.zero-axis.negative { top:var(--zero); border-radius:1px 1px 4px 4px; background:linear-gradient(180deg,#70d6a8,#257451); }
@@ -57,6 +58,6 @@
     </section>
   </main>
   <script src="/nav.js?v=20261008-stock-analysis-v1"></script>
-  <script src="/stock-analysis.js?v=20261009-negative-zero-axis-v7"></script>
+  <script src="/stock-analysis.js?v=20261009-zero-values-v8"></script>
 </body>
 </html>
