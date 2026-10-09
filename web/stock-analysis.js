@@ -148,7 +148,7 @@
   }
 
   async function loadAnnualFinancials(stock) {
-    for (const id of ['revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart']) {
+    for (const id of ['revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart', 'total-profit-chart', 'total-profit-growth-chart']) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
       el.textContent = '加载最近五年年度数据…';
@@ -163,8 +163,10 @@
       renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue');
       renderAnnualBars('profit-chart', payload.reports, 'net_profit', 'profit');
       renderYoYGrowthBars('net-profit-growth-chart', payload.reports, 'net_profit');
+      renderAnnualBars('total-profit-chart', payload.reports, 'profit', 'profit');
+      renderYoYGrowthBars('total-profit-growth-chart', payload.reports, 'profit');
     } catch (error) {
-      for (const id of ['revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart']) document.getElementById(id).textContent = `加载失败：${error.message}`;
+      for (const id of ['revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart', 'total-profit-chart', 'total-profit-growth-chart']) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
   }
 

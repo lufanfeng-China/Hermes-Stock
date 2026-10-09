@@ -140,6 +140,7 @@ def _materialize_financial_report(search_index, seed: dict[str, object]) -> dict
         revenue = search_index._pick(getter("营业收入"))
     metrics = {
         "revenue": revenue,
+        "profit": search_index._pick(getter("净利润")),
         "net_profit": search_index._pick(matched_row.get("归属于母公司所有者的净利润")),
         "ex_net_profit": search_index._pick(matched_row.get("扣除非经常性损益后的净利润")),
         "ocf": search_index._pick(matched_row.get("经营活动产生的现金流量净额")),
