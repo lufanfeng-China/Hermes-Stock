@@ -15,12 +15,16 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('>归母净利润<', html)
         self.assertEqual(html.count('单位：亿元'), 2)
         self.assertIn('grid-template-columns:repeat(2,minmax(0,1fr))', html)
-        self.assertIn('height:220px', html)
+        self.assertIn('height:154px', html)
+        self.assertIn('#ff6b6b', html)
+        self.assertIn('#9f2634', html)
 
-    def test_chart_loader_requests_five_year_reports_and_annual_periods(self):
+    def test_chart_loader_requests_five_year_reports_and_uses_latest_report_per_year(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('&years=5', js)
-        self.assertIn("endsWith('A')", js)
+        self.assertIn('const latestByYear = new Map()', js)
+        self.assertIn("row?.report_date || ''", js)
+        self.assertIn("period.endsWith('A') ? '' : period.slice(4)", js)
         self.assertIn("renderAnnualBars('revenue-chart', payload.reports, 'revenue', 'revenue')", js)
         self.assertIn("renderAnnualBars('profit-chart', payload.reports, 'net_profit', 'profit')", js)
 

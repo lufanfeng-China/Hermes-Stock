@@ -7,18 +7,17 @@
   <link rel="stylesheet" href="/styles.css">
   <style>
     .analysis-metric-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:14px; }
-    .analysis-metric-card { min-width:0; height:220px; padding:14px 16px; border:1px solid rgba(124,224,195,.14); border-radius:10px; background:rgba(124,224,195,.025); display:flex; flex-direction:column; }
+    .analysis-metric-card { min-width:0; height:154px; padding:12px 14px; border:1px solid rgba(124,224,195,.14); border-radius:10px; background:rgba(124,224,195,.025); display:flex; flex-direction:column; }
     .analysis-metric-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
     .analysis-metric-heading h2 { margin:0; font-size:15px; color:var(--text); }
     .analysis-metric-unit { color:var(--muted); font-size:11px; }
     .analysis-bar-chart { flex:1; min-height:0; display:flex; gap:10px; align-items:flex-end; padding-top:12px; }
     .analysis-bar-item { flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:6px; }
     .analysis-bar-value { font-size:11px; color:var(--text); white-space:nowrap; font-variant-numeric:tabular-nums; }
-    .analysis-bar { width:min(38px,75%); min-height:2px; border-radius:4px 4px 1px 1px; background:linear-gradient(180deg,#7ce0c3,#397e70); }
-    .analysis-bar.profit { background:linear-gradient(180deg,#7eb6ff,#426caa); }
+    .analysis-bar, .analysis-bar.profit { width:min(38px,75%); min-height:2px; border-radius:4px 4px 1px 1px; background:linear-gradient(180deg,#ff6b6b,#9f2634); }
     .analysis-bar-year { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
     .analysis-metric-status { flex:1; display:flex; align-items:center; color:var(--muted); font-size:12px; }
-    @media (max-width:760px) { .analysis-metric-grid { grid-template-columns:1fr; } .analysis-metric-card { height:210px; } }
+    @media (max-width:760px) { .analysis-metric-grid { grid-template-columns:1fr; } .analysis-metric-card { height:154px; } }
   </style>
 </head>
 <body>

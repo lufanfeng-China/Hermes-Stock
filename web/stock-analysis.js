@@ -89,16 +89,27 @@
 
   function renderAnnualBars(targetId, reports, metricKey, variant) {
     const target = document.getElementById(targetId);
-    const rows = (reports || []).filter((row) => String(row?.period || '').endsWith('A')).slice(-5);
+    // One bar per fiscal year. For the current, incomplete year use its latest
+    // published cumulative report (for example 2026Q2), rather than waiting for A.
+    const latestByYear = new Map();
+    for (const row of reports || []) {
+      const year = String(row?.year || '').slice(0, 4);
+      if (!/^\d{4}$/.test(year)) continue;
+      const previous = latestByYear.get(year);
+      if (!previous || String(row?.report_date || '') > String(previous?.report_date || '')) latestByYear.set(year, row);
+    }
+    const rows = [...latestByYear.values()].sort((a, b) => String(a.year).localeCompare(String(b.year))).slice(-5);
     const values = rows.map((row) => Number(row?.metrics?.[metricKey])).filter(Number.isFinite);
-    if (!rows.length || !values.length) { target.textContent = '暂无最近五年年度数据'; return; }
+    if (!rows.length || !values.length) { target.textContent = '暂无最近五年年度/最新财报数据'; return; }
     const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
     target.className = 'analysis-bar-chart';
     target.innerHTML = rows.map((row) => {
       const value = Number(row?.metrics?.[metricKey]);
       const height = Number.isFinite(value) ? Math.max(3, Math.abs(value) / maxAbs * 100) : 3;
       const label = Number.isFinite(value) ? `${(value / 1e8).toFixed(1)}` : '—';
-      return `<div class="analysis-bar-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar ${variant}" style="height:${height}%"></div><span class="analysis-bar-year">${String(row.year || '').slice(-2)}</span></div>`;
+      const period = String(row?.period || '');
+      const periodSuffix = period.endsWith('A') ? '' : period.slice(4);
+      return `<div class="analysis-bar-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar ${variant}" style="height:${height}%"></div><span class="analysis-bar-year">${String(row.year || '').slice(-2)}${periodSuffix}</span></div>`;
     }).join('');
   }
 
