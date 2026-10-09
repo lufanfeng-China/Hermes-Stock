@@ -3084,8 +3084,13 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         params = parse_qs(query)
         market = params.get("market", [""])[0].strip().lower()
         symbol = params.get("symbol", [""])[0].strip()
+        years_raw = params.get("years", ["3"])[0]
         try:
-            self.respond_json(HTTPStatus.OK, load_recent_three_year_financial_reports(market, symbol))
+            years = int(years_raw)
+        except (TypeError, ValueError):
+            years = 0
+        try:
+            self.respond_json(HTTPStatus.OK, load_recent_three_year_financial_reports(market, symbol, years=years))
         except ValueError as exc:
             self.respond_json(
                 HTTPStatus.BAD_REQUEST,

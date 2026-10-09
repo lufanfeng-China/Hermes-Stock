@@ -87,6 +87,38 @@
     }
   }
 
+  function renderAnnualBars(targetId, reports, metricKey, variant) {
+    const target = document.getElementById(targetId);
+    const rows = (reports || []).filter((row) => String(row?.period || '').endsWith('A')).slice(-5);
+    const values = rows.map((row) => Number(row?.metrics?.[metricKey])).filter(Number.isFinite);
+    if (!rows.length || !values.length) { target.textContent = '暂无最近五年年度数据'; return; }
+    const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
+    target.className = 'analysis-bar-chart';
+    target.innerHTML = rows.map((row) => {
+      const value = Number(row?.metrics?.[metricKey]);
+      const height = Number.isFinite(value) ? Math.max(3, Math.abs(value) / maxAbs * 100) : 3;
+      const label = Number.isFinite(value) ? `${(value / 1e8).toFixed(1)}` : '—';
+      return `<div class="analysis-bar-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar ${variant}" style="height:${height}%"></div><span class="analysis-bar-year">${String(row.year || '').slice(-2)}</span></div>`;
+    }).join('');
+  }
+
+  async function loadAnnualFinancials(stock) {
+    for (const id of ['revenue-chart', 'profit-chart']) {
+      const el = document.getElementById(id);
+      el.className = 'analysis-metric-status';
+      el.textContent = '加载最近五年年度数据…';
+    }
+    try {
+      const response = await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=5`);
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+      renderAnnualBars('revenue-chart', payload.reports, 'revenue', 'revenue');
+      renderAnnualBars('profit-chart', payload.reports, 'net_profit', 'profit');
+    } catch (error) {
+      for (const id of ['revenue-chart', 'profit-chart']) document.getElementById(id).textContent = `加载失败：${error.message}`;
+    }
+  }
+
   function apply(row) {
     const stock = normalize(row);
     if (!stock.market || !stock.symbol) return;
@@ -96,6 +128,7 @@
     hide();
     const params = new URLSearchParams({ market: stock.market, symbol: stock.symbol, name: stock.stock_name });
     history.replaceState(null, '', `${location.pathname}?${params}`);
+    loadAnnualFinancials(stock);
     window.dispatchEvent(new CustomEvent('stock-analysis:select', { detail: stock }));
   }
 
@@ -134,5 +167,6 @@
     const stock = normalize({ market, symbol, stock_name: params.get('name') || symbol });
     state.selected = stock;
     input.value = selectedLabel(stock);
+    loadAnnualFinancials(stock);
   }
 })();

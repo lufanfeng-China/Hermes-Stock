@@ -3,8 +3,16 @@ import importlib
 import json
 import re
 
-def load_recent_three_year_financial_reports(market: str, symbol: str) -> dict[str, object]:
+def load_recent_three_year_financial_reports(market: str, symbol: str, years: int = 3) -> dict[str, object]:
+    """Load annual/quarterly reports covering the most recent ``years`` fiscal years."""
     search_index = importlib.import_module("app.search.index")
+
+    try:
+        years = int(years)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("years must be an integer") from exc
+    if not 1 <= years <= 5:
+        raise ValueError("years must be between 1 and 5")
 
     market = str(market or "").strip().lower()
     symbol = str(symbol or "").strip()
@@ -66,7 +74,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str) -> dict[s
         )
         if latest_year is None:
             latest_year = report_year
-            earliest_year = latest_year - 2
+            earliest_year = latest_year - years + 1
 
     if not matched_reports:
         raise ValueError(f"no recent financial reports found for {market}:{symbol}")
@@ -75,7 +83,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str) -> dict[s
     latest_report_seed = matched_reports[0]
     latest_period_label = str(latest_report_seed.get("period") or "")
     latest_year = int(str(latest_report_seed.get("year") or "0")[:4] or "0")
-    earliest_year = latest_year - 2 if latest_year else 0
+    earliest_year = latest_year - years + 1 if latest_year else 0
     filtered_rows = [
         row for row in matched_reports
         if int(str(row.get("year") or "0")[:4] or "0") >= earliest_year
