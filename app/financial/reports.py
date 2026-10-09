@@ -11,8 +11,8 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         years = int(years)
     except (TypeError, ValueError) as exc:
         raise ValueError("years must be an integer") from exc
-    if not 1 <= years <= 5:
-        raise ValueError("years must be between 1 and 5")
+    if not 1 <= years <= 6:
+        raise ValueError("years must be between 1 and 6")
 
     market = str(market or "").strip().lower()
     symbol = str(symbol or "").strip()
