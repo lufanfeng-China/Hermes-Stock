@@ -10,9 +10,9 @@ class StockAnalysisPageTests(unittest.TestCase):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         self.assertIn('class="analysis-metric-grid"', html)
         self.assertEqual(html.count('<article class="analysis-metric-card">'), 4)
-        for chart_id in ('revenue-chart', 'revenue-growth-chart', 'profit-chart', 'ex-profit-growth-chart'):
+        for chart_id in ('revenue-chart', 'revenue-growth-chart', 'profit-chart', 'net-profit-growth-chart'):
             self.assertIn(f'id="{chart_id}"', html)
-        for label in ('营业收入', '营收增速', '归母净利润', '扣非增速'):
+        for label in ('营业收入', '营收增速', '归母净利润', '归母净利润增速'):
             self.assertIn(f'>{label}<', html)
         self.assertEqual(html.count('单位：亿元'), 2)
         self.assertEqual(html.count('单位：%'), 2)
@@ -30,7 +30,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('const latestByYear = new Map()', js)
         self.assertIn("byPeriod.get(`${year - 1}${period.slice(4)}`)", js)
         self.assertIn("renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue')", js)
-        self.assertIn("renderYoYGrowthBars('ex-profit-growth-chart', payload.reports, 'ex_net_profit')", js)
+        self.assertIn("renderYoYGrowthBars('net-profit-growth-chart', payload.reports, 'net_profit')", js)
+        self.assertNotIn('ex-profit-growth-chart', js)
         self.assertIn("const direction = value < 0 ? 'negative' : 'positive'", js)
         self.assertIn('analysis-zero-axis', js)
 
