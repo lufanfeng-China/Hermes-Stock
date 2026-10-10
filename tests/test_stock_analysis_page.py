@@ -87,6 +87,14 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('综合评分未生成：评分覆盖权重不足 85 / 100', js)
         self.assertIn('已评估红旗规则', js)
 
+    def test_evidence_uses_chinese_field_labels_and_amount_units(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('const HEALTH_FIELD_LABELS', js)
+        self.assertIn('function healthEvidenceValue', js)
+        self.assertIn("value / 1e8", js)
+        self.assertIn('资产负债率趋势', js)
+        self.assertIn('商誉五年变化', js)
+
     def test_financial_cache_has_capacity_bound_and_lru_refresh(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('MAX_FINANCIAL_CACHE_ENTRIES = 24', js)

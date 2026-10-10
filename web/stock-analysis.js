@@ -163,14 +163,26 @@
     return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}${suffix}` : '—';
   }
 
+  const HEALTH_FIELD_LABELS = {
+    revenue: '营业收入', ex_net_profit: '扣非归母净利润', net_profit: '归母净利润', ocf: '经营现金流', free_cf: '自由现金流', capex: '资本开支', goodwill: '商誉',
+    debt_ratio: '资产负债率', roe_ex: '扣非 ROE', gross_margin: '毛利率', net_margin: '净利率', accounts_receivable: '应收账款', inventory: '存货',
+  };
+  const HEALTH_AMOUNT_FIELDS = new Set(['revenue', 'ex_net_profit', 'net_profit', 'ocf', 'free_cf', 'capex', 'goodwill', 'accounts_receivable', 'inventory']);
+  function healthEvidenceValue(key, value) {
+    if (typeof value !== 'number') return value ?? '—';
+    if (HEALTH_AMOUNT_FIELDS.has(key)) return `${(value / 1e8).toFixed(2)} 亿元`;
+    if (/(ratio|margin|roe|debt|intensity|growth_gap|cagr|premium|change)/.test(key)) return `${value.toFixed(2)}%`;
+    return value.toFixed(2);
+  }
+
   function healthEvidenceSummary(evidence) {
     if (!evidence) return '';
     const periods = Array.isArray(evidence.periods) ? evidence.periods.join(' / ') : '';
     const threshold = evidence.threshold ? `阈值：${evidence.threshold}` : evidence.thresholds ? `阈值：${Object.entries(evidence.thresholds).map(([key, value]) => `${key}=${value}`).join('；')}` : '';
-    const metrics = evidence.metrics ? `指标：${Object.entries(evidence.metrics).map(([key, value]) => `${key}=${typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—'}`).join('；')}` : '';
+    const metrics = evidence.metrics ? `指标：${Object.entries(evidence.metrics).map(([key, value]) => `${HEALTH_FIELD_LABELS[key] || key}=${healthEvidenceValue(key, value)}`).join('；')}` : '';
     const actual = evidence.actual !== undefined && evidence.actual !== null ? `实际：${typeof evidence.actual === 'object' ? JSON.stringify(evidence.actual) : healthValue(evidence.actual, 'pct')}` : '';
     const inputs = Array.isArray(evidence.inputs) && evidence.inputs.length ? `原始输入：${evidence.inputs.map((value) => {
-      if (value && typeof value === 'object' && 'field' in value) return `${value.field}${value.period ? `[${value.period}]` : ''}=${typeof value.value === 'number' ? Number(value.value).toFixed(2) : value.value ?? '—'}`;
+      if (value && typeof value === 'object' && 'field' in value) return `${HEALTH_FIELD_LABELS[value.field] || value.field}${value.period ? `[${value.period}]` : ''}=${healthEvidenceValue(value.field, value.value)}`;
       return typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—';
     }).join(' / ')}` : '';
     const subscores = evidence.subscores ? `子项得分：${Object.entries(evidence.subscores).map(([key, value]) => `${key}=${value ?? '—'}`).join('；')}` : '';
@@ -291,9 +303,13 @@
     dimensions.innerHTML = (health.dimensions || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${healthEvidenceSummary(scoreEvidence[item.code]) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(scoreEvidence[item.code]))}</small>` : ''}</article>`).join('');
     const d = health.derived || {};
     const latest = (health.series || {});
+    const debtTrend = Number.isFinite(latest.debt_ratio?.[0]) && Number.isFinite(latest.debt_ratio?.at?.(-1)) ? latest.debt_ratio.at(-1) - latest.debt_ratio[0] : null;
+    const goodwillFirst = latest.goodwill?.[0];
+    const goodwillLast = latest.goodwill?.at?.(-1);
+    const goodwillGrowth = Number.isFinite(goodwillFirst) && Number.isFinite(goodwillLast) && goodwillFirst !== 0 ? (goodwillLast / goodwillFirst - 1) * 100 : null;
     const fields = [
       ['营收 CAGR', d.revenue_cagr, '%'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%'], ['利润增长溢价', d.profit_growth_premium, 'pct'], ['毛利率五年变化', d.gross_margin_change, 'pct'], ['净利率五年变化', d.net_margin_change, 'pct'],
-      ['扣非 ROE 五年均值', d.roe_ex_average, '%'], ['最新扣非 ROE', latest.roe_ex?.at?.(-1), '%'], ['最新资产负债率', latest.debt_ratio?.at?.(-1), '%'], ['最新现金利润比', d.annual_cash_profit_ratio, ''], ['五年现金利润比', d.five_year_cash_profit_ratio, ''],
+      ['扣非 ROE 五年均值', d.roe_ex_average, '%'], ['最新扣非 ROE', latest.roe_ex?.at?.(-1), '%'], ['最新资产负债率', latest.debt_ratio?.at?.(-1), '%'], ['资产负债率趋势', debtTrend, 'pct'], ['商誉五年变化', goodwillGrowth, '%'], ['最新现金利润比', d.annual_cash_profit_ratio, ''], ['五年现金利润比', d.five_year_cash_profit_ratio, ''],
       ['FCF Margin', d.fcf_margin, '%'], ['应收增速差', d.receivable_growth_gap, 'pct'], ['存货增速差', d.inventory_growth_gap, 'pct'], ['CapEx 强度', d.capex_intensity, '%'], ['商誉 / 权益', d.goodwill_equity_ratio, '%'], ['商誉 / 资产', d.goodwill_assets_ratio, '%'],
     ];
     derived.innerHTML = fields.map(([label, value, suffix]) => `<div class="health-derived-item"><span class="health-derived-label">${label}</span><strong class="health-derived-value">${healthValue(value, suffix)}</strong></div>`).join('');
