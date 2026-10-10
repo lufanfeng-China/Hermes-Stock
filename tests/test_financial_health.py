@@ -68,6 +68,16 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertIn('actual', rule['evidence'])
         self.assertIn('periods', rule['evidence'])
 
+    def test_working_capital_growth_gaps_align_to_the_current_fiscal_year(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10 * (i + 1), inventory=10 * (i + 1), capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        series = build_financial_health(reports)['series']
+        self.assertEqual(series['years'], ['2021A', '2022A', '2023A', '2024A', '2025A'])
+        self.assertEqual(series['receivable_growth_gap'][0], None)
+        self.assertEqual(series['inventory_growth_gap'][0], None)
+        self.assertAlmostEqual(series['receivable_growth_gap'][1], 100.0)
+        self.assertAlmostEqual(series['receivable_growth_gap'][-1], 25.0)
+        self.assertAlmostEqual(series['inventory_growth_gap'][-1], 25.0)
+
     def test_exposes_missing_five_year_margin_and_goodwill_evidence_series(self):
         reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30 + i, net_margin=10 + i, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1 + i, equity=60, total_assets=100 + i * 10) for i in range(5)]
         series = build_financial_health(reports)['series']

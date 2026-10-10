@@ -137,8 +137,9 @@
     renderBars(targetId, rows, rows.map((row) => Number(row?.metrics?.[metricKey])), formatter, variant);
   }
 
-  function renderYoYGrowthBars(targetId, reports, metricKey) {
-    const rows = latestRowsByYear(reports);
+  function renderYoYGrowthBars(targetId, reports, metricKey, annualPeriods = null) {
+    const annualReports = annualPeriods ? (reports || []).filter((row) => annualPeriods.has(String(row?.period))) : reports;
+    const rows = latestRowsByYear(annualReports);
     const byPeriod = new Map((reports || []).map((row) => [String(row?.period || ''), row]));
     const values = rows.map((row) => {
       const year = Number(row?.year);
@@ -299,7 +300,7 @@
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = annualPeriods.size ? payload.reports.filter((row) => annualPeriods.has(String(row.period))) : payload.reports;
       for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, evidenceReports, metric, variant, display);
-      renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue');
+      renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue', annualPeriods);
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;

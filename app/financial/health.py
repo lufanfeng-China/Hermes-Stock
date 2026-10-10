@@ -224,7 +224,9 @@ def build_financial_health(
     goodwill_equities = _ratio_series(values["goodwill"], values["equity"], 100)
     ex_profit_path = _profit_path(values["ex_net_profit"])
     goodwill_assets_ratios = _ratio_series(values["goodwill"], values["total_assets"], 100)
-    result["series"] = {"years": [str(row.get("period")) for row in rows], "annual_cash_profit_ratio": annual_cash_profit_ratios, "fcf_margin": fcf_margins, "receivable_growth_gap": receivable_gaps, "inventory_growth_gap": inventory_gaps, "capex_intensity": capex_intensities, "gross_margin": values["gross_margin"], "net_margin": values["net_margin"], "roe_ex": values["roe_ex"], "debt_ratio": values["debt_ratio"], "goodwill": values["goodwill"], "goodwill_assets_ratio": goodwill_assets_ratios, "goodwill_equity_ratio": goodwill_equities}
+    display_receivable_gaps = [None, *receivable_gaps]
+    display_inventory_gaps = [None, *inventory_gaps]
+    result["series"] = {"years": [str(row.get("period")) for row in rows], "annual_cash_profit_ratio": annual_cash_profit_ratios, "fcf_margin": fcf_margins, "receivable_growth_gap": display_receivable_gaps, "inventory_growth_gap": display_inventory_gaps, "capex_intensity": capex_intensities, "gross_margin": values["gross_margin"], "net_margin": values["net_margin"], "roe_ex": values["roe_ex"], "debt_ratio": values["debt_ratio"], "goodwill": values["goodwill"], "goodwill_assets_ratio": goodwill_assets_ratios, "goodwill_equity_ratio": goodwill_equities}
     result["derived"] = {
         "revenue_cagr": revenue_cagr,
         "ex_net_profit_cagr": ex_profit_cagr,
