@@ -310,11 +310,10 @@
     }
     const scoreBreakdown = health.score_breakdown || [];
     const trendLabel = { up: '↑ 改善', down: '↓ 走弱', flat: '→ 平稳', unknown: '—' };
-    const scoreEvidence = Object.fromEntries(scoreBreakdown.map((item) => [item.code, item.evidence]));
     dimensions.innerHTML = (health.dimensions || []).map((item) => {
       const scoreItem = scoreBreakdown.find((entry) => entry.code === item.code);
       const formation = item.available ? `评分形成：调整前 ${healthValue(scoreItem?.evidence?.pre_trend_points)} 分；趋势调整 ${healthValue(scoreItem?.trend_adjustment, '分')}；最终 ${healthValue(scoreItem?.points)} / ${item.weight} 分` : '';
-      return `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${escapeHTML(formation)}</small>` : ''}${healthEvidenceSummary(scoreEvidence[item.code]) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(scoreEvidence[item.code]))}</small>` : ''}</article>`;
+      return `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${escapeHTML(formation)}</small>` : ''}</article>`;
     }).join('');
     const d = health.derived || {};
     const latest = (health.series || {});

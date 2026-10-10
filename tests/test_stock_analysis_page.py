@@ -139,6 +139,13 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('评分形成：调整前 ${healthValue(scoreItem?.evidence?.pre_trend_points)} 分', js)
         self.assertIn('趋势调整 ${healthValue(scoreItem?.trend_adjustment, \'分\')}', js)
 
+    def test_six_kpi_cards_show_scoring_process_without_raw_metric_dump(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        dimensions_block = js.split("dimensions.innerHTML = (health.dimensions || []).map((item) => {", 1)[1].split("    const d = health.derived", 1)[0]
+        self.assertIn('评分形成：调整前', dimensions_block)
+        self.assertNotIn('healthEvidenceSummary(scoreEvidence[item.code])', dimensions_block)
+        self.assertNotIn('指标：${Object.entries(evidence.metrics)', dimensions_block)
+
     def test_investigation_panel_renders_triggered_rule_results_with_evidence(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('const investigationResults = health?.investigation_results || [];', js)
