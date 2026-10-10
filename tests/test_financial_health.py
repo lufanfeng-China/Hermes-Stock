@@ -93,6 +93,13 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertEqual(len(health['conclusions']), 6)
         self.assertTrue(all(item['status'] == 'not_applicable' for item in health['conclusions']))
 
+    def test_missing_roe_makes_profitability_conclusion_insufficient(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=None, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        conclusion = next(item for item in health['conclusions'] if item['code'] == 'profitability')
+        self.assertEqual(conclusion['status'], 'insufficient')
+        self.assertEqual(conclusion['evidence']['metrics']['roe_ex_trend'], 'unknown')
+
     def test_flat_margins_do_not_claim_profitability_is_improving(self):
         reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10 + i, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
         conclusion = next(item for item in build_financial_health(reports)['conclusions'] if item['code'] == 'profitability')

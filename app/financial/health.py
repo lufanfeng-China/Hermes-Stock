@@ -476,7 +476,7 @@ def build_financial_health(
     def conclusion(code: str, question: str, status: str, detail: str) -> dict[str, Any]:
         return {"code": code, "question": question, "status": status, "detail": detail, "evidence": {**conclusion_evidence[code], "periods": result["periods"]}}
     profit_metrics = [result["derived"]["gross_margin_change"], result["derived"]["net_margin_change"], result["derived"]["roe_ex_trend"]]
-    profitability_status = "insufficient" if any(value is None for value in profit_metrics) else "improving" if all(value > 0 for value in profit_metrics[:2]) and profit_metrics[2] == "up" else "watch" if any(value < 0 for value in profit_metrics[:2]) or profit_metrics[2] == "down" else "stable"
+    profitability_status = "insufficient" if any(value is None for value in profit_metrics) or profit_metrics[2] == "unknown" else "improving" if all(value > 0 for value in profit_metrics[:2]) and profit_metrics[2] == "up" else "watch" if any(value < 0 for value in profit_metrics[:2]) or profit_metrics[2] == "down" else "stable"
     cash_trend = _combined_trend(_series_trend(annual_cash_profit_ratios, .1), _series_trend(fcf_margins))
     cash_status = "insufficient" if cash_profit_ratio is None or fcf_margin is None or cash_trend == "unknown" else "improving" if cash_profit_ratio >= .8 and fcf_margin >= 0 and cash_trend == "up" else "watch" if cash_profit_ratio < .5 or fcf_margin < 0 or cash_trend == "down" else "stable"
     working_status = "watch" if (receivable_gap is not None and receivable_gap > 15) or (inventory_gap is not None and inventory_gap > 15) else "insufficient" if receivable_gap is None or inventory_gap is None else "stable"
