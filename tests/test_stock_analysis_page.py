@@ -73,6 +73,14 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertNotIn("health.status === 'insufficient_data'", js)
         self.assertIn('renderHealthEvidencePanels(health);', js)
 
+    def test_health_ui_has_distinct_loading_and_failure_states(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn("renderFinancialHealth(null, null, 'loading')", js)
+        self.assertIn("renderFinancialHealth(null, null, 'failed')", js)
+        self.assertIn('正在加载财报与健康度评估结果', js)
+        self.assertIn('健康度数据加载失败', js)
+        self.assertNotIn("'全部红旗规则及评分维度均有可用数据。'", js)
+
     def test_partial_score_and_industry_calibration_disclosures_are_rendered(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

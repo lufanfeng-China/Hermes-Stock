@@ -184,11 +184,19 @@
       : `<p class="health-evidence-empty">${escapeHTML(emptyMessage)}</p>`;
   }
 
-  function renderHealthEvidencePanels(health) {
+  function renderHealthEvidencePanels(health, uiState = 'ready') {
     const redPanel = document.getElementById('health-red-flag-panel');
     const investigationPanel = document.getElementById('health-investigation-panel');
     const unavailablePanel = document.getElementById('health-unavailable-panel');
     const coverageDisclosure = document.getElementById('health-coverage-disclosure');
+    if (!health && uiState !== 'ready') {
+      const message = uiState === 'failed' ? '健康度数据加载失败；尚未完成规则与评分评估。' : '正在加载财报与健康度评估结果。';
+      redPanel.innerHTML = healthEvidenceList([], message);
+      investigationPanel.innerHTML = healthEvidenceList([], message);
+      unavailablePanel.innerHTML = healthEvidenceList([], message);
+      coverageDisclosure.textContent = message;
+      return;
+    }
     const coverageInfo = health?.red_flag_coverage || {};
     const rules = health?.rule_results || [];
     const scoreBreakdown = health?.score_breakdown || [];
@@ -205,7 +213,7 @@
     });
     redPanel.innerHTML = healthEvidenceList(triggeredRules, evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
     investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
-    unavailablePanel.innerHTML = healthEvidenceList(unavailable, '全部红旗规则及评分维度均有可用数据。');
+    unavailablePanel.innerHTML = healthEvidenceList(unavailable, '未发现不可用规则或评分维度。');
     coverageDisclosure.textContent = `评分版本：${health?.score_version || '—'}；完整年报区间：${(health?.periods || []).join(' / ') || '—'}；红旗规则覆盖度：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
   }
 
@@ -224,7 +232,7 @@
     target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix]) => `<tr><th>${label}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
-  function renderFinancialHealth(health, latestReport = null) {
+  function renderFinancialHealth(health, latestReport = null, uiState = 'ready') {
     const period = document.getElementById('health-period');
     const dataAsOf = document.getElementById('health-data-asof');
     const score = document.getElementById('health-score');
@@ -237,9 +245,11 @@
     const rawAsOf = latestReport?.report_date ? `；原始财报最新 ${latestReport.period || latestReport.year || '—'}（${latestReport.report_date}）` : '';
     dataAsOf.textContent = `资料日期：健康度证据截至 ${evidenceAsOf}${rawAsOf}`;
     if (!health) {
-      period.textContent = '需要最近五个完整年度的财报数据';
-      score.innerHTML = '数据不足 <small>/ 100</small>';
-      flags.textContent = '—'; coverage.textContent = '—'; derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(null); conclusionPanel.textContent = '暂无可用结论。'; return;
+      const failed = uiState === 'failed';
+      const message = failed ? '健康度数据加载失败' : '正在加载财报与健康度评估结果';
+      period.textContent = message;
+      score.innerHTML = `${failed ? '加载失败' : '加载中'} <small>/ 100</small>`;
+      flags.textContent = '—'; coverage.textContent = '—'; derived.textContent = message; renderHealthSeries(null); renderHealthEvidencePanels(null, uiState); conclusionPanel.textContent = message; return;
     }
     if (health.status === 'not_applicable') {
       const industry = [health?.industry?.level_1, health?.industry?.level_2].filter(Boolean).join(' · ');
@@ -303,7 +313,7 @@
     const controller = new AbortController();
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
-    renderFinancialHealth(null);
+    renderFinancialHealth(null, null, 'loading');
     for (const id of chartIds) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
@@ -329,6 +339,7 @@
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;
+      renderFinancialHealth(null, null, 'failed');
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
   }
