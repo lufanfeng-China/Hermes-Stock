@@ -36,7 +36,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertLess(html.index('id="financial-health-kpi"'), html.index('aria-label="五年经营指标"'))
         for label in ('综合健康度', '财务红旗', '核心增长质量', '盈利能力', '现金含金量', '营运资本健康度', '再投资效率', '财务风险'):
             self.assertIn(label, html)
-        self.assertIn('renderFinancialHealth(payload.health)', js)
+        self.assertIn('renderFinancialHealth(payload.health, payload.latest_report)', js)
         self.assertIn('five_year_cash_profit_ratio', js)
         self.assertIn('not_applicable', js)
         self.assertIn('annual_reports_not_contiguous', js)
@@ -72,6 +72,16 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("title: item.title || item.code, reason: item.reason || '比较数据不可用', evidence: item.evidence", js)
         self.assertNotIn("health.status === 'insufficient_data'", js)
         self.assertIn('renderHealthEvidencePanels(health);', js)
+
+    def test_p2_red_flag_date_readability_and_request_contracts(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('health-data-asof', html)
+        self.assertIn('高优先级', js)
+        self.assertIn('financialAbortController?.abort()', js)
+        self.assertIn('AbortController()', js)
+        self.assertIn('FINANCIAL_CACHE_TTL_MS', js)
+        self.assertIn('健康度证据截至 ${evidenceAsOf}', js)
 
     def test_financial_report_materializes_requested_data_and_same_period_cashflow(self):
         source = (ROOT / "app" / "financial" / "reports.py").read_text(encoding="utf-8")

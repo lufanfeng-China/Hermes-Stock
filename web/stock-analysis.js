@@ -10,7 +10,8 @@
   const form = document.getElementById('stock-analysis-search-form');
   if (!input || !dropdown || !form) return;
 
-  const state = { timer: null, requestId: 0, financialRequestId: 0, selected: null, suggestions: [], recent: [] };
+  const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -197,7 +198,11 @@
     ];
     const evaluated = coverageInfo.evaluated ?? 0;
     const total = coverageInfo.total ?? 10;
-    const triggeredRules = rules.filter((item) => item.status === 'triggered').map((item) => ({ code: item.code, title: item.title || item.code, detail: item.detail || '规则已触发。', evidence: item.evidence }));
+    const triggeredRules = rules.filter((item) => item.status === 'triggered').map((item) => {
+      const high = new Set(['fcf_two_year_negative', 'ex_profit_up_ocf_down', 'revenue_up_ex_profit_down', 'debt_ratio_rising']);
+      const tier = high.has(item.code) ? '高优先级' : '关注';
+      return { ...item, title: `${tier}｜${item.title || item.code}`, detail: item.detail || '规则已触发。' };
+    });
     redPanel.innerHTML = healthEvidenceList(triggeredRules, evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
     investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
     unavailablePanel.innerHTML = healthEvidenceList(unavailable, '全部红旗规则及评分维度均有可用数据。');
@@ -219,14 +224,18 @@
     target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix]) => `<tr><th>${label}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
-  function renderFinancialHealth(health) {
+  function renderFinancialHealth(health, latestReport = null) {
     const period = document.getElementById('health-period');
+    const dataAsOf = document.getElementById('health-data-asof');
     const score = document.getElementById('health-score');
     const flags = document.getElementById('health-red-flags');
     const coverage = document.getElementById('health-coverage');
     const dimensions = document.getElementById('health-dimensions');
     const derived = document.getElementById('health-derived');
     const conclusionPanel = document.getElementById('health-conclusions');
+    const evidenceAsOf = health?.periods?.at?.(-1) || '—';
+    const rawAsOf = latestReport?.report_date ? `；原始财报最新 ${latestReport.period || latestReport.year || '—'}（${latestReport.report_date}）` : '';
+    dataAsOf.textContent = `资料日期：健康度证据截至 ${evidenceAsOf}${rawAsOf}`;
     if (!health) {
       period.textContent = '需要最近五个完整年度的财报数据';
       score.innerHTML = '数据不足 <small>/ 100</small>';
@@ -285,6 +294,11 @@
 
   async function loadAnnualFinancials(stock) {
     const financialRequestId = ++state.financialRequestId;
+    state.financialAbortController?.abort();
+    const cacheKey = `${stock.market}:${stock.symbol}:6`;
+    const cached = state.financialCache.get(cacheKey);
+    const controller = new AbortController();
+    state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderFinancialHealth(null);
     for (const id of chartIds) {
@@ -295,17 +309,23 @@
     try {
       // Request one extra year so the earliest displayed point can be compared
       // with the matching report period a year earlier.
-      const response = await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`);
-      const payload = await response.json();
+      const payload = cached && Date.now() - cached.at < FINANCIAL_CACHE_TTL_MS
+        ? cached.payload
+        : await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`, { signal: controller.signal }).then(async (response) => {
+          const body = await response.json();
+          if (!response.ok || !body.ok) throw new Error(body?.error?.message || `HTTP ${response.status}`);
+          state.financialCache.set(cacheKey, { at: Date.now(), payload: body });
+          return body;
+        });
       if (financialRequestId !== state.financialRequestId) return;
-      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
-      renderFinancialHealth(payload.health);
+      renderFinancialHealth(payload.health, payload.latest_report);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = annualPeriods.size ? payload.reports.filter((row) => annualPeriods.has(String(row.period))) : payload.reports;
       for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, evidenceReports, metric, variant, display);
       renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue', annualPeriods);
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
+      if (error.name === 'AbortError') return;
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
   }
