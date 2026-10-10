@@ -73,6 +73,27 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertNotIn("health.status === 'insufficient_data'", js)
         self.assertIn('renderHealthEvidencePanels(health);', js)
 
+    def test_not_applicable_and_insufficient_outputs_keep_dimensions_and_conclusions_visible(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertNotIn("dimensions.innerHTML = ''; derived.textContent = '该行业须使用专用财务指标和阈值。'", js)
+        self.assertIn("notApplicableLabel", js)
+        self.assertIn("not_applicable: '不适用'", js)
+        self.assertIn('renderUnavailableDimensions(health.dimensions)', js)
+        self.assertIn('renderUnavailableConclusions(health.conclusions)', js)
+
+    def test_null_score_explains_insufficient_coverage_and_rule_coverage(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn("health.score === null", js)
+        self.assertIn('综合评分未生成：评分覆盖权重不足 85 / 100', js)
+        self.assertIn('已评估红旗规则', js)
+
+    def test_financial_cache_has_capacity_bound_and_lru_refresh(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('MAX_FINANCIAL_CACHE_ENTRIES = 24', js)
+        self.assertIn('function putFinancialCache(cacheKey, payload)', js)
+        self.assertIn('state.financialCache.delete(cacheKey)', js)
+        self.assertIn('state.financialCache.keys().next().value', js)
+
     def test_health_ui_has_distinct_loading_and_failure_states(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn("renderFinancialHealth(null, null, 'loading')", js)

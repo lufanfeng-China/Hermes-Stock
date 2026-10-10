@@ -11,6 +11,7 @@
   if (!input || !dropdown || !form) return;
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
+  const MAX_FINANCIAL_CACHE_ENTRIES = 24;
   const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
@@ -214,7 +215,7 @@
     redPanel.innerHTML = healthEvidenceList(triggeredRules, evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
     investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
     unavailablePanel.innerHTML = healthEvidenceList(unavailable, '未发现不可用规则或评分维度。');
-    coverageDisclosure.textContent = `评分版本：${health?.score_version || '—'}；完整年报区间：${(health?.periods || []).join(' / ') || '—'}；红旗规则覆盖度：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
+    coverageDisclosure.textContent = `评分版本：${health?.score_version || '—'}；完整年报区间：${(health?.periods || []).join(' / ') || '—'}；已评估红旗规则：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
   }
 
   function renderHealthSeries(health) {
@@ -242,6 +243,13 @@
     const derived = document.getElementById('health-derived');
     const conclusionPanel = document.getElementById('health-conclusions');
     const evidenceAsOf = health?.periods?.at?.(-1) || '—';
+    const notApplicableLabel = { not_applicable: '不适用', unavailable: '数据不足', insufficient: '数据不足' };
+    const renderUnavailableDimensions = (items) => {
+      dimensions.innerHTML = (items || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status || 'unavailable')}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${escapeHTML(notApplicableLabel[item.status] || '数据不足')}</span></div><div class="health-dimension-trend">${escapeHTML(item.reason || '通用规则未评估')}</div></article>`).join('') || '<p class="health-evidence-empty">未返回维度状态。</p>';
+    };
+    const renderUnavailableConclusions = (items) => {
+      conclusionPanel.innerHTML = (items || []).map((item) => `<article class="health-conclusion ${escapeHTML(item.status || 'insufficient')}"><strong>${escapeHTML(item.question)}</strong><span>${escapeHTML(notApplicableLabel[item.status] || '数据不足')}</span><p>${escapeHTML(item.detail || item.reason || '暂无可用结论。')}</p>${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(item.evidence))}</small>` : ''}</article>`).join('') || '<p class="health-evidence-empty">未返回结论状态。</p>';
+    };
     const rawAsOf = latestReport?.report_date ? `；原始财报最新 ${latestReport.period || latestReport.year || '—'}（${latestReport.report_date}）` : '';
     dataAsOf.textContent = `资料日期：健康度证据截至 ${evidenceAsOf}${rawAsOf}`;
     if (!health) {
@@ -255,22 +263,28 @@
       const industry = [health?.industry?.level_1, health?.industry?.level_2].filter(Boolean).join(' · ');
       period.textContent = industry ? `行业：${industry}` : '行业适用性检查';
       score.innerHTML = '不适用 <small>通用规则</small>';
-      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '该行业须使用专用财务指标和阈值。';
-      renderHealthSeries(null); renderHealthEvidencePanels(health); conclusionPanel.textContent = health.reason || '银行、保险、证券及房地产不适用通用工商企业健康度评分。'; return;
+      flags.textContent = '—'; coverage.textContent = '—'; renderUnavailableDimensions(health.dimensions); derived.textContent = '该行业须使用专用财务指标和阈值。';
+      renderHealthSeries(null); renderHealthEvidencePanels(health); renderUnavailableConclusions(health.conclusions); return;
     }
     if (!Array.isArray(health.periods) || health.periods.length < 5) {
       const reason = health.reason === 'annual_reports_not_contiguous' ? '最近五个年报不连续，不能按五年口径计算。' : '需要最近五个连续完整年度的财报数据。';
       period.textContent = reason;
       score.innerHTML = '数据不足 <small>/ 100</small>';
-      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(health); conclusionPanel.textContent = '暂无可用结论。'; return;
+      flags.textContent = '—'; coverage.textContent = '—'; renderUnavailableDimensions(health.dimensions); derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(health); renderUnavailableConclusions(health.conclusions); return;
     }
     period.textContent = `计算区间：${health.periods.join(' / ')}`;
     const scoreLabel = document.querySelector('.health-score-label');
     const partialCoverage = health.score_coverage_status === 'partial';
-    scoreLabel.textContent = partialCoverage ? '部分覆盖评分' : '综合健康度';
-    score.innerHTML = `${healthValue(health.score)} <small>/ 100${partialCoverage ? '（部分覆盖）' : ''}</small>`;
+    const scoreUnavailable = health.score === null || health.score === undefined;
+    scoreLabel.textContent = partialCoverage ? '部分覆盖评分' : scoreUnavailable ? '综合评分未生成' : '综合健康度';
+    score.innerHTML = scoreUnavailable
+      ? '— <small>/ 100</small>'
+      : `${healthValue(health.score)} <small>/ 100${partialCoverage ? '（部分覆盖）' : ''}</small>`;
     flags.textContent = `${health.red_flag_count || 0} 项`;
     coverage.textContent = `${health.coverage_weight || 0} / 100`;
+    if (scoreUnavailable) {
+      period.textContent = `${period.textContent}；综合评分未生成：评分覆盖权重不足 85 / 100。`;
+    }
     const scoreBreakdown = health.score_breakdown || [];
     const trendLabel = { up: '↑ 改善', down: '↓ 走弱', flat: '→ 平稳', unknown: '—' };
     const scoreEvidence = Object.fromEntries(scoreBreakdown.map((item) => [item.code, item.evidence]));
@@ -305,6 +319,14 @@
     ['inventory-chart', 'inventory', 'asset', 'amount'],
   ];
 
+  function putFinancialCache(cacheKey, payload) {
+    state.financialCache.delete(cacheKey);
+    state.financialCache.set(cacheKey, { at: Date.now(), payload });
+    while (state.financialCache.size > MAX_FINANCIAL_CACHE_ENTRIES) {
+      state.financialCache.delete(state.financialCache.keys().next().value);
+    }
+  }
+
   async function loadAnnualFinancials(stock) {
     const financialRequestId = ++state.financialRequestId;
     state.financialAbortController?.abort();
@@ -322,12 +344,17 @@
     try {
       // Request one extra year so the earliest displayed point can be compared
       // with the matching report period a year earlier.
-      const payload = cached && Date.now() - cached.at < FINANCIAL_CACHE_TTL_MS
+      const cacheIsFresh = cached && Date.now() - cached.at < FINANCIAL_CACHE_TTL_MS;
+      if (cacheIsFresh) {
+        state.financialCache.delete(cacheKey);
+        state.financialCache.set(cacheKey, cached);
+      }
+      const payload = cacheIsFresh
         ? cached.payload
         : await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`, { signal: controller.signal }).then(async (response) => {
           const body = await response.json();
           if (!response.ok || !body.ok) throw new Error(body?.error?.message || `HTTP ${response.status}`);
-          state.financialCache.set(cacheKey, { at: Date.now(), payload: body });
+          putFinancialCache(cacheKey, body);
           return body;
         });
       if (financialRequestId !== state.financialRequestId) return;
