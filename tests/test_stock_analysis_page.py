@@ -154,6 +154,18 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('营收增速较高点回落，扣非利润近年承压', js)
         self.assertIn('scoreFormationCopy(item, scoreItem)', js)
 
+    def test_kpi_and_five_year_series_metrics_expose_definition_tooltips(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn('const HEALTH_METRIC_TOOLTIPS =', js)
+        self.assertIn('function healthMetricLabel(key, label)', js)
+        self.assertIn('healthMetricLabel(tooltipKey || key, label)', js)
+        self.assertIn('healthMetricLabel(tooltipKey, label)', js)
+        for key in ('revenue_cagr', 'ex_net_profit_cagr', 'profit_growth_premium', 'gross_margin', 'net_margin', 'roe_ex', 'annual_cash_profit_ratio', 'fcf_margin', 'receivable_growth_gap', 'inventory_growth_gap', 'capex_intensity', 'debt_ratio', 'goodwill_equity_ratio'):
+            self.assertIn(f"{key}: {{", js)
+        self.assertIn('.health-metric-tooltip', css)
+        self.assertIn('.health-metric-tooltip-content', css)
+
     def test_six_core_conclusions_use_concise_kpi_style_summaries(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('function conclusionSummary(item)', js)

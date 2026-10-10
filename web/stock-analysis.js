@@ -167,6 +167,32 @@
     revenue: '营业收入', ex_net_profit: '扣非归母净利润', net_profit: '归母净利润', ocf: '经营现金流', free_cf: '自由现金流', capex: '资本开支', goodwill: '商誉',
     debt_ratio: '资产负债率', roe_ex: '扣非 ROE', gross_margin: '毛利率', net_margin: '净利率', accounts_receivable: '应收账款', inventory: '存货',
   };
+  const HEALTH_METRIC_TOOLTIPS = {
+    revenue_cagr: { definition: '五年营业收入的年均复合增长率，反映收入规模的长期扩张速度。', judgement: '持续为正且更高通常更好；增速明显放缓或转负需要关注。' },
+    ex_net_profit_cagr: { definition: '五年扣非归母净利润的年均复合增长率，尽量剔除一次性损益影响。', judgement: '持续为正且不低于营收增速通常更好；利润下滑或落后于营收需关注。' },
+    profit_growth_premium: { definition: '扣非利润 CAGR 减去营收 CAGR，衡量利润增长是否跑赢收入增长。', judgement: '为正表示利润扩张优于收入；为负表示利润增长落后于收入。' },
+    gross_margin: { definition: '毛利占营业收入的比例，反映产品或服务在直接成本后的盈利空间。', judgement: '上升或稳定通常更好；连续下降可能意味着成本、价格或产品结构承压。' },
+    net_margin: { definition: '归母净利润占营业收入的比例，反映收入最终转化为净利润的效率。', judgement: '上升或稳定通常更好；下降表示费用、减值或经营效率可能承压。' },
+    roe_ex: { definition: '扣除非经常性损益后的净资产收益率，反映股东资本的经常性回报。', judgement: '较高且稳定或上升通常更好；连续下降需关注盈利质量或资本效率。' },
+    annual_cash_profit_ratio: { definition: '经营现金流净额除以扣非归母净利润，衡量当期利润的现金回收。', judgement: '接近或高于 0.8 通常说明现金支撑较好；长期偏低或为负需关注。' },
+    five_year_cash_profit_ratio: { definition: '五年经营现金流合计除以五年扣非归母净利润合计，观察长期利润现金化。', judgement: '接近或高于 0.8 通常较好；长期偏低说明利润兑现为现金不足。' },
+    fcf_margin: { definition: '自由现金流除以营业收入；自由现金流等于经营现金流减资本开支。', judgement: '为正且上升通常更好；持续为负或下降意味着投入后的现金回报承压。' },
+    receivable_growth_gap: { definition: '应收账款同比增速减去营收同比增速，衡量应收是否快于收入扩张。', judgement: '较低或为负通常更好；高于营收 15 个百分点以上会触发关注。' },
+    inventory_growth_gap: { definition: '存货同比增速减去营收同比增速，衡量库存是否快于收入扩张。', judgement: '较低或为负通常更好；高于营收 15 个百分点以上会触发关注。' },
+    capex_intensity: { definition: '资本开支除以营业收入，反映维持和扩张经营所需的投入强度。', judgement: '高低本身不判好坏；投入可控且营收、自由现金流同步改善较好，反之需关注。' },
+    debt_ratio: { definition: '总负债占总资产的比例，反映资产负债表的杠杆水平。', judgement: '在同业可比前提下，下降或保持可控通常更好；持续上升会增加偿债压力。' },
+    goodwill: { definition: '并购形成、未来可能需要减值测试的商誉账面余额。', judgement: '稳定且有利润、现金流支撑较好；快速增加但利润未兑现需关注。' },
+    goodwill_assets_ratio: { definition: '商誉占总资产的比例，衡量商誉对资产负债表的占用。', judgement: '较低或下降通常风险更低；持续上升意味着潜在减值影响扩大。' },
+    goodwill_equity_ratio: { definition: '商誉占股东权益的比例，衡量商誉对净资产的潜在影响。', judgement: '较低或下降通常风险更低；持续上升时应关注减值对净资产的冲击。' },
+  };
+
+  function healthMetricLabel(key, label) {
+    const tooltip = HEALTH_METRIC_TOOLTIPS[key];
+    if (!tooltip) return escapeHTML(label);
+    const content = `定义：${tooltip.definition}\n判断：${tooltip.judgement}`;
+    return `<span class="health-metric-tooltip" tabindex="0" title="${escapeHTML(content)}" aria-label="${escapeHTML(`${label}。${content}`)}"><span class="health-metric-tooltip-trigger">${escapeHTML(label)}</span><span class="health-metric-tooltip-content" role="tooltip">${escapeHTML(content)}</span></span>`;
+  }
+
   const HEALTH_AMOUNT_FIELDS = new Set(['revenue', 'ex_net_profit', 'net_profit', 'ocf', 'free_cf', 'capex', 'goodwill', 'accounts_receivable', 'inventory']);
   function healthEvidenceValue(key, value) {
     if (typeof value !== 'number') return value ?? '—';
@@ -253,7 +279,7 @@
       ['毛利率', 'gross_margin', '%'], ['净利率', 'net_margin', '%'],
     ];
     if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
-    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix]) => `<tr><th>${label}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix, tooltipKey]) => `<tr><th>${healthMetricLabel(tooltipKey || key, label)}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   function scoreFormationCopy(item, scoreItem) {
@@ -387,11 +413,11 @@
     const goodwillLast = latest.goodwill?.at?.(-1);
     const goodwillGrowth = Number.isFinite(goodwillFirst) && Number.isFinite(goodwillLast) && goodwillFirst !== 0 ? (goodwillLast / goodwillFirst - 1) * 100 : null;
     const fields = [
-      ['营收 CAGR', d.revenue_cagr, '%'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%'], ['利润增长溢价', d.profit_growth_premium, 'pct'], ['毛利率五年变化', d.gross_margin_change, 'pct'], ['净利率五年变化', d.net_margin_change, 'pct'],
-      ['扣非 ROE 五年均值', d.roe_ex_average, '%'], ['最新扣非 ROE', latest.roe_ex?.at?.(-1), '%'], ['最新资产负债率', latest.debt_ratio?.at?.(-1), '%'], ['资产负债率趋势', debtTrend, 'pct'], ['商誉五年变化', goodwillGrowth, '%'], ['最新现金利润比', d.annual_cash_profit_ratio, ''], ['五年现金利润比', d.five_year_cash_profit_ratio, ''],
-      ['FCF Margin', d.fcf_margin, '%'], ['应收增速差', d.receivable_growth_gap, 'pct'], ['存货增速差', d.inventory_growth_gap, 'pct'], ['CapEx 强度', d.capex_intensity, '%'], ['商誉 / 权益', d.goodwill_equity_ratio, '%'], ['商誉 / 资产', d.goodwill_assets_ratio, '%'],
+      ['营收 CAGR', d.revenue_cagr, '%', 'revenue_cagr'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%', 'ex_net_profit_cagr'], ['利润增长溢价', d.profit_growth_premium, 'pct', 'profit_growth_premium'], ['毛利率五年变化', d.gross_margin_change, 'pct', 'gross_margin'], ['净利率五年变化', d.net_margin_change, 'pct', 'net_margin'],
+      ['扣非 ROE 五年均值', d.roe_ex_average, '%', 'roe_ex'], ['最新扣非 ROE', latest.roe_ex?.at?.(-1), '%', 'roe_ex'], ['最新资产负债率', latest.debt_ratio?.at?.(-1), '%', 'debt_ratio'], ['资产负债率趋势', debtTrend, 'pct', 'debt_ratio'], ['商誉五年变化', goodwillGrowth, '%', 'goodwill'], ['最新现金利润比', d.annual_cash_profit_ratio, '', 'annual_cash_profit_ratio'], ['五年现金利润比', d.five_year_cash_profit_ratio, '', 'five_year_cash_profit_ratio'],
+      ['FCF Margin', d.fcf_margin, '%', 'fcf_margin'], ['应收增速差', d.receivable_growth_gap, 'pct', 'receivable_growth_gap'], ['存货增速差', d.inventory_growth_gap, 'pct', 'inventory_growth_gap'], ['CapEx 强度', d.capex_intensity, '%', 'capex_intensity'], ['商誉 / 权益', d.goodwill_equity_ratio, '%', 'goodwill_equity_ratio'], ['商誉 / 资产', d.goodwill_assets_ratio, '%', 'goodwill_assets_ratio'],
     ];
-    derived.innerHTML = fields.map(([label, value, suffix]) => `<div class="health-derived-item"><span class="health-derived-label">${label}</span><strong class="health-derived-value">${healthValue(value, suffix)}</strong></div>`).join('');
+    derived.innerHTML = fields.map(([label, value, suffix, tooltipKey]) => `<div class="health-derived-item"><span class="health-derived-label">${healthMetricLabel(tooltipKey, label)}</span><strong class="health-derived-value">${healthValue(value, suffix)}</strong></div>`).join('');
     renderHealthSeries(health);
     renderHealthEvidencePanels(health);
     const conclusionLabel = { improving: '改善', stable: '平稳', watch: '需关注', insufficient: '数据不足' };
