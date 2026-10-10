@@ -174,7 +174,7 @@ def build_financial_health(
         "industry": {"level_1": industry_level_1, "level_2": industry_level_2},
     }
     def mark_all_rules_unavailable(reason: str) -> None:
-        result["rule_results"] = [{"code": code, "status": "unavailable", "reason": reason} for code in RULE_CODES]
+        result["rule_results"] = [{"code": code, "status": "unavailable", "reason": reason, "evidence": {"periods": result["periods"], "reason": reason, "threshold": None, "actual": None, "inputs": []}} for code in RULE_CODES]
     if industry_level_1 in SPECIAL_INDUSTRY_L1:
         result["status"] = "not_applicable"
         result["reason"] = f"{industry_level_1}行业不适用通用工商企业五年财务健康度评分规则"
@@ -282,7 +282,8 @@ def build_financial_health(
         _combined_trend(_series_trend(values["debt_ratio"], .5, inverse=True), _series_trend(goodwill_equities, .5, inverse=True), _series_trend(fcf_margins)),
     )
     trend_adjustments = tuple(2 if trend == "up" else -2 if trend == "down" else 0 for trend in trend_basis)
-    scores = tuple(None if score is None else max(0, min(weight, score + adjustment)) for score, adjustment, (_, _, weight) in zip((growth, profitability, cash, working, reinvest, risk), trend_adjustments, DIMENSIONS))
+    pre_trend_scores = (growth, profitability, cash, working, reinvest, risk)
+    scores = tuple(None if score is None else max(0, min(weight, score + adjustment)) for score, adjustment, (_, _, weight) in zip(pre_trend_scores, trend_adjustments, DIMENSIONS))
     revenue_growths = _growth_series(values["revenue"])
     ex_profit_growths = _growth_series(values["ex_net_profit"])
     cash_profit_ratios = _ratio_series(values["ocf"], values["ex_net_profit"])
@@ -318,7 +319,7 @@ def build_financial_health(
         "reinvestment": {"metrics": {"capex_intensity": capex_intensity, "fcf_margin": fcf_margin}, "thresholds": {"capex_intensity": "bands: <=5/10/20", "fcf_margin": "bands: >=5/0"}, "subscores": {"capex": capex_score}},
         "financial_risk": {"metrics": {"debt_ratio": values["debt_ratio"][-1], "goodwill_equity_ratio": goodwill_equity, "fcf_margin": fcf_margin}, "thresholds": {"debt_ratio": "bands: <=40/60/75", "goodwill_equity_ratio": "bands: <=10/25", "fcf_margin": "bands: >=0/-5"}, "subscores": {"debt": debt_score, "goodwill": goodwill_score, "fcf": risk_fcf_score}},
     }
-    result["score_breakdown"] = [{"code": item["code"], "title": item["title"], "points": item["score"], "weight": item["weight"], "available": item["available"], "trend": item["trend"], "trend_adjustment": adjustment, "reason": None if item["available"] else "required_metric_unavailable", "evidence": {**score_evidence[item["code"]], "pre_trend_points": None if item["score"] is None else item["score"] - adjustment}} for item, adjustment in zip(dimensions, trend_adjustments)]
+    result["score_breakdown"] = [{"code": item["code"], "title": item["title"], "points": item["score"], "weight": item["weight"], "available": item["available"], "trend": item["trend"], "trend_adjustment": adjustment, "reason": None if item["available"] else "required_metric_unavailable", "evidence": {**score_evidence[item["code"]], "pre_trend_points": pre_trend_score}} for item, adjustment, pre_trend_score in zip(dimensions, trend_adjustments, pre_trend_scores)]
     coverage = sum(item["weight"] for item in dimensions if item["available"])
     raw_total = sum(item["score"] for item in dimensions if item["available"])
     result["coverage_weight"] = coverage
@@ -420,8 +421,24 @@ def build_financial_health(
     result["red_flag_coverage"] = {"evaluated": 10 - len(unavailable), "total": 10, "unavailable": unavailable}
     triggered_codes = {item["code"] for item in flags}
     rule_thresholds = {"revenue_up_ex_profit_down": "营收同比 > 0 且扣非利润绝对额下降", "ex_profit_up_ocf_down": "扣非利润绝对额改善且 CFO 同比 < 0", "receivables_growth_gap": "> 15pct", "inventory_growth_gap": "> 15pct", "gross_margin_two_year_decline": "最新三年连续下降", "roe_ex_decline": "最新三年连续下降", "debt_ratio_rising": "最近三年连续上升且累计 >= 3pct", "capex_up_revenue_growth_down": "CapEx 连增且营收增速连降", "fcf_two_year_negative": "最近两年均 < 0", "goodwill_up_profit_not": "商誉同比 > 20% 且利润未改善"}
-    rule_actuals = {"receivables_growth_gap": receivable_gap, "inventory_growth_gap": inventory_gap, "debt_ratio_rising": None if None in (recent_debt[0], recent_debt[-1]) else recent_debt[-1] - recent_debt[0], "ex_profit_up_ocf_down": {"profit_previous": values["ex_net_profit"][-2], "profit_current": values["ex_net_profit"][-1], "ocf_growth": ocf_growth}}
-    result["rule_results"] = [{"code": code, "status": "unavailable" if code in unavailable else "triggered" if code in triggered_codes else "not_triggered", "reason": "missing_or_invalid_comparison_input" if code in unavailable else None, "evidence": {"periods": result["periods"][-3:] if code in {"gross_margin_two_year_decline", "roe_ex_decline", "debt_ratio_rising", "capex_up_revenue_growth_down"} else result["periods"][-2:], "threshold": rule_thresholds[code], "actual": rule_actuals.get(code), "inputs": rule_inputs[code]}} for code in rule_available]
+    rule_actuals = {
+        "revenue_up_ex_profit_down": {"revenue_growth": revenue_growth, "profit_previous": values["ex_net_profit"][-2], "profit_current": values["ex_net_profit"][-1]},
+        "ex_profit_up_ocf_down": {"profit_previous": values["ex_net_profit"][-2], "profit_current": values["ex_net_profit"][-1], "ocf_growth": ocf_growth},
+        "receivables_growth_gap": receivable_gap,
+        "inventory_growth_gap": inventory_gap,
+        "gross_margin_two_year_decline": values["gross_margin"][-3:],
+        "roe_ex_decline": values["roe_ex"][-3:],
+        "debt_ratio_rising": None if None in (recent_debt[0], recent_debt[-1]) else recent_debt[-1] - recent_debt[0],
+        "capex_up_revenue_growth_down": {"capex": recent_capex, "revenue_growth": recent_revenue_growths},
+        "fcf_two_year_negative": values["free_cf"][-2:],
+        "goodwill_up_profit_not": {"goodwill_growth": goodwill_growth, "profit_previous": values["ex_net_profit"][-2], "profit_current": values["ex_net_profit"][-1]},
+    }
+    rule_periods = {code: result["periods"][-2:] for code in rule_available}
+    for code in ("gross_margin_two_year_decline", "roe_ex_decline", "debt_ratio_rising"):
+        rule_periods[code] = result["periods"][-3:]
+    rule_periods["capex_up_revenue_growth_down"] = result["periods"][-4:]
+    flag_details = {item["code"]: item for item in flags}
+    result["rule_results"] = [{"code": code, "title": flag_details.get(code, {}).get("title", code), "detail": flag_details.get(code, {}).get("detail"), "status": "unavailable" if code in unavailable else "triggered" if code in triggered_codes else "not_triggered", "reason": "missing_or_invalid_comparison_input" if code in unavailable else None, "evidence": {"periods": rule_periods[code], "threshold": rule_thresholds[code], "actual": rule_actuals[code], "inputs": rule_inputs[code]}} for code in rule_available]
     growth_consistent = all(value is not None and value >= 0 for value in revenue_growths) and all(value is not None and value >= 0 for value in ex_profit_growths)
     cash_trend = _combined_trend(_series_trend(annual_cash_profit_ratios, .1), _series_trend(fcf_margins))
     conclusion_evidence = {

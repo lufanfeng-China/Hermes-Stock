@@ -59,7 +59,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         ):
             self.assertIn(f"['{chart_id}', '{field}'", js)
         self.assertIn("const evidenceReports = annualPeriods.size", js)
-        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', evidenceReports, 'revenue')", js)
+        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue')", js)
+        self.assertIn('financialRequestId !== state.financialRequestId', js)
         self.assertIn("const needsZeroAxis = variant === 'growth' || numeric.some((value) => value < 0);", js)
         self.assertIn('analysis-bar zero-axis ${variant} ${direction}', js)
         self.assertIn("const zeroClass = value === 0 ? ' zero-value' : '';", js)

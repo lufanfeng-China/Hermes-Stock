@@ -35,6 +35,16 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_unavailable_rules_preserve_auditable_evidence_contract(self):
+        health = build_financial_health([annual(2022), annual(2023)], industry_level_1='银行')
+        self.assertEqual(health['status'], 'not_applicable')
+        self.assertEqual(len(health['rule_results']), 10)
+        for rule in health['rule_results']:
+            self.assertEqual(rule['status'], 'unavailable')
+            self.assertIn('evidence', rule)
+            self.assertEqual(rule['evidence']['periods'], health['periods'])
+            self.assertEqual(rule['evidence']['reason'], 'not_applicable')
+
     def test_conclusions_expose_reproducible_evidence(self):
         reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=12, free_cf=6, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
         conclusion = build_financial_health(reports)['conclusions'][0]

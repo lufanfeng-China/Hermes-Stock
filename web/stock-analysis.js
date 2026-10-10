@@ -10,7 +10,7 @@
   const form = document.getElementById('stock-analysis-search-form');
   if (!input || !dropdown || !form) return;
 
-  const state = { timer: null, requestId: 0, selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -166,8 +166,9 @@
     const threshold = evidence.threshold ? `阈值：${evidence.threshold}` : evidence.thresholds ? `阈值：${Object.entries(evidence.thresholds).map(([key, value]) => `${key}=${value}`).join('；')}` : '';
     const metrics = evidence.metrics ? `指标：${Object.entries(evidence.metrics).map(([key, value]) => `${key}=${typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—'}`).join('；')}` : '';
     const actual = evidence.actual !== undefined && evidence.actual !== null ? `实际：${typeof evidence.actual === 'object' ? JSON.stringify(evidence.actual) : healthValue(evidence.actual, 'pct')}` : '';
+    const inputs = Array.isArray(evidence.inputs) && evidence.inputs.length ? `原始输入：${evidence.inputs.map((value) => typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—').join(' / ')}` : '';
     const criteria = evidence.criteria ? Object.entries(evidence.criteria).map(([key, value]) => `${key}：${value}`).join('；') : '';
-    return [periods && `比较期：${periods}`, metrics, threshold, actual, criteria].filter(Boolean).join('；');
+    return [periods && `比较期：${periods}`, metrics, threshold, actual, inputs, criteria].filter(Boolean).join('；');
   }
 
   function healthEvidenceList(items, emptyMessage) {
@@ -190,7 +191,7 @@
     ];
     const evaluated = coverageInfo.evaluated ?? 0;
     const total = coverageInfo.total ?? 10;
-    const triggeredRules = rules.filter((item) => item.status === 'triggered').map((item) => ({ code: item.code, title: item.code, detail: '规则已触发。', evidence: item.evidence }));
+    const triggeredRules = rules.filter((item) => item.status === 'triggered').map((item) => ({ code: item.code, title: item.title || item.code, detail: item.detail || '规则已触发。', evidence: item.evidence }));
     redPanel.innerHTML = healthEvidenceList(triggeredRules, evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
     investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
     unavailablePanel.innerHTML = healthEvidenceList(unavailable, '全部红旗规则及评分维度均有可用数据。');
@@ -230,7 +231,7 @@
       period.textContent = industry ? `行业：${industry}` : '行业适用性检查';
       score.innerHTML = '不适用 <small>通用规则</small>';
       flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '该行业须使用专用财务指标和阈值。';
-      renderHealthSeries(null); renderHealthEvidencePanels(null); conclusionPanel.textContent = health.reason || '银行、保险、证券及房地产不适用通用工商企业健康度评分。'; return;
+      renderHealthSeries(null); renderHealthEvidencePanels(health); conclusionPanel.textContent = health.reason || '银行、保险、证券及房地产不适用通用工商企业健康度评分。'; return;
     }
     if (!Array.isArray(health.periods) || health.periods.length < 5 || health.status === 'insufficient_data') {
       const reason = health.reason === 'annual_reports_not_contiguous' ? '最近五个年报不连续，不能按五年口径计算。' : '需要最近五个连续完整年度的财报数据。';
@@ -277,6 +278,7 @@
   ];
 
   async function loadAnnualFinancials(stock) {
+    const financialRequestId = ++state.financialRequestId;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderFinancialHealth(null);
     for (const id of chartIds) {
@@ -289,13 +291,15 @@
       // with the matching report period a year earlier.
       const response = await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`);
       const payload = await response.json();
+      if (financialRequestId !== state.financialRequestId) return;
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
       renderFinancialHealth(payload.health);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = annualPeriods.size ? payload.reports.filter((row) => annualPeriods.has(String(row.period))) : payload.reports;
       for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, evidenceReports, metric, variant, display);
-      renderYoYGrowthBars('revenue-growth-chart', evidenceReports, 'revenue');
+      renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue');
     } catch (error) {
+      if (financialRequestId !== state.financialRequestId) return;
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
   }
