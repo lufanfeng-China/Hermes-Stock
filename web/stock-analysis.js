@@ -298,6 +298,29 @@
     return `调整前 ${base} 分：${copy.base}。\n趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。\n最终 ${finalPoints} / ${item.weight} 分`;
   }
 
+  function conclusionSummary(item) {
+    const status = item?.status || 'insufficient';
+    const copy = (() => {
+      switch (item?.code) {
+        case 'growth':
+          return { improving: '营收与扣非利润五年保持增长，增长连续性较好。', watch: '营收或扣非利润的增长不连续，增长质量需关注。', stable: '营收与扣非利润整体保持平稳。', insufficient: '缺少连续可比的营收或扣非利润数据。', focus: '关键指标：营收、扣非利润' };
+        case 'profit_premium':
+          return { improving: '扣非利润增长快于营收，增长质量较好。', watch: '扣非利润增长未跑赢营收，利润扩张需关注。', stable: '利润与营收增速基本匹配。', insufficient: '缺少可比的营收或扣非利润增长数据。', focus: '关键指标：营收增速、扣非利润增速' };
+        case 'profitability':
+          return { improving: '利润率与扣非 ROE 整体改善，盈利能力增强。', watch: '利润率或扣非 ROE 出现走弱，盈利能力需关注。', stable: '利润率与扣非 ROE 整体平稳。', insufficient: '缺少利润率或扣非 ROE 的连续数据。', focus: '关键指标：毛利率、净利率、扣非 ROE' };
+        case 'cash_conversion':
+          return { improving: '利润向经营现金和自由现金流的转化在改善。', watch: '现金转化或自由现金流承压，需关注利润含金量。', stable: '现金转化能力整体平稳。', insufficient: '缺少经营现金流、自由现金流或利润数据。', focus: '关键指标：现金利润比、FCF Margin' };
+        case 'working_capital':
+          return { improving: '应收和存货对资金的占用相对营收在改善。', watch: '应收或存货增速明显快于营收，资金占用需关注。', stable: '应收和存货相对营收的占用整体平稳。', insufficient: '缺少应收、存货或营收的可比数据。', focus: '关键指标：应收、存货相对营收增速' };
+        case 'capital_leverage':
+          return { improving: '资本投入、负债与自由现金流的配合在改善。', watch: '资本投入或负债上升与现金回报不匹配，需关注。', stable: '资本投入与财务杠杆整体可控。', insufficient: '缺少资本开支、负债或现金流的连续数据。', focus: '关键指标：CapEx 强度、资产负债率、FCF Margin' };
+        default:
+          return { improving: '核心指标整体改善。', watch: '核心指标存在需关注项。', stable: '核心指标整体平稳。', insufficient: '可用数据不足。', focus: '关键指标：相关财务指标' };
+      }
+    })();
+    return { summary: copy[status] || copy.insufficient, focus: copy.focus };
+  }
+
   function renderFinancialHealth(health, latestReport = null, uiState = 'ready') {
     const period = document.getElementById('health-period');
     const dataAsOf = document.getElementById('health-data-asof');
@@ -372,7 +395,10 @@
     renderHealthSeries(health);
     renderHealthEvidencePanels(health);
     const conclusionLabel = { improving: '改善', stable: '平稳', watch: '需关注', insufficient: '数据不足' };
-    conclusionPanel.innerHTML = (health.conclusions || []).map((item) => `<article class="health-conclusion ${escapeHTML(item.status)}"><strong>${escapeHTML(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHTML(item.detail)}</p>${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(item.evidence))}</small>` : ''}</article>`).join('') || '暂无可用结论。';
+    conclusionPanel.innerHTML = (health.conclusions || []).map((item) => {
+      const concise = conclusionSummary(item);
+      return `<article class="health-conclusion ${escapeHTML(item.status)}"><strong>${escapeHTML(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHTML(concise.summary)}</p><small class="health-rule-evidence">${escapeHTML(concise.focus)}</small></article>`;
+    }).join('') || '暂无可用结论。';
   }
 
   const METRIC_CHARTS = [
