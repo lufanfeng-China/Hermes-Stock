@@ -163,6 +163,7 @@ def build_financial_health(
         "score": None,
         "status": "insufficient_data",
         "coverage_weight": 0,
+        "score_coverage_status": "unavailable",
         "dimensions": [],
         "derived": {},
         "red_flags": [],
@@ -343,6 +344,7 @@ def build_financial_health(
     raw_total = sum(item["score"] for item in dimensions if item["available"])
     result["coverage_weight"] = coverage
     score_eligible = coverage >= 85
+    result["score_coverage_status"] = "complete" if coverage == 100 else "partial" if score_eligible else "insufficient"
     result["score"] = round(raw_total / coverage * 100, 1) if score_eligible else None
     result["status"] = _status(result["score"], 100) if result["score"] is not None else "insufficient_data"
     if not score_eligible:

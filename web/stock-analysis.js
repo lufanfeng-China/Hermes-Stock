@@ -255,7 +255,10 @@
       flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(health); conclusionPanel.textContent = '暂无可用结论。'; return;
     }
     period.textContent = `计算区间：${health.periods.join(' / ')}`;
-    score.innerHTML = `${healthValue(health.score)} <small>/ 100</small>`;
+    const scoreLabel = document.querySelector('.health-score-label');
+    const partialCoverage = health.score_coverage_status === 'partial';
+    scoreLabel.textContent = partialCoverage ? '部分覆盖评分' : '综合健康度';
+    score.innerHTML = `${healthValue(health.score)} <small>/ 100${partialCoverage ? '（部分覆盖）' : ''}</small>`;
     flags.textContent = `${health.red_flag_count || 0} 项`;
     coverage.textContent = `${health.coverage_weight || 0} / 100`;
     const scoreBreakdown = health.score_breakdown || [];

@@ -73,6 +73,14 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertNotIn("health.status === 'insufficient_data'", js)
         self.assertIn('renderHealthEvidencePanels(health);', js)
 
+    def test_partial_score_and_industry_calibration_disclosures_are_rendered(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('health-score-label', html)
+        self.assertIn('当前未按行业分位数校准', html)
+        self.assertIn("health.score_coverage_status === 'partial'", js)
+        self.assertIn('部分覆盖评分', js)
+
     def test_p2_red_flag_date_readability_and_request_contracts(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

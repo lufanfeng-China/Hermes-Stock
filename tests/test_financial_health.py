@@ -204,6 +204,13 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertLess(worsening_scores['reinvestment'], stable_scores['reinvestment'])
         self.assertLess(worsening_scores['financial_risk'], stable_scores['financial_risk'])
 
+    def test_score_marks_partial_coverage_when_one_dimension_is_unavailable(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=12, free_cf=6, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=None, inventory=None, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertEqual(health['coverage_weight'], 85)
+        self.assertIsNotNone(health['score'])
+        self.assertEqual(health['score_coverage_status'], 'partial')
+
     def test_low_dimension_coverage_withholds_composite_score(self):
         reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=None, ocf=10, free_cf=5, gross_margin=30, net_margin=None, roe_ex=None, debt_ratio=None, accounts_receivable=None, inventory=None, capex=None, goodwill=None, equity=None, total_assets=None) for i in range(5)]
         health = build_financial_health(reports)
