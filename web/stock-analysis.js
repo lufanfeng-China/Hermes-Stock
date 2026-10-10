@@ -276,7 +276,7 @@
         : adjustment > 0
           ? '营收与扣非利润的年度增速整体改善'
           : '营收与扣非利润的年度增速整体平稳';
-      return `调整前 ${base} 分：${growthReason}${speedReason}${premiumReason}。趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。最终 ${finalPoints} / ${item.weight} 分`;
+      return `调整前 ${base} 分：${growthReason}${speedReason}${premiumReason}。\n趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。\n最终 ${finalPoints} / ${item.weight} 分`;
     }
     const copy = (() => {
       switch (item.code) {
@@ -295,7 +295,7 @@
       }
     })();
     const trendReason = adjustment < 0 ? copy.down : adjustment > 0 ? copy.up : copy.flat;
-    return `调整前 ${base} 分：${copy.base}。趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。最终 ${finalPoints} / ${item.weight} 分`;
+    return `调整前 ${base} 分：${copy.base}。\n趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。\n最终 ${finalPoints} / ${item.weight} 分`;
   }
 
   function renderFinancialHealth(health, latestReport = null, uiState = 'ready') {
@@ -355,7 +355,7 @@
     dimensions.innerHTML = (health.dimensions || []).map((item) => {
       const scoreItem = scoreBreakdown.find((entry) => entry.code === item.code);
       const formation = scoreFormationCopy(item, scoreItem);
-      return `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${escapeHTML(formation)}</small>` : ''}</article>`;
+      return `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${formation.split('\n').map(escapeHTML).join('<br>')}</small>` : ''}</article>`;
     }).join('');
     const d = health.derived || {};
     const latest = (health.series || {});

@@ -154,6 +154,11 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('营收增速较高点回落，扣非利润近年承压', js)
         self.assertIn('scoreFormationCopy(item, scoreItem)', js)
 
+    def test_score_formation_renders_trend_adjustment_on_a_new_line(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn("formation.split('\\n').map(escapeHTML).join('<br>')", js)
+        self.assertIn("\\n趋势调整", js)
+
     def test_all_six_kpi_cards_use_plain_language_score_explanations(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         for code in ('profitability', 'cash_quality', 'working_capital', 'reinvestment', 'financial_risk'):
