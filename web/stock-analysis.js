@@ -256,6 +256,31 @@
     target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix]) => `<tr><th>${label}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
+  function scoreFormationCopy(item, scoreItem) {
+    if (!item?.available || !scoreItem) return '';
+    const base = healthValue(scoreItem.evidence?.pre_trend_points);
+    const adjustment = Number(scoreItem.trend_adjustment || 0);
+    const finalPoints = healthValue(scoreItem.points);
+    if (item.code === 'growth_quality') {
+      const metrics = scoreItem.evidence?.metrics || {};
+      const subscores = scoreItem.evidence?.subscores || {};
+      const growthReason = Number(metrics.revenue_cagr) > 0 && Number(metrics.ex_net_profit_cagr) > 0
+        ? '营收与扣非利润五年仍保持增长'
+        : '营收或扣非利润五年增长不足';
+      const speedReason = subscores.growth <= 3 && subscores.adjusted_profit <= 3
+        ? '，但复合增速均处于基础档'
+        : '';
+      const premiumReason = Number(metrics.profit_premium) < 0 ? '，且扣非利润增速略落后于营收' : '';
+      const trendReason = adjustment < 0
+        ? '营收增速较高点回落，扣非利润近年承压'
+        : adjustment > 0
+          ? '营收与扣非利润的年度增速整体改善'
+          : '营收与扣非利润的年度增速整体平稳';
+      return `调整前 ${base} 分：${growthReason}${speedReason}${premiumReason}。趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。最终 ${finalPoints} / ${item.weight} 分`;
+    }
+    return `评分形成：调整前 ${base} 分；趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分；最终 ${finalPoints} / ${item.weight} 分`;
+  }
+
   function renderFinancialHealth(health, latestReport = null, uiState = 'ready') {
     const period = document.getElementById('health-period');
     const dataAsOf = document.getElementById('health-data-asof');
@@ -312,7 +337,7 @@
     const trendLabel = { up: '↑ 改善', down: '↓ 走弱', flat: '→ 平稳', unknown: '—' };
     dimensions.innerHTML = (health.dimensions || []).map((item) => {
       const scoreItem = scoreBreakdown.find((entry) => entry.code === item.code);
-      const formation = item.available ? `评分形成：调整前 ${healthValue(scoreItem?.evidence?.pre_trend_points)} 分；趋势调整 ${healthValue(scoreItem?.trend_adjustment, '分')}；最终 ${healthValue(scoreItem?.points)} / ${item.weight} 分` : '';
+      const formation = scoreFormationCopy(item, scoreItem);
       return `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${escapeHTML(formation)}</small>` : ''}</article>`;
     }).join('');
     const d = health.derived || {};

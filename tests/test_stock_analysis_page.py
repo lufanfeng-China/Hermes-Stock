@@ -136,15 +136,23 @@ class StockAnalysisPageTests(unittest.TestCase):
 
     def test_score_cards_disclose_pretrend_adjustment_and_final_points(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        self.assertIn('评分形成：调整前 ${healthValue(scoreItem?.evidence?.pre_trend_points)} 分', js)
-        self.assertIn('趋势调整 ${healthValue(scoreItem?.trend_adjustment, \'分\')}', js)
+        self.assertIn('const formation = scoreFormationCopy(item, scoreItem);', js)
+        self.assertIn("趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分", js)
 
     def test_six_kpi_cards_show_scoring_process_without_raw_metric_dump(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         dimensions_block = js.split("dimensions.innerHTML = (health.dimensions || []).map((item) => {", 1)[1].split("    const d = health.derived", 1)[0]
-        self.assertIn('评分形成：调整前', dimensions_block)
+        self.assertIn('scoreFormationCopy(item, scoreItem)', dimensions_block)
         self.assertNotIn('healthEvidenceSummary(scoreEvidence[item.code])', dimensions_block)
         self.assertNotIn('指标：${Object.entries(evidence.metrics)', dimensions_block)
+
+    def test_growth_quality_card_uses_plain_language_score_explanations(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('function scoreFormationCopy(item, scoreItem)', js)
+        self.assertIn('营收与扣非利润五年仍保持增长', js)
+        self.assertIn('扣非利润增速略落后于营收', js)
+        self.assertIn('营收增速较高点回落，扣非利润近年承压', js)
+        self.assertIn('scoreFormationCopy(item, scoreItem)', js)
 
     def test_investigation_panel_renders_triggered_rule_results_with_evidence(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
