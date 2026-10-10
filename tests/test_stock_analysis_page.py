@@ -154,6 +154,14 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('营收增速较高点回落，扣非利润近年承压', js)
         self.assertIn('scoreFormationCopy(item, scoreItem)', js)
 
+    def test_all_six_kpi_cards_use_plain_language_score_explanations(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        for code in ('profitability', 'cash_quality', 'working_capital', 'reinvestment', 'financial_risk'):
+            self.assertIn(f"case '{code}':", js)
+        for phrase in ('利润率与扣非 ROE 的综合表现', '经营现金回收与自由现金流的表现', '应收与存货相对营收的变化', '资本投入、营收增长与自由现金流的联动', '负债、商誉与自由现金流的综合风险'):
+            self.assertIn(phrase, js)
+        self.assertNotIn('评分形成：调整前 ${base} 分；趋势调整', js)
+
     def test_investigation_panel_renders_triggered_rule_results_with_evidence(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('const investigationResults = health?.investigation_results || [];', js)

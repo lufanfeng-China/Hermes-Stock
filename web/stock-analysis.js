@@ -278,7 +278,24 @@
           : '营收与扣非利润的年度增速整体平稳';
       return `调整前 ${base} 分：${growthReason}${speedReason}${premiumReason}。趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。最终 ${finalPoints} / ${item.weight} 分`;
     }
-    return `评分形成：调整前 ${base} 分；趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分；最终 ${finalPoints} / ${item.weight} 分`;
+    const copy = (() => {
+      switch (item.code) {
+        case 'profitability':
+          return { base: '利润率与扣非 ROE 的综合表现形成基础分', down: '利润率或扣非 ROE 整体走弱', up: '利润率与扣非 ROE 整体改善', flat: '利润率与扣非 ROE 整体平稳' };
+        case 'cash_quality':
+          return { base: '经营现金回收与自由现金流的表现形成基础分', down: '现金转化趋势走弱', up: '现金转化趋势改善', flat: '现金转化趋势平稳' };
+        case 'working_capital':
+          return { base: '应收与存货相对营收的变化形成基础分', down: '营运资金占用相对营收走弱', up: '营运资金占用相对营收改善', flat: '营运资金占用相对营收平稳' };
+        case 'reinvestment':
+          return { base: '资本投入、营收增长与自由现金流的联动形成基础分', down: '投入与现金回报的联动走弱', up: '投入与现金回报的联动改善', flat: '投入与现金回报的联动平稳' };
+        case 'financial_risk':
+          return { base: '负债、商誉与自由现金流的综合风险形成基础分', down: '五年风险趋势已计入基础分，未额外调整', up: '五年风险趋势已计入基础分，未额外调整', flat: '五年风险趋势已计入基础分，未额外调整' };
+        default:
+          return { base: '相关财务表现形成基础分', down: '整体趋势走弱', up: '整体趋势改善', flat: '整体趋势平稳' };
+      }
+    })();
+    const trendReason = adjustment < 0 ? copy.down : adjustment > 0 ? copy.up : copy.flat;
+    return `调整前 ${base} 分：${copy.base}。趋势调整 ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(1)} 分：${trendReason}。最终 ${finalPoints} / ${item.weight} 分`;
   }
 
   function renderFinancialHealth(health, latestReport = null, uiState = 'ready') {
