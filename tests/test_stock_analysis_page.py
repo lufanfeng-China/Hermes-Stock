@@ -40,7 +40,9 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('five_year_cash_profit_ratio', js)
         self.assertIn('not_applicable', js)
         self.assertIn('annual_reports_not_contiguous', js)
-        self.assertIn('red_flags', js)
+        self.assertIn('triggeredRules', js)
+        self.assertIn('item.status === \'triggered\'', js)
+        self.assertIn('healthEvidenceSummary', js)
         for token in ('health-red-flag-panel', 'health-investigation-panel', 'health-unavailable-panel', 'health-series', 'rule_results', 'score_breakdown', '资本开支（CapEx）'):
             self.assertIn(token, html if token.startswith('health-') or token == '资本开支（CapEx）' else js)
 

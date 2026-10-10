@@ -35,6 +35,36 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_conclusions_expose_reproducible_evidence(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=12, free_cf=6, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        conclusion = build_financial_health(reports)['conclusions'][0]
+        self.assertIn('evidence', conclusion)
+        self.assertIn('metrics', conclusion['evidence'])
+        self.assertIn('criteria', conclusion['evidence'])
+        self.assertIn('periods', conclusion['evidence'])
+
+    def test_score_breakdown_exposes_reproducible_dimension_evidence(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=12, free_cf=6, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        dimension = build_financial_health(reports)['score_breakdown'][0]
+        self.assertIn('evidence', dimension)
+        self.assertIn('metrics', dimension['evidence'])
+        self.assertIn('thresholds', dimension['evidence'])
+
+    def test_rule_results_expose_reproducible_evidence(self):
+        reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 2, ocf=20 - i * 2, free_cf=10, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10 + i * 20, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        rule = next(item for item in build_financial_health(reports)['rule_results'] if item['code'] == 'receivables_growth_gap')
+        self.assertIn('evidence', rule)
+        self.assertIn('threshold', rule['evidence'])
+        self.assertIn('actual', rule['evidence'])
+        self.assertIn('periods', rule['evidence'])
+
+    def test_exposes_missing_five_year_margin_and_goodwill_evidence_series(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30 + i, net_margin=10 + i, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1 + i, equity=60, total_assets=100 + i * 10) for i in range(5)]
+        series = build_financial_health(reports)['series']
+        for code in ('gross_margin', 'net_margin', 'goodwill_assets_ratio', 'goodwill'):
+            self.assertIn(code, series)
+            self.assertEqual(len(series[code]), 5)
+
     def test_leverage_goodwill_and_cashflow_combination_creates_investigation(self):
         reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=20 - i * 3, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40 + i * 5, accounts_receivable=10, inventory=10, capex=3, goodwill=1 + i * 2, equity=60, total_assets=100) for i in range(5)]
         health = build_financial_health(reports)

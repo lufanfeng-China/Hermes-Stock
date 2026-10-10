@@ -160,9 +160,19 @@
     return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}${suffix}` : '—';
   }
 
+  function healthEvidenceSummary(evidence) {
+    if (!evidence) return '';
+    const periods = Array.isArray(evidence.periods) ? evidence.periods.join(' / ') : '';
+    const threshold = evidence.threshold ? `阈值：${evidence.threshold}` : evidence.thresholds ? `阈值：${Object.entries(evidence.thresholds).map(([key, value]) => `${key}=${value}`).join('；')}` : '';
+    const metrics = evidence.metrics ? `指标：${Object.entries(evidence.metrics).map(([key, value]) => `${key}=${typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—'}`).join('；')}` : '';
+    const actual = evidence.actual !== undefined && evidence.actual !== null ? `实际：${typeof evidence.actual === 'object' ? JSON.stringify(evidence.actual) : healthValue(evidence.actual, 'pct')}` : '';
+    const criteria = evidence.criteria ? Object.entries(evidence.criteria).map(([key, value]) => `${key}：${value}`).join('；') : '';
+    return [periods && `比较期：${periods}`, metrics, threshold, actual, criteria].filter(Boolean).join('；');
+  }
+
   function healthEvidenceList(items, emptyMessage) {
     return items.length
-      ? `<ul>${items.map((item) => `<li><strong>${escapeHTML(item.title || item.code || '未命名规则')}</strong>${item.detail || item.reason ? `：${escapeHTML(item.detail || item.reason)}` : ''}</li>`).join('')}</ul>`
+      ? `<ul>${items.map((item) => `<li><strong>${escapeHTML(item.title || item.code || '未命名规则')}</strong>${item.detail || item.reason ? `：${escapeHTML(item.detail || item.reason)}` : ''}${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(item.evidence))}</small>` : ''}</li>`).join('')}</ul>`
       : `<p class="health-evidence-empty">${escapeHTML(emptyMessage)}</p>`;
   }
 
@@ -180,10 +190,11 @@
     ];
     const evaluated = coverageInfo.evaluated ?? 0;
     const total = coverageInfo.total ?? 10;
-    redPanel.innerHTML = healthEvidenceList(health?.red_flags || [], evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
+    const triggeredRules = rules.filter((item) => item.status === 'triggered').map((item) => ({ code: item.code, title: item.code, detail: '规则已触发。', evidence: item.evidence }));
+    redPanel.innerHTML = healthEvidenceList(triggeredRules, evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
     investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
     unavailablePanel.innerHTML = healthEvidenceList(unavailable, '全部红旗规则及评分维度均有可用数据。');
-    coverageDisclosure.textContent = `红旗规则覆盖度：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
+    coverageDisclosure.textContent = `评分版本：${health?.score_version || '—'}；完整年报区间：${(health?.periods || []).join(' / ') || '—'}；红旗规则覆盖度：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
   }
 
   function renderHealthSeries(health) {
@@ -194,7 +205,8 @@
       ['现金利润比', 'annual_cash_profit_ratio', ''], ['FCF Margin', 'fcf_margin', '%'],
       ['应收增速差', 'receivable_growth_gap', 'pct'], ['存货增速差', 'inventory_growth_gap', 'pct'],
       ['CapEx 强度', 'capex_intensity', '%'], ['扣非 ROE', 'roe_ex', '%'],
-      ['资产负债率', 'debt_ratio', '%'], ['商誉 / 权益', 'goodwill_equity_ratio', '%'],
+      ['资产负债率', 'debt_ratio', '%'], ['商誉', 'goodwill', ''], ['商誉 / 资产', 'goodwill_assets_ratio', '%'], ['商誉 / 权益', 'goodwill_equity_ratio', '%'],
+      ['毛利率', 'gross_margin', '%'], ['净利率', 'net_margin', '%'],
     ];
     if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
     target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix]) => `<tr><th>${label}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -230,8 +242,10 @@
     score.innerHTML = `${healthValue(health.score)} <small>/ 100</small>`;
     flags.textContent = `${health.red_flag_count || 0} 项`;
     coverage.textContent = `${health.coverage_weight || 0} / 100`;
+    const scoreBreakdown = health.score_breakdown || [];
     const trendLabel = { up: '↑ 改善', down: '↓ 走弱', flat: '→ 平稳', unknown: '—' };
-    dimensions.innerHTML = (health.dimensions || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div></article>`).join('');
+    const scoreEvidence = Object.fromEntries(scoreBreakdown.map((item) => [item.code, item.evidence]));
+    dimensions.innerHTML = (health.dimensions || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${healthEvidenceSummary(scoreEvidence[item.code]) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(scoreEvidence[item.code]))}</small>` : ''}</article>`).join('');
     const d = health.derived || {};
     const latest = (health.series || {});
     const fields = [
@@ -243,7 +257,7 @@
     renderHealthSeries(health);
     renderHealthEvidencePanels(health);
     const conclusionLabel = { improving: '改善', stable: '平稳', watch: '需关注', insufficient: '数据不足' };
-    conclusionPanel.innerHTML = (health.conclusions || []).map((item) => `<article class="health-conclusion ${escapeHTML(item.status)}"><strong>${escapeHTML(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHTML(item.detail)}</p></article>`).join('') || '暂无可用结论。';
+    conclusionPanel.innerHTML = (health.conclusions || []).map((item) => `<article class="health-conclusion ${escapeHTML(item.status)}"><strong>${escapeHTML(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHTML(item.detail)}</p>${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(item.evidence))}</small>` : ''}</article>`).join('') || '暂无可用结论。';
   }
 
   const METRIC_CHARTS = [
