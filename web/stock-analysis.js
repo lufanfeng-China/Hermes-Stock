@@ -167,7 +167,10 @@
     const threshold = evidence.threshold ? `阈值：${evidence.threshold}` : evidence.thresholds ? `阈值：${Object.entries(evidence.thresholds).map(([key, value]) => `${key}=${value}`).join('；')}` : '';
     const metrics = evidence.metrics ? `指标：${Object.entries(evidence.metrics).map(([key, value]) => `${key}=${typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—'}`).join('；')}` : '';
     const actual = evidence.actual !== undefined && evidence.actual !== null ? `实际：${typeof evidence.actual === 'object' ? JSON.stringify(evidence.actual) : healthValue(evidence.actual, 'pct')}` : '';
-    const inputs = Array.isArray(evidence.inputs) && evidence.inputs.length ? `原始输入：${evidence.inputs.map((value) => typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—').join(' / ')}` : '';
+    const inputs = Array.isArray(evidence.inputs) && evidence.inputs.length ? `原始输入：${evidence.inputs.map((value) => {
+      if (value && typeof value === 'object' && 'field' in value) return `${value.field}${value.period ? `[${value.period}]` : ''}=${typeof value.value === 'number' ? Number(value.value).toFixed(2) : value.value ?? '—'}`;
+      return typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—';
+    }).join(' / ')}` : '';
     const subscores = evidence.subscores ? `子项得分：${Object.entries(evidence.subscores).map(([key, value]) => `${key}=${value ?? '—'}`).join('；')}` : '';
     const preTrend = evidence.pre_trend_points !== undefined && evidence.pre_trend_points !== null ? `趋势调整前：${healthValue(evidence.pre_trend_points)} 分` : '';
     const criteria = evidence.criteria ? Object.entries(evidence.criteria).map(([key, value]) => `${key}：${value}`).join('；') : '';

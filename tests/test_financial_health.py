@@ -64,6 +64,7 @@ class FinancialHealthTests(unittest.TestCase):
         reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 2, ocf=20 - i * 2, free_cf=10, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10 + i * 20, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
         rule = next(item for item in build_financial_health(reports)['rule_results'] if item['code'] == 'receivables_growth_gap')
         self.assertIn('evidence', rule)
+        self.assertTrue(all({'field', 'period', 'value'} <= set(input_) for input_ in rule['evidence']['inputs']))
         self.assertIn('threshold', rule['evidence'])
         self.assertIn('actual', rule['evidence'])
         self.assertIn('periods', rule['evidence'])
@@ -84,6 +85,23 @@ class FinancialHealthTests(unittest.TestCase):
         for code in ('gross_margin', 'net_margin', 'goodwill_assets_ratio', 'goodwill'):
             self.assertIn(code, series)
             self.assertEqual(len(series[code]), 5)
+
+    def test_early_exit_returns_six_unavailable_dimensions_and_conclusions(self):
+        health = build_financial_health([annual(2024), annual(2025)], industry_level_1='银行')
+        self.assertEqual(len(health['dimensions']), 6)
+        self.assertTrue(all(item['available'] is False and item['status'] == 'unavailable' for item in health['dimensions']))
+        self.assertEqual(len(health['conclusions']), 6)
+        self.assertTrue(all(item['status'] == 'not_applicable' for item in health['conclusions']))
+
+    def test_flat_margins_do_not_claim_profitability_is_improving(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10 + i, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        conclusion = next(item for item in build_financial_health(reports)['conclusions'] if item['code'] == 'profitability')
+        self.assertEqual(conclusion['status'], 'stable')
+
+    def test_leverage_capex_cashflow_investigation_does_not_require_goodwill_growth(self):
+        reports = [annual(2021 + i, revenue=100 + i, ex_net_profit=10, ocf=20 - i * 3, free_cf=15 - i * 4, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=35 + i * 4, accounts_receivable=10, inventory=10, capex=3 + i * 3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertIn('leverage_capex_cashflow_risk', [item['code'] for item in health['investigation_items']])
 
     def test_leverage_goodwill_and_cashflow_combination_creates_investigation(self):
         reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=20 - i * 3, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40 + i * 5, accounts_receivable=10, inventory=10, capex=3, goodwill=1 + i * 2, equity=60, total_assets=100) for i in range(5)]
