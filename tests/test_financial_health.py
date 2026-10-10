@@ -119,6 +119,26 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertEqual(health['derived']['ex_net_profit_path'], 'break_even_to_loss')
         self.assertIn('ex_net_profit_break_even_to_loss', [item['code'] for item in health['investigation_items']])
 
+    def test_zero_base_profit_red_flags_are_evaluated_when_absolute_comparison_is_available(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=value, ocf=20 if i < 4 else 10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=goodwill, equity=60, total_assets=100) for i, (value, goodwill) in enumerate([(5, 1), (5, 1), (5, 1), (0, 1), (3, 2)])]
+        health = build_financial_health(reports)
+        rules = {item['code']: item for item in health['rule_results']}
+        self.assertEqual(rules['ex_profit_up_ocf_down']['status'], 'triggered')
+        self.assertEqual(rules['goodwill_up_profit_not']['status'], 'not_triggered')
+        self.assertNotIn('ex_profit_up_ocf_down', health['red_flag_coverage']['unavailable'])
+
+    def test_missing_profitability_or_cash_inputs_make_conclusions_insufficient(self):
+        reports = [annual(2021 + i, revenue=100 + i, ex_net_profit=10, ocf=None, free_cf=5, gross_margin=None, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        conclusions = {item['code']: item for item in build_financial_health(reports)['conclusions']}
+        self.assertEqual(conclusions['profitability']['status'], 'insufficient')
+        self.assertEqual(conclusions['cash_conversion']['status'], 'insufficient')
+
+    def test_explicit_unknown_industry_is_not_scored_as_general_industry(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports, industry_level_1=None)
+        self.assertEqual(health['status'], 'not_applicable')
+        self.assertEqual(health['reason'], 'industry_classification_unavailable')
+
     def test_marks_explicit_insurance_and_securities_as_not_applicable(self):
         reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i in range(5)]
         for industry in ('保险', '证券'):

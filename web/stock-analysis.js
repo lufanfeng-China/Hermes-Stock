@@ -189,7 +189,7 @@
     const rules = health?.rule_results || [];
     const scoreBreakdown = health?.score_breakdown || [];
     const unavailable = [
-      ...rules.filter((item) => item.status === 'unavailable').map((item) => ({ code: item.code, title: item.code, reason: item.reason || '比较数据不可用' })),
+      ...rules.filter((item) => item.status === 'unavailable').map((item) => ({ code: item.code, title: item.title || item.code, reason: item.reason || '比较数据不可用', evidence: item.evidence })),
       ...scoreBreakdown.filter((item) => item.available === false).map((item) => ({ code: `score-${item.code}`, title: item.title, reason: item.reason || '评分所需指标不可用' })),
     ];
     const evaluated = coverageInfo.evaluated ?? 0;
@@ -236,11 +236,11 @@
       flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '该行业须使用专用财务指标和阈值。';
       renderHealthSeries(null); renderHealthEvidencePanels(health); conclusionPanel.textContent = health.reason || '银行、保险、证券及房地产不适用通用工商企业健康度评分。'; return;
     }
-    if (!Array.isArray(health.periods) || health.periods.length < 5 || health.status === 'insufficient_data') {
+    if (!Array.isArray(health.periods) || health.periods.length < 5) {
       const reason = health.reason === 'annual_reports_not_contiguous' ? '最近五个年报不连续，不能按五年口径计算。' : '需要最近五个连续完整年度的财报数据。';
       period.textContent = reason;
       score.innerHTML = '数据不足 <small>/ 100</small>';
-      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(null); conclusionPanel.textContent = '暂无可用结论。'; return;
+      flags.textContent = '—'; coverage.textContent = '—'; dimensions.innerHTML = ''; derived.textContent = '暂无可用 KPI 数据'; renderHealthSeries(null); renderHealthEvidencePanels(health); conclusionPanel.textContent = '暂无可用结论。'; return;
     }
     period.textContent = `计算区间：${health.periods.join(' / ')}`;
     score.innerHTML = `${healthValue(health.score)} <small>/ 100</small>`;

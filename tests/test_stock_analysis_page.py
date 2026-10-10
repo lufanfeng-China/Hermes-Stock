@@ -67,6 +67,12 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("const zeroClass = value === 0 ? ' zero-value' : '';", js)
         self.assertIn("display === 'percent'", js)
 
+    def test_partial_health_evidence_is_not_discarded_and_unavailable_rules_keep_evidence(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn("title: item.title || item.code, reason: item.reason || '比较数据不可用', evidence: item.evidence", js)
+        self.assertNotIn("health.status === 'insufficient_data'", js)
+        self.assertIn('renderHealthEvidencePanels(health);', js)
+
     def test_financial_report_materializes_requested_data_and_same_period_cashflow(self):
         source = (ROOT / "app" / "financial" / "reports.py").read_text(encoding="utf-8")
         for field in (

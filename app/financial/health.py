@@ -22,6 +22,7 @@ DIMENSIONS = (
 # level-1 groups need their own capital, leverage and cash-flow definitions.
 SPECIAL_INDUSTRY_L1 = frozenset({"银行", "非银金融", "房地产", "保险", "证券"})
 RULE_CODES = ("revenue_up_ex_profit_down", "ex_profit_up_ocf_down", "receivables_growth_gap", "inventory_growth_gap", "gross_margin_two_year_decline", "roe_ex_decline", "debt_ratio_rising", "capex_up_revenue_growth_down", "fcf_two_year_negative", "goodwill_up_profit_not")
+_INDUSTRY_UNSPECIFIED = object()
 
 
 def _number(value: Any) -> float | None:
@@ -145,7 +146,7 @@ def _flag(code: str, title: str, detail: str) -> dict[str, str]:
 def build_financial_health(
     reports: list[dict[str, Any]],
     *,
-    industry_level_1: str | None = None,
+    industry_level_1: str | None | object = _INDUSTRY_UNSPECIFIED,
     industry_level_2: str | None = None,
 ) -> dict[str, Any]:
     """Build a transparent health score and independent red-flag list.
@@ -171,10 +172,15 @@ def build_financial_health(
         "conclusions": [],
         "series": {},
         "reason": None,
-        "industry": {"level_1": industry_level_1, "level_2": industry_level_2},
+        "industry": {"level_1": None if industry_level_1 is _INDUSTRY_UNSPECIFIED else industry_level_1, "level_2": industry_level_2},
     }
     def mark_all_rules_unavailable(reason: str) -> None:
         result["rule_results"] = [{"code": code, "status": "unavailable", "reason": reason, "evidence": {"periods": result["periods"], "reason": reason, "threshold": None, "actual": None, "inputs": []}} for code in RULE_CODES]
+    if industry_level_1 is None or (isinstance(industry_level_1, str) and not industry_level_1.strip()):
+        result["status"] = "not_applicable"
+        result["reason"] = "industry_classification_unavailable"
+        mark_all_rules_unavailable("industry_classification_unavailable")
+        return result
     if industry_level_1 in SPECIAL_INDUSTRY_L1:
         result["status"] = "not_applicable"
         result["reason"] = f"{industry_level_1}行业不适用通用工商企业五年财务健康度评分规则"
@@ -409,7 +415,7 @@ def build_financial_health(
     }
     rule_available = {
         "revenue_up_ex_profit_down": revenue_growth is not None and all(value is not None for value in values["ex_net_profit"][-2:]),
-        "ex_profit_up_ocf_down": ex_growth is not None and ocf_growth is not None,
+        "ex_profit_up_ocf_down": all(value is not None for value in values["ex_net_profit"][-2:]) and ocf_growth is not None,
         "receivables_growth_gap": receivable_gap is not None,
         "inventory_growth_gap": inventory_gap is not None,
         "gross_margin_two_year_decline": all(value is not None for value in values["gross_margin"][-3:]),
@@ -417,7 +423,7 @@ def build_financial_health(
         "debt_ratio_rising": all(value is not None for value in values["debt_ratio"][-3:]),
         "capex_up_revenue_growth_down": all(value is not None for value in recent_capex) and all(value is not None for value in recent_revenue_growths),
         "fcf_two_year_negative": all(value is not None for value in values["free_cf"][-2:]),
-        "goodwill_up_profit_not": goodwill_growth is not None and ex_growth is not None,
+        "goodwill_up_profit_not": goodwill_growth is not None and all(value is not None for value in values["ex_net_profit"][-2:]),
     }
     unavailable = [code for code, available in rule_available.items() if not available]
     result["red_flag_coverage"] = {"evaluated": 10 - len(unavailable), "total": 10, "unavailable": unavailable}
@@ -454,9 +460,9 @@ def build_financial_health(
     def conclusion(code: str, question: str, status: str, detail: str) -> dict[str, Any]:
         return {"code": code, "question": question, "status": status, "detail": detail, "evidence": {**conclusion_evidence[code], "periods": result["periods"]}}
     profit_metrics = [result["derived"]["gross_margin_change"], result["derived"]["net_margin_change"], result["derived"]["roe_ex_trend"]]
-    profitability_status = "improving" if all(value is not None and value >= 0 for value in profit_metrics[:2]) and profit_metrics[2] == "up" else "watch" if any(value is None or value < 0 for value in profit_metrics[:2]) or profit_metrics[2] == "down" else "stable"
+    profitability_status = "insufficient" if any(value is None for value in profit_metrics) else "improving" if all(value >= 0 for value in profit_metrics[:2]) and profit_metrics[2] == "up" else "watch" if any(value < 0 for value in profit_metrics[:2]) or profit_metrics[2] == "down" else "stable"
     cash_trend = _combined_trend(_series_trend(annual_cash_profit_ratios, .1), _series_trend(fcf_margins))
-    cash_status = "improving" if cash_profit_ratio is not None and cash_profit_ratio >= .8 and fcf_margin is not None and fcf_margin >= 0 and cash_trend == "up" else "watch" if cash_profit_ratio is None or fcf_margin is None or cash_profit_ratio < .5 or fcf_margin < 0 or cash_trend == "down" else "stable"
+    cash_status = "insufficient" if cash_profit_ratio is None or fcf_margin is None or cash_trend == "unknown" else "improving" if cash_profit_ratio >= .8 and fcf_margin >= 0 and cash_trend == "up" else "watch" if cash_profit_ratio < .5 or fcf_margin < 0 or cash_trend == "down" else "stable"
     working_status = "watch" if (receivable_gap is not None and receivable_gap > 15) or (inventory_gap is not None and inventory_gap > 15) else "insufficient" if receivable_gap is None or inventory_gap is None else "stable"
     leverage_inputs_available = all(value is not None for value in capex_intensities) and debt_change is not None and all(value is not None for value in fcf_margins) and all(value is not None for value in revenue_growths)
     leverage_status = "insufficient" if not leverage_inputs_available else "watch" if (capex_intensities[-1] > capex_intensities[0] and debt_change > 3 and _series_trend(revenue_growths, 1) == "down") else "improving" if (capex_intensities[-1] <= capex_intensities[0] and debt_change <= 0 and _series_trend(fcf_margins) == "up") else "stable"
