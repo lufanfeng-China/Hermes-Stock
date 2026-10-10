@@ -251,6 +251,57 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertEqual([item['code'] for item in health['conclusions']], ['growth', 'profit_premium', 'profitability', 'cash_conversion', 'working_capital', 'capital_leverage'])
         self.assertTrue(all(item['status'] in {'improving', 'stable', 'watch', 'insufficient'} for item in health['conclusions']))
 
+    def test_conclusion_evidence_includes_five_year_raw_inputs(self):
+        health = build_financial_health([annual(2021 + i) for i in range(5)])
+        conclusion = next(item for item in health['conclusions'] if item['code'] == 'cash_conversion')
+        self.assertEqual(conclusion['evidence']['periods'], ['2021A', '2022A', '2023A', '2024A', '2025A'])
+        self.assertTrue(any(item['field'] == 'ocf' and item['period'] == '2021A' for item in conclusion['evidence']['inputs']))
+
+    def test_investigation_rules_mark_missing_inputs_unavailable_with_coverage(self):
+        reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i, ocf=None, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        result = next(item for item in health['investigation_results'] if item['code'] == 'earnings_quality_combination')
+        self.assertEqual(result['status'], 'unavailable')
+        self.assertEqual(result['reason'], 'required_metric_unavailable')
+        self.assertIn('earnings_quality_combination', health['investigation_coverage']['unavailable'])
+
+    def test_financial_risk_score_includes_debt_goodwill_and_fcf_five_year_trend_subscores(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=20, free_cf=5 + i * 2, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=70 - i * 8, accounts_receivable=10, inventory=10, capex=3, goodwill=20 - i * 3, equity=60, total_assets=100) for i in range(5)]
+        score = next(item for item in build_financial_health(reports)['score_breakdown'] if item['code'] == 'financial_risk')
+        self.assertEqual(score['evidence']['subscores']['debt_trend'], 2)
+        self.assertEqual(score['evidence']['subscores']['goodwill_trend'], 1)
+        self.assertEqual(score['evidence']['subscores']['fcf_trend'], 1)
+        self.assertEqual(score['trend_adjustment'], 0)
+
+    def test_triggered_investigation_has_auditable_rule_result_and_evidence(self):
+        reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 3, ocf=20 - i * 3, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10 + i * 20, inventory=10 + i * 20, capex=3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        result = next(item for item in health['investigation_results'] if item['code'] == 'earnings_quality_combination')
+        self.assertEqual(result['status'], 'triggered')
+        self.assertEqual(result['evidence']['periods'], ['2024A', '2025A'])
+        self.assertTrue(result['evidence']['inputs'])
+        self.assertIn('threshold', result['evidence'])
+
+    def test_capital_intensive_growth_with_rising_fcf_is_not_penalized_by_absolute_capex_level(self):
+        reports = [annual(2021 + i, revenue=100 * (1.3 ** i), ex_net_profit=10 * (1.3 ** i), ocf=20 * (1.35 ** i), free_cf=10 * (1.4 ** i), gross_margin=30, net_margin=10, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=10, capex=30 * (1.3 ** i), goodwill=0, equity=60, total_assets=100) for i in range(5)]
+        score = next(item for item in build_financial_health(reports)['score_breakdown'] if item['code'] == 'reinvestment')
+        self.assertEqual(score['evidence']['subscores']['capex_chain'], 5)
+        self.assertGreaterEqual(score['points'], 9)
+
+    def test_unavailable_dimension_has_uniform_status_and_missing_fields_reason(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=15, free_cf=10, gross_margin=30, net_margin=10, roe_ex=12, debt_ratio=None, accounts_receivable=10, inventory=10, capex=3, goodwill=None, equity=None, total_assets=None) for i in range(5)]
+        dimension = next(item for item in build_financial_health(reports)['dimensions'] if item['code'] == 'financial_risk')
+        self.assertEqual(dimension['status'], 'unavailable')
+        self.assertEqual(dimension['reason'], 'required_metric_unavailable')
+        self.assertIn('debt_ratio', dimension['missing_fields'])
+
+    def test_missing_financial_risk_withholds_composite_score_even_at_85_coverage(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10 + i, ocf=15 + i, free_cf=10 + i, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=None, accounts_receivable=10, inventory=10, capex=3, goodwill=None, equity=None, total_assets=None) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertEqual(health['coverage_weight'], 85)
+        self.assertIsNone(health['score'])
+        self.assertEqual(health['reason'], 'financial_risk_unavailable')
+
     def test_exposes_full_derived_kpi_contract_and_red_flag_coverage(self):
         reports = [annual(2021 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 2, ocf=12 + i * 3, free_cf=8 + i, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=50 - i, accounts_receivable=10 + i, inventory=15 + i, capex=4 + i, goodwill=i, equity=60 + i * 2, total_assets=100 + i * 10) for i in range(5)]
         health = build_financial_health(reports)

@@ -3089,6 +3089,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             years = int(years_raw)
         except (TypeError, ValueError):
             years = 0
+        years = max(6, years)
         try:
             self.respond_json(HTTPStatus.OK, load_recent_three_year_financial_reports(market, symbol, years=years))
         except ValueError as exc:

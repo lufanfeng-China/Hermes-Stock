@@ -2,6 +2,7 @@ import json
 import unittest
 from unittest import mock
 
+from app import handler as app_handler
 from scripts import serve_stock_dashboard as dashboard
 
 
@@ -737,6 +738,19 @@ class StockScoreAiReportTests(unittest.TestCase):
         self.assertEqual(9, len(loaded_paths))
         self.assertNotIn("/tmp/20231231.dat", loaded_paths)
         self.assertNotIn("/tmp/20230930.dat", loaded_paths)
+
+    def test_stock_score_report_history_raises_requested_years_to_six(self) -> None:
+        handler = mock.Mock()
+        payload = {"ok": True, "reports": []}
+
+        with mock.patch.object(app_handler, "load_recent_three_year_financial_reports", return_value=payload) as load_reports:
+            app_handler.StockDashboardHandler.handle_stock_score_report_history(
+                handler,
+                "market=sh&symbol=601318&years=5",
+            )
+
+        load_reports.assert_called_once_with("sh", "601318", years=6)
+        handler.respond_json.assert_called_once_with(app_handler.HTTPStatus.OK, payload)
 
     def test_respond_json_swallows_broken_pipe_from_write(self) -> None:
         handler = mock.Mock()

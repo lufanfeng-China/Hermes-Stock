@@ -58,8 +58,9 @@ class StockAnalysisPageTests(unittest.TestCase):
             ('inventory-chart', 'inventory'),
         ):
             self.assertIn(f"['{chart_id}', '{field}'", js)
-        self.assertIn("const evidenceReports = annualPeriods.size", js)
-        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue', annualPeriods)", js)
+        self.assertIn("const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));", js)
+        self.assertIn("const healthEvidenceReports = annualPeriods.size ?", js)
+        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', evidenceReports, 'revenue', annualPeriods)", js)
         self.assertIn('const annualReports = annualPeriods ?', js)
         self.assertIn('financialRequestId !== state.financialRequestId', js)
         self.assertIn("const needsZeroAxis = variant === 'growth' || numeric.some((value) => value < 0);", js)
@@ -86,6 +87,11 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("health.score === null", js)
         self.assertIn('综合评分未生成：评分覆盖权重不足 85 / 100', js)
         self.assertIn('已评估红旗规则', js)
+
+    def test_raw_trend_charts_never_fall_back_to_interim_reports(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn("payload.reports.filter((row) => String(row?.period || '').endsWith('A'))", js)
+        self.assertNotIn("annualPeriods.size ? payload.reports.filter((row) => annualPeriods.has(String(row.period))) : payload.reports", js)
 
     def test_evidence_uses_chinese_field_labels_and_amount_units(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -127,6 +133,30 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('AbortController()', js)
         self.assertIn('FINANCIAL_CACHE_TTL_MS', js)
         self.assertIn('健康度证据截至 ${evidenceAsOf}', js)
+
+    def test_score_cards_disclose_pretrend_adjustment_and_final_points(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('评分形成：调整前 ${healthValue(scoreItem?.evidence?.pre_trend_points)} 分', js)
+        self.assertIn('趋势调整 ${healthValue(scoreItem?.trend_adjustment, \'分\')}', js)
+
+    def test_investigation_panel_renders_triggered_rule_results_with_evidence(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('const investigationResults = health?.investigation_results || [];', js)
+        self.assertIn("item.status === 'triggered'", js)
+        self.assertIn('healthEvidenceList(triggeredInvestigations', js)
+        self.assertNotIn("healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。')", js)
+
+    def test_investigation_panel_does_not_describe_unassessed_rules_as_no_items(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('const investigationCoverage = health?.investigation_coverage || {};', js)
+        self.assertIn('const investigationUnavailable = investigationCoverage.unavailable || [];', js)
+        self.assertIn('调查规则未评估', js)
+        self.assertIn('investigationEmptyMessage', js)
+
+    def test_investigation_coverage_is_disclosed_compactly(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('已评估调查规则：${investigationEvaluated} / ${investigationTotal}', js)
+        self.assertIn('调查规则未评估：${investigationUnavailable.length} 项', js)
 
     def test_financial_report_materializes_requested_data_and_same_period_cashflow(self):
         source = (ROOT / "app" / "financial" / "reports.py").read_text(encoding="utf-8")

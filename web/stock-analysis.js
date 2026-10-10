@@ -212,6 +212,11 @@
     }
     const coverageInfo = health?.red_flag_coverage || {};
     const rules = health?.rule_results || [];
+    const investigationResults = health?.investigation_results || [];
+    const investigationCoverage = health?.investigation_coverage || {};
+    const investigationUnavailable = investigationCoverage.unavailable || [];
+    const investigationEvaluated = investigationCoverage.evaluated ?? investigationResults.length;
+    const investigationTotal = investigationCoverage.total ?? investigationResults.length;
     const scoreBreakdown = health?.score_breakdown || [];
     const unavailable = [
       ...rules.filter((item) => item.status === 'unavailable').map((item) => ({ code: item.code, title: item.title || item.code, reason: item.reason || '比较数据不可用', evidence: item.evidence })),
@@ -225,9 +230,15 @@
       return { ...item, title: `${tier}｜${item.title || item.code}`, detail: item.detail || '规则已触发。' };
     });
     redPanel.innerHTML = healthEvidenceList(triggeredRules, evaluated === total ? '全部已评估规则均未触发红旗。' : `已评估的 ${evaluated} / ${total} 项规则中未触发红旗；其余规则未评估。`);
-    investigationPanel.innerHTML = healthEvidenceList(health?.investigation_items || [], '暂无待调查事项。');
+    const triggeredInvestigations = investigationResults.filter((item) => item.status === 'triggered');
+    const investigationEmptyMessage = investigationUnavailable.length
+      ? `有 ${investigationUnavailable.length} 项调查规则未评估：${investigationUnavailable.join('、')}。`
+      : investigationEvaluated < investigationTotal
+        ? `调查规则仅评估 ${investigationEvaluated} / ${investigationTotal} 项；其余规则未评估。`
+        : '暂无待调查事项。';
+    investigationPanel.innerHTML = healthEvidenceList(triggeredInvestigations, investigationEmptyMessage);
     unavailablePanel.innerHTML = healthEvidenceList(unavailable, '未发现不可用规则或评分维度。');
-    coverageDisclosure.textContent = `评分版本：${health?.score_version || '—'}；完整年报区间：${(health?.periods || []).join(' / ') || '—'}；已评估红旗规则：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
+    coverageDisclosure.textContent = `评分版本：${health?.score_version || '—'}；完整年报区间：${(health?.periods || []).join(' / ') || '—'}；已评估红旗规则：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；已评估调查规则：${investigationEvaluated} / ${investigationTotal}；调查规则未评估：${investigationUnavailable.length} 项；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
   }
 
   function renderHealthSeries(health) {
@@ -300,7 +311,11 @@
     const scoreBreakdown = health.score_breakdown || [];
     const trendLabel = { up: '↑ 改善', down: '↓ 走弱', flat: '→ 平稳', unknown: '—' };
     const scoreEvidence = Object.fromEntries(scoreBreakdown.map((item) => [item.code, item.evidence]));
-    dimensions.innerHTML = (health.dimensions || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${healthEvidenceSummary(scoreEvidence[item.code]) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(scoreEvidence[item.code]))}</small>` : ''}</article>`).join('');
+    dimensions.innerHTML = (health.dimensions || []).map((item) => {
+      const scoreItem = scoreBreakdown.find((entry) => entry.code === item.code);
+      const formation = item.available ? `评分形成：调整前 ${healthValue(scoreItem?.evidence?.pre_trend_points)} 分；趋势调整 ${healthValue(scoreItem?.trend_adjustment, '分')}；最终 ${healthValue(scoreItem?.points)} / ${item.weight} 分` : '';
+      return `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${escapeHTML(formation)}</small>` : ''}${healthEvidenceSummary(scoreEvidence[item.code]) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(scoreEvidence[item.code]))}</small>` : ''}</article>`;
+    }).join('');
     const d = health.derived || {};
     const latest = (health.series || {});
     const debtTrend = Number.isFinite(latest.debt_ratio?.[0]) && Number.isFinite(latest.debt_ratio?.at?.(-1)) ? latest.debt_ratio.at(-1) - latest.debt_ratio[0] : null;
@@ -376,9 +391,10 @@
       if (financialRequestId !== state.financialRequestId) return;
       renderFinancialHealth(payload.health, payload.latest_report);
       const annualPeriods = new Set(payload.health?.periods || []);
-      const evidenceReports = annualPeriods.size ? payload.reports.filter((row) => annualPeriods.has(String(row.period))) : payload.reports;
-      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, evidenceReports, metric, variant, display);
-      renderYoYGrowthBars('revenue-growth-chart', payload.reports, 'revenue', annualPeriods);
+      const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
+      const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;
+      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, healthEvidenceReports, metric, variant, display);
+      renderYoYGrowthBars('revenue-growth-chart', evidenceReports, 'revenue', annualPeriods);
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;

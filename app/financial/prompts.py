@@ -44,8 +44,6 @@ def load_sub_indicator_score_context(market: str, symbol: str) -> dict[str, obje
 
 
 def build_sub_indicator_explanation_prompt(
-
-def build_sub_indicator_explanation_prompt(
     *,
     stock_name: str,
     market: str,

@@ -283,13 +283,28 @@ def build_financial_health(
     inventory_score = _score_band(-inventory_gap if inventory_gap is not None else None, ((5, 7), (-5, 5), (-15, 2)))
     working = None if None in (receivable_score, inventory_score) else receivable_score + inventory_score
 
-    capex_score = _score_band(-capex_intensity if capex_intensity is not None else None, ((-5, 5), (-10, 3), (-20, 1)))
+    capex_chain_available = all(value is not None for value in capex_intensities + revenue_growths + fcf_margins)
+    capex_intensity_trend = _series_trend(capex_intensities, .5)
+    reinvestment_revenue_trend = _series_trend(revenue_growths, 1)
+    reinvestment_revenue_growth_positive = all(value is not None and value > 0 for value in revenue_growths)
+    reinvestment_fcf_trend = _series_trend(fcf_margins)
+    if not capex_chain_available:
+        capex_score = None
+    elif reinvestment_revenue_growth_positive and reinvestment_fcf_trend == "up":
+        capex_score = 5
+    elif capex_intensity_trend == "up" and reinvestment_revenue_trend == "down":
+        capex_score = 1
+    else:
+        capex_score = 3
     reinvest = None if capex_score is None or fcf_margin is None else capex_score + _score_band(fcf_margin, ((5, 5), (0, 3)))
 
-    debt_score = _score_band(-values["debt_ratio"][-1] if values["debt_ratio"][-1] is not None else None, ((-40, 8), (-60, 5), (-75, 2)))
-    goodwill_score = _score_band(-goodwill_equity if goodwill_equity is not None else None, ((-10, 4), (-25, 2)))
-    risk_fcf_score = _score_band(fcf_margin, ((0, 3), (-5, 1)))
-    risk = None if None in (debt_score, goodwill_score, risk_fcf_score) else debt_score + goodwill_score + risk_fcf_score
+    debt_score = _score_band(-values["debt_ratio"][-1] if values["debt_ratio"][-1] is not None else None, ((-40, 6), (-60, 4), (-75, 2)))
+    goodwill_score = _score_band(-goodwill_equity if goodwill_equity is not None else None, ((-10, 3), (-25, 1)))
+    risk_fcf_score = _score_band(fcf_margin, ((0, 2), (-5, 1)))
+    debt_trend_score = 2 if _series_trend(values["debt_ratio"], .5, inverse=True) == "up" else -2 if _series_trend(values["debt_ratio"], .5, inverse=True) == "down" else 0
+    goodwill_trend_score = 1 if _series_trend(_ratio_series(values["goodwill"], values["equity"], 100), .5, inverse=True) == "up" else -1 if _series_trend(_ratio_series(values["goodwill"], values["equity"], 100), .5, inverse=True) == "down" else 0
+    risk_fcf_trend_score = 1 if _series_trend(fcf_margins) == "up" else -1 if _series_trend(fcf_margins) == "down" else 0
+    risk = None if None in (debt_score, goodwill_score, risk_fcf_score) else max(0, min(15, debt_score + goodwill_score + risk_fcf_score + debt_trend_score + goodwill_trend_score + risk_fcf_trend_score))
 
     trend_basis = (
         _combined_trend(_series_trend(revenue_growths, 1), _series_trend(ex_profit_growths, 1)),
@@ -299,7 +314,7 @@ def build_financial_health(
         _combined_trend(_series_trend(capex_intensities, .5, inverse=True), _series_trend(fcf_margins), _series_trend(revenue_growths, 1)),
         _combined_trend(_series_trend(values["debt_ratio"], .5, inverse=True), _series_trend(goodwill_equities, .5, inverse=True), _series_trend(fcf_margins)),
     )
-    trend_adjustments = tuple(2 if trend == "up" else -2 if trend == "down" else 0 for trend in trend_basis)
+    trend_adjustments = tuple(2 if trend == "up" else -2 if trend == "down" else 0 for trend in trend_basis[:-1]) + (0,)
     pre_trend_scores = (growth, profitability, cash, working, reinvest, risk)
     scores = tuple(None if score is None else max(0, min(weight, score + adjustment)) for score, adjustment, (_, _, weight) in zip(pre_trend_scores, trend_adjustments, DIMENSIONS))
     revenue_growths = _growth_series(values["revenue"])
@@ -324,10 +339,19 @@ def build_financial_health(
         _combined_trend(_series_trend(capex_intensities, .5, inverse=True), _series_trend(fcf_margins), _series_trend(revenue_growths, 1)),
         _combined_trend(_series_trend(values["debt_ratio"], .5, inverse=True), _series_trend(goodwill_equities, .5, inverse=True), _series_trend(fcf_margins)),
     )
+    dimension_required_fields = {
+        "growth_quality": ("revenue", "ex_net_profit"),
+        "profitability": ("gross_margin", "net_margin", "roe_ex"),
+        "cash_quality": ("ocf", "ex_net_profit", "free_cf", "revenue"),
+        "working_capital": ("accounts_receivable", "inventory", "revenue"),
+        "reinvestment": ("capex", "free_cf", "revenue"),
+        "financial_risk": ("debt_ratio", "goodwill", "equity", "free_cf", "revenue"),
+    }
     dimensions = []
     for (code, title, weight), score, trend in zip(DIMENSIONS, scores, trends):
         available = score is not None
-        dimensions.append({"code": code, "title": title, "weight": weight, "score": score, "trend": trend, "status": _status(score, weight) if available else "unknown", "available": available})
+        missing_fields = [field for field in dimension_required_fields[code] if any(value is None for value in values[field])]
+        dimensions.append({"code": code, "title": title, "weight": weight, "score": score, "trend": trend, "status": _status(score, weight) if available else "unavailable", "available": available, "reason": None if available else "required_metric_unavailable", "missing_fields": missing_fields})
     result["dimensions"] = dimensions
     start_roe, end_roe = values["roe_ex"][0], values["roe_ex"][-1]
     roe_change_for_score = end_roe - start_roe if start_roe is not None and end_roe is not None else None
@@ -336,19 +360,22 @@ def build_financial_health(
         "profitability": {"metrics": {"gross_margin_change": result["derived"]["gross_margin_change"], "net_margin_change": result["derived"]["net_margin_change"], "roe_ex": values["roe_ex"][-1], "roe_ex_change": roe_change_for_score}, "thresholds": {"margin_change": "bands: >=2/0/-2", "roe_ex": "bands: >=15/10/5/0", "roe_ex_change": "bands: >=2/0/-2"}, "subscores": {"gross_margin": gross_score, "net_margin": net_score, "roe_ex": roe_score, "roe_trend": roe_trend_score}},
         "cash_quality": {"metrics": {"cash_profit_ratio": cash_profit_ratio, "fcf_margin": fcf_margin}, "thresholds": {"cash_profit_ratio": "bands: >=1.2/0.8/0.5", "fcf_margin": "bands: >=10/5/0"}, "subscores": {"cash_ratio": cash_ratio_score, "fcf_margin": fcf_score}},
         "working_capital": {"metrics": {"receivable_growth_gap": receivable_gap, "inventory_growth_gap": inventory_gap}, "thresholds": {"growth_gap": "bands: <=-5/5/15"}, "subscores": {"receivables": receivable_score, "inventory": inventory_score}},
-        "reinvestment": {"metrics": {"capex_intensity": capex_intensity, "fcf_margin": fcf_margin}, "thresholds": {"capex_intensity": "bands: <=5/10/20", "fcf_margin": "bands: >=5/0"}, "subscores": {"capex": capex_score, "fcf_margin": _score_band(fcf_margin, ((5, 5), (0, 3)))}},
-        "financial_risk": {"metrics": {"debt_ratio": values["debt_ratio"][-1], "goodwill_equity_ratio": goodwill_equity, "fcf_margin": fcf_margin}, "thresholds": {"debt_ratio": "bands: <=40/60/75", "goodwill_equity_ratio": "bands: <=10/25", "fcf_margin": "bands: >=0/-5"}, "subscores": {"debt": debt_score, "goodwill": goodwill_score, "fcf": risk_fcf_score}},
+        "reinvestment": {"metrics": {"capex_intensity": capex_intensity, "capex_intensity_trend": capex_intensity_trend, "revenue_growth_trend": reinvestment_revenue_trend, "fcf_margin": fcf_margin, "fcf_margin_trend": reinvestment_fcf_trend}, "thresholds": {"capex_chain": "营收趋势向上且 FCF Margin 趋势向上=5；CapEx强度上行且营收增速趋势向下=1；其他=3", "fcf_margin": "bands: >=5/0"}, "subscores": {"capex_chain": capex_score, "fcf_margin": _score_band(fcf_margin, ((5, 5), (0, 3)))}},
+        "financial_risk": {"metrics": {"debt_ratio": values["debt_ratio"][-1], "goodwill_equity_ratio": goodwill_equity, "fcf_margin": fcf_margin, "debt_ratio_trend": _series_trend(values["debt_ratio"], .5, inverse=True), "goodwill_equity_trend": _series_trend(_ratio_series(values["goodwill"], values["equity"], 100), .5, inverse=True), "fcf_margin_trend": _series_trend(fcf_margins)}, "thresholds": {"debt_ratio": "bands: <=40/60/75", "goodwill_equity_ratio": "bands: <=10/25", "fcf_margin": "bands: >=0/-5", "five_year_trend": "debt ±2；goodwill/FCF 各±1"}, "subscores": {"debt": debt_score, "goodwill": goodwill_score, "fcf": risk_fcf_score, "debt_trend": debt_trend_score, "goodwill_trend": goodwill_trend_score, "fcf_trend": risk_fcf_trend_score}},
     }
     result["score_breakdown"] = [{"code": item["code"], "title": item["title"], "points": item["score"], "weight": item["weight"], "available": item["available"], "trend": item["trend"], "trend_adjustment": adjustment, "reason": None if item["available"] else "required_metric_unavailable", "evidence": {**score_evidence[item["code"]], "pre_trend_points": pre_trend_score}} for item, adjustment, pre_trend_score in zip(dimensions, trend_adjustments, pre_trend_scores)]
     coverage = sum(item["weight"] for item in dimensions if item["available"])
     raw_total = sum(item["score"] for item in dimensions if item["available"])
     result["coverage_weight"] = coverage
-    score_eligible = coverage >= 85
+    financial_risk_available = next(item["available"] for item in dimensions if item["code"] == "financial_risk")
+    score_eligible = coverage >= 85 and financial_risk_available
     result["score_coverage_status"] = "complete" if coverage == 100 else "partial" if score_eligible else "insufficient"
     result["score"] = round(raw_total / coverage * 100, 1) if score_eligible else None
     result["status"] = _status(result["score"], 100) if result["score"] is not None else "insufficient_data"
-    if not score_eligible:
+    if coverage < 85:
         result["reason"] = "score_coverage_insufficient"
+    elif not financial_risk_available:
+        result["reason"] = "financial_risk_unavailable"
 
     investigations: list[dict[str, str]] = []
     if ex_profit_path in {"turnaround", "loss_narrowing", "loss_widening", "loss_flat", "break_even_to_loss", "loss_to_break_even"}:
@@ -388,6 +415,43 @@ def build_financial_health(
     if roe_change is not None and debt_change is not None and roe_change > 1 and debt_change > 3:
         investigations.append(_flag("roe_leverage", "ROE 改善可能受杠杆驱动", "扣非 ROE 上升同时资产负债率明显上升，应区分经营改善与杠杆效应。"))
     result["investigation_items"] = investigations
+    investigation_codes = (
+        "capex_realization_risk", "goodwill_trend_realization_risk", "goodwill_cash_realization_risk",
+        "leverage_goodwill_cashflow_risk", "leverage_fcf_deterioration_risk", "leverage_capex_cashflow_risk",
+        "earnings_quality_combination", "margin_divergence", "roe_leverage",
+    )
+    investigation_titles = {item["code"]: item["title"] for item in investigations}
+    investigation_details = {item["code"]: item["detail"] for item in investigations}
+    investigation_inputs = [
+        {"field": field, "period": period, "value": value}
+        for field in ("revenue", "ex_net_profit", "ocf", "free_cf", "accounts_receivable", "inventory", "capex", "debt_ratio", "goodwill", "roe_ex")
+        for period, value in zip(result["periods"][-2:], values[field][-2:])
+    ]
+    triggered_investigations = {item["code"] for item in investigations}
+    investigation_required_fields = {
+        "capex_realization_risk": ("capex", "revenue", "free_cf"),
+        "goodwill_trend_realization_risk": ("goodwill", "ex_net_profit"),
+        "goodwill_cash_realization_risk": ("goodwill", "ocf", "free_cf"),
+        "leverage_goodwill_cashflow_risk": ("debt_ratio", "goodwill", "ocf", "free_cf"),
+        "leverage_fcf_deterioration_risk": ("debt_ratio", "free_cf"),
+        "leverage_capex_cashflow_risk": ("debt_ratio", "capex", "ocf", "free_cf"),
+        "earnings_quality_combination": ("revenue", "ex_net_profit", "ocf", "accounts_receivable", "inventory"),
+        "margin_divergence": ("gross_margin", "net_margin"),
+        "roe_leverage": ("roe_ex", "debt_ratio"),
+    }
+    investigation_unavailable = [
+        code for code, fields in investigation_required_fields.items()
+        if any(value is None for field in fields for value in values[field])
+    ]
+    result["investigation_results"] = [{
+        "code": code,
+        "title": investigation_titles.get(code, code),
+        "detail": investigation_details.get(code),
+        "status": "unavailable" if code in investigation_unavailable else "triggered" if code in triggered_investigations else "not_triggered",
+        "reason": "required_metric_unavailable" if code in investigation_unavailable else None,
+        "evidence": {"periods": result["periods"][-2:], "threshold": "组合财务风险调查规则", "actual": None, "inputs": investigation_inputs},
+    } for code in investigation_codes]
+    result["investigation_coverage"] = {"evaluated": len(investigation_codes) - len(investigation_unavailable), "total": len(investigation_codes), "unavailable": investigation_unavailable}
 
     flags: list[dict[str, str]] = []
     ex_growth = _growth(values["ex_net_profit"][-2], values["ex_net_profit"][-1])
@@ -481,7 +545,13 @@ def build_financial_health(
         "capital_leverage": {"metrics": {"capex_intensity": capex_intensities[-1], "debt_change": debt_change, "fcf_margin": fcf_margin}, "criteria": {"watch": "CapEx 强度上升、负债率增加 >3pct 且营收增速趋势走弱"}, "source_fields": ["capex", "debt_ratio", "free_cf", "revenue"]},
     }
     def conclusion(code: str, question: str, status: str, detail: str) -> dict[str, Any]:
-        return {"code": code, "question": question, "status": status, "detail": detail, "evidence": {**conclusion_evidence[code], "periods": result["periods"]}}
+        evidence = conclusion_evidence[code]
+        inputs = [
+            {"field": field, "period": period, "value": value}
+            for field in evidence["source_fields"]
+            for period, value in zip(result["periods"], values[field])
+        ]
+        return {"code": code, "question": question, "status": status, "detail": detail, "evidence": {**evidence, "periods": result["periods"], "inputs": inputs}}
     profit_metrics = [result["derived"]["gross_margin_change"], result["derived"]["net_margin_change"], result["derived"]["roe_ex_trend"]]
     profitability_status = "insufficient" if any(value is None for value in profit_metrics) or profit_metrics[2] == "unknown" else "improving" if all(value > 0 for value in profit_metrics[:2]) and profit_metrics[2] == "up" else "watch" if any(value < 0 for value in profit_metrics[:2]) or profit_metrics[2] == "down" else "stable"
     cash_trend = _combined_trend(_series_trend(annual_cash_profit_ratios, .1), _series_trend(fcf_margins))
