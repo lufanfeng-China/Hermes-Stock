@@ -167,8 +167,10 @@
     const metrics = evidence.metrics ? `指标：${Object.entries(evidence.metrics).map(([key, value]) => `${key}=${typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—'}`).join('；')}` : '';
     const actual = evidence.actual !== undefined && evidence.actual !== null ? `实际：${typeof evidence.actual === 'object' ? JSON.stringify(evidence.actual) : healthValue(evidence.actual, 'pct')}` : '';
     const inputs = Array.isArray(evidence.inputs) && evidence.inputs.length ? `原始输入：${evidence.inputs.map((value) => typeof value === 'number' ? Number(value).toFixed(2) : value ?? '—').join(' / ')}` : '';
+    const subscores = evidence.subscores ? `子项得分：${Object.entries(evidence.subscores).map(([key, value]) => `${key}=${value ?? '—'}`).join('；')}` : '';
+    const preTrend = evidence.pre_trend_points !== undefined && evidence.pre_trend_points !== null ? `趋势调整前：${healthValue(evidence.pre_trend_points)} 分` : '';
     const criteria = evidence.criteria ? Object.entries(evidence.criteria).map(([key, value]) => `${key}：${value}`).join('；') : '';
-    return [periods && `比较期：${periods}`, metrics, threshold, actual, inputs, criteria].filter(Boolean).join('；');
+    return [periods && `比较期：${periods}`, metrics, threshold, actual, inputs, subscores, preTrend, criteria].filter(Boolean).join('；');
   }
 
   function healthEvidenceList(items, emptyMessage) {
