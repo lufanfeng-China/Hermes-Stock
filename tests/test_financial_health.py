@@ -105,6 +105,14 @@ class FinancialHealthTests(unittest.TestCase):
         conclusion = next(item for item in build_financial_health(reports)['conclusions'] if item['code'] == 'profitability')
         self.assertEqual(conclusion['status'], 'stable')
 
+    def test_leverage_and_deteriorating_fcf_creates_investigation_without_capex_growth(self):
+        reports = [annual(2021 + i, revenue=100 + i * 10, ex_net_profit=10, ocf=20 - i, free_cf=20 - i * 6, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40 + i * 3, accounts_receivable=10, inventory=10, capex=5 + i * .5, goodwill=1, equity=60, total_assets=100) for i in range(5)]
+        health = build_financial_health(reports)
+        codes = [item['code'] for item in health['investigation_items']]
+        conclusion = next(item for item in health['conclusions'] if item['code'] == 'capital_leverage')
+        self.assertIn('leverage_fcf_deterioration_risk', codes)
+        self.assertEqual(conclusion['status'], 'watch')
+
     def test_leverage_capex_cashflow_investigation_does_not_require_goodwill_growth(self):
         reports = [annual(2021 + i, revenue=100 + i, ex_net_profit=10, ocf=20 - i * 3, free_cf=15 - i * 4, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=35 + i * 4, accounts_receivable=10, inventory=10, capex=3 + i * 3, goodwill=1, equity=60, total_assets=100) for i in range(5)]
         health = build_financial_health(reports)
@@ -119,6 +127,11 @@ class FinancialHealthTests(unittest.TestCase):
         reports = [annual(2021 + i, revenue=100 + i, ex_net_profit=10, ocf=15, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3 + i * 4, goodwill=1, equity=60, total_assets=100) for i in range(5)]
         health = build_financial_health(reports)
         self.assertIn('capex_realization_risk', [item['code'] for item in health['investigation_items']])
+
+    def test_multi_year_goodwill_growth_without_profit_realization_creates_investigation(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=15, free_cf=8, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=100 * (1.19 ** i), equity=200, total_assets=300) for i in range(5)]
+        health = build_financial_health(reports)
+        self.assertIn('goodwill_trend_realization_risk', [item['code'] for item in health['investigation_items']])
 
     def test_goodwill_growth_without_cash_realization_creates_investigation(self):
         reports = [annual(2021 + i, revenue=100 + i * 5, ex_net_profit=10 + i, ocf=20 - i * 3, free_cf=10 - i * 3, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=1 + i * 2, equity=60, total_assets=100) for i in range(5)]

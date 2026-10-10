@@ -358,7 +358,10 @@ def build_financial_health(
     if capex_growth_latest is not None and capex_growth_latest > 20 and revenue_growth_latest is not None and revenue_growth_latest < 5 and fcf_trend_down:
         investigations.append(_flag("capex_realization_risk", "资本开支兑现偏弱", "资本开支显著增加，但营收增长偏弱且 FCF 趋势走弱；需核查新增投入的收入与现金回报。"))
     goodwill_growth_latest = _growth(values["goodwill"][-2], values["goodwill"][-1])
+    goodwill_growth_five_year = _growth(values["goodwill"][0], values["goodwill"][-1])
     cash_realization_weak = _series_trend(values["ocf"]) == "down" and _series_trend(values["free_cf"]) == "down"
+    if goodwill_growth_five_year is not None and goodwill_growth_five_year > 50 and not _series_trend(values["ex_net_profit"]) == "up":
+        investigations.append(_flag("goodwill_trend_realization_risk", "商誉多年增长但利润兑现不足", "商誉五年累计显著增长，但扣非利润趋势未同步改善；需核查并购业绩承诺、减值与现金回报。"))
     if goodwill_growth_latest is not None and goodwill_growth_latest > 20 and cash_realization_weak:
         investigations.append(_flag("goodwill_cash_realization_risk", "商誉增长后的现金兑现偏弱", "商誉最新年度明显增长，但 CFO 与 FCF 五年趋势均走弱；需核查并购兑现、减值与现金回收。"))
     debt_rise_latest = values["debt_ratio"][-2] is not None and values["debt_ratio"][-1] is not None and values["debt_ratio"][-1] - values["debt_ratio"][-2] >= 3
@@ -366,6 +369,8 @@ def build_financial_health(
     if debt_rise_latest and goodwill_rise_latest and cash_realization_weak:
         investigations.append(_flag("leverage_goodwill_cashflow_risk", "杠杆、商誉与现金流组合风险", "资产负债率明显上升、商誉增长且 CFO/FCF 趋势走弱；需核查并购融资、偿债与减值压力。"))
     capex_trend_up = _series_trend(values["capex"]) == "up"
+    if debt_rise_latest and fcf_trend_down:
+        investigations.append(_flag("leverage_fcf_deterioration_risk", "杠杆上升与自由现金流恶化", "资产负债率明显上升且 FCF 五年趋势走弱；需核查偿债来源、融资用途与现金回报。"))
     if debt_rise_latest and capex_trend_up and cash_realization_weak:
         investigations.append(_flag("leverage_capex_cashflow_risk", "杠杆、资本开支与现金流组合风险", "资产负债率明显上升、CapEx 五年趋势上行且 CFO/FCF 趋势走弱；需核查融资是否转化为有效产能、收入和现金回报。"))
     latest_profit_improved = values["ex_net_profit"][-2] is not None and values["ex_net_profit"][-1] is not None and values["ex_net_profit"][-1] > values["ex_net_profit"][-2]
@@ -481,7 +486,16 @@ def build_financial_health(
     cash_status = "insufficient" if cash_profit_ratio is None or fcf_margin is None or cash_trend == "unknown" else "improving" if cash_profit_ratio >= .8 and fcf_margin >= 0 and cash_trend == "up" else "watch" if cash_profit_ratio < .5 or fcf_margin < 0 or cash_trend == "down" else "stable"
     working_status = "watch" if (receivable_gap is not None and receivable_gap > 15) or (inventory_gap is not None and inventory_gap > 15) else "insufficient" if receivable_gap is None or inventory_gap is None else "stable"
     leverage_inputs_available = all(value is not None for value in capex_intensities) and debt_change is not None and all(value is not None for value in fcf_margins) and all(value is not None for value in revenue_growths)
-    leverage_status = "insufficient" if not leverage_inputs_available else "watch" if (capex_intensities[-1] > capex_intensities[0] and debt_change > 3 and _series_trend(revenue_growths, 1) == "down") else "improving" if (capex_intensities[-1] <= capex_intensities[0] and debt_change <= 0 and _series_trend(fcf_margins) == "up") else "stable"
+    if not leverage_inputs_available:
+        leverage_status = "insufficient"
+    elif debt_change > 3 and _series_trend(fcf_margins) == "down":
+        leverage_status = "watch"
+    elif capex_intensities[-1] > capex_intensities[0] and debt_change > 3 and _series_trend(revenue_growths, 1) == "down":
+        leverage_status = "watch"
+    elif capex_intensities[-1] <= capex_intensities[0] and debt_change <= 0 and _series_trend(fcf_margins) == "up":
+        leverage_status = "improving"
+    else:
+        leverage_status = "stable"
     growth_consistent = all(value is not None and value >= 0 for value in revenue_growths) and all(value is not None and value >= 0 for value in ex_profit_growths)
     result["conclusions"] = [
         conclusion("growth", "过去五年是否持续增长？", "improving" if revenue_cagr is not None and revenue_cagr > 0 and ex_profit_path == "profitable" and growth_consistent else "watch" if revenue_cagr is not None else "insufficient", f"营收 CAGR {revenue_cagr:.1f}%；扣非利润路径：{ex_profit_path}；连续增长：{'是' if growth_consistent else '否'}。" if revenue_cagr is not None else "缺少可比增长数据。"),
