@@ -190,8 +190,58 @@
     const tooltip = HEALTH_METRIC_TOOLTIPS[key];
     if (!tooltip) return escapeHTML(label);
     const content = `定义：${tooltip.definition}\n判断：${tooltip.judgement}`;
-    return `<span class="health-metric-tooltip" tabindex="0" title="${escapeHTML(content)}" aria-label="${escapeHTML(`${label}。${content}`)}"><span class="health-metric-tooltip-trigger">${escapeHTML(label)}</span><span class="health-metric-tooltip-content" role="tooltip">${escapeHTML(content)}</span></span>`;
+    return `<span class="health-metric-tooltip" tabindex="0" data-health-tooltip="${escapeHTML(content)}" title="${escapeHTML(content)}" aria-label="${escapeHTML(`${label}。${content}`)}"><span class="health-metric-tooltip-trigger">${escapeHTML(label)}</span></span>`;
   }
+
+  function healthMetricTooltipFlyout() {
+    let flyout = document.getElementById('health-metric-tooltip-flyout');
+    if (!flyout) {
+      flyout = document.createElement('div');
+      flyout.id = 'health-metric-tooltip-flyout';
+      flyout.className = 'health-metric-tooltip-flyout';
+      flyout.setAttribute('role', 'tooltip');
+      document.body.appendChild(flyout);
+    }
+    return flyout;
+  }
+
+  function showHealthMetricTooltip(target) {
+    const content = target?.dataset?.healthTooltip;
+    if (!content) return;
+    const flyout = healthMetricTooltipFlyout();
+    flyout.textContent = content;
+    flyout.classList.add('visible');
+    flyout.style.left = '0px';
+    flyout.style.top = '0px';
+    const targetRect = target.getBoundingClientRect();
+    const flyoutRect = flyout.getBoundingClientRect();
+    const left = Math.max(8, Math.min(targetRect.left, window.innerWidth - flyoutRect.width - 8));
+    const below = targetRect.bottom + 8;
+    const top = below + flyoutRect.height <= window.innerHeight - 8
+      ? below : Math.max(8, targetRect.top - flyoutRect.height - 8);
+    flyout.style.left = `${left}px`;
+    flyout.style.top = `${top}px`;
+  }
+
+  function hideHealthMetricTooltip() {
+    document.getElementById('health-metric-tooltip-flyout')?.classList.remove('visible');
+  }
+
+  document.addEventListener('pointerover', (event) => {
+    const target = event.target.closest?.('.health-metric-tooltip');
+    if (target) showHealthMetricTooltip(target);
+  });
+  document.addEventListener('pointerout', (event) => {
+    const target = event.target.closest?.('.health-metric-tooltip');
+    if (target && !event.relatedTarget?.closest?.('.health-metric-tooltip')) hideHealthMetricTooltip();
+  });
+  document.addEventListener('focusin', (event) => {
+    const target = event.target.closest?.('.health-metric-tooltip');
+    if (target) showHealthMetricTooltip(target);
+  });
+  document.addEventListener('focusout', (event) => {
+    if (event.target.closest?.('.health-metric-tooltip')) hideHealthMetricTooltip();
+  });
 
   const HEALTH_AMOUNT_FIELDS = new Set(['revenue', 'ex_net_profit', 'net_profit', 'ocf', 'free_cf', 'capex', 'goodwill', 'accounts_receivable', 'inventory']);
   function healthEvidenceValue(key, value) {
@@ -267,6 +317,12 @@
     coverageDisclosure.textContent = `评分版本：${health?.score_version || '—'}；完整年报区间：${(health?.periods || []).join(' / ') || '—'}；已评估红旗规则：${coverageInfo.evaluated ?? 0} / ${coverageInfo.total ?? 10}；已评估调查规则：${investigationEvaluated} / ${investigationTotal}；调查规则未评估：${investigationUnavailable.length} 项；综合评分覆盖权重：${health?.coverage_weight ?? 0} / 100。`;
   }
 
+  function healthSeriesValue(key, value, suffix) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '—';
+    return key === 'goodwill' ? `${(numeric / 1e8).toFixed(2)} 亿元` : healthValue(numeric, suffix);
+  }
+
   function renderHealthSeries(health) {
     const target = document.getElementById('health-series');
     const series = health?.series || {};
@@ -279,7 +335,7 @@
       ['毛利率', 'gross_margin', '%'], ['净利率', 'net_margin', '%'],
     ];
     if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
-    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix, tooltipKey]) => `<tr><th>${healthMetricLabel(tooltipKey || key, label)}</th>${years.map((_, index) => `<td>${healthValue(series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix, tooltipKey]) => `<tr><th>${healthMetricLabel(tooltipKey || key, label)}</th>${years.map((_, index) => `<td>${healthSeriesValue(key, series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   function scoreFormationCopy(item, scoreItem) {
