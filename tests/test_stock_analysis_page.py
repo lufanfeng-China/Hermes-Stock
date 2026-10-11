@@ -195,6 +195,20 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('showHealthFlagDetail', js)
         self.assertIn('comparison-flag-button', js)
 
+    def test_health_questions_use_user_facing_six_prompts(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        prompts = (
+            '公司过去 5 年有没有持续增长？',
+            '利润增长是否快于收入增长？',
+            '毛利率、净利率和 ROE 是否在改善？',
+            '利润是否真正转化成了现金？',
+            '应收和库存是否出现异常增长？',
+            '公司增长是否依赖越来越高的资本投入和财务杠杆？',
+        )
+        for prompt in prompts:
+            self.assertIn(prompt, js)
+        self.assertIn('HEALTH_QUESTION_PROMPTS[item.code] || item.title', js)
+
     def test_five_year_derived_and_basic_metrics_are_retained(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

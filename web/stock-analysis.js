@@ -472,10 +472,20 @@
     renderHealthSeries(health);
   }
 
+  const HEALTH_QUESTION_PROMPTS = {
+    growth: '公司过去 5 年有没有持续增长？',
+    profit_premium: '利润增长是否快于收入增长？',
+    profitability: '毛利率、净利率和 ROE 是否在改善？',
+    cash_conversion: '利润是否真正转化成了现金？',
+    working_capital: '应收和库存是否出现异常增长？',
+    capital_leverage: '公司增长是否依赖越来越高的资本投入和财务杠杆？',
+  };
+
   function renderHealthQuestions(health) {
     const target = document.getElementById('health-question-grid'); if (!target) return;
     if (!health) { target.textContent = '选择股票后加载。'; return; }
-    target.innerHTML = (health.dimensions || []).map((item) => { const score = (health.score_breakdown || []).find((row) => row.code === item.code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHTML(item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHTML(item.code)}"><span class="health-question-score">${score?.points ?? '—'} / ${item.weight}</span><p>${escapeHTML(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
+    const scoreCode = { growth: 'growth_quality', profit_premium: 'growth_quality', profitability: 'profitability', cash_conversion: 'cash_quality', working_capital: 'working_capital', capital_leverage: 'reinvestment' };
+    target.innerHTML = (health.conclusions || []).map((item) => { const code = scoreCode[item.code]; const score = (health.score_breakdown || []).find((row) => row.code === code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHTML(HEALTH_QUESTION_PROMPTS[item.code] || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHTML(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><p>${escapeHTML(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
   }
 
   function renderHealthComparisonTable(health, monitor) {
