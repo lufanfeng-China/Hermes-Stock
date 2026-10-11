@@ -4,6 +4,7 @@ import json
 import re
 
 from app.financial.health import build_financial_health
+from app.financial.quarterly_monitor import build_quarterly_financial_monitor
 
 def load_recent_three_year_financial_reports(market: str, symbol: str, years: int = 6) -> dict[str, object]:
     """Load annual/quarterly reports covering the most recent ``years`` fiscal years."""
@@ -107,6 +108,11 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         industry_level_2=industry["level_2"],
     )
 
+    quarterly_monitor = build_quarterly_financial_monitor(
+        reports,
+        industry_level_1=industry["level_1"],
+    )
+
     return {
         "ok": True,
         "market": market,
@@ -117,6 +123,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "reports": reports,
         "industry": industry,
         "health": health,
+        "quarterly_monitor": quarterly_monitor,
     }
 
 

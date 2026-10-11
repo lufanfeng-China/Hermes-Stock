@@ -387,6 +387,21 @@
     return { summary: copy[status] || copy.insufficient, focus: copy.focus };
   }
 
+  function renderQuarterlyMonitor(monitor) {
+    const period = document.getElementById('quarterly-monitor-period');
+    const target = document.getElementById('quarterly-monitor-summary');
+    if (!monitor || monitor.status !== 'available') {
+      period.textContent = monitor?.status === 'not_applicable' ? '不适用通用季度监测' : '暂无可用季度监测';
+      target.textContent = monitor?.reason === 'ttm_comparison_base_unavailable' ? '缺少上年同季或上年年报，暂不能计算 TTM。' : '等待可比季度财报数据。';
+      return;
+    }
+    period.textContent = `截至 ${monitor.latest_period}（TTM 口径）`;
+    const state = { improving: '改善', stable: '平稳', watch: '需关注' };
+    const dims = (monitor.dimensions || []).map((item) => `<div class="quarterly-monitor-item ${escapeHTML(item.status)}"><strong>${escapeHTML(item.title)}</strong><span>${state[item.status] || '—'}</span><small>${escapeHTML(item.detail || '')}</small></div>`).join('');
+    const alerts = monitor.alerts?.length ? `<div class="quarterly-monitor-alerts"><strong>本季预警</strong>${monitor.alerts.map((item) => `<p class="${escapeHTML(item.severity)}">${escapeHTML(item.title)}：${escapeHTML(item.detail)}</p>`).join('')}</div>` : '<div class="quarterly-monitor-alerts"><strong>本季预警</strong><p>未触发季度早期预警。</p></div>';
+    target.innerHTML = `${dims}${alerts}`;
+  }
+
   function renderFinancialHealth(health, latestReport = null, uiState = 'ready') {
     const period = document.getElementById('health-period');
     const dataAsOf = document.getElementById('health-data-asof');
@@ -500,6 +515,7 @@
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderFinancialHealth(null, null, 'loading');
+    renderQuarterlyMonitor(null);
     for (const id of chartIds) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
@@ -523,6 +539,7 @@
         });
       if (financialRequestId !== state.financialRequestId) return;
       renderFinancialHealth(payload.health, payload.latest_report);
+      renderQuarterlyMonitor(payload.quarterly_monitor);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
       const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;

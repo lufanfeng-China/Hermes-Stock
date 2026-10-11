@@ -154,6 +154,14 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('营收增速较高点回落，扣非利润近年承压', js)
         self.assertIn('scoreFormationCopy(item, scoreItem)', js)
 
+    def test_quarterly_monitor_is_rendered_as_provisional_ttm_not_a_replacement_score(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="quarterly-health-monitor"', html)
+        self.assertIn('function renderQuarterlyMonitor(monitor)', js)
+        self.assertIn('payload.quarterly_monitor', js)
+        self.assertIn('TTM + 最新季度资产负债表', html)
+
     def test_metric_tooltips_use_only_native_title_without_dark_custom_flyout(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")

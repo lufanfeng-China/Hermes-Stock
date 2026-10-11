@@ -12,6 +12,27 @@ def annual(year, **metrics):
     }
 
 
+class QuarterlyFinancialMonitorTests(unittest.TestCase):
+    def test_builds_ttm_monitor_and_detects_receivable_early_warning(self):
+        from app.financial.quarterly_monitor import build_quarterly_financial_monitor
+        reports = [
+            annual(2024, revenue=100, ex_net_profit=10, ocf=12, capex=4, free_cf=8, gross_margin=30, net_margin=10, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=10, goodwill=1, equity=60, total_assets=100),
+            {"period": "2025Q2", "year": "2025", "report_date": "20250630", "metrics": {"revenue": 50, "ex_net_profit": 5, "ocf": 6, "capex": 2, "gross_margin": 30, "net_margin": 10, "roe_ex": 6, "debt_ratio": 40, "accounts_receivable": 10, "inventory": 10, "goodwill": 1, "equity": 60, "total_assets": 100}},
+            annual(2025, revenue=120, ex_net_profit=12, ocf=15, capex=5, free_cf=10, gross_margin=31, net_margin=11, roe_ex=13, debt_ratio=38, accounts_receivable=12, inventory=12, goodwill=1, equity=70, total_assets=110),
+            {"period": "2026Q2", "year": "2026", "report_date": "20260630", "metrics": {"revenue": 72, "ex_net_profit": 7, "ocf": 7, "capex": 3, "gross_margin": 29, "net_margin": 9, "roe_ex": 7, "debt_ratio": 42, "accounts_receivable": 18, "inventory": 11, "goodwill": 1, "equity": 72, "total_assets": 125}},
+        ]
+        monitor = build_quarterly_financial_monitor(reports, industry_level_1="电子")
+        self.assertEqual(monitor["status"], "available")
+        self.assertEqual(monitor["latest_period"], "2026Q2")
+        self.assertAlmostEqual(monitor["ttm"]["revenue"], 142.0)
+        self.assertAlmostEqual(monitor["ttm"]["free_cf"], 10.0)
+        self.assertTrue(any(item["code"] == "receivables_growth_gap" for item in monitor["alerts"]))
+
+    def test_rejects_special_industry_for_quarterly_monitor(self):
+        from app.financial.quarterly_monitor import build_quarterly_financial_monitor
+        self.assertEqual(build_quarterly_financial_monitor([], industry_level_1="银行")["status"], "not_applicable")
+
+
 class FinancialHealthTests(unittest.TestCase):
     def test_uses_five_complete_annual_reports_and_ignores_current_interim_report(self):
         reports = [
