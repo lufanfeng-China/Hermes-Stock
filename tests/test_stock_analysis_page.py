@@ -161,6 +161,15 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("renderYoYGrowthBars('revenue-growth-chart', chartReports, 'revenue', annualPeriods, payload.reports)", js)
         self.assertIn("String(row?.period || '').endsWith('A')", js)
 
+    def test_annual_and_quarterly_monitoring_summary_comparison_table(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        for label in ('总分', '覆盖度', '核心增长质量', '盈利能力', '现金含金量', '营运资本', '再投资效率', '财务风险', '已触发红旗', '待调查事项'):
+            self.assertIn(label, html)
+        self.assertIn('id="health-comparison-body"', html)
+        self.assertIn('function renderHealthComparisonTable(health, monitor)', js)
+        self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor)', js)
+
     def test_quarterly_monitor_is_rendered_as_provisional_ttm_not_a_replacement_score(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

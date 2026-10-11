@@ -394,6 +394,29 @@
     return { summary: copy[status] || copy.insufficient, focus: copy.focus };
   }
 
+  function renderHealthComparisonTable(health, monitor) {
+    const target = document.getElementById('health-comparison-body');
+    if (!target) return;
+    const unavailable = '<span class="comparison-unavailable">—</span>';
+    const points = (item) => { const value = item?.points ?? item?.score; return item?.available === false || value === null || value === undefined || !Number.isFinite(Number(value))
+      ? unavailable : `${Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1)} / ${item.weight}`; };
+    const annualDimension = (code) => (health?.dimensions || []).find((item) => item.code === code);
+    const quarterlyDimension = (code) => (monitor?.realtime_score?.breakdown || []).find((item) => item.code === code);
+    const annualScore = health?.score !== null && health?.score !== undefined && Number.isFinite(Number(health.score)) ? `${Number(health.score).toFixed(health.score % 1 ? 1 : 0)} / 100` : unavailable;
+    const quarterlyScore = monitor?.realtime_score?.score !== null && monitor?.realtime_score?.score !== undefined && Number.isFinite(Number(monitor.realtime_score.score)) ? `${monitor.realtime_score.score} / 100` : unavailable;
+    const annualFlags = health ? `${health.red_flag_count ?? 0} 项` : unavailable;
+    const annualInvestigations = health ? `${(health.investigation_results || []).filter((item) => item.status === 'triggered').length} 项` : unavailable;
+    const quarterlyAlerts = monitor?.status === 'available' ? `${(monitor.alerts || []).length} 项预警` : unavailable;
+    const quarterlyInvestigations = monitor?.status === 'available' ? '—（未设）' : unavailable;
+    const annualPeriod = Array.isArray(health?.periods) && health.periods.length ? health.periods.join('–') : '年度监测';
+    const quarterPeriod = monitor?.latest_period ? `${monitor.latest_period}（TTM）` : '季度监测';
+    const cells = (klass, label, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHTML(label)}</strong></td><td>${score}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
+    target.innerHTML = [
+      cells('comparison-annual', `五年年报：${annualPeriod}`, annualScore, health ? `${health.coverage_weight ?? 0} / 100` : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map(points), annualFlags, annualInvestigations),
+      cells('comparison-quarter', `最新季报：${quarterPeriod}`, quarterlyScore, monitor?.realtime_score ? `${monitor.realtime_score.coverage_weight ?? 0} / 100` : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map(points), quarterlyAlerts, quarterlyInvestigations),
+    ].join('');
+  }
+
   function renderQuarterlyMonitor(monitor) {
     const period = document.getElementById('quarterly-monitor-period');
     const scoreEl = document.getElementById('quarterly-realtime-score');
@@ -527,6 +550,7 @@
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderFinancialHealth(null, null, 'loading');
+    renderHealthComparisonTable(null, null);
     renderQuarterlyMonitor(null);
     for (const id of chartIds) {
       const el = document.getElementById(id);
@@ -551,6 +575,7 @@
         });
       if (financialRequestId !== state.financialRequestId) return;
       renderFinancialHealth(payload.health, payload.latest_report);
+      renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
       renderQuarterlyMonitor(payload.quarterly_monitor);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));

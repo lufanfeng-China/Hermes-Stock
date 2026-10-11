@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/styles.css">
   <style>
     .analysis-metric-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:14px; }
+    .health-comparison-section { margin:0 0 14px; border:1px solid rgba(124,224,195,.22); border-radius:8px; background:rgba(124,224,195,.035); overflow-x:auto; }.health-comparison-section h3 { margin:0; padding:10px 12px 0; font-size:14px; }.health-comparison-note { margin:4px 12px 10px; color:var(--muted); font-size:11px; }.health-comparison-table { width:100%; min-width:1080px; border-collapse:collapse; font-size:12px; }.health-comparison-table th,.health-comparison-table td { padding:9px 10px; border-bottom:1px solid rgba(124,224,195,.12); text-align:center; white-space:nowrap; font-variant-numeric:tabular-nums; }.health-comparison-table th { color:var(--muted); font-size:10px; letter-spacing:.04em; }.health-comparison-table th:first-child,.health-comparison-table td:first-child { text-align:left; position:sticky; left:0; background:#10201f; z-index:1; }.health-comparison-table tr:last-child td { border-bottom:0; }.health-comparison-table .comparison-annual { color:#ff8d8d; }.health-comparison-table .comparison-quarter { color:#8bd8ff; }.health-comparison-table .comparison-unavailable { color:var(--muted); }
     .analysis-metric-card { min-width:0; height:154px; padding:12px 14px; border:1px solid rgba(124,224,195,.14); border-radius:10px; background:rgba(124,224,195,.025); display:flex; flex-direction:column; }
     .analysis-metric-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
     .analysis-metric-heading h2 { margin:0; font-size:15px; color:var(--text); }
@@ -42,6 +43,7 @@
     </form>
 
     <section class="financial-health-kpi" id="financial-health-kpi" aria-label="五年财务健康度 KPI">
+      <section class="health-comparison-section" aria-label="年度与季度财报监测对比"><h3>年度与季度财报监测对比</h3><p class="health-comparison-note">年度行仅使用最近五个完整年报；季度行使用最新披露期及 TTM。季度预警不等同于年度红旗，季度暂未设置独立调查事项。</p><table class="health-comparison-table"><thead><tr><th>监测口径</th><th>总分</th><th>覆盖度</th><th>核心增长质量</th><th>盈利能力</th><th>现金含金量</th><th>营运资本</th><th>再投资效率</th><th>财务风险</th><th>已触发红旗</th><th>待调查事项</th></tr></thead><tbody id="health-comparison-body"><tr><td colspan="11">选择股票后加载。</td></tr></tbody></table></section>
       <section class="quarterly-health-monitor" id="quarterly-health-monitor" aria-label="季度财报监测"><div class="health-section-heading"><h3>季度财报监测</h3><span id="quarterly-monitor-period">选择股票后加载</span></div><div class="quarterly-realtime-score"><span>季度实时健康度 <small>独立评分，不改变五年年度健康度</small></span><strong id="quarterly-realtime-score">— <small>/ 100</small></strong><em id="quarterly-realtime-coverage">覆盖度：—</em></div><p class="quarterly-monitor-note">预警层，不替代五年年度健康度评分；使用 TTM + 最新季度资产负债表。</p><div id="quarterly-monitor-summary" class="quarterly-monitor-summary">选择股票后加载。</div></section>
       <div class="health-heading"><h2>财务健康度 KPI</h2><div class="health-heading-meta"><span class="health-period" id="health-period">选择股票后按最近五个完整年度计算</span><span class="health-data-asof" id="health-data-asof">资料日期：—</span></div></div>
       <div class="health-summary">
@@ -82,6 +84,6 @@
     </section>
   </main>
   <script src="/nav.js?v=20261008-stock-analysis-v1"></script>
-  <script src="/stock-analysis.js?v=20261011-annual-plus-latest-quarter-v37"></script>
+  <script src="/stock-analysis.js?v=20261011-health-comparison-table-v38"></script>
 </body>
 </html>
