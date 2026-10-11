@@ -183,6 +183,16 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('showHealthFlagDetail', js)
         self.assertIn('comparison-flag-button', js)
 
+    def test_five_year_derived_and_basic_metrics_are_retained(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="health-derived"', html)
+        self.assertIn('id="health-series"', html)
+        self.assertIn('五年派生指标', html)
+        self.assertIn('renderHealthMetrics(payload.health)', js)
+        self.assertIn('营业收入', html)
+        self.assertIn('自由现金流', html)
+
     def test_annual_score_detail_uses_reader_friendly_metric_labels(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn("revenue_cagr: '营业收入复合增长率'", js)

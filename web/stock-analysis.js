@@ -447,6 +447,22 @@
     dialog.showModal();
   }
 
+  function renderHealthMetrics(health) {
+    const target = document.getElementById('health-derived');
+    if (!target) return;
+    if (!health) { target.textContent = '选择股票后加载。'; renderHealthSeries(null); return; }
+    const d = health.derived || {}; const series = health.series || {};
+    const rows = [
+      ['营业收入复合增长率', 'revenue_cagr', d.revenue_cagr, '%'], ['扣非归母净利润复合增长率', 'ex_net_profit_cagr', d.ex_net_profit_cagr, '%'], ['利润增长溢价', 'profit_premium', d.profit_growth_premium, 'pct'],
+      ['毛利率五年变化', 'gross_margin_change', d.gross_margin_change, 'pct'], ['净利率五年变化', 'net_margin_change', d.net_margin_change, 'pct'], ['扣非 ROE 五年均值', 'roe_ex', d.roe_ex_average, '%'],
+      ['最新现金利润比', 'annual_cash_profit_ratio', d.annual_cash_profit_ratio, ''], ['五年现金利润比', 'five_year_cash_profit_ratio', d.five_year_cash_profit_ratio, ''], ['自由现金流率', 'fcf_margin', d.fcf_margin, '%'],
+      ['应收账款增速差', 'receivable_growth_gap', d.receivable_growth_gap, 'pct'], ['存货增速差', 'inventory_growth_gap', d.inventory_growth_gap, 'pct'], ['资本开支强度', 'capex_intensity', d.capex_intensity, '%'],
+      ['最新资产负债率', 'debt_ratio', series.debt_ratio?.at?.(-1), '%'], ['商誉／权益比', 'goodwill_equity_ratio', d.goodwill_equity_ratio, '%'],
+    ];
+    target.innerHTML = rows.map(([label, key, value, suffix]) => `<div class="health-derived-item"><span class="health-derived-label">${healthMetricLabel(key, label)}</span><strong class="health-derived-value">${healthMetricValue(key, value, suffix)}</strong></div>`).join('');
+    renderHealthSeries(health);
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
@@ -604,6 +620,7 @@
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderHealthComparisonTable(null, null);
+    renderHealthMetrics(null);
     for (const id of chartIds) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
@@ -627,6 +644,7 @@
         });
       if (financialRequestId !== state.financialRequestId) return;
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
+      renderHealthMetrics(payload.health);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
       const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;
