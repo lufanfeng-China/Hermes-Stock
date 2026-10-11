@@ -28,6 +28,16 @@ class QuarterlyFinancialMonitorTests(unittest.TestCase):
         self.assertAlmostEqual(monitor["ttm"]["free_cf"], 10.0)
         self.assertTrue(any(item["code"] == "receivables_growth_gap" for item in monitor["alerts"]))
 
+    def test_realtime_score_is_independent_and_requires_coverage(self):
+        from app.financial.quarterly_monitor import build_quarterly_financial_monitor
+        reports = [annual(2024, revenue=100, ex_net_profit=10, ocf=12, capex=4), {"period": "2025Q2", "year": "2025", "report_date": "20250630", "metrics": {"revenue": 50, "ex_net_profit": 5, "ocf": 6, "capex": 2, "gross_margin": 30, "net_margin": 10, "debt_ratio": 40, "accounts_receivable": 10, "inventory": 10}}, annual(2025, revenue=120, ex_net_profit=12, ocf=15, capex=5), {"period": "2026Q2", "year": "2026", "report_date": "20260630", "metrics": {"revenue": 72, "ex_net_profit": 7, "ocf": 7, "capex": 3, "gross_margin": 29, "net_margin": 9, "debt_ratio": 42, "accounts_receivable": 18, "inventory": 11}}]
+        monitor = build_quarterly_financial_monitor(reports, "电子")
+        score = monitor["realtime_score"]
+        self.assertEqual(score["version"], "quarterly-v1")
+        self.assertEqual(score["coverage_weight"], 100)
+        self.assertIsInstance(score["score"], int)
+        self.assertEqual(len(score["breakdown"]), 6)
+
     def test_rejects_special_industry_for_quarterly_monitor(self):
         from app.financial.quarterly_monitor import build_quarterly_financial_monitor
         self.assertEqual(build_quarterly_financial_monitor([], industry_level_1="银行")["status"], "not_applicable")

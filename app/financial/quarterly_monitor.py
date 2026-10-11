@@ -96,14 +96,33 @@ def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_le
     if ttm_margin is not None and ttm_margin < 0:
         alert("ttm_fcf_negative", "TTM 自由现金流为负", f"TTM FCF Margin 为 {ttm_margin:.1f}%", "high")
 
-    def state(watch: bool, improving: bool = False) -> str:
-        return "watch" if watch else "improving" if improving else "stable"
+    def dimension(code: str, title: str, required: tuple[Any, ...], watch: bool, improving: bool, detail: str) -> dict[str, Any]:
+        available = all(value is not None for value in required)
+        return {"code": code, "title": title, "available": available,
+                "status": "unavailable" if not available else "watch" if watch else "improving" if improving else "stable",
+                "detail": detail if available else "评分所需季度数据不足"}
+
+    gross_now, gross_prior = _metric(latest, "gross_margin"), _metric(prior_quarter, "gross_margin")
+    net_now, net_prior = _metric(latest, "net_margin"), _metric(prior_quarter, "net_margin")
+    def below(value: float | None, threshold: float) -> bool: return value is not None and value < threshold
+    def above(value: float | None, threshold: float) -> bool: return value is not None and value > threshold
+    def show(value: float | None) -> str: return f"{value:.1f}" if value is not None else "—"
+    profit_watch = (gross_prior is not None and below(gross_now, gross_prior - 2)) or (net_prior is not None and below(net_now, net_prior - 2))
+    profit_improve = gross_prior is not None and net_prior is not None and above(gross_now, gross_prior + 2) and above(net_now, net_prior + 2)
     dimensions = [
-        {"code": "growth", "title": "核心增长质量", "status": state((revenue_yoy or 0) > 0 and (current_yoy["ex_net_profit"] or 0) < 0, (revenue_yoy or 0) > 0 and (current_yoy["ex_net_profit"] or 0) > 0), "detail": f"累计营收同比 {revenue_yoy:.1f}%；扣非利润同比 {current_yoy['ex_net_profit']:.1f}%" if None not in (revenue_yoy, current_yoy['ex_net_profit']) else "同比数据不足"},
-        {"code": "profitability", "title": "盈利能力", "status": state((_metric(latest, "gross_margin") or 0) < (_metric(prior_quarter, "gross_margin") or 0) - 2 or (_metric(latest, "net_margin") or 0) < (_metric(prior_quarter, "net_margin") or 0) - 2, (_metric(latest, "gross_margin") or 0) > (_metric(prior_quarter, "gross_margin") or 0) + 2 and (_metric(latest, "net_margin") or 0) > (_metric(prior_quarter, "net_margin") or 0) + 2), "detail": f"毛利率 {_metric(latest, 'gross_margin'):.1f}%；净利率 {_metric(latest, 'net_margin'):.1f}%" if None not in (_metric(latest, 'gross_margin'), _metric(latest, 'net_margin')) else "利润率数据不足"},
-        {"code": "cash", "title": "现金含金量", "status": state((ttm_margin or 0) < 0, (ttm_margin or 0) >= 5), "detail": f"TTM FCF Margin {ttm_margin:.1f}%" if ttm_margin is not None else "TTM 自由现金流数据不足"},
-        {"code": "working_capital", "title": "营运资本", "status": state((receivable_gap or 0) > 15 or (inventory_gap or 0) > 15, (receivable_gap or 0) <= -5 and (inventory_gap or 0) <= -5), "detail": f"应收增速差 {receivable_gap:.1f}pct；存货增速差 {inventory_gap:.1f}pct" if None not in (receivable_gap, inventory_gap) else "同比数据不足"},
-        {"code": "reinvestment", "title": "再投资效率", "status": state((current_yoy["capex"] or 0) > 20 and (revenue_yoy or 0) < 5 and (ttm_margin or 0) < 0, (ttm_margin or 0) >= 5 and (revenue_yoy or 0) > 0), "detail": f"TTM FCF Margin {ttm_margin:.1f}%；累计 CapEx 同比 {current_yoy['capex']:.1f}%" if None not in (ttm_margin, current_yoy['capex']) else "投入或现金流数据不足"},
-        {"code": "financial_risk", "title": "财务风险", "status": state((debt_change or 0) >= 3 or (ttm_margin or 0) < 0, (debt_change or 0) <= -3 and (ttm_margin or 0) >= 0), "detail": f"资产负债率较去年同季 {debt_change:+.1f}pct" if debt_change is not None else "同季负债率数据不足"},
+        dimension("growth", "核心增长质量", (revenue_yoy, current_yoy["ex_net_profit"]), above(revenue_yoy, 0) and below(current_yoy["ex_net_profit"], 0), above(revenue_yoy, 0) and above(current_yoy["ex_net_profit"], 0), f"累计营收同比 {show(revenue_yoy)}%；扣非利润同比 {show(current_yoy['ex_net_profit'])}%"),
+        dimension("profitability", "盈利能力", (gross_now, gross_prior, net_now, net_prior), profit_watch, profit_improve, f"毛利率 {show(gross_now)}%；净利率 {show(net_now)}%"),
+        dimension("cash", "现金含金量", (ttm_margin,), below(ttm_margin, 0), ttm_margin is not None and ttm_margin >= 5, f"TTM FCF Margin {show(ttm_margin)}%"),
+        dimension("working_capital", "营运资本", (receivable_gap, inventory_gap), above(receivable_gap, 15) or above(inventory_gap, 15), receivable_gap is not None and inventory_gap is not None and receivable_gap <= -5 and inventory_gap <= -5, f"应收增速差 {show(receivable_gap)}pct；存货增速差 {show(inventory_gap)}pct"),
+        dimension("reinvestment", "再投资效率", (current_yoy["capex"], revenue_yoy, ttm_margin), above(current_yoy["capex"], 20) and below(revenue_yoy, 5) and below(ttm_margin, 0), ttm_margin is not None and revenue_yoy is not None and ttm_margin >= 5 and revenue_yoy > 0, f"TTM FCF Margin {show(ttm_margin)}%；累计 CapEx 同比 {show(current_yoy['capex'])}%"),
+        dimension("financial_risk", "财务风险", (debt_change, ttm_margin), debt_change is not None and ttm_margin is not None and (debt_change >= 3 or ttm_margin < 0), debt_change is not None and ttm_margin is not None and debt_change <= -3 and ttm_margin >= 0, f"资产负债率较去年同季 {show(debt_change)}pct"),
     ]
-    return {"status": "available", "reason": None, "latest_period": period, "as_of": latest.get("report_date"), "basis": "TTM + latest_quarter_balance", "ttm": {**ttm, "fcf_margin": ttm_margin}, "yoy": current_yoy, "latest": {key: _metric(latest, key) for key in BALANCE_FIELDS}, "gaps": {"receivable_growth_gap": receivable_gap, "inventory_growth_gap": inventory_gap, "debt_ratio_change": debt_change}, "dimensions": dimensions, "alerts": alerts}
+    weights = {"growth": 20, "profitability": 20, "cash": 20, "working_capital": 15, "reinvestment": 10, "financial_risk": 15}
+    status_ratio = {"improving": 1.0, "stable": 0.6, "watch": 0.25}
+    coverage_weight = sum(weights[item["code"]] for item in dimensions if item["available"])
+    score = round(sum(weights[item["code"]] * status_ratio[item["status"]] for item in dimensions if item["available"]) / coverage_weight * 100) if coverage_weight >= 85 else None
+    realtime_score = {"score": score, "weight": 100, "coverage_weight": coverage_weight,
+                      "status": "complete" if coverage_weight == 100 else "partial" if score is not None else "insufficient",
+                      "reason": None if score is not None else "quarterly_score_coverage_insufficient",
+                      "version": "quarterly-v1", "breakdown": [{"code": item["code"], "title": item["title"], "weight": weights[item["code"]], "status": item["status"], "available": item["available"], "points": round(weights[item["code"]] * status_ratio[item["status"]], 1) if item["available"] else None} for item in dimensions]}
+    return {"status": "available", "reason": None, "latest_period": period, "as_of": latest.get("report_date"), "basis": "TTM + latest_quarter_balance", "ttm": {**ttm, "fcf_margin": ttm_margin}, "yoy": current_yoy, "latest": {key: _metric(latest, key) for key in BALANCE_FIELDS}, "gaps": {"receivable_growth_gap": receivable_gap, "inventory_growth_gap": inventory_gap, "debt_ratio_change": debt_change}, "dimensions": dimensions, "alerts": alerts, "realtime_score": realtime_score}

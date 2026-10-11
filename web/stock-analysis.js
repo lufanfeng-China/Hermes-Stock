@@ -389,7 +389,12 @@
 
   function renderQuarterlyMonitor(monitor) {
     const period = document.getElementById('quarterly-monitor-period');
+    const scoreEl = document.getElementById('quarterly-realtime-score');
+    const coverageEl = document.getElementById('quarterly-realtime-coverage');
     const target = document.getElementById('quarterly-monitor-summary');
+    const realtime = monitor?.realtime_score;
+    scoreEl.innerHTML = Number.isFinite(realtime?.score) ? `${realtime.score} <small>/ 100</small>` : '— <small>/ 100</small>';
+    coverageEl.textContent = `覆盖度：${realtime?.coverage_weight ?? 0} / 100${realtime?.status === 'partial' ? '（部分覆盖）' : realtime?.status === 'insufficient' ? '（不足，未评分）' : ''}`;
     if (!monitor || monitor.status !== 'available') {
       period.textContent = monitor?.status === 'not_applicable' ? '不适用通用季度监测' : '暂无可用季度监测';
       target.textContent = monitor?.reason === 'ttm_comparison_base_unavailable' ? '缺少上年同季或上年年报，暂不能计算 TTM。' : '等待可比季度财报数据。';
