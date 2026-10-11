@@ -323,6 +323,40 @@
     return key === 'goodwill' ? `${(numeric / 1e8).toFixed(2)} 亿元` : healthValue(numeric, suffix);
   }
 
+  function healthMetricTone(key, value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '';
+    const between = (good, bad) => numeric >= good ? 'metric-positive' : numeric <= bad ? 'metric-negative' : '';
+    switch (key) {
+      case 'revenue_cagr':
+      case 'ex_net_profit_cagr': return between(10, 0);
+      case 'profit_growth_premium': return between(5, -5);
+      case 'gross_margin_change':
+      case 'net_margin_change': return between(3, -3);
+      case 'gross_margin': return between(40, 10);
+      case 'net_margin': return between(15, 0);
+      case 'roe_ex': return between(15, 0);
+      case 'annual_cash_profit_ratio':
+      case 'five_year_cash_profit_ratio': return between(1, 0.6);
+      case 'fcf_margin': return between(5, 0);
+      case 'receivable_growth_gap':
+      case 'inventory_growth_gap': return numeric <= -10 ? 'metric-positive' : numeric >= 15 ? 'metric-negative' : '';
+      case 'debt_ratio': return numeric <= 40 ? 'metric-positive' : numeric >= 70 ? 'metric-negative' : '';
+      case 'debt_ratio_trend': return numeric <= -3 ? 'metric-positive' : numeric >= 3 ? 'metric-negative' : '';
+      case 'goodwill': return numeric === 0 ? 'metric-positive' : '';
+      case 'goodwill_growth': return numeric <= 0 ? 'metric-positive' : numeric >= 30 ? 'metric-negative' : '';
+      case 'goodwill_assets_ratio': return numeric <= 5 ? 'metric-positive' : numeric >= 30 ? 'metric-negative' : '';
+      case 'goodwill_equity_ratio': return numeric <= 10 ? 'metric-positive' : numeric >= 50 ? 'metric-negative' : '';
+      default: return '';
+    }
+  }
+
+  function healthMetricValue(key, value, suffix = '') {
+    const display = healthSeriesValue(key, value, suffix);
+    const tone = healthMetricTone(key, value);
+    return `<span class="health-metric-value ${tone}">${display}</span>`;
+  }
+
   function renderHealthSeries(health) {
     const target = document.getElementById('health-series');
     const series = health?.series || {};
@@ -335,7 +369,7 @@
       ['毛利率', 'gross_margin', '%'], ['净利率', 'net_margin', '%'],
     ];
     if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
-    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix, tooltipKey]) => `<tr><th>${healthMetricLabel(tooltipKey || key, label)}</th>${years.map((_, index) => `<td>${healthSeriesValue(key, series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix, tooltipKey]) => `<tr><th>${healthMetricLabel(tooltipKey || key, label)}</th>${years.map((_, index) => `<td>${healthMetricValue(key, series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   function scoreFormationCopy(item, scoreItem) {
@@ -469,11 +503,11 @@
     const goodwillLast = latest.goodwill?.at?.(-1);
     const goodwillGrowth = Number.isFinite(goodwillFirst) && Number.isFinite(goodwillLast) && goodwillFirst !== 0 ? (goodwillLast / goodwillFirst - 1) * 100 : null;
     const fields = [
-      ['营收 CAGR', d.revenue_cagr, '%', 'revenue_cagr'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%', 'ex_net_profit_cagr'], ['利润增长溢价', d.profit_growth_premium, 'pct', 'profit_growth_premium'], ['毛利率五年变化', d.gross_margin_change, 'pct', 'gross_margin'], ['净利率五年变化', d.net_margin_change, 'pct', 'net_margin'],
-      ['扣非 ROE 五年均值', d.roe_ex_average, '%', 'roe_ex'], ['最新扣非 ROE', latest.roe_ex?.at?.(-1), '%', 'roe_ex'], ['最新资产负债率', latest.debt_ratio?.at?.(-1), '%', 'debt_ratio'], ['资产负债率趋势', debtTrend, 'pct', 'debt_ratio'], ['商誉五年变化', goodwillGrowth, '%', 'goodwill'], ['最新现金利润比', d.annual_cash_profit_ratio, '', 'annual_cash_profit_ratio'], ['五年现金利润比', d.five_year_cash_profit_ratio, '', 'five_year_cash_profit_ratio'],
+      ['营收 CAGR', d.revenue_cagr, '%', 'revenue_cagr'], ['扣非利润 CAGR', d.ex_net_profit_cagr, '%', 'ex_net_profit_cagr'], ['利润增长溢价', d.profit_growth_premium, 'pct', 'profit_growth_premium'], ['毛利率五年变化', d.gross_margin_change, 'pct', 'gross_margin', 'gross_margin_change'], ['净利率五年变化', d.net_margin_change, 'pct', 'net_margin', 'net_margin_change'],
+      ['扣非 ROE 五年均值', d.roe_ex_average, '%', 'roe_ex'], ['最新扣非 ROE', latest.roe_ex?.at?.(-1), '%', 'roe_ex'], ['最新资产负债率', latest.debt_ratio?.at?.(-1), '%', 'debt_ratio'], ['资产负债率趋势', debtTrend, 'pct', 'debt_ratio', 'debt_ratio_trend'], ['商誉五年变化', goodwillGrowth, '%', 'goodwill', 'goodwill_growth'], ['最新现金利润比', d.annual_cash_profit_ratio, '', 'annual_cash_profit_ratio'], ['五年现金利润比', d.five_year_cash_profit_ratio, '', 'five_year_cash_profit_ratio'],
       ['FCF Margin', d.fcf_margin, '%', 'fcf_margin'], ['应收增速差', d.receivable_growth_gap, 'pct', 'receivable_growth_gap'], ['存货增速差', d.inventory_growth_gap, 'pct', 'inventory_growth_gap'], ['CapEx 强度', d.capex_intensity, '%', 'capex_intensity'], ['商誉 / 权益', d.goodwill_equity_ratio, '%', 'goodwill_equity_ratio'], ['商誉 / 资产', d.goodwill_assets_ratio, '%', 'goodwill_assets_ratio'],
     ];
-    derived.innerHTML = fields.map(([label, value, suffix, tooltipKey]) => `<div class="health-derived-item"><span class="health-derived-label">${healthMetricLabel(tooltipKey, label)}</span><strong class="health-derived-value">${healthValue(value, suffix)}</strong></div>`).join('');
+    derived.innerHTML = fields.map(([label, value, suffix, tooltipKey, toneKey]) => `<div class="health-derived-item"><span class="health-derived-label">${healthMetricLabel(tooltipKey, label)}</span><strong class="health-derived-value">${healthMetricValue(toneKey || tooltipKey, value, suffix)}</strong></div>`).join('');
     renderHealthSeries(health);
     renderHealthEvidencePanels(health);
     const conclusionLabel = { improving: '改善', stable: '平稳', watch: '需关注', insufficient: '数据不足' };
