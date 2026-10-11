@@ -175,6 +175,12 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('需要关注的部分', js)
         self.assertIn('function buildAnnualOverallAnalysis(health)', js)
         self.assertIn('function buildQuarterlyOverallAnalysis(monitor)', js)
+        self.assertIn('function annualConclusionDetail(item, derived)', js)
+        self.assertIn('function quarterlyDimensionDetail(item, monitor)', js)
+        self.assertIn('收入和扣非利润长期增长较快', js)
+        self.assertIn('收入、扣非利润同比明显下滑', js)
+        self.assertIn('现金流和杠杆有所改善', js)
+        self.assertIn('应收账款与库存增长快于营收', js)
         self.assertIn('function scoreDetailButton(source, item)', js)
         self.assertIn('data-score-source', js)
 

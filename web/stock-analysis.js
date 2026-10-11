@@ -439,31 +439,61 @@
     dialog.showModal();
   }
 
+  function annualConclusionDetail(item, derived) {
+    const pct = (value, suffix = '%') => Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}${suffix}` : '—';
+    const metrics = item?.evidence?.metrics || {};
+    switch (item?.code) {
+      case 'growth': return `${item.status === 'watch' ? '收入和扣非利润虽长期增长较快，但未实现连续增长' : '收入和扣非利润长期增长较快'}：营收 CAGR ${pct(derived?.revenue_cagr)}，扣非归母净利润 CAGR ${pct(derived?.ex_net_profit_cagr)}；${item.detail || conclusionSummary(item).summary}`;
+      case 'profit_premium': return `利润增长质量较好：利润增长比收入快 ${pct(derived?.profit_growth_premium, 'pct')}；${item.detail || conclusionSummary(item).summary}`;
+      case 'profitability': return `盈利能力整体改善：毛利率五年变化 ${pct(derived?.gross_margin_change, 'pct')}，净利率五年变化 ${pct(derived?.net_margin_change, 'pct')}，扣非 ROE 趋势 ${metrics.roe_ex_trend === 'up' ? '向上' : '未向上'}。`;
+      case 'cash_conversion': return `现金流与利润存在背离：五年现金利润比 ${pct(derived?.five_year_cash_profit_ratio, '')}，最新自由现金流率 ${pct(derived?.fcf_margin)}；${item.detail || conclusionSummary(item).summary}`;
+      case 'working_capital': return `营运资本占用需关注：应收增速较营收高 ${pct(derived?.receivable_growth_gap, 'pct')}，存货增速较营收高 ${pct(derived?.inventory_growth_gap, 'pct')}。`;
+      case 'capital_leverage': return `资本投入与杠杆：资本开支强度 ${pct(derived?.capex_intensity)}；${item.detail || conclusionSummary(item).summary}`;
+      default: return item?.detail || conclusionSummary(item).summary;
+    }
+  }
+
+  function quarterlyDimensionDetail(item, monitor) {
+    const detail = item?.detail || '本期指标缺少进一步说明。';
+    if (item?.code === 'growth') return `收入、扣非利润同比明显下滑：${detail}。应结合订单、验收与产品结构进一步核查。`;
+    if (item?.code === 'cash') return `现金流有所改善：${detail}。`;
+    if (item?.code === 'financial_risk') return `杠杆压力有所缓解：${detail}。`;
+    if (item?.code === 'working_capital') return `应收账款与库存增长快于营收：${detail}。需核查回款与库存可消化性。`;
+    if (item?.code === 'reinvestment') return `资本投入与经营回报需匹配观察：${detail}。`;
+    return `${item?.title || '盈利能力'}：${detail}。`;
+  }
+
   function buildAnnualOverallAnalysis(health) {
     const score = Number.isFinite(Number(health?.score)) ? `${Number(health.score).toFixed(health.score % 1 ? 1 : 0)} / 100` : '未生成';
     const annualPeriods = health?.periods || [];
     const periods = annualPeriods.length ? `${annualPeriods[0]}–${annualPeriods.at(-1)}` : '';
     const conclusions = health?.conclusions || [];
-    const good = conclusions.filter((item) => item.status === 'improving').map((item) => item.detail || conclusionSummary(item).summary);
+    const derived = health?.derived || {};
+    const good = conclusions.filter((item) => item.status === 'improving').map((item) => annualConclusionDetail(item, derived));
     const bad = [
-      ...conclusions.filter((item) => item.status === 'watch').map((item) => item.detail || conclusionSummary(item).summary),
+      ...conclusions.filter((item) => item.status === 'watch').map((item) => annualConclusionDetail(item, derived)),
       ...(health?.rule_results || []).filter((item) => item.status === 'triggered').map((item) => `${item.title || '年度红旗'}：${item.detail || item.reason || '规则已触发。'}`),
       ...conclusions.filter((item) => item.status === 'insufficient' || item.status === 'unavailable').map((item) => `${item.question || item.title || '部分结论'}：${item.reason || '数据不足，未作判断。'}`),
     ];
-    return { title: '五年年报｜总体财报分析结论', meta: `评估期间：${periods || '—'}；综合得分：${score}；覆盖度：${health?.coverage_weight ?? 0} / 100。`, summary: '以下判断只基于最近五个完整年度年报，不包含最新季度数据。', good, bad };
+    const watchCount = conclusions.filter((item) => item.status === 'watch').length;
+    const improvingCount = conclusions.filter((item) => item.status === 'improving').length;
+    return { title: '五年年报｜总体财报分析结论', meta: `评估期间：${periods || '—'}；综合得分：${score}；覆盖度：${health?.coverage_weight ?? 0} / 100。`, summary: `五年年报中有 ${improvingCount} 项明确改善、${watchCount} 项需要关注；以下判断只基于最近五个完整年度年报，不包含最新季度数据。`, good, bad };
   }
 
   function buildQuarterlyOverallAnalysis(monitor) {
     const realtime = monitor?.realtime_score || {};
     const score = Number.isFinite(Number(realtime.score)) ? `${Number(realtime.score).toFixed(realtime.score % 1 ? 1 : 0)} / 100` : '未生成';
     const dimensions = monitor?.dimensions || [];
-    const good = dimensions.filter((item) => item.status === 'improving').map((item) => `${item.title}：${item.detail || '本期指标改善。'}`);
+    const good = dimensions.filter((item) => item.status === 'improving').map((item) => quarterlyDimensionDetail(item, monitor));
     const bad = [
-      ...dimensions.filter((item) => item.status === 'watch').map((item) => `${item.title}：${item.detail || '本期需关注。'}`),
+      ...dimensions.filter((item) => item.status === 'watch').map((item) => quarterlyDimensionDetail(item, monitor)),
       ...(monitor?.alerts || []).map((item) => `${item.title || '季度预警'}：${item.detail || item.reason || '预警已触发。'}`),
       ...dimensions.filter((item) => item.available === false).map((item) => `${item.title}：${item.reason || '数据不足，未作判断。'}`),
     ];
-    return { title: '最新季报/TTM｜总体财报分析结论', meta: `最新披露：${monitor?.latest_period || '—'}；实时评分：${score}；覆盖度：${realtime.coverage_weight ?? 0} / 100。`, summary: '流量项目按 TTM 口径，资产负债表项目使用最新期末余额；该结论不等同于五年年度评价。', good, bad };
+    const hasCashAndLeverageImprovement = dimensions.some((item) => item.code === 'cash' && item.status === 'improving') && dimensions.some((item) => item.code === 'financial_risk' && item.status === 'improving');
+    const hasGrowthPressure = dimensions.some((item) => item.code === 'growth' && item.status === 'watch');
+    const summary = `${hasCashAndLeverageImprovement ? '现金流和杠杆有所改善' : '季度经营指标存在分化'}${hasGrowthPressure ? '，但收入、扣非利润同比明显下滑' : ''}；流量项目按 TTM 口径，资产负债表项目使用最新期末余额；该结论不等同于五年年度评价。`;
+    return { title: '最新季报/TTM｜总体财报分析结论', meta: `最新披露：${monitor?.latest_period || '—'}；实时评分：${score}；覆盖度：${realtime.coverage_weight ?? 0} / 100。`, summary, good, bad };
   }
 
   function overallAnalysisList(items, emptyMessage) {
