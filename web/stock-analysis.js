@@ -439,12 +439,42 @@
     dialog.showModal();
   }
 
+  function buildAnnualOverallAnalysis(health) {
+    const score = Number.isFinite(Number(health?.score)) ? `${Number(health.score).toFixed(health.score % 1 ? 1 : 0)} / 100` : '未生成';
+    const annualPeriods = health?.periods || [];
+    const periods = annualPeriods.length ? `${annualPeriods[0]}–${annualPeriods.at(-1)}` : '';
+    const conclusions = health?.conclusions || [];
+    const good = conclusions.filter((item) => item.status === 'improving').map((item) => item.detail || conclusionSummary(item).summary);
+    const bad = [
+      ...conclusions.filter((item) => item.status === 'watch').map((item) => item.detail || conclusionSummary(item).summary),
+      ...(health?.rule_results || []).filter((item) => item.status === 'triggered').map((item) => `${item.title || '年度红旗'}：${item.detail || item.reason || '规则已触发。'}`),
+      ...conclusions.filter((item) => item.status === 'insufficient' || item.status === 'unavailable').map((item) => `${item.question || item.title || '部分结论'}：${item.reason || '数据不足，未作判断。'}`),
+    ];
+    return { title: '五年年报｜总体财报分析结论', meta: `评估期间：${periods || '—'}；综合得分：${score}；覆盖度：${health?.coverage_weight ?? 0} / 100。`, summary: '以下判断只基于最近五个完整年度年报，不包含最新季度数据。', good, bad };
+  }
+
+  function buildQuarterlyOverallAnalysis(monitor) {
+    const realtime = monitor?.realtime_score || {};
+    const score = Number.isFinite(Number(realtime.score)) ? `${Number(realtime.score).toFixed(realtime.score % 1 ? 1 : 0)} / 100` : '未生成';
+    const dimensions = monitor?.dimensions || [];
+    const good = dimensions.filter((item) => item.status === 'improving').map((item) => `${item.title}：${item.detail || '本期指标改善。'}`);
+    const bad = [
+      ...dimensions.filter((item) => item.status === 'watch').map((item) => `${item.title}：${item.detail || '本期需关注。'}`),
+      ...(monitor?.alerts || []).map((item) => `${item.title || '季度预警'}：${item.detail || item.reason || '预警已触发。'}`),
+      ...dimensions.filter((item) => item.available === false).map((item) => `${item.title}：${item.reason || '数据不足，未作判断。'}`),
+    ];
+    return { title: '最新季报/TTM｜总体财报分析结论', meta: `最新披露：${monitor?.latest_period || '—'}；实时评分：${score}；覆盖度：${realtime.coverage_weight ?? 0} / 100。`, summary: '流量项目按 TTM 口径，资产负债表项目使用最新期末余额；该结论不等同于五年年度评价。', good, bad };
+  }
+
+  function overallAnalysisList(items, emptyMessage) {
+    return items.length ? `<ul>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join('')}</ul>` : `<p class="health-evidence-empty">${escapeHTML(emptyMessage)}</p>`;
+  }
+
   function showHealthOverallDetail(source) {
     const dialog = document.getElementById('health-overall-detail-dialog'); const content = document.getElementById('health-overall-detail-content');
     const data = state.healthComparison; if (!dialog || !content || !data) return;
-    const items = ({ annual: data.health.conclusions, quarterly: data.monitor.alerts })[source] || [];
-    const label = source === 'annual' ? '五年年报总体分析结论' : '最新季报总体分析结论';
-    content.innerHTML = `<h3>${label}</h3>${items.length ? `<ul>${items.map((item) => `<li>${escapeHTML(item.summary || item.detail || item.reason || item.title || String(item))}</li>`).join('')}</ul>` : '<p>当前口径没有可用的总体分析结论。</p>'}`;
+    const analysis = source === 'annual' ? buildAnnualOverallAnalysis(data.health) : buildQuarterlyOverallAnalysis(data.monitor);
+    content.innerHTML = `<h3>${escapeHTML(analysis.title)}</h3><p class="health-score-detail-score">${escapeHTML(analysis.meta)}</p><section><h4>总体概要</h4><p>${escapeHTML(analysis.summary)}</p></section><section><h4>好的部分</h4>${overallAnalysisList(analysis.good, '当前口径没有明确的改善项。')}</section><section><h4>需要关注的部分</h4>${overallAnalysisList(analysis.bad, '当前已评估规则未显示需关注项。')}</section>`;
     dialog.showModal();
   }
 

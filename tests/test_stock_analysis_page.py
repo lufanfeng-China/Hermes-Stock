@@ -170,8 +170,11 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('id="health-overall-detail-dialog"', html)
         self.assertIn('function showHealthOverallDetail(source)', js)
         self.assertIn('data-overall-source', js)
-        self.assertIn('annual: data.health.conclusions', js)
-        self.assertIn('quarterly: data.monitor.alerts', js)
+        self.assertIn('总体概要', js)
+        self.assertIn('好的部分', js)
+        self.assertIn('需要关注的部分', js)
+        self.assertIn('function buildAnnualOverallAnalysis(health)', js)
+        self.assertIn('function buildQuarterlyOverallAnalysis(monitor)', js)
         self.assertIn('function scoreDetailButton(source, item)', js)
         self.assertIn('data-score-source', js)
 
