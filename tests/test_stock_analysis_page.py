@@ -168,8 +168,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('function renderQuarterlyMonitor(monitor)', js)
         self.assertIn('payload.quarterly_monitor', js)
         self.assertIn('TTM + 最新季度资产负债表', html)
-        self.assertGreater(html.index('id="quarterly-health-monitor"'), html.index('class="health-conclusions"'))
-        self.assertGreater(html.index('id="quarterly-health-monitor"'), html.index('class="health-disclosure"'))
+        self.assertLess(html.index('id="quarterly-health-monitor"'), html.index('class="health-heading"'))
+        self.assertEqual(html.count('id="quarterly-health-monitor"'), 1)
 
     def test_metric_tooltips_use_only_native_title_without_dark_custom_flyout(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
