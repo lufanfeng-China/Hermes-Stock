@@ -193,56 +193,6 @@
     return `<span class="health-metric-tooltip" tabindex="0" data-health-tooltip="${escapeHTML(content)}" title="${escapeHTML(content)}" aria-label="${escapeHTML(`${label}。${content}`)}"><span class="health-metric-tooltip-trigger">${escapeHTML(label)}</span></span>`;
   }
 
-  function healthMetricTooltipFlyout() {
-    let flyout = document.getElementById('health-metric-tooltip-flyout');
-    if (!flyout) {
-      flyout = document.createElement('div');
-      flyout.id = 'health-metric-tooltip-flyout';
-      flyout.className = 'health-metric-tooltip-flyout';
-      flyout.setAttribute('role', 'tooltip');
-      document.body.appendChild(flyout);
-    }
-    return flyout;
-  }
-
-  function showHealthMetricTooltip(target) {
-    const content = target?.dataset?.healthTooltip;
-    if (!content) return;
-    const flyout = healthMetricTooltipFlyout();
-    flyout.textContent = content;
-    flyout.classList.add('visible');
-    flyout.style.left = '0px';
-    flyout.style.top = '0px';
-    const targetRect = target.getBoundingClientRect();
-    const flyoutRect = flyout.getBoundingClientRect();
-    const left = Math.max(8, Math.min(targetRect.left, window.innerWidth - flyoutRect.width - 8));
-    const below = targetRect.bottom + 8;
-    const top = below + flyoutRect.height <= window.innerHeight - 8
-      ? below : Math.max(8, targetRect.top - flyoutRect.height - 8);
-    flyout.style.left = `${left}px`;
-    flyout.style.top = `${top}px`;
-  }
-
-  function hideHealthMetricTooltip() {
-    document.getElementById('health-metric-tooltip-flyout')?.classList.remove('visible');
-  }
-
-  document.addEventListener('pointerover', (event) => {
-    const target = event.target.closest?.('.health-metric-tooltip');
-    if (target) showHealthMetricTooltip(target);
-  });
-  document.addEventListener('pointerout', (event) => {
-    const target = event.target.closest?.('.health-metric-tooltip');
-    if (target && !event.relatedTarget?.closest?.('.health-metric-tooltip')) hideHealthMetricTooltip();
-  });
-  document.addEventListener('focusin', (event) => {
-    const target = event.target.closest?.('.health-metric-tooltip');
-    if (target) showHealthMetricTooltip(target);
-  });
-  document.addEventListener('focusout', (event) => {
-    if (event.target.closest?.('.health-metric-tooltip')) hideHealthMetricTooltip();
-  });
-
   const HEALTH_AMOUNT_FIELDS = new Set(['revenue', 'ex_net_profit', 'net_profit', 'ocf', 'free_cf', 'capex', 'goodwill', 'accounts_receivable', 'inventory']);
   function healthEvidenceValue(key, value) {
     if (typeof value !== 'number') return value ?? '—';

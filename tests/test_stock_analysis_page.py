@@ -154,6 +154,14 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('营收增速较高点回落，扣非利润近年承压', js)
         self.assertIn('scoreFormationCopy(item, scoreItem)', js)
 
+    def test_metric_tooltips_use_only_native_title_without_dark_custom_flyout(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn('title="${escapeHTML(content)}"', js)
+        self.assertNotIn('function showHealthMetricTooltip(target)', js)
+        self.assertNotIn("id = 'health-metric-tooltip-flyout'", js)
+        self.assertNotIn('.health-metric-tooltip-flyout', css)
+
     def test_health_metric_values_use_user_requested_a_share_red_good_green_bad_coloring(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
@@ -165,16 +173,11 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('.health-metric-value.metric-positive', css)
         self.assertIn('.health-metric-value.metric-negative', css)
 
-    def test_five_year_series_tooltips_use_viewport_flyout_and_goodwill_uses_yi(self):
+    def test_five_year_series_goodwill_uses_yi(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
-        self.assertIn('function showHealthMetricTooltip(target)', js)
-        self.assertIn("id = 'health-metric-tooltip-flyout'", js)
         self.assertIn('function healthSeriesValue(key, value, suffix)', js)
         self.assertIn("key === 'goodwill'", js)
         self.assertIn('healthMetricValue(key, series[key]?.[index], suffix)', js)
-        self.assertIn('.health-metric-tooltip-flyout', css)
-        self.assertIn('position: fixed', css)
 
     def test_kpi_and_five_year_series_metrics_expose_definition_tooltips(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -186,7 +189,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         for key in ('revenue_cagr', 'ex_net_profit_cagr', 'profit_growth_premium', 'gross_margin', 'net_margin', 'roe_ex', 'annual_cash_profit_ratio', 'fcf_margin', 'receivable_growth_gap', 'inventory_growth_gap', 'capex_intensity', 'debt_ratio', 'goodwill_equity_ratio'):
             self.assertIn(f"{key}: {{", js)
         self.assertIn('.health-metric-tooltip', css)
-        self.assertIn('.health-metric-tooltip-flyout', css)
+        self.assertIn('.health-metric-tooltip-trigger', css)
 
     def test_six_core_conclusions_use_concise_kpi_style_summaries(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
