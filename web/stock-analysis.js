@@ -439,6 +439,14 @@
     dialog.showModal();
   }
 
+  function showHealthFlagDetail(source) {
+    const dialog = document.getElementById('health-flag-detail-dialog'); const content = document.getElementById('health-flag-detail-content');
+    const data = state.healthComparison; if (!dialog || !content || !data) return;
+    const items = source === 'annual' ? (data.health?.rule_results || []).filter((item) => item.status === 'triggered') : (data.monitor?.alerts || []);
+    content.innerHTML = items.length ? `<ul>${items.map((item) => `<li><strong>${escapeHTML(item.title || item.code)}</strong>：${escapeHTML(item.detail || item.reason || item.evidence?.threshold || '已触发规则')}</li>`).join('')}</ul>` : '<p>未触发红旗或季度预警。</p>';
+    dialog.showModal();
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
@@ -450,9 +458,9 @@
     const quarterlyDimension = (code) => (monitor?.realtime_score?.breakdown || []).find((item) => item.code === code);
     const annualScore = health?.score !== null && health?.score !== undefined && Number.isFinite(Number(health.score)) ? Number(health.score).toFixed(health.score % 1 ? 1 : 0) : unavailable;
     const quarterlyScore = monitor?.realtime_score?.score !== null && monitor?.realtime_score?.score !== undefined && Number.isFinite(Number(monitor.realtime_score.score)) ? String(monitor.realtime_score.score) : unavailable;
-    const annualFlags = health ? String(health.red_flag_count ?? 0) : unavailable;
+    const annualFlags = health ? `<button type="button" class="comparison-flag-button" data-flag-source="annual">${health.red_flag_count ?? 0}</button>` : unavailable;
     const annualInvestigations = health ? String((health.investigation_results || []).filter((item) => item.status === 'triggered').length) : unavailable;
-    const quarterlyAlerts = monitor?.status === 'available' ? String((monitor.alerts || []).length) : unavailable;
+    const quarterlyAlerts = monitor?.status === 'available' ? `<button type="button" class="comparison-flag-button" data-flag-source="quarterly">${(monitor.alerts || []).length}</button>` : unavailable;
     const quarterlyInvestigations = monitor?.status === 'available' ? '—（未设）' : unavailable;
     const annualPeriod = '五年年报';
     const quarterPeriod = monitor?.latest_period ? `${monitor.latest_period}（TTM）` : '季度监测';
@@ -595,9 +603,7 @@
     const controller = new AbortController();
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
-    renderFinancialHealth(null, null, 'loading');
     renderHealthComparisonTable(null, null);
-    renderQuarterlyMonitor(null);
     for (const id of chartIds) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
@@ -620,9 +626,7 @@
           return body;
         });
       if (financialRequestId !== state.financialRequestId) return;
-      renderFinancialHealth(payload.health, payload.latest_report);
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
-      renderQuarterlyMonitor(payload.quarterly_monitor);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
       const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;
@@ -632,7 +636,7 @@
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;
-      renderFinancialHealth(null, null, 'failed');
+      renderHealthComparisonTable(null, null);
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
   }
@@ -679,11 +683,16 @@
   document.addEventListener('click', (event) => { if (!form.contains(event.target)) hide(); });
   document.getElementById('health-comparison-body')?.addEventListener('click', (event) => {
     const button = event.target.closest('.comparison-score-button');
+    const flag = event.target.closest('.comparison-flag-button');
     if (button) showHealthScoreDetail(button.dataset.scoreSource, button.dataset.scoreCode);
+    if (flag) showHealthFlagDetail(flag.dataset.flagSource);
   });
   const scoreDetailDialog = document.getElementById('health-score-detail-dialog');
   scoreDetailDialog?.querySelector('.health-score-detail-close')?.addEventListener('click', () => scoreDetailDialog.close());
   scoreDetailDialog?.addEventListener('click', (event) => { if (event.target === scoreDetailDialog) scoreDetailDialog.close(); });
+  const flagDetailDialog = document.getElementById('health-flag-detail-dialog');
+  flagDetailDialog?.querySelector('.health-flag-detail-close')?.addEventListener('click', () => flagDetailDialog.close());
+  flagDetailDialog?.addEventListener('click', (event) => { if (event.target === flagDetailDialog) flagDetailDialog.close(); });
 
   const params = new URLSearchParams(location.search);
   const market = params.get('market');

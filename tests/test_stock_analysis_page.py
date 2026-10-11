@@ -29,22 +29,15 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('.analysis-bar.zero-value', html)
         self.assertIn('#70d6a8', html)
 
-    def test_health_kpi_section_precedes_raw_metric_charts(self):
+    def test_comparison_section_precedes_raw_metric_charts(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('id="financial-health-kpi"', html)
         self.assertLess(html.index('id="financial-health-kpi"'), html.index('aria-label="五年经营指标"'))
-        for label in ('综合健康度', '财务红旗', '核心增长质量', '盈利能力', '现金含金量', '营运资本健康度', '再投资效率', '财务风险'):
-            self.assertIn(label, html)
-        self.assertIn('renderFinancialHealth(payload.health, payload.latest_report)', js)
-        self.assertIn('five_year_cash_profit_ratio', js)
-        self.assertIn('not_applicable', js)
-        self.assertIn('annual_reports_not_contiguous', js)
-        self.assertIn('triggeredRules', js)
-        self.assertIn('item.status === \'triggered\'', js)
-        self.assertIn('healthEvidenceSummary', js)
-        for token in ('health-red-flag-panel', 'health-investigation-panel', 'health-unavailable-panel', 'health-series', 'rule_results', 'score_breakdown', '资本开支（CapEx）'):
-            self.assertIn(token, html if token.startswith('health-') or token == '资本开支（CapEx）' else js)
+        self.assertIn('年度与季度财报监测对比', html)
+        self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor)', js)
+        self.assertNotIn('id="health-dimensions"', html)
+        self.assertNotIn('id="health-red-flag-panel"', html)
 
     def test_chart_configuration_has_all_requested_data_fields_and_units(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -108,27 +101,24 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('state.financialCache.delete(cacheKey)', js)
         self.assertIn('state.financialCache.keys().next().value', js)
 
-    def test_health_ui_has_distinct_loading_and_failure_states(self):
+    def test_health_ui_has_comparison_loading_and_failure_states(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        self.assertIn("renderFinancialHealth(null, null, 'loading')", js)
-        self.assertIn("renderFinancialHealth(null, null, 'failed')", js)
-        self.assertIn('正在加载财报与健康度评估结果', js)
-        self.assertIn('健康度数据加载失败', js)
-        self.assertNotIn("'全部红旗规则及评分维度均有可用数据。'", js)
+        self.assertIn('renderHealthComparisonTable(null, null)', js)
+        self.assertNotIn("renderQuarterlyMonitor(null)", js)
+        self.assertNotIn("renderFinancialHealth(null, null, 'loading')", js)
 
-    def test_partial_score_and_industry_calibration_disclosures_are_rendered(self):
+    def test_comparison_score_and_coverage_are_rendered(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        self.assertIn('health-score-label', html)
-        self.assertIn('当前未按行业分位数校准', html)
-        self.assertIn("health.score_coverage_status === 'partial'", js)
-        self.assertIn('部分覆盖评分', js)
+        self.assertIn('总分（100）', html)
+        self.assertIn('覆盖度（100）', html)
+        self.assertIn('health.score_coverage_status', js)
 
     def test_p2_red_flag_date_readability_and_request_contracts(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        self.assertIn('health-data-asof', html)
-        self.assertIn('高优先级', js)
+        self.assertIn('health-flag-detail-dialog', html)
+        self.assertIn('showHealthFlagDetail', js)
         self.assertIn('financialAbortController?.abort()', js)
         self.assertIn('AbortController()', js)
         self.assertIn('FINANCIAL_CACHE_TTL_MS', js)
@@ -169,7 +159,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('总分（100）', html)
         self.assertIn('核心增长质量（20）', html)
         self.assertIn("const annualPeriod = '五年年报';", js)
-        self.assertIn("const annualFlags = health ? String(health.red_flag_count ?? 0)", js)
+        self.assertIn("data-flag-source=\"annual\"", js)
         self.assertIn('id="health-comparison-body"', html)
         self.assertIn('function renderHealthComparisonTable(health, monitor)', js)
         self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor)', js)
@@ -183,6 +173,16 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("data-score-source", js)
         self.assertIn("health-comparison-body", js)
 
+    def test_comparison_only_ui_and_clickable_flag_details(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertNotIn('id="quarterly-health-monitor"', html)
+        self.assertNotIn('id="health-dimensions"', html)
+        self.assertNotIn('id="health-red-flag-panel"', html)
+        self.assertIn('id="health-flag-detail-dialog"', html)
+        self.assertIn('showHealthFlagDetail', js)
+        self.assertIn('comparison-flag-button', js)
+
     def test_annual_score_detail_uses_reader_friendly_metric_labels(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn("revenue_cagr: '营业收入复合增长率'", js)
@@ -190,15 +190,12 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("profit_premium: '利润增长溢价'", js)
         self.assertIn("gross_margin_change: '毛利率五年变化'", js)
 
-    def test_quarterly_monitor_is_rendered_as_provisional_ttm_not_a_replacement_score(self):
+    def test_quarterly_monitor_is_compared_only_in_the_table(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        self.assertIn('id="quarterly-health-monitor"', html)
-        self.assertIn('function renderQuarterlyMonitor(monitor)', js)
+        self.assertNotIn('id="quarterly-health-monitor"', html)
         self.assertIn('payload.quarterly_monitor', js)
-        self.assertIn('TTM + 最新季度资产负债表', html)
-        self.assertLess(html.index('id="quarterly-health-monitor"'), html.index('class="health-heading"'))
-        self.assertEqual(html.count('id="quarterly-health-monitor"'), 1)
+        self.assertIn("最新季报：${quarterPeriod}", js)
 
     def test_metric_tooltips_use_only_native_title_without_dark_custom_flyout(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
