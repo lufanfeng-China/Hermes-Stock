@@ -183,6 +183,13 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("data-score-source", js)
         self.assertIn("health-comparison-body", js)
 
+    def test_annual_score_detail_uses_reader_friendly_metric_labels(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn("revenue_cagr: '营业收入复合增长率'", js)
+        self.assertIn("ex_net_profit_cagr: '扣非归母净利润复合增长率'", js)
+        self.assertIn("profit_premium: '利润增长溢价'", js)
+        self.assertIn("gross_margin_change: '毛利率五年变化'", js)
+
     def test_quarterly_monitor_is_rendered_as_provisional_ttm_not_a_replacement_score(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

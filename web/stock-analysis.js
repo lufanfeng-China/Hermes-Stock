@@ -173,6 +173,16 @@
   const HEALTH_FIELD_LABELS = {
     revenue: '营业收入', ex_net_profit: '扣非归母净利润', net_profit: '归母净利润', ocf: '经营现金流', free_cf: '自由现金流', capex: '资本开支', goodwill: '商誉',
     debt_ratio: '资产负债率', roe_ex: '扣非 ROE', gross_margin: '毛利率', net_margin: '净利率', accounts_receivable: '应收账款', inventory: '存货',
+    revenue_cagr: '营业收入复合增长率', ex_net_profit_cagr: '扣非归母净利润复合增长率', profit_premium: '利润增长溢价',
+    gross_margin_change: '毛利率五年变化', net_margin_change: '净利率五年变化', roe_ex_change: '扣非 ROE 五年变化',
+    annual_cash_profit_ratio: '最新现金利润比', five_year_cash_profit_ratio: '五年现金利润比', fcf_margin: '自由现金流率', fcf_margin_change: '自由现金流率变化',
+    receivable_growth_gap: '应收账款增速差', inventory_growth_gap: '存货增速差', capex_intensity: '资本开支强度', capex_intensity_trend: '资本开支强度趋势',
+    revenue_growth_trend: '营收增长趋势', debt_ratio_trend: '资产负债率趋势', goodwill_equity_ratio: '商誉／权益比', goodwill_equity_trend: '商誉／权益趋势',
+  };
+  const HEALTH_SCORE_COMPONENT_LABELS = {
+    growth: '营收增长', adjusted_profit: '扣非利润增长', premium: '利润增长溢价', gross_margin: '毛利率', net_margin: '净利率', roe: '扣非 ROE',
+    annual_cash_profit: '最新现金利润比', five_year_cash_profit: '五年现金利润比', fcf_margin: '自由现金流率', receivable: '应收账款周转', inventory: '存货周转',
+    capex_intensity: '资本开支强度', revenue_growth: '营收增长趋势', debt_ratio: '资产负债率', goodwill_equity: '商誉／权益比',
   };
   const HEALTH_METRIC_TOOLTIPS = {
     revenue_cagr: { definition: '五年营业收入的年均复合增长率，反映收入规模的长期扩张速度。', judgement: '持续为正且更高通常更好；增速明显放缓或转负需要关注。' },
@@ -413,9 +423,10 @@
       title.textContent = `五年年报｜${scoreItem.title}得分由来`;
       const evidence = scoreItem.evidence || {};
       const metrics = Object.entries(evidence.metrics || {}).map(([key, value]) => `<dt>${escapeHTML(HEALTH_FIELD_LABELS[key] || key)}</dt><dd>${escapeHTML(healthEvidenceValue(key, value))}</dd>`).join('');
-      const subscores = Object.entries(evidence.subscores || {}).map(([key, value]) => `<dt>子项：${escapeHTML(key)}</dt><dd>${escapeHTML(String(value))}</dd>`).join('');
+      const subscores = Object.entries(evidence.subscores || {}).map(([key, value]) => `<dt>子项：${escapeHTML(HEALTH_SCORE_COMPONENT_LABELS[key] || key)}</dt><dd>${escapeHTML(String(value))}</dd>`).join('');
+      const thresholds = Object.entries(evidence.thresholds || {}).map(([key, value]) => `${HEALTH_SCORE_COMPONENT_LABELS[key] || HEALTH_FIELD_LABELS[key] || key}：${value}`).join('；');
       const formation = scoreFormationCopy(dimension, scoreItem).split('\n').map(escapeHTML).join('<br>');
-      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><p>${formation}</p><dl>${metrics}${subscores}<dt>评分阈值</dt><dd>${escapeHTML(Object.values(evidence.thresholds || {}).join('；') || '—')}</dd></dl>`;
+      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><p>${formation}</p><dl>${metrics}${subscores}<dt>评分阈值</dt><dd>${escapeHTML(thresholds || '—')}</dd></dl>`;
     } else {
       const scoreItem = (data.monitor?.realtime_score?.breakdown || []).find((item) => item.code === code);
       const dimension = (data.monitor?.dimensions || []).find((item) => item.code === code);
