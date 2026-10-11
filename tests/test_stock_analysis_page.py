@@ -60,7 +60,7 @@ class StockAnalysisPageTests(unittest.TestCase):
             self.assertIn(f"['{chart_id}', '{field}'", js)
         self.assertIn("const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));", js)
         self.assertIn("const healthEvidenceReports = annualPeriods.size ?", js)
-        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', evidenceReports, 'revenue', annualPeriods)", js)
+        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', chartReports, 'revenue', annualPeriods, payload.reports)", js)
         self.assertIn('const annualReports = annualPeriods ?', js)
         self.assertIn('financialRequestId !== state.financialRequestId', js)
         self.assertIn("const needsZeroAxis = variant === 'growth' || numeric.some((value) => value < 0);", js)
@@ -153,6 +153,13 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('扣非利润增速略落后于营收', js)
         self.assertIn('营收增速较高点回落，扣非利润近年承压', js)
         self.assertIn('scoreFormationCopy(item, scoreItem)', js)
+
+    def test_raw_charts_append_latest_quarter_without_polluting_annual_health_evidence(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('function appendLatestQuarter(annualReports, allReports)', js)
+        self.assertIn('chartReports = appendLatestQuarter(healthEvidenceReports, payload.reports)', js)
+        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', chartReports, 'revenue', annualPeriods, payload.reports)", js)
+        self.assertIn("String(row?.period || '').endsWith('A')", js)
 
     def test_quarterly_monitor_is_rendered_as_provisional_ttm_not_a_replacement_score(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")

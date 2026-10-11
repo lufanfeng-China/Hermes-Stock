@@ -97,7 +97,13 @@
       const previous = latestByYear.get(year);
       if (!previous || String(row?.report_date || '') > String(previous?.report_date || '')) latestByYear.set(year, row);
     }
-    return [...latestByYear.values()].sort((a, b) => String(a.year).localeCompare(String(b.year))).slice(-5);
+    return [...latestByYear.values()].sort((a, b) => String(a.year).localeCompare(String(b.year))).slice(-6);
+  }
+
+  function appendLatestQuarter(annualReports, allReports) {
+    const quarters = (allReports || []).filter((row) => !String(row?.period || '').endsWith('A'));
+    const latestQuarter = quarters.sort((a, b) => String(a?.report_date || '').localeCompare(String(b?.report_date || ''))).at(-1);
+    return latestQuarter ? [...(annualReports || []), latestQuarter] : (annualReports || []);
   }
 
   function periodLabel(row) {
@@ -119,15 +125,16 @@
     target.innerHTML = rows.map((row, index) => {
       const value = values[index];
       const label = Number.isFinite(value) ? formatter(value) : '—';
+      const reportClass = String(row?.period || '').endsWith('A') ? '' : ' latest-quarter';
       if (needsZeroAxis) {
         const direction = value < 0 ? 'negative' : 'positive';
         const barSize = Number.isFinite(value) ? (value === 0 ? 0 : Math.max(3, Math.abs(value) / range * 100)) : 3;
         const zeroClass = value === 0 ? ' zero-value' : '';
-        return `<div class="analysis-bar-item analysis-growth-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar-plot" style="--zero:${zero}%"><span class="analysis-zero-axis"></span><div class="analysis-bar zero-axis ${variant} ${direction}${zeroClass}" style="--bar-size:${barSize}%"></div></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
+        return `<div class="analysis-bar-item analysis-growth-item${reportClass}"><span class="analysis-bar-value">${label}</span><div class="analysis-bar-plot" style="--zero:${zero}%"><span class="analysis-zero-axis"></span><div class="analysis-bar zero-axis ${variant} ${direction}${zeroClass}" style="--bar-size:${barSize}%"></div></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
       }
       const height = Number.isFinite(value) ? (value === 0 ? 0 : Math.max(3, Math.abs(value) / maxAbs * 100)) : 3;
       const zeroClass = value === 0 ? ' zero-value' : '';
-      return `<div class="analysis-bar-item"><span class="analysis-bar-value">${label}</span><div class="analysis-bar ${variant}${zeroClass}" style="height:${height}%"></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
+      return `<div class="analysis-bar-item${reportClass}"><span class="analysis-bar-value">${label}</span><div class="analysis-bar ${variant}${zeroClass}" style="height:${height}%"></div><span class="analysis-bar-year">${periodLabel(row)}</span></div>`;
     }).join('');
   }
 
@@ -139,10 +146,10 @@
     renderBars(targetId, rows, rows.map((row) => Number(row?.metrics?.[metricKey])), formatter, variant);
   }
 
-  function renderYoYGrowthBars(targetId, reports, metricKey, annualPeriods = null) {
-    const annualReports = annualPeriods ? (reports || []).filter((row) => annualPeriods.has(String(row?.period))) : reports;
+  function renderYoYGrowthBars(targetId, reports, metricKey, annualPeriods = null, comparisonReports = reports) {
+    const annualReports = annualPeriods ? (reports || []).filter((row) => annualPeriods.has(String(row?.period)) || !String(row?.period || '').endsWith('A')) : reports;
     const rows = latestRowsByYear(annualReports);
-    const byPeriod = new Map((reports || []).map((row) => [String(row?.period || ''), row]));
+    const byPeriod = new Map((comparisonReports || []).map((row) => [String(row?.period || ''), row]));
     const values = rows.map((row) => {
       const year = Number(row?.year);
       const period = String(row?.period || '');
@@ -548,8 +555,9 @@
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
       const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;
-      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, healthEvidenceReports, metric, variant, display);
-      renderYoYGrowthBars('revenue-growth-chart', evidenceReports, 'revenue', annualPeriods);
+      const chartReports = appendLatestQuarter(healthEvidenceReports, payload.reports);
+      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, chartReports, metric, variant, display);
+      renderYoYGrowthBars('revenue-growth-chart', chartReports, 'revenue', annualPeriods, payload.reports);
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;
