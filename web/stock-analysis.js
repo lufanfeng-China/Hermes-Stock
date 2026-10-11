@@ -12,7 +12,7 @@
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
   const MAX_FINANCIAL_CACHE_ENTRIES = 24;
-  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), healthComparison: null, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -394,9 +394,44 @@
     return { summary: copy[status] || copy.insufficient, focus: copy.focus };
   }
 
+  function scoreDetailButton(source, item) {
+    const value = item?.points ?? item?.score;
+    if (item?.available === false || value === null || value === undefined || !Number.isFinite(Number(value))) return '<span class="comparison-unavailable">—</span>';
+    return `<button type="button" class="comparison-score-button" data-score-source="${source}" data-score-code="${escapeHTML(item.code)}" aria-label="查看${escapeHTML(item.title || item.code)}得分由来">${Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1)}</button>`;
+  }
+
+  function showHealthScoreDetail(source, code) {
+    const dialog = document.getElementById('health-score-detail-dialog');
+    const title = document.getElementById('health-score-detail-title');
+    const content = document.getElementById('health-score-detail-content');
+    const data = state.healthComparison;
+    if (!dialog || !title || !content || !data) return;
+    if (source === 'annual') {
+      const scoreItem = (data.health?.score_breakdown || []).find((item) => item.code === code);
+      const dimension = (data.health?.dimensions || []).find((item) => item.code === code);
+      if (!scoreItem) return;
+      title.textContent = `五年年报｜${scoreItem.title}得分由来`;
+      const evidence = scoreItem.evidence || {};
+      const metrics = Object.entries(evidence.metrics || {}).map(([key, value]) => `<dt>${escapeHTML(HEALTH_FIELD_LABELS[key] || key)}</dt><dd>${escapeHTML(healthEvidenceValue(key, value))}</dd>`).join('');
+      const subscores = Object.entries(evidence.subscores || {}).map(([key, value]) => `<dt>子项：${escapeHTML(key)}</dt><dd>${escapeHTML(String(value))}</dd>`).join('');
+      const formation = scoreFormationCopy(dimension, scoreItem).split('\n').map(escapeHTML).join('<br>');
+      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><p>${formation}</p><dl>${metrics}${subscores}<dt>评分阈值</dt><dd>${escapeHTML(Object.values(evidence.thresholds || {}).join('；') || '—')}</dd></dl>`;
+    } else {
+      const scoreItem = (data.monitor?.realtime_score?.breakdown || []).find((item) => item.code === code);
+      const dimension = (data.monitor?.dimensions || []).find((item) => item.code === code);
+      if (!scoreItem) return;
+      const statusLabel = { improving: '改善', stable: '平稳', watch: '需关注' }[scoreItem.status] || '不可用';
+      const ratio = { improving: '100%', stable: '60%', watch: '25%' }[scoreItem.status] || '—';
+      title.textContent = `最新季报｜${scoreItem.title}得分由来`;
+      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><dl><dt>季度状态</dt><dd>${statusLabel}</dd><dt>评分规则</dt><dd>改善计权重的 100%；平稳计 60%；需关注计 25%。本项按 ${ratio} 折算。</dd><dt>本期依据</dt><dd>${escapeHTML(dimension?.detail || '数据不足')}</dd><dt>口径</dt><dd>最新季度流量按 TTM，资产负债表项目使用最新期末余额。</dd></dl>`;
+    }
+    dialog.showModal();
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
+    state.healthComparison = { health, monitor };
     const unavailable = '<span class="comparison-unavailable">—</span>';
     const points = (item) => { const value = item?.points ?? item?.score; return item?.available === false || value === null || value === undefined || !Number.isFinite(Number(value))
       ? unavailable : Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1); };
@@ -412,8 +447,8 @@
     const quarterPeriod = monitor?.latest_period ? `${monitor.latest_period}（TTM）` : '季度监测';
     const cells = (klass, label, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHTML(label)}</strong></td><td>${score}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
     target.innerHTML = [
-      cells('comparison-annual', annualPeriod, annualScore, health ? String(health.coverage_weight ?? 0) : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map(points), annualFlags, annualInvestigations),
-      cells('comparison-quarter', `最新季报：${quarterPeriod}`, quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map(points), quarterlyAlerts, quarterlyInvestigations),
+      cells('comparison-annual', annualPeriod, annualScore, health ? String(health.coverage_weight ?? 0) : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map((item) => scoreDetailButton('annual', item)), annualFlags, annualInvestigations),
+      cells('comparison-quarter', `最新季报：${quarterPeriod}`, quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map((item) => scoreDetailButton('quarterly', item)), quarterlyAlerts, quarterlyInvestigations),
     ].join('');
   }
 
@@ -631,6 +666,13 @@
     apply(rows[Number(option.dataset.index)]);
   });
   document.addEventListener('click', (event) => { if (!form.contains(event.target)) hide(); });
+  document.getElementById('health-comparison-body')?.addEventListener('click', (event) => {
+    const button = event.target.closest('.comparison-score-button');
+    if (button) showHealthScoreDetail(button.dataset.scoreSource, button.dataset.scoreCode);
+  });
+  const scoreDetailDialog = document.getElementById('health-score-detail-dialog');
+  scoreDetailDialog?.querySelector('.health-score-detail-close')?.addEventListener('click', () => scoreDetailDialog.close());
+  scoreDetailDialog?.addEventListener('click', (event) => { if (event.target === scoreDetailDialog) scoreDetailDialog.close(); });
 
   const params = new URLSearchParams(location.search);
   const market = params.get('market');
