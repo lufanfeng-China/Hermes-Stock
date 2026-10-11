@@ -164,6 +164,17 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('function renderHealthComparisonTable(health, monitor)', js)
         self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor)', js)
 
+    def test_total_score_opens_overall_financial_conclusion_and_keeps_six_kpi_actions(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="health-overall-detail-dialog"', html)
+        self.assertIn('function showHealthOverallDetail(source)', js)
+        self.assertIn('data-overall-source', js)
+        self.assertIn('annual: data.health.conclusions', js)
+        self.assertIn('quarterly: data.monitor.alerts', js)
+        self.assertIn('function scoreDetailButton(source, item)', js)
+        self.assertIn('data-score-source', js)
+
     def test_comparison_kpi_scores_open_a_detail_dialog(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

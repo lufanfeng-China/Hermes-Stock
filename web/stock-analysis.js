@@ -439,6 +439,15 @@
     dialog.showModal();
   }
 
+  function showHealthOverallDetail(source) {
+    const dialog = document.getElementById('health-overall-detail-dialog'); const content = document.getElementById('health-overall-detail-content');
+    const data = state.healthComparison; if (!dialog || !content || !data) return;
+    const items = ({ annual: data.health.conclusions, quarterly: data.monitor.alerts })[source] || [];
+    const label = source === 'annual' ? '五年年报总体分析结论' : '最新季报总体分析结论';
+    content.innerHTML = `<h3>${label}</h3>${items.length ? `<ul>${items.map((item) => `<li>${escapeHTML(item.summary || item.detail || item.reason || item.title || String(item))}</li>`).join('')}</ul>` : '<p>当前口径没有可用的总体分析结论。</p>'}`;
+    dialog.showModal();
+  }
+
   function showHealthFlagDetail(source) {
     const dialog = document.getElementById('health-flag-detail-dialog'); const content = document.getElementById('health-flag-detail-content');
     const data = state.healthComparison; if (!dialog || !content || !data) return;
@@ -480,10 +489,11 @@
     const quarterlyInvestigations = monitor?.status === 'available' ? '—（未设）' : unavailable;
     const annualPeriod = '五年年报';
     const quarterPeriod = monitor?.latest_period ? `${monitor.latest_period}（TTM）` : '季度监测';
-    const cells = (klass, label, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHTML(label)}</strong></td><td>${score}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
+    const overallButton = (source, score) => score === unavailable ? unavailable : `<button type="button" class="comparison-score-button" data-overall-source="${source}" aria-label="查看总体财报分析结论">${score}</button>`;
+    const cells = (klass, label, source, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHTML(label)}</strong></td><td>${overallButton(source, score)}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
     target.innerHTML = [
-      cells('comparison-annual', annualPeriod, annualScore, health ? String(health.coverage_weight ?? 0) : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map((item) => scoreDetailButton('annual', item)), annualFlags, annualInvestigations),
-      cells('comparison-quarter', `最新季报：${quarterPeriod}`, quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map((item) => scoreDetailButton('quarterly', item)), quarterlyAlerts, quarterlyInvestigations),
+      cells('comparison-annual', annualPeriod, 'annual', annualScore, health ? String(health.coverage_weight ?? 0) : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map((item) => scoreDetailButton('annual', item)), annualFlags, annualInvestigations),
+      cells('comparison-quarter', `最新季报：${quarterPeriod}`, 'quarterly', quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map((item) => scoreDetailButton('quarterly', item)), quarterlyAlerts, quarterlyInvestigations),
     ].join('');
   }
 
@@ -701,8 +711,10 @@
   document.addEventListener('click', (event) => { if (!form.contains(event.target)) hide(); });
   document.getElementById('health-comparison-body')?.addEventListener('click', (event) => {
     const button = event.target.closest('.comparison-score-button');
+    const overall = event.target.closest('[data-overall-source]');
     const flag = event.target.closest('.comparison-flag-button');
-    if (button) showHealthScoreDetail(button.dataset.scoreSource, button.dataset.scoreCode);
+    if (overall) showHealthOverallDetail(overall.dataset.overallSource);
+    else if (button) showHealthScoreDetail(button.dataset.scoreSource, button.dataset.scoreCode);
     if (flag) showHealthFlagDetail(flag.dataset.flagSource);
   });
   const scoreDetailDialog = document.getElementById('health-score-detail-dialog');
@@ -711,6 +723,9 @@
   const flagDetailDialog = document.getElementById('health-flag-detail-dialog');
   flagDetailDialog?.querySelector('.health-flag-detail-close')?.addEventListener('click', () => flagDetailDialog.close());
   flagDetailDialog?.addEventListener('click', (event) => { if (event.target === flagDetailDialog) flagDetailDialog.close(); });
+  const overallDetailDialog = document.getElementById('health-overall-detail-dialog');
+  overallDetailDialog?.querySelector('.health-overall-detail-close')?.addEventListener('click', () => overallDetailDialog.close());
+  overallDetailDialog?.addEventListener('click', (event) => { if (event.target === overallDetailDialog) overallDetailDialog.close(); });
 
   const params = new URLSearchParams(location.search);
   const market = params.get('market');
