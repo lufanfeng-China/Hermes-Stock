@@ -472,6 +472,12 @@
     renderHealthSeries(health);
   }
 
+  function renderHealthQuestions(health) {
+    const target = document.getElementById('health-question-grid'); if (!target) return;
+    if (!health) { target.textContent = '选择股票后加载。'; return; }
+    target.innerHTML = (health.dimensions || []).map((item) => { const score = (health.score_breakdown || []).find((row) => row.code === item.code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHTML(item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHTML(item.code)}"><span class="health-question-score">${score?.points ?? '—'} / ${item.weight}</span><p>${escapeHTML(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
@@ -631,6 +637,7 @@
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderHealthComparisonTable(null, null);
     renderHealthMetrics(null);
+    renderHealthQuestions(null);
     for (const id of chartIds) {
       const el = document.getElementById(id);
       el.className = 'analysis-metric-status';
@@ -655,6 +662,7 @@
       if (financialRequestId !== state.financialRequestId) return;
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
       renderHealthMetrics(payload.health);
+      renderHealthQuestions(payload.health);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
       const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;
@@ -716,6 +724,10 @@
     if (overall) showHealthOverallDetail(overall.dataset.overallSource);
     else if (button) showHealthScoreDetail(button.dataset.scoreSource, button.dataset.scoreCode);
     if (flag) showHealthFlagDetail(flag.dataset.flagSource);
+  });
+  document.getElementById('health-question-grid')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-score-source="annual"]');
+    if (button) showHealthScoreDetail('annual', button.dataset.scoreCode);
   });
   const scoreDetailDialog = document.getElementById('health-score-detail-dialog');
   scoreDetailDialog?.querySelector('.health-score-detail-close')?.addEventListener('click', () => scoreDetailDialog.close());

@@ -190,7 +190,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertNotIn('id="quarterly-health-monitor"', html)
         self.assertNotIn('id="health-dimensions"', html)
         self.assertNotIn('id="health-red-flag-panel"', html)
-        self.assertIn('id="health-flag-detail-dialog"', html)
+        self.assertIn('id="health-question-grid"', html)
+        self.assertIn('function renderHealthQuestions(health)', js)
         self.assertIn('showHealthFlagDetail', js)
         self.assertIn('comparison-flag-button', js)
 
