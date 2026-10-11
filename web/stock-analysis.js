@@ -491,7 +491,7 @@
       ...dimensions.filter((item) => item.available === false).map((item) => `${item.title}：${item.reason || '数据不足，未作判断。'}`),
     ];
     const hasCashAndLeverageImprovement = dimensions.some((item) => item.code === 'cash' && item.status === 'improving') && dimensions.some((item) => item.code === 'financial_risk' && item.status === 'improving');
-    const hasGrowthPressure = dimensions.some((item) => item.code === 'growth' && item.status === 'watch');
+    const hasGrowthPressure = dimensions.some((item) => item.code === 'growth' && (item.status === 'watch' || /同比\s*[-−]/.test(item.detail || '')));
     const summary = `${hasCashAndLeverageImprovement ? '现金流和杠杆有所改善' : '季度经营指标存在分化'}${hasGrowthPressure ? '，但收入、扣非利润同比明显下滑' : ''}；流量项目按 TTM 口径，资产负债表项目使用最新期末余额；该结论不等同于五年年度评价。`;
     return { title: '最新季报/TTM｜总体财报分析结论', meta: `最新披露：${monitor?.latest_period || '—'}；实时评分：${score}；覆盖度：${realtime.coverage_weight ?? 0} / 100。`, summary, good, bad };
   }
