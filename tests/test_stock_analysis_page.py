@@ -166,6 +166,10 @@ class StockAnalysisPageTests(unittest.TestCase):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         for label in ('总分', '覆盖度', '核心增长质量', '盈利能力', '现金含金量', '营运资本', '再投资效率', '财务风险', '已触发红旗', '待调查事项'):
             self.assertIn(label, html)
+        self.assertIn('总分（100）', html)
+        self.assertIn('核心增长质量（20）', html)
+        self.assertIn("const annualPeriod = '五年年报';", js)
+        self.assertIn("const annualFlags = health ? String(health.red_flag_count ?? 0)", js)
         self.assertIn('id="health-comparison-body"', html)
         self.assertIn('function renderHealthComparisonTable(health, monitor)', js)
         self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor)', js)
