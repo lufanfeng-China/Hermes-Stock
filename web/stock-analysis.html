@@ -14,7 +14,7 @@
     @media (max-width:760px) { .latest-report-change-grid { grid-template-columns:1fr; } }
     .analysis-metric-card { min-width:0; height:154px; padding:12px 14px; border:1px solid rgba(124,224,195,.14); border-radius:10px; background:rgba(124,224,195,.025); display:flex; flex-direction:column; }
     .analysis-metric-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
-    .analysis-metric-heading h2 { margin:0; font-size:15px; color:var(--text); }
+    .analysis-metric-heading h2 { margin:0; font-size:15px; color:var(--text); }.metric-lineage-trigger { border:0; padding:0; background:transparent; color:inherit; font:inherit; cursor:pointer; text-align:left; border-bottom:1px dashed rgba(139,216,255,.65); } .metric-lineage-trigger:focus-visible { outline:2px solid #8bd8ff; outline-offset:3px; } .metric-lineage-dialog { width:min(680px,calc(100vw - 28px)); color:var(--text); background:#10201f; border:1px solid rgba(139,216,255,.5); border-radius:10px; padding:0; }.metric-lineage-dialog::backdrop { background:rgba(0,0,0,.68); }.metric-lineage-dialog article { padding:18px; }.metric-lineage-dialog h3 { margin:0 32px 12px 0; }.metric-lineage-dialog dl { display:grid; grid-template-columns:max-content 1fr; gap:9px 12px; font-size:13px; line-height:1.5; }.metric-lineage-dialog dt { color:var(--muted); }.metric-lineage-dialog dd { margin:0; }.metric-lineage-close { position:absolute; top:10px; right:10px; border:0; background:transparent; color:var(--muted); font-size:24px; cursor:pointer; }
     .analysis-metric-unit { color:var(--muted); font-size:11px; }
     .analysis-bar-chart { flex:1; min-height:0; display:flex; gap:10px; align-items:stretch; padding-top:12px; }
     .analysis-bar-item { flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:6px; }
@@ -74,7 +74,8 @@
   <dialog id="health-score-detail-dialog" class="health-score-detail-dialog" aria-labelledby="health-score-detail-title"><article><button type="button" class="health-score-detail-close" aria-label="关闭">×</button><h3 id="health-score-detail-title">KPI 得分明细</h3><div id="health-score-detail-content"></div></article></dialog>
   <dialog id="health-flag-detail-dialog" class="health-score-detail-dialog" aria-label="红旗触发详情"><article><button type="button" class="health-flag-detail-close" aria-label="关闭">×</button><h3>红旗触发详情</h3><div id="health-flag-detail-content"></div></article></dialog>
   <dialog id="health-overall-detail-dialog" class="health-score-detail-dialog" aria-label="总体财报分析结论"><article><button type="button" class="health-overall-detail-close" aria-label="关闭">×</button><div id="health-overall-detail-content"></div></article></dialog>
+  <dialog id="metric-lineage-dialog" class="metric-lineage-dialog" aria-label="指标口径与数据血缘"><article><button type="button" class="metric-lineage-close" aria-label="关闭">×</button><div id="metric-lineage-content"></div></article></dialog>
   <script src="/nav.js?v=20261008-stock-analysis-v1"></script>
-  <script src="/stock-analysis.js?v=20261012-latest-report-summary-v59"></script>
+  <script src="/stock-analysis.js?v=20261012-metric-lineage-v60"></script>
 </body>
 </html>

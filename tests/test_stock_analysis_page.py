@@ -29,6 +29,20 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('.analysis-bar.zero-value', html)
         self.assertIn('#70d6a8', html)
 
+    def test_metric_lineage_drawer_discloses_current_value_basis_formula_inputs_and_non_ttm_reason(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="metric-lineage-dialog"', html)
+        self.assertIn("data-metric-lineage", js)
+        self.assertIn('const METRIC_LINEAGE =', js)
+        self.assertIn('function showMetricLineage(metricKey)', js)
+        self.assertIn('当前显示值', js)
+        self.assertIn('计算公式', js)
+        self.assertIn('使用报告期', js)
+        self.assertIn('为何不适用 TTM', js)
+        self.assertIn("dialog.showModal()", js)
+        self.assertIn("data-metric-lineage", js)
+
     def test_latest_report_change_summary_surfaces_ranked_quarterly_findings_with_basis_and_chart_links(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

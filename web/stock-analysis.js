@@ -12,7 +12,7 @@
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
   const MAX_FINANCIAL_CACHE_ENTRIES = 24;
-  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), healthComparison: null, selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -841,6 +841,37 @@
     ['inventory-chart', 'inventory', 'asset', 'amount', 'point'],
   ];
 
+  const METRIC_LINEAGE = {
+    revenue: { label: '营业收入', basis: 'TTM', unit: '亿元', formula: '本期累计营收 + 上年年报营收 − 上年同期累计营收' },
+    revenue_growth: { label: '营收增长率', basis: 'TTM', unit: '%', formula: '本期 TTM 营收 ÷ 上期 TTM 营收 − 1' },
+    net_profit: { label: '归母净利润', basis: 'TTM', unit: '亿元', formula: '本期累计利润 + 上年年报利润 − 上年同期累计利润' },
+    ex_net_profit: { label: '扣非归母净利润', basis: 'TTM', unit: '亿元', formula: '本期累计扣非利润 + 上年年报扣非利润 − 上年同期累计扣非利润' },
+    gross_margin: { label: '毛利率', basis: 'TTM', unit: '%', formula: 'TTM 毛利 ÷ TTM 营收' }, net_margin: { label: '净利率', basis: 'TTM', unit: '%', formula: 'TTM 归母净利润 ÷ TTM 营收' },
+    roe_ex: { label: '扣非 ROE', basis: 'TTM', unit: '%', formula: 'TTM 扣非归母净利润 ÷ 最新期末权益' },
+    ocf: { label: '经营现金流', basis: 'TTM', unit: '亿元', formula: '本期累计经营现金流 + 上年年报 − 上年同期累计' }, free_cf: { label: '自由现金流', basis: 'TTM', unit: '亿元', formula: 'TTM 经营现金流 − TTM 资本开支' }, capex: { label: '资本开支', basis: 'TTM', unit: '亿元', formula: '本期累计资本开支 + 上年年报 − 上年同期累计' },
+    debt_ratio: { label: '资产负债率', basis: '非TTM', unit: '%', formula: '最新期末总负债 ÷ 最新期末总资产', reason: '资产负债率是资产负债表时点比例，跨期相加没有经济含义。' },
+    goodwill: { label: '商誉', basis: '非TTM', unit: '亿元', formula: '最新期末商誉账面余额', reason: '商誉是资产负债表时点余额，不能滚动为 TTM。' },
+    accounts_receivable: { label: '应收账款', basis: '非TTM', unit: '亿元', formula: '最新期末应收账款余额', reason: '应收账款是资产负债表时点余额，不能滚动为 TTM。' },
+    inventory: { label: '库存', basis: '非TTM', unit: '亿元', formula: '最新期末存货余额', reason: '存货是资产负债表时点余额，不能滚动为 TTM。' },
+  };
+
+  function showMetricLineage(metricKey) {
+    const dialog = document.getElementById('metric-lineage-dialog'); const content = document.getElementById('metric-lineage-content');
+    const definition = METRIC_LINEAGE[metricKey]; const payload = state.financialPayload;
+    if (!dialog || !content || !definition || !payload) return;
+    const period = String(payload.quarterly_monitor?.latest_period || payload.latest_report?.period || '—');
+    const ttm = buildLatestTTMReport(payload.reports, payload.quarterly_monitor);
+    const metric = metricKey === 'revenue_growth' ? 'revenue_yoy' : metricKey;
+    const source = definition.basis === 'TTM' ? ttm?.metrics : payload.latest_report?.metrics;
+    const rawValue = Number(source?.[metric]);
+    const value = Number.isFinite(rawValue) ? (definition.unit === '亿元' ? `${(rawValue / 1e8).toFixed(2)} 亿元` : `${rawValue.toFixed(2)}%`) : '数据不足';
+    const inputs = definition.basis === 'TTM'
+      ? `${period}、${Number(period.slice(0, 4)) - 1}A、${Number(period.slice(0, 4)) - 1}${period.slice(4)}`
+      : period;
+    content.innerHTML = `<h3>${escapeHTML(definition.label)}｜指标口径与数据血缘</h3><dl><dt>当前显示值</dt><dd>${escapeHTML(value)}（${escapeHTML(interimPeriodLabel(period, definition.basis))}）</dd><dt>计算公式</dt><dd>${escapeHTML(definition.formula)}</dd><dt>使用报告期</dt><dd>${escapeHTML(inputs)}</dd><dt>为何不适用 TTM</dt><dd>${escapeHTML(definition.reason || '适用 TTM：该指标为期间流量或由期间流量派生。')}</dd></dl>`;
+    dialog.showModal();
+  }
+
   function putFinancialCache(cacheKey, payload) {
     state.financialCache.delete(cacheKey);
     state.financialCache.set(cacheKey, { at: Date.now(), payload });
@@ -883,6 +914,7 @@
           return body;
         });
       if (financialRequestId !== state.financialRequestId) return;
+      state.financialPayload = payload;
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
       renderLatestReportChanges(payload.quarterly_monitor);
       renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report);
@@ -958,6 +990,15 @@
     const button = event.target.closest('[data-score-source="annual"]');
     if (button) showHealthScoreDetail('annual', button.dataset.scoreCode);
   });
+  document.querySelectorAll('.analysis-metric-card').forEach((card) => {
+    const chart = card.querySelector('[id$="-chart"]'); const metric = METRIC_CHARTS.find(([id]) => id === chart?.id)?.[1] || (chart?.id === 'revenue-growth-chart' ? 'revenue_growth' : null);
+    const heading = card.querySelector('.analysis-metric-heading h2');
+    if (metric && heading) heading.innerHTML = `<button type="button" class="metric-lineage-trigger" data-metric-lineage="${metric}" title="查看指标口径与数据血缘">${heading.textContent}</button>`;
+  });
+  document.addEventListener('click', (event) => { const trigger = event.target.closest('[data-metric-lineage]'); if (trigger) showMetricLineage(trigger.dataset.metricLineage); });
+  const lineageDialog = document.getElementById('metric-lineage-dialog');
+  lineageDialog?.addEventListener('click', (event) => { if (event.target === lineageDialog || event.target.closest('.metric-lineage-close')) lineageDialog.close(); });
+
   const scoreDetailDialog = document.getElementById('health-score-detail-dialog');
   scoreDetailDialog?.querySelector('.health-score-detail-close')?.addEventListener('click', () => scoreDetailDialog.close());
   scoreDetailDialog?.addEventListener('click', (event) => { if (event.target === scoreDetailDialog) scoreDetailDialog.close(); });
