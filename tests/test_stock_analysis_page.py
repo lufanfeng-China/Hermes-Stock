@@ -57,6 +57,20 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('加权 PE-TTM', js)
         self.assertIn('dialog.showModal()', js)
 
+    def test_clickable_industry_valuation_position_opens_full_secondary_industry_peer_dialog(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="industry-valuation-peer-dialog"', html)
+        self.assertIn('id="industry-valuation-peer-table"', html)
+        self.assertIn('估值分位', html)
+        self.assertIn('PE(动)', html)
+        self.assertIn('function showIndustryValuationPeers()', js)
+        self.assertIn('/api/industry-valuation-percentile?', js)
+        self.assertIn('data-industry-valuation-peers', js)
+        self.assertIn('valuation_percentile', js)
+        self.assertIn('valuation_band', js)
+        self.assertIn('点击列头可排序', js)
+
     def test_industry_financial_position_renders_alignment_coverage_and_peer_percentiles(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
