@@ -103,10 +103,72 @@
   function appendLatestQuarter(annualReports, allReports) {
     const quarters = (allReports || []).filter((row) => !String(row?.period || '').endsWith('A'));
     const latestQuarter = quarters.sort((a, b) => String(a?.report_date || '').localeCompare(String(b?.report_date || ''))).at(-1);
-    return latestQuarter ? [...(annualReports || []), latestQuarter] : (annualReports || []);
+    return latestQuarter
+      ? [...(annualReports || []), { ...latestQuarter, label: interimPeriodLabel(latestQuarter.period, '非TTM') }]
+      : (annualReports || []);
+  }
+
+  function interimPeriodLabel(period, basis) {
+    return `${String(period).slice(2)}(${basis})`;
+  }
+
+  function buildLatestTTMReport(reports, quarterlyMonitor) {
+    if (quarterlyMonitor?.status !== 'available' || !quarterlyMonitor?.latest_period) return null;
+    const period = String(quarterlyMonitor.latest_period);
+    const year = Number(period.slice(0, 4));
+    const suffix = period.slice(4);
+    const byPeriod = new Map((reports || []).map((row) => [String(row?.period || ''), row]));
+    const latest = byPeriod.get(period);
+    const annual = byPeriod.get(`${year - 1}A`);
+    const samePeriodPriorYear = byPeriod.get(`${year - 1}${suffix}`);
+    const olderAnnual = byPeriod.get(`${year - 2}A`);
+    const olderSamePeriod = byPeriod.get(`${year - 2}${suffix}`);
+    if (!latest || !annual || !samePeriodPriorYear) return null;
+    const numberOrNull = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+    const ttm = (metric) => {
+      const current = numberOrNull(latest.metrics?.[metric]);
+      const priorAnnual = numberOrNull(annual.metrics?.[metric]);
+      const priorSame = numberOrNull(samePeriodPriorYear.metrics?.[metric]);
+      return current === null || priorAnnual === null || priorSame === null ? null : current + priorAnnual - priorSame;
+    };
+    const monitorTTM = quarterlyMonitor.ttm || {};
+    const revenue = numberOrNull(monitorTTM.revenue) ?? ttm('revenue');
+    const exNetProfit = numberOrNull(monitorTTM.ex_net_profit) ?? ttm('ex_net_profit');
+    const ocf = numberOrNull(monitorTTM.ocf) ?? ttm('ocf');
+    const capex = numberOrNull(monitorTTM.capex) ?? ttm('capex');
+    const freeCf = numberOrNull(monitorTTM.free_cf) ?? ttm('free_cf');
+    const netProfit = ttm('net_profit');
+    const grossProfit = (row) => {
+      const revenueValue = numberOrNull(row?.metrics?.revenue);
+      const margin = numberOrNull(row?.metrics?.gross_margin);
+      return revenueValue === null || margin === null ? null : revenueValue * margin / 100;
+    };
+    const ttmGrossProfit = [grossProfit(latest), grossProfit(annual), grossProfit(samePeriodPriorYear)].every(Number.isFinite)
+      ? grossProfit(latest) + grossProfit(annual) - grossProfit(samePeriodPriorYear) : null;
+    const priorTtmInputs = olderAnnual && olderSamePeriod
+      ? [numberOrNull(samePeriodPriorYear.metrics?.revenue), numberOrNull(olderAnnual.metrics?.revenue), numberOrNull(olderSamePeriod.metrics?.revenue)]
+      : [];
+    const priorTtmRevenue = priorTtmInputs.length === 3 && priorTtmInputs.every(Number.isFinite)
+      ? priorTtmInputs[0] + priorTtmInputs[1] - priorTtmInputs[2] : null;
+    const revenueTtmYoY = Number.isFinite(revenue) && Number.isFinite(priorTtmRevenue) && priorTtmRevenue !== 0
+      ? (revenue / priorTtmRevenue - 1) * 100 : null;
+    return {
+      ...latest,
+      label: interimPeriodLabel(period, 'TTM'), basis: 'ttm',
+      metrics: {
+        ...latest.metrics,
+        revenue, ex_net_profit: exNetProfit, net_profit: netProfit, ocf, capex, free_cf: freeCf,
+        gross_margin: Number.isFinite(ttmGrossProfit) && Number.isFinite(revenue) && revenue !== 0 ? ttmGrossProfit / revenue * 100 : null,
+        net_margin: Number.isFinite(netProfit) && Number.isFinite(revenue) && revenue !== 0 ? netProfit / revenue * 100 : null,
+        // The backend financial snapshot already derives this field as TTM deducted profit / ending equity.
+        roe_ex: numberOrNull(latest.metrics?.roe_ex),
+        revenue_yoy: revenueTtmYoY,
+      },
+    };
   }
 
   function periodLabel(row) {
+    if (row?.label) return String(row.label);
     const period = String(row?.period || '');
     return `${String(row?.year || '').slice(-2)}${period.endsWith('A') ? '' : period.slice(4)}`;
   }
@@ -151,6 +213,8 @@
     const rows = latestRowsByYear(annualReports);
     const byPeriod = new Map((comparisonReports || []).map((row) => [String(row?.period || ''), row]));
     const values = rows.map((row) => {
+      const explicitYoY = Number(row?.metrics?.[`${metricKey}_yoy`]);
+      if (Number.isFinite(explicitYoY)) return explicitYoY;
       const year = Number(row?.year);
       const period = String(row?.period || '');
       const prior = byPeriod.get(`${year - 1}${period.slice(4)}`);
@@ -324,17 +388,65 @@
     return `<span class="health-metric-value ${tone}">${display}</span>`;
   }
 
-  function renderHealthSeries(health) {
+  function latestQuarterSeriesPoint(quarterlyMonitor, latestReport) {
+    if (quarterlyMonitor?.status !== 'available' || !quarterlyMonitor?.latest_period) return null;
+    const ttm = quarterlyMonitor.ttm || {};
+    const gaps = quarterlyMonitor.gaps || {};
+    const latestMetrics = latestReport?.metrics || {};
+    const numberOrNull = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+    const ratio = (numerator, denominator) => Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0
+      ? numerator / denominator : null;
+    const percentage = (numerator, denominator) => {
+      const value = ratio(numerator, denominator);
+      return value === null ? null : value * 100;
+    };
+    const period = String(quarterlyMonitor.latest_period);
+    return {
+      year: period.slice(0, 4), period, label: period,
+      values: {
+        annual_cash_profit_ratio: ratio(numberOrNull(ttm.ocf), numberOrNull(ttm.ex_net_profit)),
+        fcf_margin: numberOrNull(ttm.fcf_margin),
+        receivable_growth_gap: numberOrNull(gaps.receivable_growth_gap),
+        inventory_growth_gap: numberOrNull(gaps.inventory_growth_gap),
+        capex_intensity: percentage(numberOrNull(ttm.capex), numberOrNull(ttm.revenue)),
+        roe_ex: numberOrNull(latestMetrics.roe_ex),
+      },
+    };
+  }
+
+  const HEALTH_TTM_SERIES_KEYS = new Set(['annual_cash_profit_ratio', 'fcf_margin', 'capex_intensity', 'roe_ex']);
+
+  function renderHealthSeries(health, quarterlyMonitor = null, latestReport = null) {
     const target = document.getElementById('health-series');
     const series = health?.series || {};
     const years = series.years || [];
-    const rows = [
+    const HEALTH_SERIES_CHARTS = [
       ['现金利润比', 'annual_cash_profit_ratio', ''], ['FCF Margin', 'fcf_margin', '%'],
       ['应收增速差', 'receivable_growth_gap', 'pct'], ['存货增速差', 'inventory_growth_gap', 'pct'],
       ['CapEx 强度', 'capex_intensity', '%'], ['扣非 ROE', 'roe_ex', '%'],
     ];
     if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
-    target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix, tooltipKey]) => `<tr><th>${healthMetricLabel(tooltipKey || key, label)}</th>${years.map((_, index) => `<td>${healthMetricValue(key, series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+
+    const seriesRows = years.map((year) => {
+      const label = String(year);
+      const annualYear = label.replace(/A$/, '');
+      return { year: annualYear, period: `${annualYear}A`, label: String(year) };
+    });
+    const latestQuarter = latestQuarterSeriesPoint(quarterlyMonitor, latestReport);
+    const chartRows = latestQuarter ? [...seriesRows, latestQuarter] : seriesRows;
+    target.innerHTML = `<div class="health-series-chart-grid">${HEALTH_SERIES_CHARTS.map(([label, key, suffix]) => {
+      const chartId = `health-series-chart-${key}`;
+      return `<article class="health-series-chart-card"><div class="health-series-chart-heading"><h4>${healthMetricLabel(key, label)}</h4><span>${suffix === 'pct' ? '单位：百分点' : suffix ? '单位：%' : '倍'}</span></div><div id="${chartId}" class="analysis-metric-status">暂无可用数据</div></article>`;
+    }).join('')}</div>`;
+
+    HEALTH_SERIES_CHARTS.forEach(([, key, suffix]) => {
+      const chartId = `health-series-chart-${key}`;
+      const rows = chartRows.map((row) => row.values
+        ? { ...row, label: interimPeriodLabel(row.period, HEALTH_TTM_SERIES_KEYS.has(key) ? 'TTM' : '非TTM') }
+        : row);
+      const values = rows.map((row, index) => row.values ? row.values[key] : Number(series[key]?.[index]));
+      renderBars(chartId, rows, values, (value) => healthSeriesValue(key, value, suffix), 'health');
+    });
   }
 
   function scoreFormationCopy(item, scoreItem) {
@@ -514,7 +626,7 @@
     dialog.showModal();
   }
 
-  function renderHealthMetrics(health) {
+  function renderHealthMetrics(health, quarterlyMonitor = null, latestReport = null) {
     const target = document.getElementById('health-derived');
     if (!target) return;
     if (!health) { target.textContent = '选择股票后加载。'; renderHealthSeries(null); return; }
@@ -527,7 +639,7 @@
       ['最新资产负债率', 'debt_ratio', series.debt_ratio?.at?.(-1), '%'], ['商誉／权益比', 'goodwill_equity_ratio', d.goodwill_equity_ratio, '%'],
     ];
     target.innerHTML = rows.map(([label, key, value, suffix]) => `<div class="health-derived-item"><span class="health-derived-label">${healthMetricLabel(key, label)}</span><strong class="health-derived-value">${healthMetricValue(key, value, suffix)}</strong></div>`).join('');
-    renderHealthSeries(health);
+    renderHealthSeries(health, quarterlyMonitor, latestReport);
   }
 
   const HEALTH_QUESTION_PROMPTS = {
@@ -672,19 +784,19 @@
   }
 
   const METRIC_CHARTS = [
-    ['revenue-chart', 'revenue', 'revenue', 'amount'],
-    ['net-profit-chart', 'net_profit', 'profit', 'amount'],
-    ['ex-net-profit-chart', 'ex_net_profit', 'profit', 'amount'],
-    ['gross-margin-chart', 'gross_margin', 'ratio', 'percent'],
-    ['net-margin-chart', 'net_margin', 'ratio', 'percent'],
-    ['roe-ex-chart', 'roe_ex', 'ratio', 'percent'],
-    ['debt-ratio-chart', 'debt_ratio', 'ratio', 'percent'],
-    ['ocf-chart', 'ocf', 'cash', 'amount'],
-    ['free-cf-chart', 'free_cf', 'cash', 'amount'],
-    ['capex-chart', 'capex', 'cash', 'amount'],
-    ['goodwill-chart', 'goodwill', 'asset', 'amount'],
-    ['accounts-receivable-chart', 'accounts_receivable', 'asset', 'amount'],
-    ['inventory-chart', 'inventory', 'asset', 'amount'],
+    ['revenue-chart', 'revenue', 'revenue', 'amount', 'ttm'],
+    ['net-profit-chart', 'net_profit', 'profit', 'amount', 'ttm'],
+    ['ex-net-profit-chart', 'ex_net_profit', 'profit', 'amount', 'ttm'],
+    ['gross-margin-chart', 'gross_margin', 'ratio', 'percent', 'ttm'],
+    ['net-margin-chart', 'net_margin', 'ratio', 'percent', 'ttm'],
+    ['roe-ex-chart', 'roe_ex', 'ratio', 'percent', 'ttm'],
+    ['debt-ratio-chart', 'debt_ratio', 'ratio', 'percent', 'point'],
+    ['ocf-chart', 'ocf', 'cash', 'amount', 'ttm'],
+    ['free-cf-chart', 'free_cf', 'cash', 'amount', 'ttm'],
+    ['capex-chart', 'capex', 'cash', 'amount', 'ttm'],
+    ['goodwill-chart', 'goodwill', 'asset', 'amount', 'point'],
+    ['accounts-receivable-chart', 'accounts_receivable', 'asset', 'amount', 'point'],
+    ['inventory-chart', 'inventory', 'asset', 'amount', 'point'],
   ];
 
   function putFinancialCache(cacheKey, payload) {
@@ -729,14 +841,18 @@
         });
       if (financialRequestId !== state.financialRequestId) return;
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
-      renderHealthMetrics(payload.health);
+      renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report);
       renderHealthQuestions(payload.health);
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
       const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;
-      const chartReports = appendLatestQuarter(healthEvidenceReports, payload.reports);
-      for (const [id, metric, variant, display] of METRIC_CHARTS) renderAnnualBars(id, chartReports, metric, variant, display);
-      renderYoYGrowthBars('revenue-growth-chart', chartReports, 'revenue', annualPeriods, payload.reports);
+      const pointInTimeReports = appendLatestQuarter(healthEvidenceReports, payload.reports);
+      const latestTTMReport = buildLatestTTMReport(payload.reports, payload.quarterly_monitor);
+      const ttmReports = latestTTMReport ? [...healthEvidenceReports, latestTTMReport] : pointInTimeReports;
+      for (const [id, metric, variant, display, interimBasis] of METRIC_CHARTS) {
+        renderAnnualBars(id, interimBasis === 'ttm' ? ttmReports : pointInTimeReports, metric, variant, display);
+      }
+      renderYoYGrowthBars('revenue-growth-chart', ttmReports, 'revenue', annualPeriods, payload.reports);
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;

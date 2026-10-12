@@ -46,10 +46,11 @@
     <section class="financial-health-kpi" id="financial-health-kpi" aria-label="年度与季度财报监测对比">
       <section class="health-comparison-section" aria-label="年度与季度财报监测对比"><h3>年度与季度财报监测对比</h3><p class="health-comparison-note">年度行仅使用最近五个完整年报；季度行使用最新披露期及 TTM。点击 KPI 分数查看得分由来，点击红旗数字查看触发原因。</p><table class="health-comparison-table"><thead><tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th><th>核心增长质量（20）</th><th>盈利能力（20）</th><th>现金含金量（20）</th><th>营运资本（15）</th><th>再投资效率（10）</th><th>财务风险（15）</th><th>已触发红旗</th><th>待调查事项</th></tr></thead><tbody id="health-comparison-body"><tr><td colspan="11">选择股票后加载。</td></tr></tbody></table></section>
       <section class="health-question-section" aria-labelledby="health-question-title"><div class="health-section-heading"><h3 id="health-question-title">六项财务健康问题</h3><span>五年年报口径</span></div><div id="health-question-grid" class="health-question-grid">选择股票后加载。</div></section>
-      <section class="health-series-section" aria-labelledby="health-series-title"><div class="health-section-heading"><h3 id="health-series-title">五年派生指标</h3><span>仅使用完整年度年报</span></div><div class="health-derived" id="health-derived">选择股票后加载。</div><div id="health-series" class="health-series">选择股票后加载。</div></section>
+      <section class="health-series-section" aria-labelledby="health-series-title"><div class="health-section-heading"><h3 id="health-series-title">五年派生指标</h3><span>五年年报 + 最新季报：现金/FCF/CapEx/扣非 ROE 为 TTM；增速差为非 TTM 期末同比差</span></div><div class="health-derived" id="health-derived">选择股票后加载。</div><div id="health-series" class="health-series">选择股票后加载。</div></section>
     </section>
 
     <section class="analysis-metric-grid" aria-label="五年经营指标">
+      <p class="analysis-metric-basis-note">最新非年报柱：营收、利润、现金流、利润率与扣非 ROE 使用 TTM；资产负债率、商誉、应收账款、库存为非 TTM 的期末时点值。</p>
       <article class="analysis-metric-card"><div class="analysis-metric-heading"><h2>营业收入</h2><span class="analysis-metric-unit">单位：亿元</span></div><div class="analysis-metric-status" id="revenue-chart">选择股票后加载最近五年财报数据</div></article>
       <article class="analysis-metric-card"><div class="analysis-metric-heading"><h2>营收增长率</h2><span class="analysis-metric-unit">单位：%</span></div><div class="analysis-metric-status" id="revenue-growth-chart">选择股票后加载同比增速</div></article>
       <article class="analysis-metric-card"><div class="analysis-metric-heading"><h2>归母净利润</h2><span class="analysis-metric-unit">单位：亿元</span></div><div class="analysis-metric-status" id="net-profit-chart">选择股票后加载最近五年财报数据</div></article>
@@ -70,6 +71,6 @@
   <dialog id="health-flag-detail-dialog" class="health-score-detail-dialog" aria-label="红旗触发详情"><article><button type="button" class="health-flag-detail-close" aria-label="关闭">×</button><h3>红旗触发详情</h3><div id="health-flag-detail-content"></div></article></dialog>
   <dialog id="health-overall-detail-dialog" class="health-score-detail-dialog" aria-label="总体财报分析结论"><article><button type="button" class="health-overall-detail-close" aria-label="关闭">×</button><div id="health-overall-detail-content"></div></article></dialog>
   <script src="/nav.js?v=20261008-stock-analysis-v1"></script>
-  <script src="/stock-analysis.js?v=20261012-series-cleanup-v51"></script>
+  <script src="/stock-analysis.js?v=20261012-all-bars-ttm-v58"></script>
 </body>
 </html>

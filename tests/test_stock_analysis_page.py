@@ -53,7 +53,7 @@ class StockAnalysisPageTests(unittest.TestCase):
             self.assertIn(f"['{chart_id}', '{field}'", js)
         self.assertIn("const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));", js)
         self.assertIn("const healthEvidenceReports = annualPeriods.size ?", js)
-        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', chartReports, 'revenue', annualPeriods, payload.reports)", js)
+        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', ttmReports, 'revenue', annualPeriods, payload.reports)", js)
         self.assertIn('const annualReports = annualPeriods ?', js)
         self.assertIn('financialRequestId !== state.financialRequestId', js)
         self.assertIn("const needsZeroAxis = variant === 'growth' || numeric.some((value) => value < 0);", js)
@@ -147,8 +147,9 @@ class StockAnalysisPageTests(unittest.TestCase):
     def test_raw_charts_append_latest_quarter_without_polluting_annual_health_evidence(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('function appendLatestQuarter(annualReports, allReports)', js)
-        self.assertIn('chartReports = appendLatestQuarter(healthEvidenceReports, payload.reports)', js)
-        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', chartReports, 'revenue', annualPeriods, payload.reports)", js)
+        self.assertIn('pointInTimeReports = appendLatestQuarter(healthEvidenceReports, payload.reports)', js)
+        self.assertIn('const latestTTMReport = buildLatestTTMReport(payload.reports, payload.quarterly_monitor);', js)
+        self.assertIn("renderYoYGrowthBars('revenue-growth-chart', ttmReports, 'revenue', annualPeriods, payload.reports)", js)
         self.assertIn("String(row?.period || '').endsWith('A')", js)
 
     def test_annual_and_quarterly_monitoring_summary_comparison_table(self):
@@ -227,9 +228,60 @@ class StockAnalysisPageTests(unittest.TestCase):
         for removed_metric in ('资产负债率', '商誉', '商誉 / 资产', '商誉 / 权益', '毛利率', '净利率'):
             self.assertNotIn(f"['{removed_metric}'", series_renderer)
         self.assertIn('五年派生指标', html)
-        self.assertIn('renderHealthMetrics(payload.health)', js)
+        self.assertIn('renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report)', js)
         self.assertIn('营业收入', html)
         self.assertIn('自由现金流', html)
+
+    def test_five_year_derived_series_render_as_signed_bar_charts(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
+        series_renderer = js[js.index('function renderHealthSeries'):js.index('function scoreFormationCopy')]
+        self.assertIn('const HEALTH_SERIES_CHARTS = [', series_renderer)
+        for label, key in (
+            ('现金利润比', 'annual_cash_profit_ratio'), ('FCF Margin', 'fcf_margin'),
+            ('应收增速差', 'receivable_growth_gap'), ('存货增速差', 'inventory_growth_gap'),
+            ('CapEx 强度', 'capex_intensity'), ('扣非 ROE', 'roe_ex'),
+        ):
+            self.assertIn(f"['{label}', '{key}'", series_renderer)
+        self.assertIn("renderBars(chartId, rows, values", series_renderer)
+        self.assertIn('label: String(year)', series_renderer)
+        self.assertIn('class="health-series-chart-grid"', series_renderer)
+        self.assertIn('.health-series-chart-grid', css)
+        self.assertIn('.health-series-chart-card', css)
+
+    def test_derived_metric_charts_append_explicitly_labeled_latest_quarter(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        series_renderer = js[js.index('function renderHealthSeries'):js.index('function scoreFormationCopy')]
+        self.assertIn('function latestQuarterSeriesPoint(quarterlyMonitor, latestReport)', js)
+        self.assertIn('const latestQuarter = latestQuarterSeriesPoint(quarterlyMonitor, latestReport);', series_renderer)
+        self.assertIn('const chartRows = latestQuarter ? [...seriesRows, latestQuarter] : seriesRows;', series_renderer)
+        self.assertIn('renderHealthSeries(health, quarterlyMonitor, latestReport);', js)
+        for key in ('annual_cash_profit_ratio', 'fcf_margin', 'receivable_growth_gap', 'inventory_growth_gap', 'capex_intensity', 'roe_ex'):
+            self.assertIn(f'{key}:', js)
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        self.assertIn('五年年报 + 最新季报', html)
+        self.assertIn('现金/FCF/CapEx/扣非 ROE 为 TTM', html)
+
+    def test_interim_bars_use_ttm_for_flow_metrics_and_disclose_point_in_time_metrics(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        self.assertIn('function buildLatestTTMReport(reports, quarterlyMonitor)', js)
+        self.assertIn("['revenue-chart', 'revenue', 'revenue', 'amount', 'ttm']", js)
+        self.assertIn("['roe-ex-chart', 'roe_ex', 'ratio', 'percent', 'ttm']", js)
+        self.assertIn("['accounts-receivable-chart', 'accounts_receivable', 'asset', 'amount', 'point']", js)
+        self.assertIn("['inventory-chart', 'inventory', 'asset', 'amount', 'point']", js)
+        self.assertIn("label: interimPeriodLabel(period, 'TTM')", js)
+        self.assertIn("const HEALTH_TTM_SERIES_KEYS = new Set", js)
+        self.assertIn("HEALTH_TTM_SERIES_KEYS.has(key) ? 'TTM' : '非TTM'", js)
+        self.assertIn('增速差为非 TTM 期末同比差', html)
+
+    def test_interim_chart_labels_use_short_ascii_ttm_suffix(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('function interimPeriodLabel(period, basis)', js)
+        self.assertIn('return `${String(period).slice(2)}(${basis})`;', js)
+        self.assertIn("label: interimPeriodLabel(period, 'TTM')", js)
+        self.assertIn("label: interimPeriodLabel(latestQuarter.period, '非TTM')", js)
+        self.assertIn("interimPeriodLabel(row.period, HEALTH_TTM_SERIES_KEYS.has(key) ? 'TTM' : '非TTM')", js)
 
     def test_annual_score_detail_uses_reader_friendly_metric_labels(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -260,7 +312,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("'metric-positive'", js)
         self.assertIn("'metric-negative'", js)
         self.assertIn('healthMetricValue(toneKey || tooltipKey, value, suffix)', js)
-        self.assertIn('healthMetricValue(key, series[key]?.[index], suffix)', js)
+        self.assertIn("renderBars(chartId, rows, values", js)
         self.assertIn('.health-metric-value.metric-positive', css)
         self.assertIn('.health-metric-value.metric-negative', css)
 
@@ -268,14 +320,14 @@ class StockAnalysisPageTests(unittest.TestCase):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('function healthSeriesValue(key, value, suffix)', js)
         self.assertIn("key === 'goodwill'", js)
-        self.assertIn('healthMetricValue(key, series[key]?.[index], suffix)', js)
+        self.assertIn('numeric / 1e8', js)
 
     def test_kpi_and_five_year_series_metrics_expose_definition_tooltips(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
         self.assertIn('const HEALTH_METRIC_TOOLTIPS =', js)
         self.assertIn('function healthMetricLabel(key, label)', js)
-        self.assertIn('healthMetricLabel(tooltipKey || key, label)', js)
+        self.assertIn('healthMetricLabel(key, label)', js)
         self.assertIn('healthMetricLabel(tooltipKey, label)', js)
         for key in ('revenue_cagr', 'ex_net_profit_cagr', 'profit_growth_premium', 'gross_margin', 'net_margin', 'roe_ex', 'annual_cash_profit_ratio', 'fcf_margin', 'receivable_growth_gap', 'inventory_growth_gap', 'capex_intensity', 'debt_ratio', 'goodwill_equity_ratio'):
             self.assertIn(f"{key}: {{", js)
