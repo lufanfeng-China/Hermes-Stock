@@ -47,12 +47,12 @@
     </form>
 
     <section class="financial-health-kpi" id="financial-health-kpi" aria-label="年度与季度财报监测对比">
-      <section class="health-comparison-section" aria-label="年度与季度财报监测对比"><h3>年度与季度财报监测对比</h3><p class="health-comparison-note">年度行仅使用最近五个完整年报；季度行使用最新披露期及 TTM。点击 KPI 分数查看得分由来，点击红旗数字查看触发原因。</p><table class="health-comparison-table"><thead><tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th><th>核心增长质量（20）</th><th>盈利能力（20）</th><th>现金含金量（20）</th><th>营运资本（15）</th><th>再投资效率（10）</th><th>财务风险（15）</th><th>已触发红旗</th><th>待调查事项</th></tr></thead><tbody id="health-comparison-body"><tr><td colspan="11">选择股票后加载。</td></tr></tbody></table></section>
+      <section class="health-comparison-section" aria-label="年度与季度财报监测对比"><h3>年度与季度财报监测对比</h3><p class="health-comparison-note">年度行仅使用完整年报：连续五年时为完整五年评分；连续 2～4 年时为成立期审慎评分并单列置信度；不足 2 年仅展示快照不评分。季度行使用最新披露期及 TTM。点击 KPI 分数查看得分由来，点击红旗数字查看触发原因。</p><table class="health-comparison-table"><thead><tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th><th>核心增长质量（20）</th><th>盈利能力（20）</th><th>现金含金量（20）</th><th>营运资本（15）</th><th>再投资效率（10）</th><th>财务风险（15）</th><th>已触发红旗</th><th>待调查事项</th></tr></thead><tbody id="health-comparison-body"><tr><td colspan="11">选择股票后加载。</td></tr></tbody></table></section>
       <section class="latest-report-change-section" aria-labelledby="valuation-performance-linkage-title"><div class="latest-report-change-heading"><h3 id="valuation-performance-linkage-title">估值—业绩联动</h3><span id="valuation-performance-linkage-period">选择股票后加载</span></div><p class="latest-report-change-note">仅陈列同一时点可验证事实与共现；不构成买卖建议，也不表达因果结论。</p><div id="valuation-performance-linkage" class="analysis-metric-status">选择股票后加载。</div></section>
       <section class="latest-report-change-section" aria-labelledby="industry-financial-position-title"><div class="latest-report-change-heading"><h3 id="industry-financial-position-title">申万二级行业财务位置</h3><span id="industry-financial-position-period">选择股票后加载</span></div><p class="latest-report-change-note">仅与相同报告期的申万二级同行比较；分位越高代表位置越靠前（负债率、周转天数已按风险方向反转）。</p><div id="industry-financial-position" class="analysis-metric-status">选择股票后加载。</div></section>
       <section class="latest-report-change-section" aria-labelledby="latest-report-change-title"><div class="latest-report-change-heading"><h3 id="latest-report-change-title">最新财报变化</h3><span id="latest-report-change-period">选择股票后加载</span></div><p class="latest-report-change-note">优先展示本期最值得关注的变化；点击卡片查看对应指标图。流量/现金指标与期末时点指标按各自口径标记。</p><div id="latest-report-change-summary" class="latest-report-change-grid">选择股票后加载。</div></section>
-      <section class="health-question-section" aria-labelledby="health-question-title"><div class="health-section-heading"><h3 id="health-question-title">六项财务健康问题</h3><span>五年年报口径</span></div><div id="health-question-grid" class="health-question-grid">选择股票后加载。</div></section>
-      <section class="health-series-section" aria-labelledby="health-series-title"><div class="health-section-heading"><h3 id="health-series-title">五年派生指标</h3><span>五年年报 + 最新季报：现金/FCF/CapEx/扣非 ROE 为 TTM；增速差为非 TTM 期末同比差</span></div><div class="health-derived" id="health-derived">选择股票后加载。</div><div id="health-series" class="health-series">选择股票后加载。</div></section>
+      <section class="health-question-section" aria-labelledby="health-question-title"><div class="health-section-heading"><h3 id="health-question-title">六项财务健康问题</h3><span id="health-question-period">选择股票后加载。</span></div><div id="health-question-grid" class="health-question-grid">选择股票后加载。</div></section>
+      <section class="health-series-section" aria-labelledby="health-series-title"><div class="health-section-heading"><h3 id="health-series-title">年度派生指标</h3><span id="health-derived-period">选择股票后加载。</span></div><div class="health-derived" id="health-derived">选择股票后加载。</div><div id="health-series" class="health-series">选择股票后加载。</div></section>
     </section>
 
     <section class="analysis-metric-grid" aria-label="五年经营指标">
@@ -78,6 +78,6 @@
   <dialog id="health-overall-detail-dialog" class="health-score-detail-dialog" aria-label="总体财报分析结论"><article><button type="button" class="health-overall-detail-close" aria-label="关闭">×</button><div id="health-overall-detail-content"></div></article></dialog>
   <dialog id="metric-lineage-dialog" class="metric-lineage-dialog" aria-label="指标口径与数据血缘"><article><button type="button" class="metric-lineage-close" aria-label="关闭">×</button><div id="metric-lineage-content"></div></article></dialog>
   <script src="/nav.js?v=20261008-stock-analysis-v1"></script>
-  <script src="/stock-analysis.js?v=20261012-valuation-performance-linkage-v62"></script>
+  <script src="/stock-analysis.js?v=20261012-dual-track-health-v63"></script>
 </body>
 </html>

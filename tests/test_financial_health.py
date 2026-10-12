@@ -66,6 +66,41 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertGreaterEqual(health["score"], 0)
         self.assertEqual(health["red_flags"], [])
 
+    def test_two_consecutive_annual_reports_receive_low_confidence_establishment_score(self):
+        reports = [
+            annual(2024, revenue=100, ex_net_profit=10, ocf=12, free_cf=8, gross_margin=30, net_margin=10, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=12, capex=4, goodwill=0, equity=60, total_assets=100),
+            annual(2025, revenue=125, ex_net_profit=14, ocf=18, free_cf=11, gross_margin=32, net_margin=11, roe_ex=14, debt_ratio=38, accounts_receivable=11, inventory=13, capex=5, goodwill=0, equity=70, total_assets=112),
+        ]
+
+        health = build_financial_health(reports)
+
+        self.assertEqual(health["assessment_track"], "establishment")
+        self.assertEqual(health["sample_years"], 2)
+        self.assertEqual(health["confidence"], "low")
+        self.assertEqual(health["periods"], ["2024A", "2025A"])
+        self.assertIsInstance(health["score"], float)
+        self.assertEqual(health["score_comparability"], "not_comparable_to_five_year")
+
+    def test_four_consecutive_annual_reports_receive_higher_confidence_establishment_score(self):
+        reports = [annual(2022 + i, revenue=100 + i * 20, ex_net_profit=10 + i * 3, ocf=12 + i * 3, free_cf=8 + i * 2, gross_margin=30 + i, net_margin=10 + i, roe_ex=12 + i, debt_ratio=40 - i, accounts_receivable=10 + i, inventory=12 + i, capex=4 + i, goodwill=0, equity=60 + i * 10, total_assets=100 + i * 15) for i in range(4)]
+
+        health = build_financial_health(reports)
+
+        self.assertEqual(health["assessment_track"], "establishment")
+        self.assertEqual(health["sample_years"], 4)
+        self.assertEqual(health["confidence"], "higher")
+        self.assertIsInstance(health["score"], float)
+        self.assertNotIn("five_year", health["score_label"])
+
+    def test_one_complete_annual_report_is_snapshot_only_and_never_receives_a_score(self):
+        health = build_financial_health([annual(2025, revenue=100, ex_net_profit=10)])
+
+        self.assertEqual(health["assessment_track"], "snapshot")
+        self.assertEqual(health["sample_years"], 1)
+        self.assertEqual(health["confidence"], "none")
+        self.assertIsNone(health["score"])
+        self.assertEqual(health["reason"], "annual_reports_insufficient")
+
     def test_unavailable_rules_preserve_auditable_evidence_contract(self):
         health = build_financial_health([annual(2022), annual(2023)], industry_level_1='银行')
         self.assertEqual(health['status'], 'not_applicable')

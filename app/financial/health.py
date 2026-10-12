@@ -67,9 +67,9 @@ def _recent_annual_reports(reports: list[dict[str, Any]]) -> list[dict[str, Any]
     return annual[-5:]
 
 
-def _are_contiguous_annuals(rows: list[dict[str, Any]]) -> bool:
+def _are_contiguous_annuals(rows: list[dict[str, Any]], *, minimum: int = 2) -> bool:
     years = [_annual_year(row) for row in rows]
-    return len(years) == 5 and all(year is not None for year in years) and all(b == a + 1 for a, b in zip(years, years[1:]))
+    return len(years) >= minimum and all(year is not None for year in years) and all(b == a + 1 for a, b in zip(years, years[1:]))
 
 
 def _score_band(value: float | None, bands: tuple[tuple[float, float], ...]) -> float | None:
@@ -155,8 +155,17 @@ def build_financial_health(
     independent list and must never be hidden by a high composite score.
     """
     rows = _recent_annual_reports(reports)
+    sample_years = len(rows)
+    assessment_track = "five_year" if sample_years >= 5 else "establishment" if sample_years >= 2 else "snapshot"
+    confidence = {5: "complete", 4: "higher", 3: "medium", 2: "low"}.get(sample_years, "none")
+    score_label = "五年年报｜完整" if assessment_track == "five_year" else (f"成立期年报｜{sample_years}年样本" if assessment_track == "establishment" else "成立期财务快照｜暂不评分")
     result: dict[str, Any] = {
-        "score_version": "financial-health-v2",
+        "score_version": "financial-health-v2" if assessment_track == "five_year" else "financial-health-establishment-v1",
+        "assessment_track": assessment_track,
+        "sample_years": sample_years,
+        "confidence": confidence,
+        "score_label": score_label,
+        "score_comparability": "comparable" if assessment_track == "five_year" else "not_comparable_to_five_year",
         "score_breakdown": [],
         "rule_results": [],
         "periods": [str(row.get("period")) for row in rows],
@@ -194,7 +203,7 @@ def build_financial_health(
         mark_all_rules_unavailable("not_applicable")
         mark_all_outputs_unavailable("not_applicable", "not_applicable")
         return result
-    if len(rows) < 5:
+    if len(rows) < 2:
         result["reason"] = "annual_reports_insufficient"
         mark_all_rules_unavailable("annual_reports_insufficient")
         mark_all_outputs_unavailable("annual_reports_insufficient", "insufficient")
@@ -210,8 +219,9 @@ def build_financial_health(
         "roe_ex", "debt_ratio", "accounts_receivable", "inventory", "capex", "goodwill",
         "equity", "total_assets",
     )}
-    revenue_cagr = _cagr(values["revenue"][0], values["revenue"][-1])
-    ex_profit_cagr = _cagr(values["ex_net_profit"][0], values["ex_net_profit"][-1])
+    annual_span = len(rows) - 1
+    revenue_cagr = _cagr(values["revenue"][0], values["revenue"][-1], annual_span)
+    ex_profit_cagr = _cagr(values["ex_net_profit"][0], values["ex_net_profit"][-1], annual_span)
     premium = ex_profit_cagr - revenue_cagr if revenue_cagr is not None and ex_profit_cagr is not None else None
     total_ocf = _sum(values["ocf"])
     total_ex_profit = _sum(values["ex_net_profit"])
@@ -244,6 +254,7 @@ def build_financial_health(
     display_inventory_gaps = [None, *inventory_gaps]
     result["series"] = {"years": [str(row.get("period")) for row in rows], "annual_cash_profit_ratio": annual_cash_profit_ratios, "fcf_margin": fcf_margins, "receivable_growth_gap": display_receivable_gaps, "inventory_growth_gap": display_inventory_gaps, "capex_intensity": capex_intensities, "gross_margin": values["gross_margin"], "net_margin": values["net_margin"], "roe_ex": values["roe_ex"], "debt_ratio": values["debt_ratio"], "goodwill": values["goodwill"], "goodwill_assets_ratio": goodwill_assets_ratios, "goodwill_equity_ratio": goodwill_equities}
     result["derived"] = {
+        "annual_span_years": annual_span,
         "revenue_cagr": revenue_cagr,
         "ex_net_profit_cagr": ex_profit_cagr,
         "profit_growth_premium": premium,

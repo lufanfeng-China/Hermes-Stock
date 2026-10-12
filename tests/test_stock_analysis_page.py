@@ -215,7 +215,13 @@ class StockAnalysisPageTests(unittest.TestCase):
             self.assertIn(label, html)
         self.assertIn('总分（100）', html)
         self.assertIn('核心增长质量（20）', html)
-        self.assertIn("const annualPeriod = '五年年报';", js)
+        self.assertIn('function annualAssessmentLabel(health)', js)
+        self.assertIn('function annualAssessmentBasis(health)', js)
+        self.assertIn('id="health-question-period"', html)
+        self.assertIn('id="health-derived-period"', html)
+        self.assertIn('成立期年报', js)
+        self.assertIn('不可与完整五年评分横比', js)
+        self.assertIn('const annualPeriod = annualAssessmentLabel(health);', js)
         self.assertIn("data-flag-source=\"annual\"", js)
         self.assertIn('id="health-comparison-body"', html)
         self.assertIn('function renderHealthComparisonTable(health, monitor)', js)
@@ -273,7 +279,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         )
         for prompt in prompts:
             self.assertIn(prompt, js)
-        self.assertIn('HEALTH_QUESTION_PROMPTS[item.code] || item.title', js)
+        self.assertIn('function healthQuestionPrompt(code, health)', js)
+        self.assertIn('healthQuestionPrompt(item.code, health) || item.title', js)
 
     def test_five_year_derived_and_basic_metrics_are_retained(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
@@ -283,7 +290,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         series_renderer = js[js.index('function renderHealthSeries'):js.index('function scoreFormationCopy')]
         for removed_metric in ('资产负债率', '商誉', '商誉 / 资产', '商誉 / 权益', '毛利率', '净利率'):
             self.assertNotIn(f"['{removed_metric}'", series_renderer)
-        self.assertIn('五年派生指标', html)
+        self.assertIn('年度派生指标', html)
+        self.assertIn('id="health-derived-period"', html)
         self.assertIn('renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report)', js)
         self.assertIn('营业收入', html)
         self.assertIn('自由现金流', html)
@@ -315,8 +323,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         for key in ('annual_cash_profit_ratio', 'fcf_margin', 'receivable_growth_gap', 'inventory_growth_gap', 'capex_intensity', 'roe_ex'):
             self.assertIn(f'{key}:', js)
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
-        self.assertIn('五年年报 + 最新季报', html)
-        self.assertIn('现金/FCF/CapEx/扣非 ROE 为 TTM', html)
+        self.assertIn('id="health-derived-period"', html)
+        self.assertIn('现金/FCF/CapEx/扣非 ROE 为 TTM', js)
 
     def test_interim_bars_use_ttm_for_flow_metrics_and_disclose_point_in_time_metrics(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -329,7 +337,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("label: interimPeriodLabel(period, 'TTM')", js)
         self.assertIn("const HEALTH_TTM_SERIES_KEYS = new Set", js)
         self.assertIn("HEALTH_TTM_SERIES_KEYS.has(key) ? 'TTM' : '非TTM'", js)
-        self.assertIn('增速差为非 TTM 期末同比差', html)
+        self.assertIn('增速差为非 TTM 期末同比差', js)
 
     def test_interim_chart_labels_use_short_ascii_ttm_suffix(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

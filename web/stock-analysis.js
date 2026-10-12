@@ -628,13 +628,16 @@
 
   function renderHealthMetrics(health, quarterlyMonitor = null, latestReport = null) {
     const target = document.getElementById('health-derived');
+    const period = document.getElementById('health-derived-period');
     if (!target) return;
-    if (!health) { target.textContent = '选择股票后加载。'; renderHealthSeries(null); return; }
+    if (!health) { if (period) period.textContent = '选择股票后加载。'; target.textContent = '选择股票后加载。'; renderHealthSeries(null); return; }
+    if (period) period.textContent = `${annualAssessmentBasis(health)}；最新季报中现金/FCF/CapEx/扣非 ROE 为 TTM，增速差为非 TTM 期末同比差。`;
     const d = health.derived || {}; const series = health.series || {};
+    const windowLabel = health.assessment_track === 'five_year' ? '五年' : `${health.sample_years || health.periods?.length || '—'}年`;
     const rows = [
-      ['营业收入复合增长率', 'revenue_cagr', d.revenue_cagr, '%'], ['扣非归母净利润复合增长率', 'ex_net_profit_cagr', d.ex_net_profit_cagr, '%'], ['利润增长溢价', 'profit_premium', d.profit_growth_premium, 'pct'],
-      ['毛利率五年变化', 'gross_margin_change', d.gross_margin_change, 'pct'], ['净利率五年变化', 'net_margin_change', d.net_margin_change, 'pct'], ['扣非 ROE 五年均值', 'roe_ex', d.roe_ex_average, '%'],
-      ['最新现金利润比', 'annual_cash_profit_ratio', d.annual_cash_profit_ratio, ''], ['五年现金利润比', 'five_year_cash_profit_ratio', d.five_year_cash_profit_ratio, ''], ['自由现金流率', 'fcf_margin', d.fcf_margin, '%'],
+      [`营业收入${windowLabel}复合增长率`, 'revenue_cagr', d.revenue_cagr, '%'], [`扣非归母净利润${windowLabel}复合增长率`, 'ex_net_profit_cagr', d.ex_net_profit_cagr, '%'], ['利润增长溢价', 'profit_premium', d.profit_growth_premium, 'pct'],
+      [`毛利率${windowLabel}变化`, 'gross_margin_change', d.gross_margin_change, 'pct'], [`净利率${windowLabel}变化`, 'net_margin_change', d.net_margin_change, 'pct'], [`扣非 ROE ${windowLabel}均值`, 'roe_ex', d.roe_ex_average, '%'],
+      ['最新现金利润比', 'annual_cash_profit_ratio', d.annual_cash_profit_ratio, ''], [`${windowLabel}现金利润比`, 'five_year_cash_profit_ratio', d.five_year_cash_profit_ratio, ''], ['自由现金流率', 'fcf_margin', d.fcf_margin, '%'],
       ['应收账款增速差', 'receivable_growth_gap', d.receivable_growth_gap, 'pct'], ['存货增速差', 'inventory_growth_gap', d.inventory_growth_gap, 'pct'], ['资本开支强度', 'capex_intensity', d.capex_intensity, '%'],
       ['最新资产负债率', 'debt_ratio', series.debt_ratio?.at?.(-1), '%'], ['商誉／权益比', 'goodwill_equity_ratio', d.goodwill_equity_ratio, '%'],
     ];
@@ -651,11 +654,21 @@
     capital_leverage: '公司增长是否依赖越来越高的资本投入和财务杠杆？',
   };
 
+  function healthQuestionPrompt(code, health) {
+    if (code === 'growth' && health?.assessment_track === 'establishment') {
+      return `公司成立期 ${health.sample_years || health.periods?.length || '—'} 年完整年报是否持续增长？`;
+    }
+    return HEALTH_QUESTION_PROMPTS[code];
+  }
+
   function renderHealthQuestions(health) {
-    const target = document.getElementById('health-question-grid'); if (!target) return;
-    if (!health) { target.textContent = '选择股票后加载。'; return; }
+    const target = document.getElementById('health-question-grid');
+    const period = document.getElementById('health-question-period');
+    if (!target) return;
+    if (!health) { if (period) period.textContent = '选择股票后加载。'; target.textContent = '选择股票后加载。'; return; }
+    if (period) period.textContent = annualAssessmentBasis(health);
     const scoreCode = { growth: 'growth_quality', profit_premium: 'growth_quality', profitability: 'profitability', cash_conversion: 'cash_quality', working_capital: 'working_capital', capital_leverage: 'reinvestment' };
-    target.innerHTML = (health.conclusions || []).map((item) => { const code = scoreCode[item.code]; const score = (health.score_breakdown || []).find((row) => row.code === code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHTML(HEALTH_QUESTION_PROMPTS[item.code] || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHTML(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><p>${escapeHTML(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
+    target.innerHTML = (health.conclusions || []).map((item) => { const code = scoreCode[item.code]; const score = (health.score_breakdown || []).find((row) => row.code === code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHTML(healthQuestionPrompt(item.code, health) || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHTML(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><p>${escapeHTML(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
   }
 
   const LATEST_REPORT_CHANGE_CONFIG = {
@@ -700,6 +713,26 @@
     }).join('')}`;
   }
 
+  function annualAssessmentLabel(health) {
+    const years = Number(health?.sample_years ?? health?.periods?.length ?? 0);
+    if (health?.assessment_track === 'establishment') {
+      const confidence = { low: '低', medium: '中等', higher: '较高' }[health.confidence] || '有限';
+      return `成立期年报｜${years}年样本｜${confidence}置信度（不可与完整五年评分横比）`;
+    }
+    if (health?.assessment_track === 'snapshot') return `成立期财务快照｜${years || '不足2'}份完整年报｜暂不评分`;
+    return '五年年报｜完整';
+  }
+
+  function annualAssessmentBasis(health) {
+    const years = Number(health?.sample_years ?? health?.periods?.length ?? 0);
+    if (health?.assessment_track === 'establishment') {
+      const confidence = { low: '低', medium: '中等', higher: '较高' }[health.confidence] || '有限';
+      return `成立期 ${years} 个完整年报｜${confidence}置信度｜不可与完整五年评分横比`;
+    }
+    if (health?.assessment_track === 'snapshot') return `成立期财务快照｜${years || '不足2'}份完整年报｜暂不评分`;
+    return '五个完整年报口径';
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
@@ -715,7 +748,7 @@
     const annualInvestigations = health ? String((health.investigation_results || []).filter((item) => item.status === 'triggered').length) : unavailable;
     const quarterlyAlerts = monitor?.status === 'available' ? `<button type="button" class="comparison-flag-button" data-flag-source="quarterly">${(monitor.alerts || []).length}</button>` : unavailable;
     const quarterlyInvestigations = monitor?.status === 'available' ? '—（未设）' : unavailable;
-    const annualPeriod = '五年年报';
+    const annualPeriod = annualAssessmentLabel(health);
     const quarterPeriod = monitor?.latest_period ? `${monitor.latest_period}（TTM）` : '季度监测';
     const overallButton = (source, score) => score === unavailable ? unavailable : `<button type="button" class="comparison-score-button" data-overall-source="${source}" aria-label="查看总体财报分析结论">${score}</button>`;
     const cells = (klass, label, source, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHTML(label)}</strong></td><td>${overallButton(source, score)}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
