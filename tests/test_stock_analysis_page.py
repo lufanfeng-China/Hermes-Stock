@@ -219,7 +219,9 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('function annualAssessmentBasis(health)', js)
         self.assertIn('id="health-question-period"', html)
         self.assertIn('id="health-derived-period"', html)
-        self.assertIn('成立期年报', js)
+        label_renderer = js[js.index('function annualAssessmentLabel'):js.index('function annualAssessmentBasis')]
+        self.assertIn('return `${years}年样本`;', label_renderer)
+        self.assertNotIn('置信度', label_renderer)
         self.assertIn('不可与完整五年评分横比', js)
         self.assertIn('const annualPeriod = annualAssessmentLabel(health);', js)
         self.assertIn("data-flag-source=\"annual\"", js)

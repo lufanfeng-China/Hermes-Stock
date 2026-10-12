@@ -715,10 +715,7 @@
 
   function annualAssessmentLabel(health) {
     const years = Number(health?.sample_years ?? health?.periods?.length ?? 0);
-    if (health?.assessment_track === 'establishment') {
-      const confidence = { low: '低', medium: '中等', higher: '较高' }[health.confidence] || '有限';
-      return `成立期年报｜${years}年样本｜${confidence}置信度（不可与完整五年评分横比）`;
-    }
+    if (health?.assessment_track === 'establishment') return `${years}年样本`;
     if (health?.assessment_track === 'snapshot') return `成立期财务快照｜${years || '不足2'}份完整年报｜暂不评分`;
     return '五年年报｜完整';
   }
