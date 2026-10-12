@@ -5,6 +5,7 @@ import re
 
 from app.financial.health import build_financial_health
 from app.financial.quarterly_monitor import build_quarterly_financial_monitor
+from app.financial.industry_position import build_industry_financial_position
 
 def load_recent_three_year_financial_reports(market: str, symbol: str, years: int = 6) -> dict[str, object]:
     """Load annual/quarterly reports covering the most recent ``years`` fiscal years."""
@@ -112,6 +113,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         reports,
         industry_level_1=industry["level_1"],
     )
+    industry_position = build_industry_financial_position(market, symbol, search_index._load_financial_snapshot() or {})
 
     return {
         "ok": True,
@@ -124,6 +126,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "industry": industry,
         "health": health,
         "quarterly_monitor": quarterly_monitor,
+        "industry_financial_position": industry_position,
     }
 
 

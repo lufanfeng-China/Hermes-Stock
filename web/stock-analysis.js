@@ -825,6 +825,16 @@
     }).join('') || '暂无可用结论。';
   }
 
+  function renderIndustryFinancialPosition(position) {
+    const target = document.getElementById('industry-financial-position'); const period = document.getElementById('industry-financial-position-period');
+    if (!target || !period) return;
+    if (position?.status !== 'available') { period.textContent = '行业对比暂不可用'; target.textContent = '缺少可对齐的行业快照数据。'; return; }
+    period.textContent = `${position.industry_level_2}｜${position.report_period}｜覆盖率 ${position.period_alignment_coverage}%（${position.aligned_sample_count}/${position.industry_member_count}）`;
+    target.className = '';
+    const rows = Object.values(position.metrics || {}).map((m) => `<tr><td>${escapeHTML(m.label)}</td><td>${Number.isFinite(m.company_value) ? m.company_value.toFixed(2) : '—'} ${escapeHTML(m.unit || '')}</td><td>${Number.isFinite(m.industry_median) ? m.industry_median.toFixed(2) : '—'}</td><td>${Number.isFinite(m.percentile) ? `${m.percentile.toFixed(1)}%` : '—'}</td><td>${m.sample_count || 0}</td></tr>`).join('');
+    target.innerHTML = `<table class="health-comparison-table"><thead><tr><th>指标</th><th>公司</th><th>行业中位数</th><th>分位</th><th>样本数</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
   const METRIC_CHARTS = [
     ['revenue-chart', 'revenue', 'revenue', 'amount', 'ttm'],
     ['net-profit-chart', 'net_profit', 'profit', 'amount', 'ttm'],
@@ -889,6 +899,7 @@
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderHealthComparisonTable(null, null);
+    renderIndustryFinancialPosition(null);
     renderLatestReportChanges(null);
     renderHealthMetrics(null);
     renderHealthQuestions(null);
@@ -916,6 +927,7 @@
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
+      renderIndustryFinancialPosition(payload.industry_financial_position);
       renderLatestReportChanges(payload.quarterly_monitor);
       renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report);
       renderHealthQuestions(payload.health);

@@ -29,6 +29,16 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('.analysis-bar.zero-value', html)
         self.assertIn('#70d6a8', html)
 
+    def test_industry_financial_position_renders_alignment_coverage_and_peer_percentiles(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="industry-financial-position"', html)
+        self.assertIn('function renderIndustryFinancialPosition(position)', js)
+        self.assertIn('行业中位数', js)
+        self.assertIn('分位', js)
+        self.assertIn('覆盖率', js)
+        self.assertIn('payload.industry_financial_position', js)
+
     def test_metric_lineage_drawer_discloses_current_value_basis_formula_inputs_and_non_ttm_reason(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
