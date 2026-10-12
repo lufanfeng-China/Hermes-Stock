@@ -70,6 +70,9 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('valuation_percentile', js)
         self.assertIn('valuation_band', js)
         self.assertIn('点击列头可排序', js)
+        self.assertIn('[data-industry-valuation-peers] { cursor:pointer;', html)
+        self.assertIn('[data-industry-valuation-peers]:hover', html)
+        self.assertIn('[data-industry-valuation-peers]:focus-visible', html)
 
     def test_industry_financial_position_renders_alignment_coverage_and_peer_percentiles(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")

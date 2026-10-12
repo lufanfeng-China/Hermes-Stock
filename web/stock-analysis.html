@@ -32,6 +32,7 @@
     .analysis-bar.zero-axis.negative { top:var(--zero); border-radius:1px 1px 4px 4px; background:linear-gradient(180deg,#70d6a8,#257451); }
     .analysis-bar-year { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
     .analysis-metric-status { flex:1; display:flex; align-items:center; color:var(--muted); font-size:12px; }
+    .latest-report-change-item[data-industry-valuation-peers] { cursor:pointer; transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease; }.latest-report-change-item[data-industry-valuation-peers]:hover { transform:translateY(-2px); border-color:rgba(255,195,111,.9); background:rgba(255,195,111,.09); box-shadow:0 8px 20px rgba(0,0,0,.24); }.latest-report-change-item[data-industry-valuation-peers]:focus-visible { outline:2px solid #ffc36f; outline-offset:3px; border-color:#ffc36f; }
     @media (max-width:760px) { .analysis-metric-grid { grid-template-columns:1fr; } .analysis-metric-card { height:154px; } }
   </style>
 </head>
@@ -83,6 +84,6 @@
   <dialog id="industry-valuation-history-dialog" class="industry-valuation-history-dialog" aria-label="二级行业历史估值"><article><button type="button" class="health-score-detail-close industry-valuation-history-close" aria-label="关闭">×</button><h3 id="industry-valuation-history-title">二级行业历史估值</h3><p id="industry-valuation-history-meta"></p><svg id="industry-valuation-history-chart" class="industry-valuation-history-chart" viewBox="0 0 920 310" role="img" aria-label="行业加权PE-TTM季度历史曲线"></svg><div class="industry-valuation-history-table-wrap"><table class="industry-valuation-history-table"><thead><tr><th>交易截止日</th><th>加权 PE-TTM</th><th>相对当前</th></tr></thead><tbody id="industry-valuation-history-table"></tbody></table></div></article></dialog>
   <dialog id="industry-valuation-peer-dialog" class="industry-valuation-peer-dialog" aria-label="二级行业估值位置对照"><article><button type="button" class="health-score-detail-close industry-valuation-peer-close" aria-label="关闭">×</button><p class="eyebrow">VALUATION PERCENTILE</p><h3 id="industry-valuation-peer-title">行业估值位置对照</h3><p id="industry-valuation-peer-status">点击行业内估值位置后加载同业样本。</p><div class="industry-valuation-peer-table-wrap"><table class="industry-valuation-peer-table"><thead><tr><th data-peer-sort="valuation_percentile">估值分位 ↕</th><th>股票名称</th><th data-peer-sort="current_price">当前价格 ↕</th><th data-peer-sort="ps_ttm">PS-TTM ↕</th><th data-peer-sort="pe_ttm">PE(动) ↕</th><th>区间标签</th></tr></thead><tbody id="industry-valuation-peer-table"></tbody></table></div></article></dialog>
   <script src="/nav.js?v=20261008-stock-analysis-v1"></script>
-  <script src="/stock-analysis.js?v=20261012-dual-track-health-v67"></script>
+  <script src="/stock-analysis.js?v=20261012-dual-track-health-v68"></script>
 </body>
 </html>
