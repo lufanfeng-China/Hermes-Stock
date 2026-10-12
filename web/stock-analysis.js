@@ -713,6 +713,12 @@
     }).join('')}`;
   }
 
+  function compactQuarterPeriod(period) {
+    const normalized = String(period || '').trim();
+    if (!/^\d{4}Q[1-4]$/.test(normalized)) return '季度监测';
+    return `${normalized.slice(2)}-TTM`;
+  }
+
   function annualAssessmentLabel(health) {
     const years = Number(health?.sample_years ?? health?.periods?.length ?? 0);
     if (health?.assessment_track === 'establishment') return `${years}年样本`;
@@ -746,12 +752,12 @@
     const quarterlyAlerts = monitor?.status === 'available' ? `<button type="button" class="comparison-flag-button" data-flag-source="quarterly">${(monitor.alerts || []).length}</button>` : unavailable;
     const quarterlyInvestigations = monitor?.status === 'available' ? '—（未设）' : unavailable;
     const annualPeriod = annualAssessmentLabel(health);
-    const quarterPeriod = monitor?.latest_period ? `${monitor.latest_period}（TTM）` : '季度监测';
+    const quarterPeriod = compactQuarterPeriod(monitor?.latest_period);
     const overallButton = (source, score) => score === unavailable ? unavailable : `<button type="button" class="comparison-score-button" data-overall-source="${source}" aria-label="查看总体财报分析结论">${score}</button>`;
     const cells = (klass, label, source, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHTML(label)}</strong></td><td>${overallButton(source, score)}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
     target.innerHTML = [
       cells('comparison-annual', annualPeriod, 'annual', annualScore, health ? String(health.coverage_weight ?? 0) : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map((item) => scoreDetailButton('annual', item)), annualFlags, annualInvestigations),
-      cells('comparison-quarter', `最新季报：${quarterPeriod}`, 'quarterly', quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map((item) => scoreDetailButton('quarterly', item)), quarterlyAlerts, quarterlyInvestigations),
+      cells('comparison-quarter', quarterPeriod, 'quarterly', quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map((item) => scoreDetailButton('quarterly', item)), quarterlyAlerts, quarterlyInvestigations),
     ].join('');
   }
 

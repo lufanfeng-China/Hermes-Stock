@@ -361,7 +361,10 @@ class StockAnalysisPageTests(unittest.TestCase):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertNotIn('id="quarterly-health-monitor"', html)
         self.assertIn('payload.quarterly_monitor', js)
-        self.assertIn("最新季报：${quarterPeriod}", js)
+        self.assertIn('function compactQuarterPeriod(period)', js)
+        self.assertIn('return `${normalized.slice(2)}-TTM`;', js)
+        self.assertIn("const quarterPeriod = compactQuarterPeriod(monitor?.latest_period);", js)
+        self.assertIn("cells('comparison-quarter', quarterPeriod, 'quarterly'", js)
 
     def test_metric_tooltips_use_only_native_title_without_dark_custom_flyout(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
