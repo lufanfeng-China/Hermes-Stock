@@ -825,6 +825,19 @@
     }).join('') || '暂无可用结论。';
   }
 
+  function renderValuationPerformanceLinkage(valuation, health, monitor) {
+    const target = document.getElementById('valuation-performance-linkage'); const period = document.getElementById('valuation-performance-linkage-period');
+    if (!target || !period) return;
+    if (!valuation?.ok) { period.textContent = '相对估值数据暂不可用'; target.textContent = '财务健康度与季度变化仍可在下方查看。'; return; }
+    const valPeriod = `${valuation.industry_level_2_name || '—'}｜${valuation.primary_percentile_metric === 'pe_ttm' ? 'PE-TTM' : 'PS-TTM'}`;
+    const healthScore = Number.isFinite(Number(health?.score)) ? `${Number(health.score).toFixed(0)} / 100（${health.status || '—'}）` : '数据不足';
+    const flags = Array.isArray(health?.red_flags) ? health.red_flags : [];
+    const alerts = Array.isArray(monitor?.alerts) ? monitor.alerts : [];
+    period.textContent = `${valPeriod}｜财报期 ${monitor?.latest_period || '—'}`;
+    target.className = '';
+    target.innerHTML = `<div class="latest-report-change-grid"><article class="latest-report-change-item stable"><strong>行业内估值位置</strong><p>${escapeHTML(valuation.valuation_band_label || '—')}｜${Number.isFinite(Number(valuation.primary_percentile)) ? `${Number(valuation.primary_percentile).toFixed(1)}% 分位` : '分位不可用'}</p><span class="latest-report-change-basis">个股 ${Number.isFinite(Number(valuation.primary_percentile_value)) ? Number(valuation.primary_percentile_value).toFixed(2) : '—'}；行业加权 ${Number.isFinite(Number(valuation.industry_weighted_pe_ttm)) ? `PE ${Number(valuation.industry_weighted_pe_ttm).toFixed(2)}` : '—'}</span></article><article class="latest-report-change-item stable"><strong>财务健康度</strong><p>${escapeHTML(healthScore)}</p><span class="latest-report-change-basis">完整年报：${escapeHTML((health?.periods || []).join('、') || '—')}</span></article><article class="latest-report-change-item ${alerts.length || flags.length ? 'watch' : 'stable'}"><strong>季度变化与红旗</strong><p>季度变化：${alerts.length ? `${alerts.length} 项提示` : '暂无提示'}；红旗：${flags.length} 项</p><span class="latest-report-change-basis">${escapeHTML([...alerts.map((item) => item.title), ...flags.map((item) => item.title)].join('；') || '无已列示事项')}</span></article></div>`;
+  }
+
   function renderIndustryFinancialPosition(position) {
     const target = document.getElementById('industry-financial-position'); const period = document.getElementById('industry-financial-position-period');
     if (!target || !period) return;
@@ -899,6 +912,7 @@
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderHealthComparisonTable(null, null);
+    renderValuationPerformanceLinkage(null, null, null);
     renderIndustryFinancialPosition(null);
     renderLatestReportChanges(null);
     renderHealthMetrics(null);
@@ -924,8 +938,12 @@
           putFinancialCache(cacheKey, body);
           return body;
         });
+      const valuation = await fetch(`/api/relative-valuation?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+        .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+        .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null);
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
+      renderValuationPerformanceLinkage(valuation, payload.health, payload.quarterly_monitor);
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
       renderIndustryFinancialPosition(payload.industry_financial_position);
       renderLatestReportChanges(payload.quarterly_monitor);

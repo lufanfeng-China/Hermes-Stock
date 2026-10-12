@@ -29,6 +29,21 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('.analysis-bar.zero-value', html)
         self.assertIn('#70d6a8', html)
 
+    def test_valuation_performance_linkage_co_displays_relative_valuation_health_quarterly_change_and_flags_without_advice(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="valuation-performance-linkage"', html)
+        self.assertIn('估值—业绩联动', html)
+        self.assertIn('function renderValuationPerformanceLinkage(valuation, health, monitor)', js)
+        self.assertIn('/api/relative-valuation?', js)
+        self.assertIn('行业内估值位置', js)
+        self.assertIn('财务健康度', js)
+        self.assertIn('季度变化', js)
+        self.assertIn('红旗', js)
+        self.assertIn('仅陈列同一时点可验证事实与共现', html)
+        self.assertNotIn('买入建议', html)
+        self.assertNotIn('卖出建议', html)
+
     def test_industry_financial_position_renders_alignment_coverage_and_peer_percentiles(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
