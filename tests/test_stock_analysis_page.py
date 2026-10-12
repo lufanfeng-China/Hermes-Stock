@@ -223,6 +223,9 @@ class StockAnalysisPageTests(unittest.TestCase):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertIn('id="health-derived"', html)
         self.assertIn('id="health-series"', html)
+        series_renderer = js[js.index('function renderHealthSeries'):js.index('function scoreFormationCopy')]
+        for removed_metric in ('资产负债率', '商誉', '商誉 / 资产', '商誉 / 权益', '毛利率', '净利率'):
+            self.assertNotIn(f"['{removed_metric}'", series_renderer)
         self.assertIn('五年派生指标', html)
         self.assertIn('renderHealthMetrics(payload.health)', js)
         self.assertIn('营业收入', html)

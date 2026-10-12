@@ -332,8 +332,6 @@
       ['现金利润比', 'annual_cash_profit_ratio', ''], ['FCF Margin', 'fcf_margin', '%'],
       ['应收增速差', 'receivable_growth_gap', 'pct'], ['存货增速差', 'inventory_growth_gap', 'pct'],
       ['CapEx 强度', 'capex_intensity', '%'], ['扣非 ROE', 'roe_ex', '%'],
-      ['资产负债率', 'debt_ratio', '%'], ['商誉', 'goodwill', ''], ['商誉 / 资产', 'goodwill_assets_ratio', '%'], ['商誉 / 权益', 'goodwill_equity_ratio', '%'],
-      ['毛利率', 'gross_margin', '%'], ['净利率', 'net_margin', '%'],
     ];
     if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
     target.innerHTML = `<table><thead><tr><th>指标</th>${years.map((year) => `<th>${escapeHTML(year)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, key, suffix, tooltipKey]) => `<tr><th>${healthMetricLabel(tooltipKey || key, label)}</th>${years.map((_, index) => `<td>${healthMetricValue(key, series[key]?.[index], suffix)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
