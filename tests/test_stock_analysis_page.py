@@ -44,6 +44,19 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertNotIn('买入建议', html)
         self.assertNotIn('卖出建议', html)
 
+    def test_clickable_secondary_industry_opens_quarterly_valuation_history_from_2020(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="industry-valuation-history-dialog"', html)
+        self.assertIn('id="industry-valuation-history-chart"', html)
+        self.assertIn('id="industry-valuation-history-table"', html)
+        self.assertIn('function showIndustryValuationHistory(valuation)', js)
+        self.assertIn('data-industry-valuation-history', js)
+        self.assertIn('industry_temperature_history', js)
+        self.assertIn("row.trading_day >= '2020-01-01'", js)
+        self.assertIn('加权 PE-TTM', js)
+        self.assertIn('dialog.showModal()', js)
+
     def test_industry_financial_position_renders_alignment_coverage_and_peer_percentiles(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

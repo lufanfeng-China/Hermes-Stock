@@ -12,7 +12,7 @@
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
   const MAX_FINANCIAL_CACHE_ENTRIES = 24;
-  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -861,15 +861,44 @@
     }).join('') || '暂无可用结论。';
   }
 
+  function showIndustryValuationHistory(valuation) {
+    const dialog = document.getElementById('industry-valuation-history-dialog');
+    const title = document.getElementById('industry-valuation-history-title');
+    const meta = document.getElementById('industry-valuation-history-meta');
+    const chart = document.getElementById('industry-valuation-history-chart');
+    const table = document.getElementById('industry-valuation-history-table');
+    if (!dialog || !title || !meta || !chart || !table) return;
+    const rows = (valuation?.industry_temperature_history || []).filter((row) => row.trading_day >= '2020-01-01' && Number.isFinite(Number(row.weighted_pe_ttm)));
+    const industry = String(valuation?.industry_level_2_name || '二级行业');
+    title.textContent = `${industry}｜行业历史估值`;
+    if (!rows.length) { meta.textContent = '2020 年以来暂无可用季度加权 PE-TTM。'; chart.innerHTML = ''; table.innerHTML = ''; dialog.showModal(); return; }
+    const current = Number(rows.at(-1).weighted_pe_ttm);
+    meta.textContent = `行业过热 / ${Number(valuation?.industry_temperature_percentile_since_2022 || 0).toFixed(2)}%｜历史序列基于自 2020 年以来行业加权 PE-TTM。`;
+    const values = rows.map((row) => Number(row.weighted_pe_ttm));
+    const lo = Math.min(...values); const hi = Math.max(...values); const span = Math.max(hi - lo, 1);
+    const d = { w: 920, h: 310, l: 58, r: 28, t: 24, b: 45 }; const pw = d.w - d.l - d.r; const ph = d.h - d.t - d.b;
+    const x = (i) => d.l + (rows.length === 1 ? pw / 2 : i * pw / (rows.length - 1));
+    const y = (v) => d.t + (hi - v) / span * ph;
+    const line = rows.map((row, i) => `${x(i).toFixed(1)},${y(Number(row.weighted_pe_ttm)).toFixed(1)}`).join(' ');
+    const ticks = [0, .25, .5, .75, 1].map((ratio) => { const value = hi - ratio * span; const yy = d.t + ratio * ph; return `<line x1="${d.l}" y1="${yy}" x2="${d.w - d.r}" y2="${yy}" stroke="rgba(139,216,255,.2)"/><text x="${d.l - 8}" y="${yy + 4}" text-anchor="end" fill="#89a9bb" font-size="11">${value.toFixed(1)}</text>`; }).join('');
+    const labels = rows.map((row, i) => (i === 0 || i === rows.length - 1 || String(row.trading_day).endsWith('-03-31')) ? `<text x="${x(i)}" y="${d.h - 14}" text-anchor="middle" fill="#89a9bb" font-size="11">${String(row.trading_day).slice(2, 7)}</text>` : '').join('');
+    const points = rows.map((row, i) => `<circle cx="${x(i)}" cy="${y(Number(row.weighted_pe_ttm))}" r="3.5" fill="#ffc36f"><title>${escapeHTML(`${row.trading_day}｜加权 PE-TTM ${Number(row.weighted_pe_ttm).toFixed(2)}`)}</title></circle>`).join('');
+    chart.innerHTML = `${ticks}<line x1="${d.l}" y1="${y(current)}" x2="${d.w - d.r}" y2="${y(current)}" stroke="#73dfc4" stroke-dasharray="7 6"/><text x="${d.w - d.r}" y="${y(current) - 8}" text-anchor="end" fill="#73dfc4" font-size="12">当前 ${current.toFixed(2)}</text><polyline points="${line}" fill="none" stroke="#ffc36f" stroke-width="3"/>${points}${labels}`;
+    table.innerHTML = rows.map((row, index) => { const value = Number(row.weighted_pe_ttm); const change = current ? (value / current - 1) * 100 : null; const klass = index === rows.length - 1 ? ' class="industry-valuation-history-current"' : ''; return `<tr${klass}><td>${escapeHTML(row.trading_day)}</td><td>${value.toFixed(2)}</td><td>${Number.isFinite(change) ? `${change >= 0 ? '+' : ''}${change.toFixed(1)}%` : '—'}</td></tr>`; }).join('');
+    dialog.showModal();
+  }
+
   function renderValuationPerformanceLinkage(valuation, health, monitor) {
     const target = document.getElementById('valuation-performance-linkage'); const period = document.getElementById('valuation-performance-linkage-period');
     if (!target || !period) return;
+    state.industryValuation = valuation || null;
     if (!valuation?.ok) { period.textContent = '相对估值数据暂不可用'; target.textContent = '财务健康度与季度变化仍可在下方查看。'; return; }
     const valPeriod = `${valuation.industry_level_2_name || '—'}｜${valuation.primary_percentile_metric === 'pe_ttm' ? 'PE-TTM' : 'PS-TTM'}`;
     const healthScore = Number.isFinite(Number(health?.score)) ? `${Number(health.score).toFixed(0)} / 100（${health.status || '—'}）` : '数据不足';
     const flags = Array.isArray(health?.red_flags) ? health.red_flags : [];
     const alerts = Array.isArray(monitor?.alerts) ? monitor.alerts : [];
-    period.textContent = `${valPeriod}｜财报期 ${monitor?.latest_period || '—'}`;
+    const industryName = valuation.industry_level_2_name || '—';
+    period.innerHTML = `<button type="button" class="industry-valuation-history-trigger" data-industry-valuation-history>${escapeHTML(industryName)}</button>｜${escapeHTML(valuation.primary_percentile_metric === 'pe_ttm' ? 'PE-TTM' : 'PS-TTM')}｜财报期 ${escapeHTML(monitor?.latest_period || '—')}`;
     target.className = '';
     target.innerHTML = `<div class="latest-report-change-grid"><article class="latest-report-change-item stable"><strong>行业内估值位置</strong><p>${escapeHTML(valuation.valuation_band_label || '—')}｜${Number.isFinite(Number(valuation.primary_percentile)) ? `${Number(valuation.primary_percentile).toFixed(1)}% 分位` : '分位不可用'}</p><span class="latest-report-change-basis">个股 ${Number.isFinite(Number(valuation.primary_percentile_value)) ? Number(valuation.primary_percentile_value).toFixed(2) : '—'}；行业加权 ${Number.isFinite(Number(valuation.industry_weighted_pe_ttm)) ? `PE ${Number(valuation.industry_weighted_pe_ttm).toFixed(2)}` : '—'}</span></article><article class="latest-report-change-item stable"><strong>财务健康度</strong><p>${escapeHTML(healthScore)}</p><span class="latest-report-change-basis">完整年报：${escapeHTML((health?.periods || []).join('、') || '—')}</span></article><article class="latest-report-change-item ${alerts.length || flags.length ? 'watch' : 'stable'}"><strong>季度变化与红旗</strong><p>季度变化：${alerts.length ? `${alerts.length} 项提示` : '暂无提示'}；红旗：${flags.length} 项</p><span class="latest-report-change-basis">${escapeHTML([...alerts.map((item) => item.title), ...flags.map((item) => item.title)].join('；') || '无已列示事项')}</span></article></div>`;
   }
@@ -1062,6 +1091,10 @@
     if (metric && heading) heading.innerHTML = `<button type="button" class="metric-lineage-trigger" data-metric-lineage="${metric}" title="查看指标口径与数据血缘">${heading.textContent}</button>`;
   });
   document.addEventListener('click', (event) => { const trigger = event.target.closest('[data-metric-lineage]'); if (trigger) showMetricLineage(trigger.dataset.metricLineage); });
+  document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-valuation-history]')) showIndustryValuationHistory(state.industryValuation); });
+  const industryValuationHistoryDialog = document.getElementById('industry-valuation-history-dialog');
+  industryValuationHistoryDialog?.querySelector('.industry-valuation-history-close')?.addEventListener('click', () => industryValuationHistoryDialog.close());
+  industryValuationHistoryDialog?.addEventListener('click', (event) => { if (event.target === industryValuationHistoryDialog) industryValuationHistoryDialog.close(); });
   const lineageDialog = document.getElementById('metric-lineage-dialog');
   lineageDialog?.addEventListener('click', (event) => { if (event.target === lineageDialog || event.target.closest('.metric-lineage-close')) lineageDialog.close(); });
 
