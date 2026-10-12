@@ -658,6 +658,48 @@
     target.innerHTML = (health.conclusions || []).map((item) => { const code = scoreCode[item.code]; const score = (health.score_breakdown || []).find((row) => row.code === code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHTML(HEALTH_QUESTION_PROMPTS[item.code] || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHTML(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><p>${escapeHTML(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
   }
 
+  const LATEST_REPORT_CHANGE_CONFIG = {
+    growth: { chartId: 'revenue-growth-chart', basis: '非TTM' },
+    profitability: { chartId: 'gross-margin-chart', basis: '非TTM' },
+    cash: { chartId: 'free-cf-chart', basis: 'TTM' },
+    working_capital: { chartId: 'accounts-receivable-chart', basis: '非TTM' },
+    reinvestment: { chartId: 'capex-chart', basis: 'TTM' },
+    financial_risk: { chartId: 'debt-ratio-chart', basis: '非TTM' },
+  };
+
+  function renderLatestReportChanges(monitor) {
+    const target = document.getElementById('latest-report-change-summary');
+    const period = document.getElementById('latest-report-change-period');
+    if (!target || !period) return;
+    if (monitor?.status !== 'available' || !monitor?.latest_period) {
+      period.textContent = monitor?.status === 'not_applicable' ? '不适用通用季度监测' : '暂无可用季度数据';
+      target.textContent = '暂无可用最新财报变化摘要。';
+      return;
+    }
+    const stateLabel = { watch: '需关注', improving: '改善', stable: '平稳' };
+    const priority = { watch: 0, improving: 1, stable: 2 };
+    const latestPeriod = String(monitor.latest_period);
+    period.textContent = `截至 ${latestPeriod.slice(2)}`;
+    const insights = (monitor.dimensions || [])
+      .filter((item) => item?.available !== false && LATEST_REPORT_CHANGE_CONFIG[item.code])
+      .sort((left, right) => (priority[left.status] ?? 3) - (priority[right.status] ?? 3))
+      .slice(0, 3);
+    const alert = (monitor.alerts || [])[0];
+    const alertMarkup = alert
+      ? `<div class="latest-report-change-alert"><strong>本期预警｜${escapeHTML(alert.title || alert.code || '需关注')}</strong>：${escapeHTML(alert.detail || alert.reason || '季度规则已触发。')}</div>`
+      : '';
+    if (!insights.length) {
+      target.innerHTML = `${alertMarkup}<p class="health-evidence-empty">暂无可用最新财报变化摘要。</p>`;
+      return;
+    }
+    target.innerHTML = `${alertMarkup}${insights.map((item) => {
+      const config = LATEST_REPORT_CHANGE_CONFIG[item.code];
+      const label = stateLabel[item.status] || '数据不足';
+      const basis = interimPeriodLabel(latestPeriod, config.basis);
+      return `<a class="latest-report-change-item ${escapeHTML(item.status || 'stable')}" href="#${config.chartId}"><strong>${escapeHTML(item.title || item.code)}｜${label}</strong><p>${escapeHTML(item.detail || '暂无指标说明。')}</p><span class="latest-report-change-basis">${basis} · 查看指标图</span></a>`;
+    }).join('')}`;
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
@@ -816,6 +858,7 @@
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     renderHealthComparisonTable(null, null);
+    renderLatestReportChanges(null);
     renderHealthMetrics(null);
     renderHealthQuestions(null);
     for (const id of chartIds) {
@@ -841,6 +884,7 @@
         });
       if (financialRequestId !== state.financialRequestId) return;
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
+      renderLatestReportChanges(payload.quarterly_monitor);
       renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report);
       renderHealthQuestions(payload.health);
       const annualPeriods = new Set(payload.health?.periods || []);
@@ -857,6 +901,7 @@
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;
       renderHealthComparisonTable(null, null);
+      renderLatestReportChanges(null);
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }
   }

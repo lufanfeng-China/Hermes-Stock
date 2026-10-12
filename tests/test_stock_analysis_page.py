@@ -29,6 +29,23 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('.analysis-bar.zero-value', html)
         self.assertIn('#70d6a8', html)
 
+    def test_latest_report_change_summary_surfaces_ranked_quarterly_findings_with_basis_and_chart_links(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="latest-report-change-summary"', html)
+        self.assertIn('id="latest-report-change-period"', html)
+        self.assertIn('最新财报变化', html)
+        self.assertIn('function renderLatestReportChanges(monitor)', js)
+        self.assertIn('LATEST_REPORT_CHANGE_CONFIG', js)
+        self.assertIn("latest-report-change-item", js)
+        self.assertIn("latest-report-change-basis", js)
+        self.assertIn(".latest-report-change-alert { grid-column:1 / -1;", html)
+        self.assertIn("href=\"#${config.chartId}\"", js)
+        self.assertIn("renderLatestReportChanges(payload.quarterly_monitor)", js)
+        self.assertIn("'TTM'", js)
+        self.assertIn("'非TTM'", js)
+        self.assertIn("暂无可用最新财报变化摘要", js)
+
     def test_comparison_section_precedes_raw_metric_charts(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
