@@ -1,6 +1,5 @@
 """Data update commands and orchestration."""
 import importlib
-import json
 import subprocess
 import sys
 import time
@@ -15,51 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 TONGDAXIN_DIR = "/home/lufanfeng/tdx_data"
 DERIVED_FINAL_DIR = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
-STOCK_SCREENER_STRATEGY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_screener_strategies_current.json"
-STOCK_RPS_HISTORY_DATASET = DERIVED_FINAL_DIR / "dataset_stock_rps_history.parquet"
 DEFAULT_SYMBOL = "601600"
-
-def ensure_stock_screener_strategy_dataset(strategy: str) -> None:
-    """Build the stock-screener strategy dataset on demand when a preset needs it."""
-    strategy = str(strategy or "").strip()
-    if strategy not in {"rps_first", "slingshot_trend", "rps_first_macd", "duotou", "ath_rps360"}:
-        return
-    dataset_is_current = (
-        STOCK_SCREENER_STRATEGY_DATASET.exists()
-        and (
-            not STOCK_RPS_HISTORY_DATASET.exists()
-            or STOCK_SCREENER_STRATEGY_DATASET.stat().st_mtime >= STOCK_RPS_HISTORY_DATASET.stat().st_mtime
-        )
-    )
-    dataset_has_strategy = False
-    if STOCK_SCREENER_STRATEGY_DATASET.exists():
-        try:
-            payload = json.loads(STOCK_SCREENER_STRATEGY_DATASET.read_text(encoding="utf-8"))
-            rows = payload if isinstance(payload, list) else payload.get("rows", [])
-            dataset_has_strategy = any(str(row.get("strategy", "")).strip() == strategy for row in rows if isinstance(row, dict))
-        except Exception:
-            dataset_has_strategy = False
-    if dataset_is_current and dataset_has_strategy:
-        return
-    result = subprocess.run(
-        [
-            TONGDAXIN_PYTHON,
-            str(PROJECT_ROOT / "scripts" / "build_stock_screener_strategies.py"),
-            "--strategy",
-            strategy,
-            "--tdxdir",
-            TONGDAXIN_DIR,
-            "--output",
-            str(STOCK_SCREENER_STRATEGY_DATASET),
-        ],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(_tail_lines(result.stderr or result.stdout or "strategy build failed"))
-    load_stock_screener_strategy_rows.cache_clear()
 
 
 
@@ -167,30 +122,6 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         (
             'refresh_rps_daily',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/refresh_rps_daily.py'), '--ndays', '120'],
-        ),
-        (
-            'rebuild_screener_first',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'rps_first', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_slingshot',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'slingshot_trend', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_duotou',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'duotou', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
-        ),
-        (
-            'rebuild_screener_ath',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_screener_strategies.py'),
-             '--strategy', 'ath_rps360', '--tdxdir', TONGDAXIN_DIR,
-             '--output', str(STOCK_SCREENER_STRATEGY_DATASET)],
         ),
         (
             'rebuild_macd_signals',

@@ -132,12 +132,6 @@ class RealtimeScreenerPageTests(unittest.TestCase):
         self.assertIn("scenarioSelectEl.value = 'rps_pullback'", script)
         self.assertIn("conditionForm.hidden = scenario.key === 'rps_pullback'", script)
 
-    def test_navigation_links_to_realtime_screener(self) -> None:
-        for filename in ("stock-score.html", "stock-screener.html", "rps-pool.html"):
-            html = (WEB_ROOT / filename).read_text(encoding="utf-8")
-            self.assertIn('/realtime-screener.html', html)
-            self.assertIn('实时选股', html)
-
     def test_realtime_screener_styles_are_terminal_dashboard_aligned(self) -> None:
         self.assertIn(".realtime-screener-shell", STYLES_CSS)
         self.assertIn(".realtime-condition-grid", STYLES_CSS)

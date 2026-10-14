@@ -58,16 +58,6 @@ body {
   overflow: hidden;
 }
 
-.rps-page-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.9fr);
-  gap: 16px;
-  align-items: start;
-}
-
-.rps-profile-card {
-  margin-bottom: 0;
-}
 
 .terminal-shell {
   padding: 16px;
@@ -331,112 +321,12 @@ h2 {
   align-items: center;
 }
 
-.rps-table-wrap {
-  margin-top: 14px;
-  max-height: 420px;
-  overflow: auto;
-  border: 1px solid rgba(127, 153, 170, 0.18);
-  border-radius: 14px;
-  background: rgba(5, 11, 17, 0.92);
-}
-
-.rps-ranking-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.rps-ranking-table th,
-.rps-ranking-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(127, 153, 170, 0.12);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.rps-ranking-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: rgba(8, 16, 24, 0.98);
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-align: left;
-}
-
-.rps-ranking-table th:nth-child(1),
-.rps-ranking-table td:nth-child(1),
-.rps-ranking-table th:nth-child(4),
-.rps-ranking-table td:nth-child(4),
-.rps-ranking-table th:nth-child(5),
-.rps-ranking-table td:nth-child(5),
-.rps-ranking-table th:nth-child(6),
-.rps-ranking-table td:nth-child(6) {
-  text-align: right;
-}
-
-.rps-ranking-table th:nth-child(1),
-.rps-ranking-table td:nth-child(1) {
-  width: 72px;
-}
-
-.rps-ranking-table th:nth-child(2),
-.rps-ranking-table td:nth-child(2) {
-  width: 108px;
-}
-
-.rps-ranking-table th:nth-child(4),
-.rps-ranking-table td:nth-child(4),
-.rps-ranking-table th:nth-child(5),
-.rps-ranking-table td:nth-child(5),
-.rps-ranking-table th:nth-child(6),
-.rps-ranking-table td:nth-child(6) {
-  width: 96px;
-}
-
-.rps-ranking-table td:nth-child(3) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rps-result-row {
-  cursor: pointer;
-}
-
-.rps-result-row:hover,
-.rps-result-row:focus {
-  outline: none;
-  background: linear-gradient(90deg, rgba(82, 179, 255, 0.12), rgba(124, 224, 195, 0.08));
-}
-
-.rps-result-row:hover td,
-.rps-result-row:focus td {
-  color: var(--text);
-}
 
 .row-selected td {
   background: rgba(82, 179, 255, 0.20) !important;
   color: var(--text) !important;
 }
 
-.rps-empty-row td.result-empty {
-  border-bottom: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-/* ── RPS Filter row ─────────────────────────────────── */
-.rps-filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 12px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 4px;
-  margin-bottom: 8px;
-}
 
 .filter-group {
   display: flex;
@@ -3104,31 +2994,9 @@ button:hover {
   color: var(--muted);
 }
 
-.stock-screener-shell {
-  width: min(1480px, calc(100vw - 32px));
-}
 
-.stock-screener-filter-card,
-.stock-screener-results-card,
-.stock-screener-kline-section {
-  margin-bottom: 16px;
-}
 
-.stock-screener-filter-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 12px;
-}
 
-@media (max-width: 720px) {
-  .stock-screener-filter-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.stock-screener-filter-grid[hidden] {
-  display: none;
-}
 
 /* ── Filter groups ── */
 .filter-group {
@@ -3186,118 +3054,13 @@ button:hover {
 .filter-group.filter-col-3 { grid-template-columns: repeat(3, 1fr); }
 .filter-group.filter-col-4 { grid-template-columns: repeat(4, 1fr); }
 
-/* ── RPS group: 4-column ── */
-.filter-rps { grid-template-columns: repeat(4, 1fr); }
-.rps-total-row {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: center;
-  gap: 24px;
-  padding: 6px 0 8px;
-  border-bottom: 1px solid rgba(124,224,195,0.06);
-}
-.rps-total-row .filter-label {
-  font-weight: 600;
-  color: var(--accent);
-}
-.rps-total-row input {
-  width: 80px;
-}
 
 /* ── Tech signals: 3-column ── */
 .filter-tech-signals { grid-template-columns: repeat(3, 1fr); }
 
-.stock-screener-filter-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  align-items: center;
-}
-
-.stock-screener-filter-head-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px 12px;
-  align-items: center;
-}
-
-.stock-screener-filter-toggle {
-  min-height: 34px;
-  padding: 0 12px;
-  font-size: 12px;
-}
-
-.stock-screener-strategy-desc {
-  grid-column: 1 / -1;
-  margin-top: 4px;
-  color: var(--color-muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.stock-screener-results-wrap {
-  max-height: 520px;
-  overflow: auto;
-  border: 1px solid rgba(127, 153, 170, 0.16);
-  border-radius: 14px;
-  background: rgba(7, 16, 24, 0.72);
-}
-
-.stock-screener-table {
-  min-width: 980px;
-}
-
-.stock-screener-table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: rgba(8, 16, 24, 0.98);
-}
-
-.stock-screener-row {
-  cursor: pointer;
-}
-
-.stock-screener-row:hover td,
-.stock-screener-row:focus td,
-.stock-screener-row.row-selected td {
-  background: linear-gradient(90deg, rgba(82, 179, 255, 0.16), rgba(124, 224, 195, 0.08));
-}
-
-.stock-screener-symbol {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.stock-screener-pagination {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.stock-screener-pagination .nav-link:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
-}
-
-#stock-screener-kline-section.hidden {
-  display: none;
-}
 
 @media (max-width: 780px) {
-  .topbar,
-  .metrics,
-  .topbar-actions,
-  .symbol-form,
-  .search-grid,
-  .rps-page-grid {
-    grid-template-columns: 1fr;
-  }
+
 
   .scrubber-meta {
     flex-direction: column;
@@ -4061,18 +3824,6 @@ button:hover {
   min-width: 120px;
 }
 
-/* ── Watchlist toolbar in screener ────────────────────────────────────── */
-
-.stock-screener-results-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 14px;
-  border: 1px solid rgba(124, 224, 195, 0.12);
-  border-radius: 8px;
-  margin: 8px 0;
-  background: rgba(7, 16, 24, 0.5);
-}
 
 .wl-select-all-label {
   display: flex;
@@ -4089,19 +3840,6 @@ button:hover {
   cursor: pointer;
 }
 
-/* Highlight stocks already in watchlist */
-.stock-screener-row.wl-highlighted {
-  background: rgba(124, 224, 195, 0.08) !important;
-}
-
-.stock-screener-row.wl-highlighted:hover {
-  background: rgba(124, 224, 195, 0.14) !important;
-}
-#stock-screener-preset-select,
-#stock-screener-preset-select option {
-  color: var(--text) !important;
-  background: var(--bg-main) !important;
-}
 
 .preset-dropdown {
   position: relative;

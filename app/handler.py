@@ -17,12 +17,11 @@ from urllib.parse import parse_qs, urlparse
 from app.config import (
     PROJECT_ROOT, WEB_ROOT, TONGDAXIN_PYTHON, TONGDAXIN_DIR,
     DEFAULT_SYMBOL, DEFAULT_HERMES_MODEL, DERIVED_FINAL_DIR,
-    STOCK_SCREENER_STRATEGY_DATASET, STOCK_RPS_HISTORY_DATASET,
 )
 from app.data.watchlist import _load_watchlist, _save_watchlist
 from app.data.tech_eval import _load_tech_eval, _load_prev_tech_evals
 from app.data.industry_temp import _load_industry_temp
-from app.data.rps_history import load_rps_trading_days, load_stock_rps_history, _load_rps_history_dataset
+from app.data.rps_history import load_stock_rps_history, _load_rps_history_dataset
 from app.tdx.kline import load_stock_history, load_stock_kline, infer_market
 from app.tdx.percentile import compute_stock_price_percentile
 from app.financial.reports import load_recent_three_year_financial_reports
@@ -32,7 +31,7 @@ from app.pipeline.state import (
     _update_data_update_job_state, _append_data_update_job_output,
     _record_data_update_progress, DataUpdateStepError, _format_timestamp,
 )
-from app.pipeline.commands import ensure_stock_screener_strategy_dataset, _latest_trading_day_for_refresh, archive_daily_is_ready, _latest_minute_trading_day
+from app.pipeline.commands import _latest_trading_day_for_refresh, archive_daily_is_ready, _latest_minute_trading_day
 from app.pipeline.runner import start_data_update_job, run_full_data_update
 from app.industry.templates import _industry_template_tags, _build_industry_valuation_percentile_payload
 
@@ -46,7 +45,6 @@ from app.bottleneck import (
 
 # Additional imports from original
 from app.search.index import (
-    build_stock_screener_response,
     compute_stock_score,
     concept_search_response,
     rps_ranking_response,
@@ -55,14 +53,9 @@ from app.search.index import (
     pool_filter_response,
     industry_hierarchy_response,
     concept_list_response,
-    load_stock_screener_strategy_rows,
 )
 from app.industry.heatmap import DEFAULT_INDUSTRY_LIMIT, industry_heatmap_response
 from app.relative_valuation.service import build_relative_valuation_result
-from app.search.macd_gc import (  # MACD Extreme Golden Cross
-    scan_all, handle_open, handle_replenish, handle_sell, handle_edit_entry, handle_config,
-    _load_state, _init_if_needed,
-)
 from app.valuation.models import (
     calc_intrinsic_value_dcf,
     calc_gordon_growth,
@@ -613,12 +606,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-price-percentile":
             self.handle_stock_price_percentile(parsed.query)
             return
-        if parsed.path == "/api/stock-screener":
-            self.handle_stock_screener(parsed.query)
-            return
-        if parsed.path == "/api/rps-trading-days":
-            self.handle_rps_trading_days()
-            return
         if parsed.path == "/api/concept-analysis":
             self.handle_concept_analysis(parsed.query)
             return
@@ -630,13 +617,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/concept-list":
             self.handle_concept_list(parsed.query)
-            return
-        # ── MACD Extreme Golden Cross ──
-        if parsed.path == "/api/macd-extreme-gc":
-            self.handle_macd_gc_scan(parsed.query)
-            return
-        if parsed.path == "/api/macd-extreme-gc/equity-history":
-            self.handle_macd_gc_equity_history()
             return
         # ── Bottleneck Discovery ──
         if parsed.path == "/api/bottleneck/step1":
@@ -746,32 +726,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/competitive-edge":
             self.handle_competitive_edge("")
-            return
-        # ── MACD Extreme Golden Cross ──
-        if parsed.path == "/api/macd-extreme-gc/open":
-            self.handle_macd_gc_open()
-            return
-        if parsed.path == "/api/macd-extreme-gc/replenish":
-            self.handle_macd_gc_replenish()
-            return
-        if parsed.path == "/api/macd-extreme-gc/sell":
-            self.handle_macd_gc_sell()
-            return
-        if parsed.path == "/api/macd-extreme-gc/entry":
-            self.handle_macd_gc_edit_entry()
-            return
-        if parsed.path == "/api/macd-extreme-gc/config":
-            self.handle_macd_gc_config()
-            return
-        if parsed.path == "/api/macd-extreme-gc/backtest-summary":
-            self.handle_macd_gc_backtest_summary()
-            return
-        if parsed.path == "/api/macd-extreme-gc/backtest":
-            self.handle_macd_gc_backtest()
-            return
-        # ── MACD Extreme Golden Cross ──
-        if parsed.path == "/api/macd-extreme-gc/equity-history":
-            self.handle_macd_gc_equity_history()
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -1410,159 +1364,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 {"ok": False, "error": {"code": "concept_list_error", "message": str(exc)}},
             )
 
-    def handle_stock_screener(self, query: str) -> None:
-        params = {
-            key: ",".join(v.strip() for v in values if v.strip())
-            for key, values in parse_qs(query, keep_blank_values=True).items()
-            if values
-        }
-        try:
-            # Only ensure current strategy dataset when NOT in historical mode
-            as_of_date = params.get("as_of_date", "").strip()
-            if not as_of_date:
-                ensure_stock_screener_strategy_dataset(params.get("strategy", ""))
-            result = build_stock_screener_response(params)
-            # Augment with swing low price for current page rows
-            if result.get("rows"):
-                from mootdx.reader import Reader
-                reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
-                for row in result["rows"]:
-                    try:
-                        daily = reader.daily(symbol=row["symbol"])
-                        if daily is not None and not daily.empty and len(daily) >= 111:
-                            daily = daily.sort_index()
-                            # When historical date, truncate to as_of_date
-                            if as_of_date:
-                                daily = daily[daily.index <= as_of_date]
-                            if len(daily) < 111:
-                                row["swing_low_price"] = None
-                                row["ma10_dist_pct"] = None
-                                continue
-                            lows = daily["low"].astype(float).tolist()
-                            closes = daily["close"].astype(float).tolist()
-                            n = len(lows)
-                            # Search last 90 bars for most recent swing low
-                            # (low < all 10 bars before AND < all 10 bars after)
-                            swing_idx = None
-                            search_end = n - 11  # need 10 bars after
-                            search_start = max(0, n - 90)
-                            for i in range(search_end - 1, search_start - 1, -1):
-                                lo = lows[i]
-                                before = lows[max(0, i - 10):i]
-                                after = lows[i + 1:i + 11]
-                                if all(lo < v for v in before) and all(lo < v for v in after):
-                                    swing_idx = i
-                                    break
-                            if swing_idx is not None:
-                                row["swing_low_price"] = round(closes[swing_idx], 2)
-                            else:
-                                # Fallback: lowest close in last 90 bars
-                                fb_start = max(0, n - 90)
-                                row["swing_low_price"] = round(min(closes[fb_start:]), 2)
-                            # MA10 distance: (close - MA10) / MA10 * 100
-                            if n >= 10:
-                                ma10 = sum(closes[-10:]) / 10
-                                row["ma10_dist_pct"] = round((closes[-1] - ma10) / ma10 * 100, 2) if ma10 != 0 else None
-                            else:
-                                row["ma10_dist_pct"] = None
-                            # MA10 slope: daily rate of change of MA10 line
-                            if n >= 11:
-                                ma10_today = sum(closes[-10:]) / 10
-                                ma10_yesterday = sum(closes[-11:-1]) / 10
-                                if ma10_yesterday != 0:
-                                    row["ma10_slope_pct"] = round((ma10_today - ma10_yesterday) / ma10_yesterday * 100, 2)
-                            # MA30 slope: daily rate of change of MA30 line (uses as_of truncated data)
-                            if n >= 31:
-                                ma30_today = sum(closes[-30:]) / 30
-                                ma30_yesterday = sum(closes[-31:-1]) / 30
-                                if ma30_yesterday != 0:
-                                    row["ma30_slope_pct"] = round((ma30_today - ma30_yesterday) / ma30_yesterday * 100, 2)
-                        else:
-                            row["swing_low_price"] = None
-                            row["ma10_dist_pct"] = None
-                    except Exception:
-                        row["swing_low_price"] = None
-            # Compute trend duration for current page rows
-            if result.get("rows"):
-                import glob, re
-                if as_of_date:
-                    # Load tech eval files with date <= as_of_date
-                    pattern = str(DERIVED_FINAL_DIR / "dataset_technical_eval_*.json")
-                    all_files = sorted(glob.glob(pattern), reverse=True)
-                    prev_tech_days = []
-                    for fp in all_files[:20]:
-                        m = re.search(r'(\d{4}-\d{2}-\d{2})', fp)
-                        if m and m.group(1) <= as_of_date:
-                            try:
-                                with open(fp) as f:
-                                    data = json.load(f)
-                                stocks = data.get("stocks", {}) if isinstance(data, dict) else {}
-                                prev_tech_days.append({s: {"trend": v.get("trend"), "trend_label": v.get("trend_label"),
-                                                              "short_trend": v.get("short_trend"), "short_trend_label": v.get("short_trend_label")}
-                                                       for s, v in stocks.items()})
-                            except Exception:
-                                prev_tech_days.append({})
-                else:
-                    prev_tech_days = _load_prev_tech_evals(max_days=20)
-                for row in result["rows"]:
-                    try:
-                        symbol = str(row.get("symbol", "")).zfill(6)
-                        current_trend = str(row.get("tech_trend") or "")
-                        duration = 1
-                        if current_trend:
-                            for day_data in prev_tech_days:
-                                prev = day_data.get(symbol)
-                                if prev and prev.get("trend") == current_trend:
-                                    duration += 1
-                                else:
-                                    break
-                        row["trend_duration"] = duration
-                    except Exception:
-                        row["trend_duration"] = 1
-                    try:
-                        current_short = str(row.get("tech_short_trend") or "")
-                        short_dur = 1
-                        if current_short:
-                            for day_data in prev_tech_days:
-                                prev = day_data.get(symbol)
-                                if prev and prev.get("short_trend") == current_short:
-                                    short_dur += 1
-                                else:
-                                    break
-                        row["short_trend_duration"] = short_dur
-                    except Exception:
-                        row["short_trend_duration"] = 1
-            # Augment with Kronos AI prediction
-            if result.get("rows"):
-                kronos_path = DERIVED_FINAL_DIR / "dataset_kronos_prediction.json"
-                if kronos_path.exists():
-                    try:
-                        kronos_data = json.loads(kronos_path.read_text(encoding="utf-8"))
-                        for row in result["rows"]:
-                            key = f"{row.get('market', '')}:{row.get('symbol', '')}"
-                            pred = kronos_data.get(key)
-                            if pred:
-                                row["pred_direction"] = pred.get("pred_direction")
-                                row["pred_5d_pct"] = pred.get("pred_5d_pct")
-                                row["pred_20d_pct"] = pred.get("pred_20d_pct")
-                    except Exception:
-                        pass
-            # Augment with PE分位 from quarterly database + apply filter
-            if result.get("rows"):
-                self._enrich_pe_percentile(result, params)
-            # Apply 股价新高 filter
-            new_high = params.get("price_new_high", "").strip()
-            if new_high and result.get("rows"):
-                result["rows"] = self._filter_price_new_high(result["rows"], new_high, TONGDAXIN_DIR, as_of_date)
-                result["total"] = len(result["rows"])
-                result["total_pages"] = max(1, (result["total"] + int(params.get("page_size", "50") or "50") - 1) // int(params.get("page_size", "50") or "50"))
-            self.respond_json(HTTPStatus.OK, result)
-        except Exception as exc:
-            self.respond_json(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"ok": False, "error": {"code": "stock_screener_error", "message": str(exc)}},
-            )
-
     @staticmethod
 
     def _enrich_pe_percentile(result: dict, params: dict) -> None:
@@ -1815,16 +1616,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(status, result)
         except Exception as exc:
             self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": str(exc)})
-
-    def handle_rps_trading_days(self) -> None:
-        """Return sorted list of unique trading days from RPS history dataset."""
-        try:
-            self.respond_json(HTTPStatus.OK, {"ok": True, "trading_days": load_rps_trading_days()})
-        except Exception as exc:
-            self.respond_json(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"ok": False, "error": {"code": "rps_trading_days_error", "message": str(exc)}},
-            )
 
     # ── Watchlist handlers ───────────────────────────────────────────────
 
@@ -2414,8 +2205,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
             {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
-            {'id': 'rebuild_screener_rps_first', 'name': '重建 RPS首次 策略', 'desc': '重建 RPS首次进入前50 的选股策略结果'},
-            {'id': 'rebuild_screener_ath', 'name': '重建 历史新高 策略', 'desc': '重建 历史新高 + RPS>360 选股策略结果'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ])
 
@@ -3245,142 +3034,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
     # ── End Bottleneck Handlers ──────────────────────────────
 
     # ── MACD Extreme Golden Cross Handlers ────────────────────
-
-    def handle_macd_gc_scan(self, query: str) -> None:
-        params = {k: v[0] for k, v in parse_qs(query).items()}
-        df_param = params.get("date_from", "")
-        dt_param = params.get("date_to", "")
-        stock = params.get("stock", "")
-
-        state = _load_state()
-        _init_if_needed(state)
-
-        try:
-            result = scan_all(state, df_param, dt_param, stock)
-            self.respond_json(HTTPStatus.OK, result)
-        except Exception as exc:
-            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"ok": False, "error": str(exc)})
-
-    def handle_macd_gc_open(self) -> None:
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
-        result = handle_open(body["code"], body["shares"], body["price"],
-                             body.get("signal_date", ""), body.get("ndif"))
-        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
-
-    def handle_macd_gc_replenish(self) -> None:
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
-        result = handle_replenish(body["code"], body["shares"], body["price"])
-        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
-
-    def handle_macd_gc_sell(self) -> None:
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
-        result = handle_sell(body["code"])
-        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
-
-    def handle_macd_gc_edit_entry(self) -> None:
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
-        result = handle_edit_entry(body["code"], body["index"], body["price"], body["shares"],
-                                   body.get("date", ""))
-        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
-
-    def handle_macd_gc_config(self) -> None:
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
-        result = handle_config(body["capital"], body["lot"])
-        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
-
-    def handle_macd_gc_equity_history(self) -> None:
-        from app.search.macd_gc import compute_equity_history
-        result = compute_equity_history()
-        self.respond_json(HTTPStatus.OK, {"ok": True, "history": result})
-
-    def handle_macd_gc_backtest_summary(self) -> None:
-        """Run isolated QFQ backtests for the page's exit parameters and three capital tiers."""
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
-        start = str(body.get("start") or "2012-01-01")
-        lot = int(body.get("lot", 50_000))
-        profit_target = float(body.get("profit_target", 20))
-        retrace_floor = float(body.get("retrace_floor", 15))
-        if lot <= 0 or profit_target <= 0 or retrace_floor < 0 or retrace_floor >= profit_target:
-            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "参数无效：卖出触发必须大于回撤触发"})
-            return
-        import subprocess
-        from datetime import date as _date
-        rows = []
-        for capital in (3_000_000, 6_000_000, 10_000_000):
-            payload = {"start": start, "capital": capital, "lot": lot,
-                       "profit_target": profit_target, "retrace_floor": retrace_floor,
-                       "write_output": False}
-            result = subprocess.run(
-                ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python3",
-                 "/home/lufanfeng/Project-Hermes-Stock/scripts/run_macd_backtest_v2_cash_mtm.py",
-                 json.dumps(payload)], capture_output=True, text=True, timeout=600,
-            )
-            if result.returncode != 0 or "OK|" not in result.stdout:
-                self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": result.stderr or result.stdout})
-                return
-            parts = next(line for line in result.stdout.splitlines() if line.startswith("OK|")).split("|")
-            equity = float(parts[5])
-            years = max((_date(2026, 7, 24) - _date.fromisoformat(start)).days / 365.25, 1 / 365.25)
-            rows.append({"capital": capital, "finalEquity": round(equity, 2),
-                         "totalReturnPct": round((equity / capital - 1) * 100, 2),
-                         "annualizedReturnPct": round(((equity / capital) ** (1 / years) - 1) * 100, 2),
-                         "openPositions": int(parts[1]), "closedPositions": int(parts[2]),
-                         "executed": int(parts[3]), "rejectedForCash": int(parts[4])})
-        self.respond_json(HTTPStatus.OK, {"ok": True, "start": start, "asOf": "2026-07-24", "lotCash": lot,
-                                          "profitTarget": profit_target, "retraceFloor": retrace_floor,
-                                          "entryRule": f"NDIF<-1% + MACD金叉 + MA10上升；浮盈>{profit_target:g}%后，回撤<{retrace_floor:g}%或死叉卖出",
-                                          "method": "QFQ 信号 + 原始价成交/严格 MTM", "rows": rows})
-
-    def handle_macd_gc_backtest(self) -> None:
-        content_len = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(content_len).decode("utf-8"))
-        start = body.get("start", "2024-01-01")
-        capital = int(body.get("capital", 10_000_000))
-        lot = int(body.get("lot", 50_000))
-        profit_target = float(body.get("profit_target", 20))
-        retrace_floor = float(body.get("retrace_floor", 15))
-        if profit_target <= 0 or retrace_floor < 0 or retrace_floor >= profit_target:
-            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "卖出触发必须大于回撤触发，且回撤触发不能为负数"})
-            return
-
-        import subprocess, os
-        # Clear old MTM caches
-        eq_paths = (
-            "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_equity_weekly.json",
-            "/home/lufanfeng/Project-Hermes-Stock/data/derived/datasets/final/macd_gc_equity_monthly.json",
-        )
-        for eq_path in eq_paths:
-            if os.path.exists(eq_path):
-                os.remove(eq_path)
-        
-        # Run backtest
-        result = subprocess.run(
-            ["/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python3",
-             "/home/lufanfeng/Project-Hermes-Stock/scripts/run_macd_backtest_v2_cash_mtm.py",
-             json.dumps({"start": start, "capital": capital, "lot": lot,
-                         "profit_target": profit_target, "retrace_floor": retrace_floor})],
-            capture_output=True, text=True, timeout=600
-        )
-        if result.returncode == 0 and "OK" in result.stdout:
-            parts = result.stdout.strip().split("|")
-            self.respond_json(HTTPStatus.OK, {
-                "ok": True,
-                "positions": int(parts[1]),
-                "history": int(parts[2]),
-                "executed": int(parts[3]),
-                "rejected": int(parts[4]),
-                "equity": int(parts[5]),
-            })
-        else:
-            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"ok": False, "error": result.stderr or result.stdout})
 
     # ── End MACD GC Handlers ──────────────────────────────────
     def respond_json(self, status: HTTPStatus, payload: dict[str, object]) -> bool:
