@@ -12,7 +12,7 @@
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
   const MAX_FINANCIAL_CACHE_ENTRIES = 24;
-  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, industryHealthPeers: null, industryHealthPeerView: 'annual', industryHealthPeerSort: { key: 'score', direction: -1 }, stockProfile: null, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -269,9 +269,9 @@
 
   function healthMetricLabel(key, label) {
     const tooltip = HEALTH_METRIC_TOOLTIPS[key];
-    if (!tooltip) return escapeHTML(label);
+    if (!tooltip) return escapeHtml(label);
     const content = `定义：${tooltip.definition}\n判断：${tooltip.judgement}`;
-    return `<span class="health-metric-tooltip" tabindex="0" data-health-tooltip="${escapeHTML(content)}" title="${escapeHTML(content)}" aria-label="${escapeHTML(`${label}。${content}`)}"><span class="health-metric-tooltip-trigger">${escapeHTML(label)}</span></span>`;
+    return `<span class="health-metric-tooltip" tabindex="0" data-health-tooltip="${escapeHtml(content)}" title="${escapeHTML(content)}" aria-label="${escapeHtml(`${label}。${content}`)}"><span class="health-metric-tooltip-trigger">${escapeHtml(label)}</span></span>`;
   }
 
   const HEALTH_AMOUNT_FIELDS = new Set(['revenue', 'ex_net_profit', 'net_profit', 'ocf', 'free_cf', 'capex', 'goodwill', 'accounts_receivable', 'inventory']);
@@ -300,8 +300,8 @@
 
   function healthEvidenceList(items, emptyMessage) {
     return items.length
-      ? `<ul>${items.map((item) => `<li><strong>${escapeHTML(item.title || item.code || '未命名规则')}</strong>${item.detail || item.reason ? `：${escapeHTML(item.detail || item.reason)}` : ''}${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(item.evidence))}</small>` : ''}</li>`).join('')}</ul>`
-      : `<p class="health-evidence-empty">${escapeHTML(emptyMessage)}</p>`;
+      ? `<ul>${items.map((item) => `<li><strong>${escapeHtml(item.title || item.code || '未命名规则')}</strong>${item.detail || item.reason ? `：${escapeHtml(item.detail || item.reason)}` : ''}${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHtml(healthEvidenceSummary(item.evidence))}</small>` : ''}</li>`).join('')}</ul>`
+      : `<p class="health-evidence-empty">${escapeHtml(emptyMessage)}</p>`;
   }
 
   function renderHealthEvidencePanels(health, uiState = 'ready') {
@@ -517,7 +517,7 @@
   function scoreDetailButton(source, item) {
     const value = item?.points ?? item?.score;
     if (item?.available === false || value === null || value === undefined || !Number.isFinite(Number(value))) return '<span class="comparison-unavailable">—</span>';
-    return `<button type="button" class="comparison-score-button" data-score-source="${source}" data-score-code="${escapeHTML(item.code)}" aria-label="查看${escapeHTML(item.title || item.code)}得分由来">${Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1)}</button>`;
+    return `<button type="button" class="comparison-score-button" data-score-source="${source}" data-score-code="${escapeHtml(item.code)}" aria-label="查看${escapeHtml(item.title || item.code)}得分由来">${Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1)}</button>`;
   }
 
   function showHealthScoreDetail(source, code) {
@@ -532,11 +532,11 @@
       if (!scoreItem) return;
       title.textContent = `五年年报｜${scoreItem.title}得分由来`;
       const evidence = scoreItem.evidence || {};
-      const metrics = Object.entries(evidence.metrics || {}).map(([key, value]) => `<dt>${escapeHTML(HEALTH_FIELD_LABELS[key] || key)}</dt><dd>${escapeHTML(healthEvidenceValue(key, value))}</dd>`).join('');
-      const subscores = Object.entries(evidence.subscores || {}).map(([key, value]) => `<dt>子项：${escapeHTML(HEALTH_SCORE_COMPONENT_LABELS[key] || key)}</dt><dd>${escapeHTML(String(value))}</dd>`).join('');
+      const metrics = Object.entries(evidence.metrics || {}).map(([key, value]) => `<dt>${escapeHtml(HEALTH_FIELD_LABELS[key] || key)}</dt><dd>${escapeHtml(healthEvidenceValue(key, value))}</dd>`).join('');
+      const subscores = Object.entries(evidence.subscores || {}).map(([key, value]) => `<dt>子项：${escapeHtml(HEALTH_SCORE_COMPONENT_LABELS[key] || key)}</dt><dd>${escapeHtml(String(value))}</dd>`).join('');
       const thresholds = Object.entries(evidence.thresholds || {}).map(([key, value]) => `${HEALTH_SCORE_COMPONENT_LABELS[key] || HEALTH_FIELD_LABELS[key] || key}：${value}`).join('；');
       const formation = scoreFormationCopy(dimension, scoreItem).split('\n').map(escapeHTML).join('<br>');
-      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><p>${formation}</p><dl>${metrics}${subscores}<dt>评分阈值</dt><dd>${escapeHTML(thresholds || '—')}</dd></dl>`;
+      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><p>${formation}</p><dl>${metrics}${subscores}<dt>评分阈值</dt><dd>${escapeHtml(thresholds || '—')}</dd></dl>`;
     } else {
       const scoreItem = (data.monitor?.realtime_score?.breakdown || []).find((item) => item.code === code);
       const dimension = (data.monitor?.dimensions || []).find((item) => item.code === code);
@@ -544,7 +544,7 @@
       const statusLabel = { improving: '改善', stable: '平稳', watch: '需关注' }[scoreItem.status] || '不可用';
       const ratio = { improving: '100%', stable: '60%', watch: '25%' }[scoreItem.status] || '—';
       title.textContent = `最新季报｜${scoreItem.title}得分由来`;
-      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><dl><dt>季度状态</dt><dd>${statusLabel}</dd><dt>评分规则</dt><dd>改善计权重的 100%；平稳计 60%；需关注计 25%。本项按 ${ratio} 折算。</dd><dt>本期依据</dt><dd>${escapeHTML(dimension?.detail || '数据不足')}</dd><dt>口径</dt><dd>最新季度流量按 TTM，资产负债表项目使用最新期末余额。</dd></dl>`;
+      content.innerHTML = `<p class="health-score-detail-score">${scoreItem.points} / ${scoreItem.weight}</p><dl><dt>季度状态</dt><dd>${statusLabel}</dd><dt>评分规则</dt><dd>改善计权重的 100%；平稳计 60%；需关注计 25%。本项按 ${ratio} 折算。</dd><dt>本期依据</dt><dd>${escapeHtml(dimension?.detail || '数据不足')}</dd><dt>口径</dt><dd>最新季度流量按 TTM，资产负债表项目使用最新期末余额。</dd></dl>`;
     }
     dialog.showModal();
   }
@@ -607,14 +607,14 @@
   }
 
   function overallAnalysisList(items, emptyMessage) {
-    return items.length ? `<ul>${items.map((item) => `<li>${escapeHTML(item)}</li>`).join('')}</ul>` : `<p class="health-evidence-empty">${escapeHTML(emptyMessage)}</p>`;
+    return items.length ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : `<p class="health-evidence-empty">${escapeHtml(emptyMessage)}</p>`;
   }
 
   function showHealthOverallDetail(source) {
     const dialog = document.getElementById('health-overall-detail-dialog'); const content = document.getElementById('health-overall-detail-content');
     const data = state.healthComparison; if (!dialog || !content || !data) return;
     const analysis = source === 'annual' ? buildAnnualOverallAnalysis(data.health) : buildQuarterlyOverallAnalysis(data.monitor);
-    content.innerHTML = `<h3>${escapeHTML(analysis.title)}</h3><p class="health-score-detail-score">${escapeHTML(analysis.meta)}</p><section><h4>总体概要</h4><p>${escapeHTML(analysis.summary)}</p></section><section><h4>好的部分</h4>${overallAnalysisList(analysis.good, '当前口径没有明确的改善项。')}</section><section><h4>需要关注的部分</h4>${overallAnalysisList(analysis.bad, '当前已评估规则未显示需关注项。')}</section>`;
+    content.innerHTML = `<h3>${escapeHtml(analysis.title)}</h3><p class="health-score-detail-score">${escapeHtml(analysis.meta)}</p><section><h4>总体概要</h4><p>${escapeHtml(analysis.summary)}</p></section><section><h4>好的部分</h4>${overallAnalysisList(analysis.good, '当前口径没有明确的改善项。')}</section><section><h4>需要关注的部分</h4>${overallAnalysisList(analysis.bad, '当前已评估规则未显示需关注项。')}</section>`;
     dialog.showModal();
   }
 
@@ -622,7 +622,7 @@
     const dialog = document.getElementById('health-flag-detail-dialog'); const content = document.getElementById('health-flag-detail-content');
     const data = state.healthComparison; if (!dialog || !content || !data) return;
     const items = source === 'annual' ? (data.health?.rule_results || []).filter((item) => item.status === 'triggered') : (data.monitor?.alerts || []);
-    content.innerHTML = items.length ? `<ul>${items.map((item) => `<li><strong>${escapeHTML(item.title || item.code)}</strong>：${escapeHTML(item.detail || item.reason || item.evidence?.threshold || '已触发规则')}</li>`).join('')}</ul>` : '<p>未触发红旗或季度预警。</p>';
+    content.innerHTML = items.length ? `<ul>${items.map((item) => `<li><strong>${escapeHtml(item.title || item.code)}</strong>：${escapeHtml(item.detail || item.reason || item.evidence?.threshold || '已触发规则')}</li>`).join('')}</ul>` : '<p>未触发红旗或季度预警。</p>';
     dialog.showModal();
   }
 
@@ -668,7 +668,7 @@
     if (!health) { if (period) period.textContent = '选择股票后加载。'; target.textContent = '选择股票后加载。'; return; }
     if (period) period.textContent = annualAssessmentBasis(health);
     const scoreCode = { growth: 'growth_quality', profit_premium: 'growth_quality', profitability: 'profitability', cash_conversion: 'cash_quality', working_capital: 'working_capital', capital_leverage: 'reinvestment' };
-    target.innerHTML = (health.conclusions || []).map((item) => { const code = scoreCode[item.code]; const score = (health.score_breakdown || []).find((row) => row.code === code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHTML(healthQuestionPrompt(item.code, health) || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHTML(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><p>${escapeHTML(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
+    target.innerHTML = (health.conclusions || []).map((item) => { const code = scoreCode[item.code]; const score = (health.score_breakdown || []).find((row) => row.code === code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHtml(healthQuestionPrompt(item.code, health) || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHtml(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><p>${escapeHtml(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
   }
 
   const LATEST_REPORT_CHANGE_CONFIG = {
@@ -699,7 +699,7 @@
       .slice(0, 3);
     const alert = (monitor.alerts || [])[0];
     const alertMarkup = alert
-      ? `<div class="latest-report-change-alert"><strong>本期预警｜${escapeHTML(alert.title || alert.code || '需关注')}</strong>：${escapeHTML(alert.detail || alert.reason || '季度规则已触发。')}</div>`
+      ? `<div class="latest-report-change-alert"><strong>本期预警｜${escapeHtml(alert.title || alert.code || '需关注')}</strong>：${escapeHtml(alert.detail || alert.reason || '季度规则已触发。')}</div>`
       : '';
     if (!insights.length) {
       target.innerHTML = `${alertMarkup}<p class="health-evidence-empty">暂无可用最新财报变化摘要。</p>`;
@@ -709,7 +709,7 @@
       const config = LATEST_REPORT_CHANGE_CONFIG[item.code];
       const label = stateLabel[item.status] || '数据不足';
       const basis = interimPeriodLabel(latestPeriod, config.basis);
-      return `<a class="latest-report-change-item ${escapeHTML(item.status || 'stable')}" href="#${config.chartId}"><strong>${escapeHTML(item.title || item.code)}｜${label}</strong><p>${escapeHTML(item.detail || '暂无指标说明。')}</p><span class="latest-report-change-basis">${basis} · 查看指标图</span></a>`;
+      return `<a class="latest-report-change-item ${escapeHtml(item.status || 'stable')}" href="#${config.chartId}"><strong>${escapeHtml(item.title || item.code)}｜${label}</strong><p>${escapeHtml(item.detail || '暂无指标说明。')}</p><span class="latest-report-change-basis">${basis} · 查看指标图</span></a>`;
     }).join('')}`;
   }
 
@@ -736,6 +736,165 @@
     return '五个完整年报口径';
   }
 
+  function renderNicheLeaderBadge(profile) {
+    const target = document.getElementById('basic-market-leader'); const category = String(profile?.profile?.niche_leader || '').trim();
+    if (!target) return; target.innerHTML = category ? `<button type="button" class="niche-leader-trigger" data-niche-leader-detail title="查看细分龙头资料">🏆 细分龙头</button>` : '';
+  }
+  function showNicheLeaderDetail() {
+    const profile = state.stockProfile?.profile || {}; const detail = profile.niche_leader_detail || {}; const category = String(detail.category || profile.niche_leader || '').trim(); const dialog = document.getElementById('niche-leader-dialog'); const content = document.getElementById('niche-leader-content');
+    if (!dialog || !content || !category) return; document.getElementById('niche-leader-title').textContent = `细分龙头｜${profile.stock_name || state.selected?.symbol || ''}`; content.innerHTML = `<dt>细分领域</dt><dd>${escapeHtml(category)}</dd><dt>认定依据</dt><dd>${escapeHtml(detail.summary || '暂无可展示的认定依据摘要。')}</dd><dt>研究来源</dt><dd>${escapeHtml(detail.source || '细分龙头映射数据集')}</dd><dt>更新时间</dt><dd>${escapeHtml(detail.refreshed_at || '未提供')}</dd>`; dialog.showModal();
+  }
+
+  function metricStatus(state, label) { return { state, label }; }
+
+  function peerMetricStatus(percentile) {
+    const value = Number(percentile);
+    if (!Number.isFinite(value)) return null;
+    if (value >= 75) return metricStatus('strong', '行业前25%');
+    if (value >= 25) return metricStatus('neutral', '行业中位');
+    if (value >= 10) return metricStatus('watch', '行业后25%');
+    return metricStatus('risk', '行业后10%');
+  }
+
+  function operatingMetricStatus(metric, value, { peerPercentile = null, consecutiveFcfNegative = false } = {}) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return metricStatus('unavailable', '数据不足');
+    if (metric === 'net_margin') {
+      if (number < 0) return metricStatus('risk', '亏损');
+      return peerMetricStatus(peerPercentile) || (number >= 10 ? metricStatus('strong', '盈利较强') : number >= 0 ? metricStatus('neutral', '盈利') : metricStatus('risk', '亏损'));
+    }
+    if (metric === 'cash_profit_ratio') {
+      if (number < 0 || number < 0.6) return metricStatus('risk', '现金不足');
+      if (number < 0.8) return metricStatus('watch', '现金偏弱');
+      return peerMetricStatus(peerPercentile) || (number >= 1 ? metricStatus('strong', '现金充足') : metricStatus('neutral', '基本健康'));
+    }
+    if (metric === 'debt_ratio') {
+      if (number > 85) return metricStatus('risk', '杠杆过高');
+      if (number > 70) return metricStatus('watch', '杠杆偏高');
+      return peerMetricStatus(peerPercentile) || (number < 40 ? metricStatus('strong', '杠杆较低') : metricStatus('neutral', '杠杆正常'));
+    }
+    if (metric === 'revenue_yoy') return number >= 20 ? metricStatus('strong', '高增长') : number >= 5 ? metricStatus('neutral', '稳定增长') : number >= 0 ? metricStatus('watch', '低增长') : metricStatus('risk', '营收下滑');
+    if (metric === 'revenue_cagr') return number >= 15 ? metricStatus('strong', '持续高增长') : number >= 5 ? metricStatus('neutral', '稳定增长') : number >= 0 ? metricStatus('watch', '长期低增') : metricStatus('risk', '长期收缩');
+    if (metric === 'gross_margin') return number < 0 ? metricStatus('risk', '毛利为负') : number < 10 ? metricStatus('watch', '待同业比较') : metricStatus('neutral', '待同业比较');
+    if (metric === 'roe_ex') return number >= 15 ? metricStatus('strong', '回报较强') : number >= 8 ? metricStatus('neutral', '回报正常') : number >= 0 ? metricStatus('watch', '回报偏弱') : metricStatus('risk', '回报为负');
+    if (metric === 'fcf_margin') return number < -5 || consecutiveFcfNegative ? metricStatus('risk', '持续现金压力') : number < 0 ? metricStatus('watch', '投入期/承压') : number > 5 ? metricStatus('strong', '现金创造强') : metricStatus('neutral', '现金为正');
+    return metricStatus('unavailable', '未设规则');
+  }
+
+  function valuationMetricStatus(metric, value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || (metric === 'pe_ttm' && number <= 0)) return metricStatus('unavailable', '估值不可比');
+    if (metric === 'pe_ttm') return metricStatus('neutral', '非质地判断');
+    return number <= 20 ? metricStatus('neutral', '历史低位') : number <= 80 ? metricStatus('neutral', '历史中位') : number <= 95 ? metricStatus('watch', '历史高位') : metricStatus('risk', '历史极高位');
+  }
+
+  function rpsMetricStatus(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return metricStatus('unavailable', '数据不足');
+    return number >= 80 ? metricStatus('strong', '强势') : number >= 50 ? metricStatus('neutral', '偏强') : number >= 20 ? metricStatus('watch', '偏弱') : metricStatus('risk', '弱势');
+  }
+
+  function renderBasicMarket(valuation, reports = [], profile = null, pricePercentile = null, peHistory = null, quarterlyMonitor = null, industryFinancialPosition = null) {
+    const grid = document.getElementById('basic-market-grid'); const period = document.getElementById('basic-market-period');
+    if (!grid) return;
+    const n = (v) => Number.isFinite(Number(v)) ? Number(v) : null;
+    const text = (v, suffix = '') => n(v) === null ? '—' : `${n(v).toFixed(2)}${suffix}`;
+    const pct = (v) => text(v, '%');
+    const marketValue = (v) => n(v) === null ? '—' : n(v).toFixed(1);
+    const ratioPct = (numerator, denominator) => n(numerator) === null || n(denominator) === null || n(denominator) === 0
+      ? null : n(numerator) / n(denominator) * 100;
+    const annual = [...reports].filter((r) => String(r?.period || '').endsWith('A')).sort((a,b) => String(a.period).localeCompare(String(b.period)));
+    const revenue = (r) => n(r?.metrics?.revenue);
+    const growth = (years) => { const end = annual.at(-1), start = annual.at(-(years + 1)); const a = revenue(end), b = revenue(start); return a !== null && b !== null && a > 0 && b > 0 ? ((a / b) ** (1 / years) - 1) * 100 : null; };
+    const ttm = buildLatestTTMReport(reports, quarterlyMonitor)?.metrics || {};
+    const latestPoint = [...reports].sort((a, b) => String(a?.period || '').localeCompare(String(b?.period || ''))).at(-1)?.metrics || {};
+    const industryMetrics = industryFinancialPosition?.status === 'available' ? industryFinancialPosition.metrics || {} : {};
+    const peerPercentile = (metric) => industryMetrics[metric]?.percentile;
+    const cashProfitRatio = ratioPct(ttm.ocf, ttm.ex_net_profit);
+    const fcfMargin = ratioPct(ttm.free_cf, ttm.revenue);
+    const latestAnnualFcfMargin = ratioPct(annual.at(-1)?.metrics?.free_cf, annual.at(-1)?.metrics?.revenue);
+    const consecutiveFcfNegative = [fcfMargin, latestAnnualFcfMargin].every((value) => Number.isFinite(value) && value < 0);
+    const cagr3 = growth(3); const pePercentile = peHistory?.history?.at(-1)?.pe_pct;
+    const rps = profile?.profile || {}; const cards = [
+      { label: '现价', value: text(valuation?.current_price, ' 元'), kind: 'kline' },
+      { label: 'PE-TTM', value: text(valuation?.pe_ttm), kind: 'pe', status: valuationMetricStatus('pe_ttm', valuation?.pe_ttm) },
+      { label: '总市值（亿）', value: marketValue(valuation?.total_market_cap) },
+      { label: '营收同比（TTM）', value: pct(ttm.revenue_yoy), status: operatingMetricStatus('revenue_yoy', ttm.revenue_yoy) },
+      { label: '3年营收 CAGR', value: pct(cagr3), status: operatingMetricStatus('revenue_cagr', cagr3) },
+      { label: '毛利率（TTM）', value: pct(ttm.gross_margin), status: operatingMetricStatus('gross_margin', ttm.gross_margin) },
+      { label: '净利率（TTM）', value: pct(ttm.net_margin), status: operatingMetricStatus('net_margin', ttm.net_margin, { peerPercentile: peerPercentile('net_margin') }) },
+      { label: 'RPS20', value: text(rps.rps_20), kind: 'rps', status: rpsMetricStatus(rps.rps_20) },
+      { label: 'RPS50', value: text(rps.rps_50), kind: 'rps', status: rpsMetricStatus(rps.rps_50) },
+      { label: '股价五年分位', value: pct(pricePercentile?.price_percentile), status: valuationMetricStatus('price_percentile', pricePercentile?.price_percentile) },
+      { label: 'PE 5年分位', value: pct(pePercentile), status: valuationMetricStatus('pe_percentile', pePercentile) },
+      { label: '流通市值（亿）', value: marketValue(valuation?.free_float_market_cap) },
+      { label: '扣非 ROE（TTM）', value: pct(ttm.roe_ex), status: operatingMetricStatus('roe_ex', ttm.roe_ex) },
+      { label: '现金利润比（TTM）', value: text(cashProfitRatio === null ? null : cashProfitRatio / 100), status: operatingMetricStatus('cash_profit_ratio', cashProfitRatio === null ? null : cashProfitRatio / 100, { peerPercentile: peerPercentile('ocf_to_profit') }) },
+      { label: 'FCF率（TTM）', value: pct(fcfMargin), status: operatingMetricStatus('fcf_margin', fcfMargin, { consecutiveFcfNegative }) },
+      { label: '资产负债率（最新）', value: pct(latestPoint.debt_ratio), status: operatingMetricStatus('debt_ratio', latestPoint.debt_ratio, { peerPercentile: peerPercentile('debt_ratio') }) },
+      { label: 'RPS120', value: text(rps.rps_120), kind: 'rps', status: rpsMetricStatus(rps.rps_120) },
+      { label: 'RPS250', value: text(rps.rps_250), kind: 'rps', status: rpsMetricStatus(rps.rps_250) },
+    ];
+    period.textContent = `${valuation?.industry_level_2_name || '—'}｜${annual.at(-1)?.period || '年报覆盖不足'}｜RPS 最新截面`;
+    grid.innerHTML = cards.map(({ label, value, kind, status }) => {
+      const state = status?.state || ''; const statusLabel = status?.label || '';
+      const ariaLabel = statusLabel ? `${label}：${value}；${statusLabel}` : `${label}：${value}`;
+      return `<article class="basic-market-card ${state}" aria-label="${escapeHtml(ariaLabel)}"${kind === 'pe' ? ' data-stock-pe-history role="button" tabindex="0" title="查看 PE-TTM 历史走势"' : ''}${kind === 'kline' ? ' data-stock-kline-history role="button" tabindex="0" title="查看历史K线图"' : ''}><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span>${statusLabel ? `<em class="basic-market-status">${escapeHtml(statusLabel)}</em>` : ''}</article>`;
+    }).join('');
+  }
+
+  let stockKlineChart = null;
+  async function showStockKlineHistory() {
+    const d=document.getElementById('stock-kline-dialog'), svg=document.getElementById('stock-kline-svg'), title=document.getElementById('stock-kline-title'), status=document.getElementById('stock-kline-status'), s=state.selected?.symbol;
+    if(!d||!svg||!s)return; d.showModal(); title.textContent=`${s}｜历史K线图`; status.textContent='加载前复权日线、成交量、均线和 RPS…';
+    try { const [a,b]=await Promise.all([fetch(`/api/stock-kline?symbol=${encodeURIComponent(s)}&limit=300`),fetch(`/api/stock-rps-history?symbol=${encodeURIComponent(s)}`)]); const [k,r]=await Promise.all([a.json(),b.json()]); if(!k.ok)throw Error('数据不可用'); const {KlineChart}=await import('./kline-chart.js?v=20260604-ma'); if(!stockKlineChart)stockKlineChart=new KlineChart(svg,{marginRight:20}); stockKlineChart.load(k.bars||[],r.history||[],250); title.textContent=`${s} ${k.bars?.[0]?.name||''}｜历史K线图`; status.textContent=`前复权日线｜${k.bars?.length||0} 个交易日｜含 MA10/20/30/60 与 RPS`; } catch(e) { status.textContent=`K线加载失败：${e.message||'未知错误'}`; }
+  }
+
+  async function showStockPeHistory() {
+    const dialog = document.getElementById('stock-pe-history-dialog'), title = document.getElementById('stock-pe-history-title'), meta = document.getElementById('stock-pe-history-meta'), chart = document.getElementById('stock-pe-history-chart'), table = document.getElementById('stock-pe-history-table');
+    const stock = state.selected; if (!dialog || !stock) return; title.textContent = `PE-TTM 历史走势 — ${stock.stock_name || stock.symbol}`; meta.textContent = '加载真实季度估值序列…'; chart.innerHTML = ''; table.innerHTML = ''; dialog.showModal();
+    try { const res = await fetch(`/api/stock-pe-history?symbol=${encodeURIComponent(stock.symbol)}`); const data = await res.json(); const rows = (data.history || []).filter(r => Number.isFinite(Number(r.pe_ad)) || Number.isFinite(Number(r.ind_median_pe))); if (!res.ok || !data.ok || !rows.length) { meta.textContent = '暂无可用 PE-TTM 历史数据。'; return; }
+      meta.textContent = `共 ${rows.length} 个报告期｜橙线为个股披露日 PE-TTM，蓝虚线为同行业中位数，绿虚线为当前实时 PE。`;
+      const vals = [...rows.map(r=>Number(r.pe_ad)),...rows.map(r=>Number(r.ind_median_pe)),Number(data.current_pe)].filter(Number.isFinite); const W=920,H=330,L=55,R=28,T=24,B=45,pw=W-L-R,ph=H-T-B,max=Math.max(...vals)*1.1||1, y=v=>T+ph-(v/max)*ph, x=i=>L+(rows.length<2?pw/2:i*pw/(rows.length-1)); let grid=''; for(let i=0;i<=5;i++){const v=max*i/5, yy=y(v);grid+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="rgba(98,184,255,.2)" stroke-dasharray="4 5"/><text x="${L-8}" y="${yy+4}" text-anchor="end" fill="#89a9bb" font-size="11">${v.toFixed(0)}</text>`;} const line=(field)=>rows.map((r,i)=>Number.isFinite(Number(r[field]))?`${i&&Number.isFinite(Number(rows[i-1][field]))?'L':'M'}${x(i).toFixed(1)},${y(Number(r[field])).toFixed(1)}`:'').join(' '); const labels=rows.map((r,i)=>(i===0||i===rows.length-1||i%Math.ceil(rows.length/10)===0)?`<text x="${x(i)}" y="${H-14}" text-anchor="middle" fill="#89a9bb" font-size="10">${escapeHtml(r.period)}</text>`:'').join(''); const dots=rows.map((r,i)=>Number.isFinite(Number(r.pe_ad))?`<circle cx="${x(i)}" cy="${y(Number(r.pe_ad))}" r="3" fill="#ffc36f"><title>${escapeHtml(`${r.period}｜PE-TTM ${Number(r.pe_ad).toFixed(2)}`)}</title></circle>`:'').join(''); const current=Number(data.current_pe); chart.innerHTML=`${grid}<path d="${line('pe_ad')}" fill="none" stroke="#ffc36f" stroke-width="3"/>${dots}<path d="${line('ind_median_pe')}" fill="none" stroke="#62b8ff" stroke-width="2" stroke-dasharray="7 5"/>${Number.isFinite(current)?`<line x1="${L}" y1="${y(current)}" x2="${W-R}" y2="${y(current)}" stroke="#73dfc4" stroke-width="2" stroke-dasharray="8 6"/><text x="${W-R}" y="${y(current)-7}" text-anchor="end" fill="#73dfc4" font-size="11">当前 ${current.toFixed(2)}</text>`:''}${labels}`;
+      table.innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.period)}</td><td>${Number.isFinite(Number(r.pe_ad))?Number(r.pe_ad).toFixed(2):'—'}</td><td>${Number.isFinite(Number(r.ind_median_pe))?Number(r.ind_median_pe).toFixed(2):'—'}</td><td>${Number.isFinite(Number(r.pe_pct))?`${Number(r.pe_pct).toFixed(1)}%`:'—'}</td></tr>`).join('');
+    } catch(e) { meta.textContent=`加载 PE-TTM 历史失败：${e.message}`; }
+  }
+
+  function renderCompositeFinancialHealth(composite) {
+    const root = document.getElementById('financial-health-composite');
+    const score = document.getElementById('financial-health-composite-score');
+    const status = document.getElementById('financial-health-composite-status');
+    const detail = document.getElementById('financial-health-composite-detail');
+    const risk = document.getElementById('financial-health-composite-risk');
+    if (!root || !score || !status || !detail || !risk) return;
+    const labels = { excellent: '优秀', stable: '稳健', watch: '关注', risk: '风险', unavailable: '数据不足' };
+    const level = composite?.display_status || 'unavailable';
+    root.className = `financial-health-composite ${level}`;
+    const value = Number(composite?.score);
+    score.innerHTML = Number.isFinite(value) ? `${value.toFixed(1)} <small>/ 100</small>` : '— <small>/ 100</small>';
+    const mode = composite?.mode;
+    status.textContent = mode === 'blended'
+      ? `${labels[level]}｜长期基础与最新当季共同判断`
+      : mode === 'annual_only'
+        ? `${labels[level]}｜最新当季数据不足，未加入当季修正`
+        : mode === 'quarterly_only'
+          ? `${labels[level]}｜成立期或非五年样本，仅展示当季监测分`
+          : '数据不足｜暂不生成综合判断';
+    const formatScore = (item) => Number.isFinite(Number(item)) ? Number(item).toFixed(1) : '—';
+    if (mode === 'blended') {
+      detail.textContent = `五年基础 ${formatScore(composite.annual_score)} × ${(Number(composite.annual_weight) * 100).toFixed(0)}% + 当季脉冲 ${formatScore(composite.quarterly_score)} × ${(Number(composite.quarterly_weight) * 100).toFixed(0)}%｜最新 ${composite.quarterly_period || '—'}｜当季覆盖 ${composite.quarterly_coverage_weight ?? '—'} / 100。`;
+    } else if (mode === 'annual_only') {
+      detail.textContent = `五年基础 ${formatScore(composite?.annual_score)} × 100%｜当季监测覆盖 ${composite?.quarterly_coverage_weight ?? '—'} / 100，未达合成门槛。`;
+    } else if (mode === 'quarterly_only') {
+      detail.textContent = `当季脉冲 ${formatScore(composite?.quarterly_score)} × 100%｜最新 ${composite?.quarterly_period || '—'}；不是五年长期综合分。`;
+    } else {
+      detail.textContent = '需要连续五年完整年报与可评分的当季监测，才会生成可比较的综合判断。';
+    }
+    const overlay = composite?.risk_overlay || {};
+    risk.className = `financial-health-composite-risk ${overlay.status || 'none'}`;
+    risk.textContent = `风险覆盖层：${overlay.message || '尚未完成风险规则评估。'} 数值分不因该提示重复扣减。`;
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
@@ -754,7 +913,7 @@
     const annualPeriod = annualAssessmentLabel(health);
     const quarterPeriod = compactQuarterPeriod(monitor?.latest_period);
     const overallButton = (source, score) => score === unavailable ? unavailable : `<button type="button" class="comparison-score-button" data-overall-source="${source}" aria-label="查看总体财报分析结论">${score}</button>`;
-    const cells = (klass, label, source, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHTML(label)}</strong></td><td>${overallButton(source, score)}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
+    const cells = (klass, label, source, score, coverage, dims, flags, investigations) => `<tr><td class="${klass}"><strong>${escapeHtml(label)}</strong></td><td>${overallButton(source, score)}</td><td>${coverage}</td>${dims.map(points => `<td>${points}</td>`).join('')}<td>${flags}</td><td>${investigations}</td></tr>`;
     target.innerHTML = [
       cells('comparison-annual', annualPeriod, 'annual', annualScore, health ? String(health.coverage_weight ?? 0) : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map((item) => scoreDetailButton('annual', item)), annualFlags, annualInvestigations),
       cells('comparison-quarter', quarterPeriod, 'quarterly', quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map((item) => scoreDetailButton('quarterly', item)), quarterlyAlerts, quarterlyInvestigations),
@@ -776,8 +935,8 @@
     }
     period.textContent = `截至 ${monitor.latest_period}（TTM 口径）`;
     const state = { improving: '改善', stable: '平稳', watch: '需关注' };
-    const dims = (monitor.dimensions || []).map((item) => `<div class="quarterly-monitor-item ${escapeHTML(item.status)}"><strong>${escapeHTML(item.title)}</strong><span>${state[item.status] || '—'}</span><small>${escapeHTML(item.detail || '')}</small></div>`).join('');
-    const alerts = monitor.alerts?.length ? `<div class="quarterly-monitor-alerts"><strong>本季预警</strong>${monitor.alerts.map((item) => `<p class="${escapeHTML(item.severity)}">${escapeHTML(item.title)}：${escapeHTML(item.detail)}</p>`).join('')}</div>` : '<div class="quarterly-monitor-alerts"><strong>本季预警</strong><p>未触发季度早期预警。</p></div>';
+    const dims = (monitor.dimensions || []).map((item) => `<div class="quarterly-monitor-item ${escapeHtml(item.status)}"><strong>${escapeHtml(item.title)}</strong><span>${state[item.status] || '—'}</span><small>${escapeHtml(item.detail || '')}</small></div>`).join('');
+    const alerts = monitor.alerts?.length ? `<div class="quarterly-monitor-alerts"><strong>本季预警</strong>${monitor.alerts.map((item) => `<p class="${escapeHtml(item.severity)}">${escapeHtml(item.title)}：${escapeHtml(item.detail)}</p>`).join('')}</div>` : '<div class="quarterly-monitor-alerts"><strong>本季预警</strong><p>未触发季度早期预警。</p></div>';
     target.innerHTML = `${dims}${alerts}`;
   }
 
@@ -793,10 +952,10 @@
     const evidenceAsOf = health?.periods?.at?.(-1) || '—';
     const notApplicableLabel = { not_applicable: '不适用', unavailable: '数据不足', insufficient: '数据不足' };
     const renderUnavailableDimensions = (items) => {
-      dimensions.innerHTML = (items || []).map((item) => `<article class="health-dimension ${escapeHTML(item.status || 'unavailable')}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${escapeHTML(notApplicableLabel[item.status] || '数据不足')}</span></div><div class="health-dimension-trend">${escapeHTML(item.reason || '通用规则未评估')}</div></article>`).join('') || '<p class="health-evidence-empty">未返回维度状态。</p>';
+      dimensions.innerHTML = (items || []).map((item) => `<article class="health-dimension ${escapeHtml(item.status || 'unavailable')}"><div class="health-dimension-top"><span>${escapeHtml(item.title)}</span><span class="health-dimension-score">${escapeHtml(notApplicableLabel[item.status] || '数据不足')}</span></div><div class="health-dimension-trend">${escapeHtml(item.reason || '通用规则未评估')}</div></article>`).join('') || '<p class="health-evidence-empty">未返回维度状态。</p>';
     };
     const renderUnavailableConclusions = (items) => {
-      conclusionPanel.innerHTML = (items || []).map((item) => `<article class="health-conclusion ${escapeHTML(item.status || 'insufficient')}"><strong>${escapeHTML(item.question)}</strong><span>${escapeHTML(notApplicableLabel[item.status] || '数据不足')}</span><p>${escapeHTML(item.detail || item.reason || '暂无可用结论。')}</p>${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHTML(healthEvidenceSummary(item.evidence))}</small>` : ''}</article>`).join('') || '<p class="health-evidence-empty">未返回结论状态。</p>';
+      conclusionPanel.innerHTML = (items || []).map((item) => `<article class="health-conclusion ${escapeHtml(item.status || 'insufficient')}"><strong>${escapeHtml(item.question)}</strong><span>${escapeHtml(notApplicableLabel[item.status] || '数据不足')}</span><p>${escapeHtml(item.detail || item.reason || '暂无可用结论。')}</p>${healthEvidenceSummary(item.evidence) ? `<small class="health-rule-evidence">${escapeHtml(healthEvidenceSummary(item.evidence))}</small>` : ''}</article>`).join('') || '<p class="health-evidence-empty">未返回结论状态。</p>';
     };
     const rawAsOf = latestReport?.report_date ? `；原始财报最新 ${latestReport.period || latestReport.year || '—'}（${latestReport.report_date}）` : '';
     dataAsOf.textContent = `资料日期：健康度证据截至 ${evidenceAsOf}${rawAsOf}`;
@@ -838,7 +997,7 @@
     dimensions.innerHTML = (health.dimensions || []).map((item) => {
       const scoreItem = scoreBreakdown.find((entry) => entry.code === item.code);
       const formation = scoreFormationCopy(item, scoreItem);
-      return `<article class="health-dimension ${escapeHTML(item.status)}"><div class="health-dimension-top"><span>${escapeHTML(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${formation.split('\n').map(escapeHTML).join('<br>')}</small>` : ''}</article>`;
+      return `<article class="health-dimension ${escapeHtml(item.status)}"><div class="health-dimension-top"><span>${escapeHtml(item.title)}</span><span class="health-dimension-score">${item.available ? `${healthValue(item.score)} / ${item.weight}` : '数据不足'}</span></div><div class="health-dimension-trend">${trendLabel[item.trend] || '—'}</div>${formation ? `<small class="health-rule-evidence">${formation.split('\n').map(escapeHTML).join('<br>')}</small>` : ''}</article>`;
     }).join('');
     const d = health.derived || {};
     const latest = (health.series || {});
@@ -857,7 +1016,7 @@
     const conclusionLabel = { improving: '改善', stable: '平稳', watch: '需关注', insufficient: '数据不足' };
     conclusionPanel.innerHTML = (health.conclusions || []).map((item) => {
       const concise = conclusionSummary(item);
-      return `<article class="health-conclusion ${escapeHTML(item.status)}"><strong>${escapeHTML(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHTML(concise.summary)}</p><small class="health-rule-evidence">${escapeHTML(concise.focus)}</small></article>`;
+      return `<article class="health-conclusion ${escapeHtml(item.status)}"><strong>${escapeHtml(item.question)}</strong><span>${conclusionLabel[item.status] || '—'}</span><p>${escapeHtml(concise.summary)}</p><small class="health-rule-evidence">${escapeHtml(concise.focus)}</small></article>`;
     }).join('') || '暂无可用结论。';
   }
 
@@ -882,9 +1041,9 @@
     const line = rows.map((row, i) => `${x(i).toFixed(1)},${y(Number(row.weighted_pe_ttm)).toFixed(1)}`).join(' ');
     const ticks = [0, .25, .5, .75, 1].map((ratio) => { const value = hi - ratio * span; const yy = d.t + ratio * ph; return `<line x1="${d.l}" y1="${yy}" x2="${d.w - d.r}" y2="${yy}" stroke="rgba(139,216,255,.2)"/><text x="${d.l - 8}" y="${yy + 4}" text-anchor="end" fill="#89a9bb" font-size="11">${value.toFixed(1)}</text>`; }).join('');
     const labels = rows.map((row, i) => (i === 0 || i === rows.length - 1 || String(row.trading_day).endsWith('-03-31')) ? `<text x="${x(i)}" y="${d.h - 14}" text-anchor="middle" fill="#89a9bb" font-size="11">${String(row.trading_day).slice(2, 7)}</text>` : '').join('');
-    const points = rows.map((row, i) => `<circle cx="${x(i)}" cy="${y(Number(row.weighted_pe_ttm))}" r="3.5" fill="#ffc36f"><title>${escapeHTML(`${row.trading_day}｜加权 PE-TTM ${Number(row.weighted_pe_ttm).toFixed(2)}`)}</title></circle>`).join('');
+    const points = rows.map((row, i) => `<circle cx="${x(i)}" cy="${y(Number(row.weighted_pe_ttm))}" r="3.5" fill="#ffc36f"><title>${escapeHtml(`${row.trading_day}｜加权 PE-TTM ${Number(row.weighted_pe_ttm).toFixed(2)}`)}</title></circle>`).join('');
     chart.innerHTML = `${ticks}<line x1="${d.l}" y1="${y(current)}" x2="${d.w - d.r}" y2="${y(current)}" stroke="#73dfc4" stroke-dasharray="7 6"/><text x="${d.w - d.r}" y="${y(current) - 8}" text-anchor="end" fill="#73dfc4" font-size="12">当前 ${current.toFixed(2)}</text><polyline points="${line}" fill="none" stroke="#ffc36f" stroke-width="3"/>${points}${labels}`;
-    table.innerHTML = rows.map((row, index) => { const value = Number(row.weighted_pe_ttm); const change = current ? (value / current - 1) * 100 : null; const klass = index === rows.length - 1 ? ' class="industry-valuation-history-current"' : ''; return `<tr${klass}><td>${escapeHTML(row.trading_day)}</td><td>${value.toFixed(2)}</td><td>${Number.isFinite(change) ? `${change >= 0 ? '+' : ''}${change.toFixed(1)}%` : '—'}</td></tr>`; }).join('');
+    table.innerHTML = rows.map((row, index) => { const value = Number(row.weighted_pe_ttm); const change = current ? (value / current - 1) * 100 : null; const klass = index === rows.length - 1 ? ' class="industry-valuation-history-current"' : ''; return `<tr${klass}><td>${escapeHtml(row.trading_day)}</td><td>${value.toFixed(2)}</td><td>${Number.isFinite(change) ? `${change >= 0 ? '+' : ''}${change.toFixed(1)}%` : '—'}</td></tr>`; }).join('');
     dialog.showModal();
   }
 
@@ -909,7 +1068,26 @@
     const { key, direction } = state.industryPeerSort;
     const rows = [...state.industryValuationPeers].sort((a, b) => { const rawA = a?.[key]; const rawB = b?.[key]; const av = rawA == null || rawA === '' ? NaN : Number(rawA); const bv = rawB == null || rawB === '' ? NaN : Number(rawB); const aok = Number.isFinite(av); const bok = Number.isFinite(bv); if (aok && bok) return direction * (av - bv); if (aok) return -1; if (bok) return 1; return 0; });
     const metric = (value) => Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '—';
-    target.innerHTML = rows.map((row) => `<tr class="${row.is_current_stock ? 'industry-valuation-peer-current' : ''}"><td>${row.valuation_percentile != null ? `${Number(row.valuation_percentile).toFixed(1)}%` : '—'}</td><td><span class="industry-valuation-peer-stock">${escapeHTML(row.stock_name || '—')}</span><span class="industry-valuation-peer-code">${escapeHTML(`${String(row.market || '').toUpperCase()}:${row.symbol || '—'}`)}</span></td><td>${metric(row.current_price)}</td><td>${metric(row.ps_ttm)}</td><td>${metric(row.pe_ttm)}</td><td>${escapeHTML(row.valuation_band || '估值不可比')}</td></tr>`).join('') || '<tr><td colspan="6">当前行业暂无可展示成员。</td></tr>';
+    target.innerHTML = rows.map((row) => `<tr class="${row.is_current_stock ? 'industry-valuation-peer-current' : ''}"><td>${row.valuation_percentile != null ? `${Number(row.valuation_percentile).toFixed(1)}%` : '—'}</td><td><span class="industry-valuation-peer-stock">${escapeHtml(row.stock_name || '—')}</span><span class="industry-valuation-peer-code">${escapeHtml(`${String(row.market || '').toUpperCase()}:${row.symbol || '—'}`)}</span></td><td>${metric(row.current_price)}</td><td>${metric(row.ps_ttm)}</td><td>${metric(row.pe_ttm)}</td><td>${escapeHtml(row.valuation_band || '估值不可比')}</td></tr>`).join('') || '<tr><td colspan="6">当前行业暂无可展示成员。</td></tr>';
+  }
+
+  const HEALTH_PEER_DIMENSIONS = ['growth_quality', 'profitability', 'cash_quality', 'working_capital', 'reinvestment', 'financial_risk'];
+  const formatHealthPeerScore = (value) => Number.isFinite(Number(value)) ? Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1) : '—';
+  function renderIndustryHealthPeers() {
+    const payload = state.industryHealthPeers; const view = state.industryHealthPeerView; const body = document.getElementById('industry-health-peer-table'); const status = document.getElementById('industry-health-peer-status');
+    if (!payload || !body || !status) return;
+    const { key, direction } = state.industryHealthPeerSort;
+    const rows = [...(payload.rows || [])].sort((a, b) => { const av = key === 'stock_name' ? String(a.stock_name || '') : Number((a[view]?.dimensions || {})[key] ?? a[view]?.[key]); const bv = key === 'stock_name' ? String(b.stock_name || '') : Number((b[view]?.dimensions || {})[key] ?? b[view]?.[key]); if (key === 'stock_name') return av.localeCompare(bv, 'zh-CN') * direction; const aok = Number.isFinite(av), bok = Number.isFinite(bv); if (aok !== bok) return aok ? -1 : 1; return aok ? (av - bv) * direction : String(a.symbol).localeCompare(String(b.symbol)); });
+    const valid = rows.filter(row => Number.isFinite(Number(row[view]?.score))).length;
+    const periods = [...new Set(rows.map(row => view === 'annual' ? (row.annual?.periods || []).join('–') : row.quarterly?.period).filter(Boolean))];
+    status.textContent = `${payload.industry_level_2 || '当前二级行业'}｜${view === 'annual' ? '完整年报健康评分（5年年报；成立期样本单列）' : '当季最新财报监测（TTM + 最新季度资产负债表）'}｜可评分 ${valid}/${rows.length}｜报告期：${periods.join(' / ') || '—'}。点击列头可排序。`;
+    body.innerHTML = rows.map(row => { const score = row[view] || {}; const dims = score.dimensions || {}; return `<tr class="${row.is_current_stock ? 'industry-health-peer-current' : ''}"><td><span class="industry-health-peer-stock">${escapeHtml(row.stock_name || row.symbol)}</span><span class="industry-health-peer-code">${escapeHtml(`${row.market || ''}:${row.symbol || ''}`)}${view === 'annual' ? `｜${escapeHtml(score.assessment_track === 'establishment' ? `${score.sample_years}年样本` : '5年年报')}` : `｜${escapeHtml(score.period || '—')}`}</span></td><td>${formatHealthPeerScore(score.score)}</td>${HEALTH_PEER_DIMENSIONS.map(code => `<td>${formatHealthPeerScore(dims[code])}</td>`).join('')}</tr>`; }).join('') || '<tr><td colspan="8">暂无行业成员数据。</td></tr>';
+    document.querySelectorAll('[data-health-peer-view]').forEach(button => button.classList.toggle('active', button.dataset.healthPeerView === view));
+  }
+  async function showIndustryHealthPeers() {
+    const dialog = document.getElementById('industry-health-peer-dialog'); const title = document.getElementById('industry-health-peer-title'); const status = document.getElementById('industry-health-peer-status'); const body = document.getElementById('industry-health-peer-table');
+    if (!dialog || !state.selected) return; if (!dialog.open) dialog.showModal(); title.textContent = '行业财务健康度对照'; status.textContent = '正在按该二级行业全部股票的完整财报计算年度评分和最新季度监测，首次加载可能需要约一分钟，完成后会缓存。'; body.innerHTML = '<tr><td colspan="8">正在加载全行业财务健康数据…</td></tr>';
+    try { const response = await fetch(`/api/industry-financial-health-peers?market=${encodeURIComponent(state.selected.market)}&symbol=${encodeURIComponent(state.selected.symbol)}`); const payload = await response.json(); if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || payload?.reason || '行业健康度数据不可用'); state.industryHealthPeers = payload; title.textContent = `${payload.industry_level_2 || '当前行业'}｜财务健康度对照`; renderIndustryHealthPeers(); } catch (error) { status.textContent = `加载失败：${error.message || '未知错误'}`; body.innerHTML = '<tr><td colspan="8">行业财务健康度数据加载失败。</td></tr>'; }
   }
 
   function renderValuationPerformanceLinkage(valuation, health, monitor) {
@@ -922,9 +1100,9 @@
     const flags = Array.isArray(health?.red_flags) ? health.red_flags : [];
     const alerts = Array.isArray(monitor?.alerts) ? monitor.alerts : [];
     const industryName = valuation.industry_level_2_name || '—';
-    period.innerHTML = `<button type="button" class="industry-valuation-history-trigger" data-industry-valuation-history>${escapeHTML(industryName)}</button>｜${escapeHTML(valuation.primary_percentile_metric === 'pe_ttm' ? 'PE-TTM' : 'PS-TTM')}｜财报期 ${escapeHTML(monitor?.latest_period || '—')}`;
+    period.innerHTML = `<button type="button" class="industry-valuation-history-trigger" data-industry-valuation-history>${escapeHtml(industryName)}</button>｜${escapeHtml(valuation.primary_percentile_metric === 'pe_ttm' ? 'PE-TTM' : 'PS-TTM')}｜财报期 ${escapeHtml(monitor?.latest_period || '—')}`;
     target.className = '';
-    target.innerHTML = `<div class="latest-report-change-grid"><article class="latest-report-change-item stable" data-industry-valuation-peers role="button" tabindex="0" title="查看该二级行业全部股票估值位置"><strong>行业内估值位置</strong><p>${escapeHTML(valuation.valuation_band_label || '—')}｜${Number.isFinite(Number(valuation.primary_percentile)) ? `${Number(valuation.primary_percentile).toFixed(1)}% 分位` : '分位不可用'}</p><span class="latest-report-change-basis">个股 ${Number.isFinite(Number(valuation.primary_percentile_value)) ? Number(valuation.primary_percentile_value).toFixed(2) : '—'}；行业加权 ${Number.isFinite(Number(valuation.industry_weighted_pe_ttm)) ? `PE ${Number(valuation.industry_weighted_pe_ttm).toFixed(2)}` : '—'}</span></article><article class="latest-report-change-item stable"><strong>财务健康度</strong><p>${escapeHTML(healthScore)}</p><span class="latest-report-change-basis">完整年报：${escapeHTML((health?.periods || []).join('、') || '—')}</span></article><article class="latest-report-change-item ${alerts.length || flags.length ? 'watch' : 'stable'}"><strong>季度变化与红旗</strong><p>季度变化：${alerts.length ? `${alerts.length} 项提示` : '暂无提示'}；红旗：${flags.length} 项</p><span class="latest-report-change-basis">${escapeHTML([...alerts.map((item) => item.title), ...flags.map((item) => item.title)].join('；') || '无已列示事项')}</span></article></div>`;
+    target.innerHTML = `<div class="latest-report-change-grid"><article class="latest-report-change-item stable" data-industry-valuation-peers role="button" tabindex="0" title="查看该二级行业全部股票估值位置"><strong>行业内估值位置</strong><p>${escapeHtml(valuation.valuation_band_label || '—')}｜${Number.isFinite(Number(valuation.primary_percentile)) ? `${Number(valuation.primary_percentile).toFixed(1)}% 分位` : '分位不可用'}</p><span class="latest-report-change-basis">个股 ${Number.isFinite(Number(valuation.primary_percentile_value)) ? Number(valuation.primary_percentile_value).toFixed(2) : '—'}；行业加权 ${Number.isFinite(Number(valuation.industry_weighted_pe_ttm)) ? `PE ${Number(valuation.industry_weighted_pe_ttm).toFixed(2)}` : '—'}</span></article><article class="latest-report-change-item stable" data-industry-health-peers role="button" tabindex="0" title="查看该二级行业全部股票财务健康度"><strong>财务健康度</strong><p>${escapeHtml(healthScore)}</p><span class="latest-report-change-basis">完整年报：${escapeHtml((health?.periods || []).join('、') || '—')}</span></article><article class="latest-report-change-item ${alerts.length || flags.length ? 'watch' : 'stable'}"><strong>季度变化与红旗</strong><p>季度变化：${alerts.length ? `${alerts.length} 项提示` : '暂无提示'}；红旗：${flags.length} 项</p><span class="latest-report-change-basis">${escapeHtml([...alerts.map((item) => item.title), ...flags.map((item) => item.title)].join('；') || '无已列示事项')}</span></article></div>`;
   }
 
   function renderIndustryFinancialPosition(position) {
@@ -933,7 +1111,7 @@
     if (position?.status !== 'available') { period.textContent = '行业对比暂不可用'; target.textContent = '缺少可对齐的行业快照数据。'; return; }
     period.textContent = `${position.industry_level_2}｜${position.report_period}｜覆盖率 ${position.period_alignment_coverage}%（${position.aligned_sample_count}/${position.industry_member_count}）`;
     target.className = '';
-    const rows = Object.values(position.metrics || {}).map((m) => `<tr><td>${escapeHTML(m.label)}</td><td>${Number.isFinite(m.company_value) ? m.company_value.toFixed(2) : '—'} ${escapeHTML(m.unit || '')}</td><td>${Number.isFinite(m.industry_median) ? m.industry_median.toFixed(2) : '—'}</td><td>${Number.isFinite(m.percentile) ? `${m.percentile.toFixed(1)}%` : '—'}</td><td>${m.sample_count || 0}</td></tr>`).join('');
+    const rows = Object.values(position.metrics || {}).map((m) => `<tr><td>${escapeHtml(m.label)}</td><td>${Number.isFinite(m.company_value) ? m.company_value.toFixed(2) : '—'} ${escapeHtml(m.unit || '')}</td><td>${Number.isFinite(m.industry_median) ? m.industry_median.toFixed(2) : '—'}</td><td>${Number.isFinite(m.percentile) ? `${m.percentile.toFixed(1)}%` : '—'}</td><td>${m.sample_count || 0}</td></tr>`).join('');
     target.innerHTML = `<table class="health-comparison-table"><thead><tr><th>指标</th><th>公司</th><th>行业中位数</th><th>分位</th><th>样本数</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
@@ -980,7 +1158,7 @@
     const inputs = definition.basis === 'TTM'
       ? `${period}、${Number(period.slice(0, 4)) - 1}A、${Number(period.slice(0, 4)) - 1}${period.slice(4)}`
       : period;
-    content.innerHTML = `<h3>${escapeHTML(definition.label)}｜指标口径与数据血缘</h3><dl><dt>当前显示值</dt><dd>${escapeHTML(value)}（${escapeHTML(interimPeriodLabel(period, definition.basis))}）</dd><dt>计算公式</dt><dd>${escapeHTML(definition.formula)}</dd><dt>使用报告期</dt><dd>${escapeHTML(inputs)}</dd><dt>为何不适用 TTM</dt><dd>${escapeHTML(definition.reason || '适用 TTM：该指标为期间流量或由期间流量派生。')}</dd></dl>`;
+    content.innerHTML = `<h3>${escapeHtml(definition.label)}｜指标口径与数据血缘</h3><dl><dt>当前显示值</dt><dd>${escapeHtml(value)}（${escapeHtml(interimPeriodLabel(period, definition.basis))}）</dd><dt>计算公式</dt><dd>${escapeHtml(definition.formula)}</dd><dt>使用报告期</dt><dd>${escapeHtml(inputs)}</dd><dt>为何不适用 TTM</dt><dd>${escapeHtml(definition.reason || '适用 TTM：该指标为期间流量或由期间流量派生。')}</dd></dl>`;
     dialog.showModal();
   }
 
@@ -1000,6 +1178,9 @@
     const controller = new AbortController();
     state.financialAbortController = controller;
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
+    const basicMarket = document.getElementById('basic-market-grid');
+    if (basicMarket) { basicMarket.innerHTML = '<div class="analysis-metric-status">加载基础行情…</div>'; document.getElementById('basic-market-period').textContent = '加载中'; }
+    renderCompositeFinancialHealth(null);
     renderHealthComparisonTable(null, null);
     renderValuationPerformanceLinkage(null, null, null);
     renderIndustryFinancialPosition(null);
@@ -1027,11 +1208,26 @@
           putFinancialCache(cacheKey, body);
           return body;
         });
-      const valuation = await fetch(`/api/relative-valuation?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
-        .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
-        .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null);
+      const [valuation, profile, pricePercentile, peHistory] = await Promise.all([
+        fetch(`/api/relative-valuation?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
+        fetch(`/api/stock-profile?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
+        fetch(`/api/stock-price-percentile?symbol=${encodeURIComponent(stock.symbol)}&years=5`, { signal: controller.signal })
+          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
+        fetch(`/api/stock-pe-history?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
+      ]);
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
+      state.stockProfile = profile;
+      renderNicheLeaderBadge(profile);
+      renderBasicMarket(valuation, payload.reports, profile, pricePercentile, peHistory, payload.quarterly_monitor, payload.industry_financial_position);
+      renderCompositeFinancialHealth(payload.composite_financial_health);
       renderValuationPerformanceLinkage(valuation, payload.health, payload.quarterly_monitor);
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
       renderIndustryFinancialPosition(payload.industry_financial_position);
@@ -1115,9 +1311,29 @@
     if (metric && heading) heading.innerHTML = `<button type="button" class="metric-lineage-trigger" data-metric-lineage="${metric}" title="查看指标口径与数据血缘">${heading.textContent}</button>`;
   });
   document.addEventListener('click', (event) => { const trigger = event.target.closest('[data-metric-lineage]'); if (trigger) showMetricLineage(trigger.dataset.metricLineage); });
+  document.addEventListener('click', (event) => { if (event.target.closest('[data-stock-kline-history]')) showStockKlineHistory(); });
+  document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-stock-kline-history]')) { event.preventDefault(); showStockKlineHistory(); } });
+  const stockKlineDialog=document.getElementById('stock-kline-dialog'); stockKlineDialog?.querySelector('.stock-kline-close')?.addEventListener('click',()=>stockKlineDialog.close()); stockKlineDialog?.addEventListener('click',(event)=>{if(event.target===stockKlineDialog)stockKlineDialog.close();});
+  document.addEventListener('click', (event) => { if (event.target.closest('[data-niche-leader-detail]')) showNicheLeaderDetail(); });
+  document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-niche-leader-detail]')) { event.preventDefault(); showNicheLeaderDetail(); } });
+  const nicheLeaderDialog = document.getElementById('niche-leader-dialog');
+  nicheLeaderDialog?.querySelector('.niche-leader-close')?.addEventListener('click', () => nicheLeaderDialog.close());
+  nicheLeaderDialog?.addEventListener('click', (event) => { if (event.target === nicheLeaderDialog) nicheLeaderDialog.close(); });
+  document.addEventListener('click', (event) => { if (event.target.closest('[data-stock-pe-history]')) showStockPeHistory(); });
+  document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-stock-pe-history]')) { event.preventDefault(); showStockPeHistory(); } });
+  const stockPeHistoryDialog = document.getElementById('stock-pe-history-dialog');
+  stockPeHistoryDialog?.querySelector('.stock-pe-history-close')?.addEventListener('click', () => stockPeHistoryDialog.close());
+  stockPeHistoryDialog?.addEventListener('click', (event) => { if (event.target === stockPeHistoryDialog) stockPeHistoryDialog.close(); });
   document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-valuation-history]')) showIndustryValuationHistory(state.industryValuation); });
   document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-valuation-peers]')) showIndustryValuationPeers(); });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-industry-valuation-peers]')) { event.preventDefault(); showIndustryValuationPeers(); } });
+  document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-health-peers]')) showIndustryHealthPeers(); });
+  document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-industry-health-peers]')) { event.preventDefault(); showIndustryHealthPeers(); } });
+  const industryHealthPeerDialog = document.getElementById('industry-health-peer-dialog');
+  industryHealthPeerDialog?.querySelector('.industry-health-peer-close')?.addEventListener('click', () => industryHealthPeerDialog.close());
+  industryHealthPeerDialog?.addEventListener('click', (event) => { if (event.target === industryHealthPeerDialog) industryHealthPeerDialog.close(); });
+  document.querySelectorAll('[data-health-peer-view]').forEach((button) => button.addEventListener('click', () => { state.industryHealthPeerView = button.dataset.healthPeerView; state.industryHealthPeerSort = { key: 'score', direction: -1 }; renderIndustryHealthPeers(); }));
+  document.querySelectorAll('[data-health-peer-sort]').forEach((header) => header.addEventListener('click', () => { const key = header.dataset.healthPeerSort; state.industryHealthPeerSort = { key, direction: state.industryHealthPeerSort.key === key ? -state.industryHealthPeerSort.direction : -1 }; renderIndustryHealthPeers(); }));
   const industryPeerDialog = document.getElementById('industry-valuation-peer-dialog');
   industryPeerDialog?.querySelector('.industry-valuation-peer-close')?.addEventListener('click', () => industryPeerDialog.close());
   industryPeerDialog?.addEventListener('click', (event) => { if (event.target === industryPeerDialog) industryPeerDialog.close(); });

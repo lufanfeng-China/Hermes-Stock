@@ -73,6 +73,95 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('[data-industry-valuation-peers] { cursor:pointer;', html)
         self.assertIn('[data-industry-valuation-peers]:hover', html)
         self.assertIn('[data-industry-valuation-peers]:focus-visible', html)
+        self.assertIn('[data-industry-health-peers]:hover', html)
+        self.assertIn('[data-industry-health-peers]:focus-visible', html)
+
+    def test_basic_market_module_is_above_financial_health_comparison_and_uses_rps_windows(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertLess(html.index('id="basic-market-section"'), html.index('id="financial-health-kpi"'))
+        self.assertIn('基础行情', html)
+        for label in ('RPS20', 'RPS50', 'RPS120', 'RPS250'):
+            self.assertIn(label, js)
+        self.assertIn('renderBasicMarket', js)
+        self.assertIn('/api/stock-profile?', js)
+        self.assertIn('profile?.profile || {}', js)
+
+    def test_basic_market_replaces_ps_ttm_with_five_year_price_percentile(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('/api/stock-price-percentile?symbol=', js)
+        self.assertIn("label: '股价五年分位'", js)
+        self.assertIn('pricePercentile?.price_percentile', js)
+        self.assertNotIn("['PS-TTM', text(valuation?.ps_ttm)", js)
+
+    def test_basic_market_replaces_latest_revenue_yoy_with_pe_history_percentile(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn("label: 'PE 5年分位'", js)
+        self.assertIn('peHistory?.history?.at(-1)?.pe_pct', js)
+        self.assertNotIn("['最新营收同比', text(valuation?.revenue_yoy, '%')", js)
+
+    def test_basic_market_renders_eight_operating_quality_metrics_in_uniform_grid(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        for label in (
+            '营收同比（TTM）', '3年营收 CAGR', '毛利率（TTM）', '净利率（TTM）',
+            '扣非 ROE（TTM）', '现金利润比（TTM）', 'FCF率（TTM）', '资产负债率（最新）',
+        ):
+            self.assertIn(f"label: '{label}'", js)
+        self.assertIn(
+            "label: '总市值（亿）', value: marketValue(valuation?.total_market_cap)",
+            js,
+        )
+        self.assertIn("label: '流通市值（亿）', value: marketValue(valuation?.free_float_market_cap)", js)
+        self.assertIn('grid-template-columns:repeat(9,minmax(0,1fr))', html)
+        self.assertIn('.basic-market-card { min-width:0; height:68px;', html)
+
+    def test_basic_market_uses_distinct_quality_valuation_and_momentum_color_semantics(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+
+        self.assertIn('function operatingMetricStatus', js)
+        self.assertIn('function valuationMetricStatus', js)
+        self.assertIn('function rpsMetricStatus', js)
+        self.assertIn('industryFinancialPosition', js)
+        self.assertIn('basic-market-status', js)
+        self.assertIn('aria-label=', js)
+        for status in ('strong', 'neutral', 'watch', 'risk', 'unavailable'):
+            self.assertIn(f'.basic-market-card.{status}', html)
+        self.assertIn('.basic-market-status', html)
+
+    def test_current_price_basic_market_card_opens_real_kline_dialog(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="stock-kline-dialog"', html)
+        self.assertIn('id="stock-kline-svg"', html)
+        self.assertIn('data-stock-kline-history', js)
+        self.assertIn('function showStockKlineHistory', js)
+        self.assertIn('/api/stock-kline?', js)
+        self.assertIn('/api/stock-rps-history?', js)
+        self.assertIn("import('./kline-chart.js", js)
+
+    def test_niche_leader_badge_opens_auditable_detail_dialog(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="niche-leader-dialog"', html)
+        self.assertIn('data-niche-leader-detail', js)
+        self.assertIn('function renderNicheLeaderBadge', js)
+        self.assertIn('function showNicheLeaderDetail', js)
+        self.assertIn('细分龙头映射数据集', html)
+        self.assertIn('认定依据', js)
+        self.assertIn('niche_leader_detail', js)
+        self.assertIn('niche_leader', js)
+
+    def test_pe_ttm_basic_market_card_opens_history_dialog_with_real_api(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="stock-pe-history-dialog"', html)
+        self.assertIn('data-stock-pe-history', js)
+        self.assertIn('/api/stock-pe-history?', js)
+        self.assertIn('个股 PE-TTM', html)
+        self.assertIn('行业中位数', html)
+        self.assertIn('当前实时 PE', html)
 
     def test_industry_financial_position_renders_alignment_coverage_and_peer_percentiles(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
@@ -199,6 +288,19 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('总分（100）', html)
         self.assertIn('覆盖度（100）', html)
         self.assertIn('health.score_coverage_status', js)
+
+    def test_composite_health_score_discloses_its_auditable_components_and_risk_overlay(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('financial-health-composite', html)
+        self.assertIn('financial-health-composite-score', html)
+        self.assertIn('financial-health-composite-detail', html)
+        self.assertIn('financial-health-composite-risk', html)
+        self.assertIn('function renderCompositeFinancialHealth(composite)', js)
+        self.assertIn('payload.composite_financial_health', js)
+        self.assertIn('五年基础', js)
+        self.assertIn('当季脉冲', js)
+        self.assertIn('risk_overlay', js)
 
     def test_p2_red_flag_date_readability_and_request_contracts(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")

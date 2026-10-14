@@ -2,10 +2,12 @@
 import importlib
 import json
 import re
+from functools import lru_cache
 
 from app.financial.health import build_financial_health
 from app.financial.quarterly_monitor import build_quarterly_financial_monitor
 from app.financial.industry_position import build_industry_financial_position
+from app.financial.composite_health import build_composite_financial_health
 
 def load_recent_three_year_financial_reports(market: str, symbol: str, years: int = 6) -> dict[str, object]:
     """Load annual/quarterly reports covering the most recent ``years`` fiscal years."""
@@ -113,6 +115,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         reports,
         industry_level_1=industry["level_1"],
     )
+    composite_financial_health = build_composite_financial_health(health, quarterly_monitor)
     industry_position = build_industry_financial_position(market, symbol, search_index._load_financial_snapshot() or {})
 
     return {
@@ -126,6 +129,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "industry": industry,
         "health": health,
         "quarterly_monitor": quarterly_monitor,
+        "composite_financial_health": composite_financial_health,
         "industry_financial_position": industry_position,
     }
 
@@ -194,4 +198,57 @@ def _materialize_financial_report(search_index, seed: dict[str, object]) -> dict
         "period": seed.get("period"),
         "metrics": metrics,
     }
+
+
+@lru_cache(maxsize=128)
+def build_industry_financial_health_peers(market: str, symbol: str) -> dict[str, object]:
+    """Return every secondary-industry member's annual and quarterly health views.
+
+    The two views deliberately remain separate: ``annual`` is exclusively derived
+    from complete annual reports, while ``quarterly`` is the independent TTM/latest-
+    balance monitor. Missing coverage is represented by ``None``, never zero.
+    """
+    search_index = importlib.import_module("app.search.index")
+    market, symbol = str(market or "").strip().lower(), str(symbol or "").strip()
+    if market not in {"sh", "sz", "bj"} or not symbol.isdigit() or len(symbol) != 6:
+        raise ValueError("market must be sh, sz or bj and symbol must be a 6-digit code")
+    industry_map = search_index._load_industry_map()
+    industry_level_2, industry_level_1 = industry_map.get((market, symbol), (None, None))
+    if not industry_level_2:
+        return {"ok": False, "market": market, "symbol": symbol, "industry_level_1": industry_level_1,
+                "industry_level_2": None, "rows": [], "reason": "industry_classification_unavailable"}
+
+    annual_codes = ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")
+    quarterly_code_map = {"growth": "growth_quality", "profitability": "profitability", "cash": "cash_quality",
+                          "working_capital": "working_capital", "reinvestment": "reinvestment", "financial_risk": "financial_risk"}
+    names = search_index._stock_name_lookup()
+    members = sorted((peer_market, peer_symbol) for (peer_market, peer_symbol), (peer_ind2, _peer_ind1) in industry_map.items()
+                     if peer_ind2 == industry_level_2)
+    rows: list[dict[str, object]] = []
+    for peer_market, peer_symbol in members:
+        base = {"market": peer_market, "symbol": peer_symbol, "stock_name": names.get((peer_market, peer_symbol), peer_symbol),
+                "is_current_stock": peer_market == market and peer_symbol == symbol}
+        annual = {"score": None, "periods": [], "assessment_track": None, "sample_years": 0, "coverage_weight": 0,
+                  "status": "unavailable", "dimensions": {code: None for code in annual_codes}}
+        quarterly = {"score": None, "period": None, "coverage_weight": 0, "status": "unavailable",
+                     "dimensions": {code: None for code in annual_codes}}
+        try:
+            payload = load_recent_three_year_financial_reports(peer_market, peer_symbol, years=6)
+            health = payload.get("health") or {}
+            annual.update({key: health.get(key) for key in ("score", "periods", "assessment_track", "sample_years", "coverage_weight", "status")})
+            annual["dimensions"] = {item["code"]: item.get("score") for item in health.get("dimensions", []) if item.get("code") in annual_codes}
+            annual["dimensions"] = {code: annual["dimensions"].get(code) for code in annual_codes}
+            monitor = payload.get("quarterly_monitor") or {}
+            realtime = monitor.get("realtime_score") or {}
+            quarterly.update({"score": realtime.get("score"), "period": monitor.get("latest_period"),
+                              "coverage_weight": realtime.get("coverage_weight") or 0, "status": realtime.get("status") or monitor.get("status") or "unavailable"})
+            quarterly["dimensions"] = {quarterly_code_map[item["code"]]: item.get("points") for item in realtime.get("breakdown", []) if item.get("code") in quarterly_code_map}
+            quarterly["dimensions"] = {code: quarterly["dimensions"].get(code) for code in annual_codes}
+            base["stock_name"] = payload.get("stock_name") or base["stock_name"]
+        except Exception as exc:  # retain every mapped industry member and disclose unavailable coverage
+            annual["reason"] = str(exc)
+            quarterly["reason"] = str(exc)
+        rows.append({**base, "annual": annual, "quarterly": quarterly})
+    return {"ok": True, "market": market, "symbol": symbol, "industry_level_1": industry_level_1,
+            "industry_level_2": industry_level_2, "rows": rows}
 

@@ -580,6 +580,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-score-industry-total-peers":
             self.handle_stock_score_industry_total_peers(parsed.query)
             return
+        if parsed.path == "/api/industry-financial-health-peers":
+            self.handle_industry_financial_health_peers(parsed.query)
+            return
         if parsed.path == "/api/stock-score-subdiag-explanation":
             self.handle_stock_score_subdiag_explanation(parsed.query)
             return
@@ -2243,6 +2246,20 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "stock_score_industry_total_peers_error", "message": str(exc)}},
             )
+
+    def handle_industry_financial_health_peers(self, query: str) -> None:
+        from app.financial.reports import build_industry_financial_health_peers
+
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol.isdigit() or len(symbol) != 6:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol 参数不合法"}})
+            return
+        try:
+            self.respond_json(HTTPStatus.OK, build_industry_financial_health_peers(market, symbol))
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "industry_financial_health_peers_error", "message": str(exc)}})
 
     def handle_stock_score_subdiag_explanation(self, query: str) -> None:
         params = parse_qs(query)

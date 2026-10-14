@@ -38,6 +38,23 @@ class QuarterlyFinancialMonitorTests(unittest.TestCase):
         self.assertIsInstance(score["score"], int)
         self.assertEqual(len(score["breakdown"]), 6)
 
+    def test_small_revenue_profit_divergence_exposes_watch_severity_evidence(self):
+        from app.financial.quarterly_monitor import build_quarterly_financial_monitor
+        reports = [
+            annual(2024, revenue=100, ex_net_profit=10, ocf=12, capex=4),
+            {"period": "2025Q2", "year": "2025", "report_date": "20250630", "metrics": {"revenue": 50, "ex_net_profit": 5, "ocf": 6, "capex": 2, "gross_margin": 30, "net_margin": 10, "debt_ratio": 40, "accounts_receivable": 10, "inventory": 10}},
+            annual(2025, revenue=120, ex_net_profit=12, ocf=15, capex=5),
+            {"period": "2026Q2", "year": "2026", "report_date": "20260630", "metrics": {"revenue": 53, "ex_net_profit": 4.835, "ocf": 7, "capex": 3, "gross_margin": 30, "net_margin": 10, "debt_ratio": 40, "accounts_receivable": 10, "inventory": 10}},
+        ]
+
+        monitor = build_quarterly_financial_monitor(reports, "电子")
+        alert = next(item for item in monitor["alerts"] if item["code"] == "revenue_up_profit_down")
+
+        self.assertEqual(alert["severity"], "watch")
+        self.assertAlmostEqual(alert["severity_basis"]["metrics"]["growth_gap_pct"], 9.3, places=1)
+        self.assertEqual(alert["severity_basis"]["thresholds"]["high_growth_gap_gte"], 20.0)
+        self.assertIn("高严重度阈值", alert["detail"])
+
     def test_rejects_special_industry_for_quarterly_monitor(self):
         from app.financial.quarterly_monitor import build_quarterly_financial_monitor
         self.assertEqual(build_quarterly_financial_monitor([], industry_level_1="银行")["status"], "not_applicable")

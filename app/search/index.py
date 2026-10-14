@@ -1139,6 +1139,8 @@ def stock_profile_response(symbol: str) -> dict[str, object]:
         load_rps_rows(),
         basic_info=basic_info,
     )
+    profile["niche_leader"] = _lookup_niche_leader(symbol_text)
+    profile["niche_leader_detail"] = _lookup_niche_leader_detail(str(profile.get("market", "")), symbol_text)
     return {
         "ok": True,
         "symbol": symbol,
@@ -5802,3 +5804,18 @@ def _lookup_niche_leader(symbol: str) -> str:
     except Exception:
         pass
     return ""
+
+
+def _lookup_niche_leader_detail(market: str, symbol: str) -> dict[str, str] | None:
+    """Return cached research rationale for a mapped niche leader, preserving uncertainty labels."""
+    category = _lookup_niche_leader(symbol)
+    if not category or not market:
+        return None
+    try:
+        import json
+        path = Path(PROJECT_ROOT) / "data" / "derived" / "cache" / "competitive_edge" / f"{market}_{symbol.zfill(6)}.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        summary = str(payload.get("text", "")).split("[标签:", 1)[0].strip()
+        return {"category": category, "summary": summary, "source": "竞争优势研究摘要（含明确标注的推测）", "refreshed_at": str(payload.get("refreshed_at", ""))}
+    except Exception:
+        return {"category": category, "summary": "暂无可展示的认定依据摘要。", "source": "细分龙头映射数据集", "refreshed_at": ""}
