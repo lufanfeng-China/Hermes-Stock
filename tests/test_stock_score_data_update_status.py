@@ -32,10 +32,10 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
         self.assertIn('self.handle_data_update_retry()', script)
         self.assertIn('data_update_job', script)
 
-    def test_dashboard_script_uses_stock_score_page_as_root_homepage(self) -> None:
+    def test_dashboard_script_uses_stock_analysis_page_as_root_homepage(self) -> None:
         script = (PROJECT_ROOT / 'scripts' / 'serve_stock_dashboard.py').read_text(encoding='utf-8')
         self.assertIn('if parsed.path == "/":', script)
-        self.assertIn('self.serve_static("stock-score.html")', script)
+        self.assertIn('self.serve_static("stock-analysis.html")', script)
 
     def test_dashboard_script_exposes_financial_snapshot_and_industry_valuation_dates(self) -> None:
         script = (PROJECT_ROOT / 'scripts' / 'serve_stock_dashboard.py').read_text(encoding='utf-8')

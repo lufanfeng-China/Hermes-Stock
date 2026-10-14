@@ -1,20 +1,18 @@
 /** Global navigation — injected into any page with <div id="global-nav"> */
 (function () {
   const PAGES = [
-    { href: '/stock-score.html', label: '财务评分' },
     { href: '/stock-analysis.html', label: '股票分析' },
     { href: '/financial-report.html', label: '财报分析' },
     { href: '/watchlist.html', label: '自选股' },
-    { href: '/concept-analysis.html', label: '概念分析' },
     { href: '/concept-temperature.html', label: '概念温度' },
     { href: '/bottleneck.html', label: '瓶颈股发现' },
   ];
 
   const currentPath = location.pathname.replace(/\/$/, '') || '/';
-  // stock-score.html is served at / (index.html) and /stock-score.html
+  // stock-analysis.html is served at / and /stock-analysis.html
   const isActive = (href) => {
-    if (currentPath === '/' && href === '/stock-score.html') return true;
-    if (currentPath === '/stock-score.html' && href === '/stock-score.html') return true;
+    if (currentPath === '/' && href === '/stock-analysis.html') return true;
+    if (currentPath === '/stock-analysis.html' && href === '/stock-analysis.html') return true;
     return currentPath === href;
   };
 

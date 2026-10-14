@@ -773,10 +773,10 @@ class StockScoreAiReportTests(unittest.TestCase):
 
     def test_serve_static_swallows_broken_pipe_from_write(self) -> None:
         handler = mock.Mock()
-        target = dashboard.WEB_ROOT / "stock-score.js"
+        target = dashboard.WEB_ROOT / "stock-analysis.js"
         handler.wfile.write.side_effect = BrokenPipeError()
 
-        dashboard.StockDashboardHandler.serve_static(handler, "stock-score.js")
+        dashboard.StockDashboardHandler.serve_static(handler, "stock-analysis.js")
 
         handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
         handler.send_header.assert_any_call("Content-Type", "application/javascript; charset=utf-8")
@@ -784,22 +784,22 @@ class StockScoreAiReportTests(unittest.TestCase):
 
     def test_serve_static_can_skip_body_for_head_request(self) -> None:
         handler = mock.Mock()
-        target = dashboard.WEB_ROOT / "stock-score.html"
+        target = dashboard.WEB_ROOT / "stock-analysis.html"
 
-        dashboard.StockDashboardHandler.serve_static(handler, "stock-score.html", include_body=False)
+        dashboard.StockDashboardHandler.serve_static(handler, "stock-analysis.html", include_body=False)
 
         handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
         handler.send_header.assert_any_call("Content-Type", "text/html; charset=utf-8")
         handler.send_header.assert_any_call("Content-Length", str(len(target.read_bytes())))
         handler.wfile.write.assert_not_called()
 
-    def test_do_head_routes_root_to_stock_score_without_body(self) -> None:
+    def test_do_head_routes_root_to_stock_analysis_without_body(self) -> None:
         handler = mock.Mock()
         handler.path = "/"
 
         dashboard.StockDashboardHandler.do_HEAD(handler)
 
-        handler.serve_static.assert_called_once_with("stock-score.html", include_body=False)
+        handler.serve_static.assert_called_once_with("stock-analysis.html", include_body=False)
 
     def test_load_recent_three_year_financial_reports_returns_recent_three_year_quarter_timeline(self) -> None:
         class FakeRow(dict):

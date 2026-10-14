@@ -325,7 +325,7 @@ document.addEventListener('click', (e) => {
   if (!cell) return;
   const sym = cell.dataset.symbol;
   const mkt = sym.startsWith('6') ? 'sh' : sym.startsWith('9') ? 'bj' : 'sz';
-  window.open(`/stock-score.html?symbol=${encodeURIComponent(sym)}&market=${mkt}`, '_blank');
+  window.open(`/stock-analysis.html?symbol=${encodeURIComponent(sym)}&market=${mkt}`, '_blank');
 });
 
 function loadAll() {

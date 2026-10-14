@@ -164,7 +164,7 @@
       memberMeta.textContent = '共 ' + data.stocks.length + ' 只有效成分股 · 按 ' + data.window + ' 日前复权涨幅降序 · 截至 ' + data.as_of_date;
       membersEl.innerHTML = data.stocks.map(function (row) {
         var market = row.symbol[0] === '6' ? 'sh' : (row.symbol.startsWith('92') ? 'bj' : 'sz');
-        var href = '/stock-score.html?market=' + market + '&symbol=' + encodeURIComponent(row.symbol) + '&name=' + encodeURIComponent(row.stock_name);
+        var href = '/stock-analysis.html?market=' + market + '&symbol=' + encodeURIComponent(row.symbol) + '&name=' + encodeURIComponent(row.stock_name);
         return '<tr><td>' + esc(row.symbol) + '</td><td><a class="stock-link" href="' + href + '">' + esc(row.stock_name) + '</a></td><td class="' + color(row.return_pct) + '">' + pct(row.return_pct) + '</td><td>' + Number(row.latest_close).toFixed(2) + '</td><td>' + Number(row.volume_ratio_5d_20d).toFixed(2) + '</td></tr>';
       }).join('');
     } catch (err) {

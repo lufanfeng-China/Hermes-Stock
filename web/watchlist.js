@@ -172,7 +172,7 @@ function bindRowEvents() {
       const symbol = row.dataset.symbol;
       const name = row.dataset.name;
       const params = new URLSearchParams({ market, symbol, name });
-      window.location.href = `/stock-score.html?${params.toString()}`;
+      window.location.href = `/stock-analysis.html?${params.toString()}`;
     });
   });
 

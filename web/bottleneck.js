@@ -486,7 +486,7 @@ async function renderStep4() {
                       '<td style="font-size:12px;white-space:nowrap;">' + smlLabel + '</td>' +
                       '<td style="font-size:12px;color:var(--text-muted);max-width:260px;">' + sreason + '</td>' +
                       '<td><button class="btn" style="padding:4px 10px;font-size:11px;white-space:nowrap;"' +
-                      ' onclick="window.open(\'/stock-score.html?symbol=' + scode + '&market=' + smarket + '&name=' + snameEnc + '\',\'_blank\')">查看 →</button></td></tr>');
+                      ' onclick="window.open(\'/stock-analysis.html?symbol=' + scode + '&market=' + smarket + '&name=' + snameEnc + '\',\'_blank\')">查看 →</button></td></tr>');
                   }
                   return rows.join('');
                 })()}
@@ -545,7 +545,7 @@ async function renderStep5() {
                 <tr>
                   <td style="font-weight:600;">${s.code}</td>
                   <td>
-                    <a href="/stock-score.html?symbol=${s.code}&market=${s.market}&name=${encodeURIComponent(s.name || '')}" target="_blank"
+                    <a href="/stock-analysis.html?symbol=${s.code}&market=${s.market}&name=${encodeURIComponent(s.name || '')}" target="_blank"
                        style="color:var(--accent2);text-decoration:none;cursor:pointer;"
                        title="跳转财务评分页面">
                       ${s.name || '—'}
@@ -716,9 +716,9 @@ async function renderStep7() {
             return `
               <tr>
                 <td>${idx < 3 ? '🥇🥈🥉'[idx] : idx+1}</td>
-                <td style="font-weight:600;"><a href="/stock-score.html?symbol=${s.code}&market=${s.market}&name=${encodeURIComponent(s.name || '')}" style="color:var(--accent2);" target="_blank">${s.code}</a></td>
+                <td style="font-weight:600;"><a href="/stock-analysis.html?symbol=${s.code}&market=${s.market}&name=${encodeURIComponent(s.name || '')}" style="color:var(--accent2);" target="_blank">${s.code}</a></td>
                 <td>
-                  <a href="/stock-score.html?symbol=${s.code}&market=${s.market}&name=${encodeURIComponent(s.name || '')}" target="_blank"
+                  <a href="/stock-analysis.html?symbol=${s.code}&market=${s.market}&name=${encodeURIComponent(s.name || '')}" target="_blank"
                      style="color:var(--accent2);text-decoration:none;" title="跳转财务评分页面">
                     ${s.name || '—'}
                   </a>

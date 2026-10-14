@@ -672,7 +672,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.handle_proxy_capital_flow(parsed.query)
             return
         if parsed.path == "/":
-            self.serve_static("stock-score.html")
+            self.serve_static("stock-analysis.html")
             return
         if parsed.path.startswith("/"):
             self.serve_static(parsed.path.lstrip("/"))
@@ -732,7 +732,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         if parsed.path == "/":
-            self.serve_static("stock-score.html", include_body=False)
+            self.serve_static("stock-analysis.html", include_body=False)
             return
         if parsed.path.startswith("/"):
             self.serve_static(parsed.path.lstrip("/"), include_body=False)
