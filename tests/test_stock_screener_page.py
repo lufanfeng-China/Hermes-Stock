@@ -8,6 +8,28 @@ STYLES_CSS = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
 
 
 class StockScreenerPageTests(unittest.TestCase):
+    def test_v2_screener_uses_three_step_workbench_anchors(self) -> None:
+        html = (WEB_ROOT / "stock-screener-v2.html").read_text(encoding="utf-8")
+        script = (WEB_ROOT / "stock-screener.js").read_text(encoding="utf-8")
+
+        for anchor in (
+            'id="stock-screener-strategy-stage"',
+            'id="stock-screener-active-filters"',
+            'id="stock-screener-core-filters"',
+            'id="stock-screener-advanced-filters"',
+            'id="stock-screener-run-bar"',
+            'id="stock-screener-column-view"',
+        ):
+            self.assertIn(anchor, html)
+
+        for helper in (
+            "renderActiveFilterSummary",
+            "getActiveFilterEntries",
+            "toggleAdvancedFilterGroup",
+            "setResultsColumnView",
+        ):
+            self.assertIn(helper, script)
+
     def test_stock_screener_page_contains_filter_workbench_results_and_kline(self) -> None:
         html = (WEB_ROOT / "stock-screener.html").read_text(encoding="utf-8")
 

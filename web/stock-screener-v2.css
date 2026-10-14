@@ -257,3 +257,58 @@ body:has(.screener-v2-shell) { background: var(--v2-canvas); color: var(--v2-ink
   .screener-v2-shell .filter-group:nth-of-type(5) { grid-column: span 1; }
   .screener-v2-shell .stock-screener-filter-head-actions { align-items: flex-end; flex-direction: column; }
 }
+
+/* Three-step workbench override */
+.screener-v2-shell .stock-screener-filter-grid { display: block; }
+.screener-v2-shell .stock-screener-strategy-stage,
+.screener-v2-shell .stock-screener-filter-section,
+.screener-v2-shell .stock-screener-advanced-filters { margin: 0 0 16px; }
+.screener-v2-shell .screener-stage-heading { display:flex; align-items:center; gap:10px; min-width:0; }
+.screener-v2-shell .screener-stage-heading h3 { margin:0; font-size:15px; }
+.screener-v2-shell .screener-stage-heading p { margin:2px 0 0; color:rgba(0,0,0,.55); font-size:12px; }
+.screener-v2-shell .screener-step { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--v2-ink); color:#fff; font:600 11px var(--v2-mono); flex:0 0 auto; }
+.screener-v2-shell .stock-screener-strategy-stage { padding:14px 4px 8px; border-bottom:1px solid var(--v2-line); }
+.screener-v2-shell .stock-screener-strategy-stage .stock-screener-filter-actions { padding-left:34px; }
+.screener-v2-shell .stock-screener-filter-section { padding:14px; border:1px solid var(--v2-line); border-radius:14px; background:#fff; }
+.screener-v2-shell .stock-screener-active-filters { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:32px; margin:12px 0; }
+.screener-v2-shell .active-filter-label { font:600 11px var(--v2-mono); color:rgba(0,0,0,.56); }
+.screener-v2-shell .active-filter-token { display:inline-flex; align-items:center; gap:5px; padding:5px 7px; border:1px solid #c8d4b0; border-radius:6px; background:#f4f8ea; font-size:12px; }
+.screener-v2-shell .active-filter-token button { padding:0; border:0; background:transparent; color:inherit; cursor:pointer; font-size:15px; line-height:1; }
+.screener-v2-shell .active-filter-empty { color:rgba(0,0,0,.52); font-size:12px; }
+.screener-v2-shell .stock-screener-core-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.screener-v2-shell .stock-screener-core-grid .filter-group { min-height:0; padding:13px; border:1px solid var(--v2-line); border-radius:10px; background:var(--v2-soft); }
+.screener-v2-shell .stock-screener-core-grid .filter-group:nth-of-type(n) { grid-column:auto; background:var(--v2-soft); }
+.screener-v2-shell .stock-screener-core-grid .filter-group:first-child { grid-column:span 2; }
+.screener-v2-shell .stock-screener-advanced-filters { border:1px solid var(--v2-line); border-radius:12px; overflow:hidden; background:#fff; }
+.screener-v2-shell .stock-screener-advanced-toggle { display:flex; align-items:center; width:100%; gap:12px; padding:13px 14px; border:0; background:var(--v2-soft); color:var(--v2-ink); font:600 13px var(--v2-sans); text-align:left; cursor:pointer; }
+.screener-v2-shell .stock-screener-advanced-toggle span:nth-child(2) { margin-left:auto; color:rgba(0,0,0,.55); font:11px var(--v2-mono); }
+.screener-v2-shell .stock-screener-advanced-panel { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px; }
+.screener-v2-shell .stock-screener-advanced-panel .filter-group { min-width:0; padding:13px; border:1px solid var(--v2-line); border-radius:10px; background:#fff; }
+.screener-v2-shell .stock-screener-advanced-panel .filter-tech-signals { grid-column:span 2; }
+.screener-v2-shell .stock-screener-run-bar { position:relative; z-index:1; justify-content:flex-end; padding:10px 12px; border:1px solid #c8c8c4; border-radius:12px; background:#fff; box-shadow:0 4px 14px rgba(0,0,0,.05); }
+.screener-v2-shell .topbar-actions { min-width:0; max-width:calc(100% - 270px); overflow-x:auto; }
+.screener-v2-shell .topbar-actions nav { flex-wrap:nowrap; white-space:nowrap; }
+.screener-v2-shell .stock-screener-run-bar .screener-stage-heading { margin-right:auto; }
+.screener-v2-shell .stock-screener-result-meta { display:flex; align-items:center; gap:12px; color:rgba(0,0,0,.6); font-size:11px; }
+.screener-v2-shell .stock-screener-result-meta p { margin:0; }
+.screener-v2-shell .stock-screener-result-meta select { width:auto; padding:4px 6px; font-size:11px; }
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(4),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(4),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(5),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(5),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(6),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(6),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(10),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(10),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(12),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(12),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(14),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(14),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(15),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(15),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] th:nth-child(17),
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] td:nth-child(17) { display:none; }
+.screener-v2-shell .stock-screener-table[data-column-view="decision"] { min-width:820px; }
+@media (max-width:1080px) { .screener-v2-shell .stock-screener-core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:720px) { .screener-v2-shell .stock-screener-core-grid,.screener-v2-shell .stock-screener-advanced-panel { grid-template-columns:1fr; } .screener-v2-shell .stock-screener-core-grid .filter-group:first-child,.screener-v2-shell .stock-screener-advanced-panel .filter-tech-signals { grid-column:auto; } .screener-v2-shell .stock-screener-run-bar { align-items:center; } .screener-v2-shell .stock-screener-run-bar .screener-stage-heading { display:none; } .screener-v2-shell .stock-screener-result-meta { width:100%; justify-content:space-between; } }
+@media (prefers-reduced-motion:reduce) { .screener-v2-shell * { transition:none !important; } }

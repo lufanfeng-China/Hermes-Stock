@@ -188,6 +188,68 @@ function toggleScreenerFilters() {
   form.hidden = !willExpand;
   filterToggleEl.setAttribute('aria-expanded', String(willExpand));
   filterToggleEl.textContent = willExpand ? '收起筛选' : '展开筛选';
+  if (willExpand) renderActiveFilterSummary();
+}
+
+const FILTER_LABELS = {
+  symbol_filter: '搜索', min_total_score: '全市场总分', min_ind_total_score: '行业内总分',
+  min_rps_total: '个股RPS总分', min_industry_rps_total: '行业RPS总分',
+  max_pe_pct: 'PE分位上限', min_pe_pct: 'PE分位下限', max_primary_percentile: '行业估值位置',
+  tech_trend: '趋势', tech_short_trend: '短期趋势', tech_momentum: '动量',
+  industry_level_1: '申万一级', industry_level_2: '申万二级', valuation_band: '估值区间',
+};
+
+function getActiveFilterEntries() {
+  if (!form) return [];
+  const entries = [];
+  for (const [name, value] of new FormData(form).entries()) {
+    if (name === 'strategy' || name === 'as_of_date' || !String(value || '').trim()) continue;
+    const label = FILTER_LABELS[name] || form.elements.namedItem(name)?.closest('.filter-row')?.querySelector('label')?.textContent || name;
+    const existing = entries.find((entry) => entry.name === name);
+    if (existing) existing.values.push(String(value));
+    else entries.push({ name, label: String(label).trim(), values: [String(value)] });
+  }
+  if (strategyInputEl?.value) entries.unshift({ name: 'strategy', label: '策略', values: [STRATEGY_PRESETS[strategyInputEl.value]?.description ? strategyInputEl.value : strategyInputEl.value] });
+  if (asOfDateInput?.value) entries.unshift({ name: 'as_of_date', label: '回测日', values: [asOfDateInput.value] });
+  return entries;
+}
+
+function renderActiveFilterSummary() {
+  const summaryEl = document.getElementById('stock-screener-active-filters');
+  const countEl = document.getElementById('stock-screener-advanced-count');
+  if (!summaryEl) return;
+  const entries = getActiveFilterEntries();
+  const manualEntries = entries.filter((entry) => !['strategy', 'as_of_date'].includes(entry.name));
+  summaryEl.innerHTML = entries.length
+    ? `<span class="active-filter-label">当前条件</span>${entries.map((entry) => `<span class="active-filter-token">${escapeHtml(entry.label)}: ${escapeHtml(entry.values.join('、'))}${['strategy', 'as_of_date'].includes(entry.name) ? '' : `<button type="button" data-remove-filter="${escapeHtml(entry.name)}" aria-label="移除${escapeHtml(entry.label)}">×</button>`}</span>`).join('')}`
+    : '<span class="active-filter-empty">尚未设置条件，先选择策略或填写筛选项。</span>';
+  if (countEl) countEl.textContent = `${manualEntries.length} 项已启用`;
+}
+
+function removeFilter(name) {
+  const control = form?.elements?.namedItem(name);
+  if (!control) return;
+  if (control instanceof RadioNodeList) [...control].forEach((item) => { item.checked = false; });
+  else if (control.multiple) [...control.options].forEach((option) => { option.selected = false; });
+  else control.value = '';
+  renderActiveFilterSummary();
+}
+
+function toggleAdvancedFilterGroup() {
+  const panel = document.getElementById('stock-screener-advanced-panel');
+  const toggle = document.querySelector('.stock-screener-advanced-toggle');
+  if (!panel || !toggle) return;
+  const willOpen = panel.hidden;
+  panel.hidden = !willOpen;
+  toggle.setAttribute('aria-expanded', String(willOpen));
+  localStorage.setItem('stock-screener-advanced-open', String(willOpen));
+}
+
+function setResultsColumnView(view) {
+  const table = document.querySelector('.stock-screener-table');
+  const normalized = view === 'analysis' ? 'analysis' : 'decision';
+  table?.setAttribute('data-column-view', normalized);
+  localStorage.setItem('stock-screener-column-view', normalized);
 }
 
 function setActiveStrategyButton(strategy) {
@@ -232,6 +294,7 @@ function applyStrategyPreset(strategy) {
   }
   collapseScreenerFiltersAfterStrategy();
   currentPage = 1;
+  renderActiveFilterSummary();
   runScreener(1);
 }
 
@@ -453,6 +516,7 @@ function resetFilters() {
   const descEl = document.getElementById('stock-screener-strategy-desc');
   if (descEl) descEl.textContent = '';
   currentPage = 1;
+  renderActiveFilterSummary();
   runScreener(1);
 }
 
@@ -463,6 +527,18 @@ level1El.addEventListener('change', () => {
 document.getElementById('stock-screener-apply-btn').addEventListener('click', () => runScreener(1));
 document.getElementById('stock-screener-reset-btn').addEventListener('click', resetFilters);
 filterToggleEl.addEventListener('click', toggleScreenerFilters);
+form?.addEventListener('input', renderActiveFilterSummary);
+form?.addEventListener('change', renderActiveFilterSummary);
+document.getElementById('stock-screener-active-filters')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-remove-filter]');
+  if (button) removeFilter(button.dataset.removeFilter);
+});
+document.querySelector('.stock-screener-advanced-toggle')?.addEventListener('click', toggleAdvancedFilterGroup);
+const columnViewEl = document.getElementById('stock-screener-column-view');
+const savedColumnView = localStorage.getItem('stock-screener-column-view') || 'decision';
+if (columnViewEl) { columnViewEl.value = savedColumnView; columnViewEl.addEventListener('change', () => setResultsColumnView(columnViewEl.value)); }
+setResultsColumnView(savedColumnView);
+if (localStorage.getItem('stock-screener-advanced-open') === 'true') toggleAdvancedFilterGroup();
 strategyButtonsEl?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-strategy]');
   if (!button) return;
@@ -577,6 +653,7 @@ function selectDate(dateStr) {
   }
   closeCalendar();
   currentPage = 1;
+  renderActiveFilterSummary();
   runScreener(1);
 }
 
@@ -588,6 +665,7 @@ function clearDate() {
   }
   closeCalendar();
   currentPage = 1;
+  renderActiveFilterSummary();
   runScreener(1);
 }
 

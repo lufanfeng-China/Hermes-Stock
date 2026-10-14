@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>股票筛选 · V2</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/stock-screener-v2.css?v=20260729-c">
+  <link rel="stylesheet" href="/stock-screener-v2.css?v=20261014-d">
 </head>
 <body>
   <main class="app-shell stock-screener-shell screener-v2-shell">
@@ -61,6 +61,8 @@
         </div>
       </div>
 
+      <section id="stock-screener-strategy-stage" class="stock-screener-strategy-stage" aria-labelledby="stock-screener-strategy-title">
+      <div class="screener-stage-heading"><span class="screener-step">1</span><div><h3 id="stock-screener-strategy-title">选择策略</h3><p>先从策略信号开始，再用条件收窄候选池。</p></div></div>
       <div id="stock-screener-strategy-buttons" class="stock-screener-filter-actions" role="group" aria-label="策略预设">
 <button type="button" class="nav-link" data-strategy="rps_first">RPS首次</button>
 <button type="button" class="nav-link" data-strategy="slingshot_trend">弹弓趋势</button>
@@ -76,8 +78,13 @@
         <button id="stock-screener-delete-preset-btn" class="nav-link" type="button" style="display:none;color:#ef4444" title="删除当前方案">✕</button>
       </div>
       <p id="stock-screener-strategy-desc" class="search-meta stock-screener-strategy-desc"></p>
+      </section>
 
       <form id="stock-screener-filter-form" class="stock-screener-filter-grid" onsubmit="return false;" hidden>
+        <section id="stock-screener-core-filters" class="stock-screener-filter-section" aria-labelledby="stock-screener-core-title">
+          <div class="screener-stage-heading"><span class="screener-step">2</span><div><h3 id="stock-screener-core-title">收窄候选池</h3><p>常用条件置顶，高级条件按需展开。</p></div></div>
+          <div id="stock-screener-active-filters" class="stock-screener-active-filters" aria-live="polite"></div>
+          <div class="stock-screener-core-grid">
         <input name="strategy" type="hidden" value="">
         <input type="hidden" id="stock-screener-asof-date" name="as_of_date" value="">
 
@@ -133,7 +140,12 @@
           <div class="filter-row"><label>行业内估值位置 ≤</label><input name="max_primary_percentile" type="number" step="0.1"></div>
           <div class="filter-row"><label>行业温度</label><select id="stock-screener-temperature" name="industry_temperature_label" multiple><option>行业偏冷</option><option>行业温和</option><option>行业偏热</option><option>行业过热</option></select></div>
         </fieldset>
+        </div>
+        </section>
 
+        <section id="stock-screener-advanced-filters" class="stock-screener-advanced-filters" aria-labelledby="stock-screener-advanced-title">
+          <button type="button" class="stock-screener-advanced-toggle" aria-expanded="false" aria-controls="stock-screener-advanced-panel"><span id="stock-screener-advanced-title">高级条件</span><span id="stock-screener-advanced-count">0 项已启用</span><span aria-hidden="true">▾</span></button>
+          <div id="stock-screener-advanced-panel" class="stock-screener-advanced-panel" hidden>
         <!-- ── 技术面（信号灯） ── -->
         <fieldset class="filter-group filter-tech-signals">
           <legend>技术面（信号灯）</legend>
@@ -175,9 +187,12 @@
           <div class="filter-row"><label>PE-TTM ≤</label><input name="max_pe_ttm" type="number" step="0.01"></div>
           <div class="filter-row"><label>股价新高</label><select name="price_new_high"><option value="">不限</option><option value="1y">一年新高</option><option value="2y">二年新高</option><option value="3y">三年新高</option><option value="all">历史新高</option></select></div>
         </fieldset>
+        </div>
+        </section>
 
-        <div class="stock-screener-filter-actions">
-          <button id="stock-screener-apply-btn" type="button">执行筛选</button>
+        <div id="stock-screener-run-bar" class="stock-screener-filter-actions stock-screener-run-bar">
+          <div class="screener-stage-heading"><span class="screener-step">3</span><div><h3>运行筛选</h3><p>条件变动后手动运行。</p></div></div>
+          <button id="stock-screener-apply-btn" type="button">运行筛选</button>
           <button id="stock-screener-reset-btn" type="button" class="nav-link">重置</button>
         </div>
       </form>
@@ -190,7 +205,7 @@
           <h2>筛选结果 <span id="stock-screener-count" class="pool-badge">0</span></h2>
         </div>
         <p id="stock-screener-page-info" class="search-meta">第 1 / 1 页</p>
-        <p id="stock-screener-data-date" class="search-meta" style="color:#6f8899;font-size:10px"></p>
+        <div class="stock-screener-result-meta"><p id="stock-screener-data-date" class="search-meta"></p><label>列视图 <select id="stock-screener-column-view" aria-label="结果列视图"><option value="decision">决策视图</option><option value="analysis">完整分析</option></select></label></div>
       </div>
       <div id="stock-screener-results-toolbar" class="stock-screener-results-toolbar" style="display:none">
         <label class="wl-select-all-label"><input type="checkbox" id="wl-select-all"> 全选</label>
@@ -275,6 +290,6 @@
   </div>
 
   <script src="/nav.js"></script>
-  <script type="module" src="/stock-screener.js?v=20260729-v2a"></script>
+  <script type="module" src="/stock-screener.js?v=20261014-v2b"></script>
 </body>
 </html>
