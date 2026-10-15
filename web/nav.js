@@ -2,10 +2,12 @@
 (function () {
   const PAGES = [
     { href: '/stock-analysis.html', label: '股票分析' },
+    { href: '/stock-filter.html', label: '股票筛选' },
     { href: '/financial-report.html', label: '财报分析' },
     { href: '/watchlist.html', label: '自选股' },
     { href: '/concept-temperature.html', label: '概念温度' },
     { href: '/bottleneck.html', label: '瓶颈股发现' },
+    { href: '/data-update.html', label: '数据更新' },
   ];
 
   const currentPath = location.pathname.replace(/\/$/, '') || '/';

@@ -60,6 +60,17 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
     commands = _data_update_commands(trading_day, retry_failed=retry_failed)
 
     for step_name, command in commands:
+        # A command may stay quiet for minutes (notably full-market RPS).  Publish
+        # the step at launch instead of waiting for a parseable stdout line, so the
+        # UI never remains pinned to the previous completed step.
+        _update_data_update_job_state(
+            current_step=step_name,
+            current_industry=None,
+            progress_index=None,
+            progress_total=None,
+            current_progress_text=f"当前步骤：{step_name} 正在运行...",
+            last_line="",
+        )
         try:
             result = _run_data_update_command(step_name, command, progress_callback=progress_callback)
         except subprocess.TimeoutExpired as exc:

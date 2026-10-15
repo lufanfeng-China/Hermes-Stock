@@ -558,6 +558,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/industry-hierarchy":
             self.handle_industry_hierarchy(parsed.query)
             return
+        if parsed.path == "/api/stock-filter":
+            self.handle_stock_filter(parsed.query)
+            return
         if parsed.path == "/api/stock-score":
             self.handle_stock_score(parsed.query)
             return
@@ -1944,6 +1947,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         """Clear entire watchlist."""
         _save_watchlist({"stocks": []})
         self.respond_json(HTTPStatus.OK, {"ok": True})
+
+    def handle_stock_filter(self, query: str) -> None:
+        """Return the new independent all-market stock filter response."""
+        from app.stock_filter import filter_response
+        result = filter_response(parse_qs(query))
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
 
     def handle_stock_score(self, query: str) -> None:
         from app.search.index import compute_financial_scores, compute_stock_score
