@@ -85,29 +85,29 @@
       <aside class="filter-sidebar" aria-label="筛选条件">
         <div class="filter-sidebar-head"><h3>筛选条件</h3><button class="reset-button" type="reset" form="filter-form">重置</button></div>
         <form id="filter-form" class="filter-form">
-          <fieldset class="filter-group" data-filter-group="rps"><legend><span>01</span>RPS 强度</legend><p class="filter-note">四个周期和合计均可设置闭区间（0–100；合计 0–400）。</p><div class="range-grid">
+          <fieldset class="filter-group" data-filter-group="rps"><legend><span>01</span>RPS 强度</legend><div class="range-grid">
             <label class="filter-field">RPS20<div class="range-pair"><input name="rps_20_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_20_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS50<div class="range-pair"><input name="rps_50_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_50_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS120<div class="range-pair"><input name="rps_120_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_120_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS250<div class="range-pair"><input name="rps_250_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_250_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field full">RPS Total<div class="range-pair"><input name="rps_total_min" type="number" min="0" max="400" placeholder="最小"><b>—</b><input name="rps_total_max" type="number" min="0" max="400" placeholder="最大"></div></label>
           </div></fieldset>
-          <fieldset class="filter-group" data-filter-group="market"><legend><span>02</span>基础行情</legend><p class="filter-note">最新可用价格、估值与市值快照；市值单位为亿元。</p><div class="range-grid">
+          <fieldset class="filter-group" data-filter-group="market"><legend><span>02</span>基础行情</legend><div class="range-grid">
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">PE-TTM<div class="range-pair"><input name="pe_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="pe_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">总市值（亿）<div class="range-pair"><input name="total_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="total_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">流通市值（亿）<div class="range-pair"><input name="free_float_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="free_float_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
           </div></fieldset>
-          <fieldset class="filter-group" data-filter-group="financial"><legend><span>03</span>财务健康</legend><p class="filter-note">年度总分仅按连续五年完整年报；当季总分按最新披露期的独立监测。</p><div class="range-grid">
+          <fieldset class="filter-group" data-filter-group="financial"><legend><span>03</span>财务健康</legend><div class="range-grid">
             <label class="filter-field">五年总分<div class="range-pair"><input name="annual_total_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="annual_total_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">当季总分<div class="range-pair"><input name="quarterly_total_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="quarterly_total_max" type="number" min="0" max="100" placeholder="最大"></div></label>
           </div></fieldset>
-          <fieldset class="filter-group" data-filter-group="trend"><legend><span>04</span>趋势过滤</legend><p class="filter-note">同一周期内可多选；日、周、月三个周期之间为 AND。</p><div class="trend-grid">
+          <fieldset class="filter-group" data-filter-group="trend"><legend><span>04</span>趋势过滤</legend><div class="trend-grid">
             <label>日线<select name="trend_daily" multiple size="3"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="bearish">空头</option></select></label>
             <label>周线<select name="trend_weekly" multiple size="3"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="bearish">空头</option></select></label>
             <label>月线<select name="trend_monthly" multiple size="3"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="bearish">空头</option></select></label>
           </div></fieldset>
-          <fieldset class="filter-group" data-filter-group="technical"><legend><span>05</span>MACD / 均线金叉</legend><p class="filter-note">技术金叉在最近一个交易日按预计算技术数据筛选；同组多选为 OR。</p><div class="range-grid">
+          <fieldset class="filter-group" data-filter-group="technical"><legend><span>05</span>MACD / 均线金叉</legend><div class="range-grid">
             <label class="filter-field">MACD 金叉<select name="macd_cross" multiple size="2"><option value="zero_below">零轴下金叉</option><option value="zero_above">零轴上金叉</option></select></label>
             <label class="filter-field">均线金叉<select name="golden_cross" multiple size="3"><option value="5/10">MA5 / MA10</option><option value="10/20">MA10 / MA20</option><option value="20/60">MA20 / MA60</option></select></label>
           </div></fieldset>
