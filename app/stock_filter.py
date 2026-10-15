@@ -40,6 +40,27 @@ def _passes(value: Any, bounds: tuple[float | None, float | None]) -> bool:
     return number is not None and (lo is None or number >= lo) and (hi is None or number <= hi)
 
 
+def classify_timeframe_trend(closes: list[float]) -> str | None:
+    """Classify one homogeneous price timeframe from fast/mid/slow moving averages.
+
+    The caller is responsible for supplying only daily, weekly, or monthly closes;
+    this prevents a trend label from mixing periods.
+    """
+    values = [float(value) for value in closes if _num(value) is not None]
+    if len(values) < 20:
+        return None
+    series = pd.Series(values, dtype=float)
+    fast, middle, slow = (series.rolling(window).mean().iloc[-1] for window in (5, 10, 20))
+    latest = values[-1]
+    if latest > fast > middle > slow:
+        return "strong_bullish"
+    if latest > fast > middle:
+        return "bullish"
+    if latest < fast < middle:
+        return "bearish"
+    return "neutral"
+
+
 def _read_json(path: Path) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -56,11 +77,18 @@ def _qfq_latest() -> dict[tuple[str, str], dict[str, float | None]]:
     frame["symbol"] = frame["symbol"].astype(str).str.zfill(6)
     frame["date"] = pd.to_datetime(frame["date"])
     result = {}
+    trend_labels = {"strong_bullish": "强多头", "bullish": "多头", "bearish": "空头", "neutral": "震荡"}
     for key, group in frame.groupby(["market", "symbol"], sort=False):
         group = group.sort_values("date")
         close = group["close"].astype(float).tolist()
+        weekly_close = group.set_index("date")["close"].resample("W-FRI").last().dropna().astype(float).tolist()
+        monthly_close = group.set_index("date")["close"].resample("ME").last().dropna().astype(float).tolist()
         latest = close[-1] if close else None
-        item = {"return_1d": None, "return_5d": None, "return_20d": None, "qfq_as_of": str(group.iloc[-1]["date"].date()) if len(group) else None}
+        weekly_trend = classify_timeframe_trend(weekly_close)
+        monthly_trend = classify_timeframe_trend(monthly_close)
+        item = {"return_1d": None, "return_5d": None, "return_20d": None, "qfq_as_of": str(group.iloc[-1]["date"].date()) if len(group) else None,
+                "trend_weekly": weekly_trend, "trend_weekly_label": trend_labels.get(weekly_trend or ""),
+                "trend_monthly": monthly_trend, "trend_monthly_label": trend_labels.get(monthly_trend or "")}
         for days in (1, 5, 20):
             if len(close) > days and close[-1-days] != 0:
                 item[f"return_{days}d"] = round((close[-1] / close[-1-days] - 1) * 100, 4)
@@ -130,6 +158,9 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "annual_total": _num(a.get("score")), "annual_dimensions": a.get("dimensions") or {}, "annual_derived": a.get("derived") or {},
             "quarterly_total": _num(q.get("score")), "quarterly_dimensions": q.get("dimensions") or {},
             "annual_period": a.get("anchor_period"), "quarterly_period": q.get("anchor_period"),
+            "trend_daily": tech.get("trend"), "trend_daily_label": tech.get("trend_label"),
+            "trend_weekly": qfq.get("trend_weekly"), "trend_weekly_label": qfq.get("trend_weekly_label"),
+            "trend_monthly": qfq.get("trend_monthly"), "trend_monthly_label": qfq.get("trend_monthly_label"),
             "trend": tech.get("trend"), "trend_label": tech.get("trend_label"),
             "short_trend": tech.get("short_trend"), "short_trend_label": tech.get("short_trend_label"),
             "momentum": tech.get("momentum"), "momentum_label": tech.get("momentum_label"),
@@ -161,7 +192,10 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     rows, data_date = _universe()
-    trends, macds, crosses = _selected(params, "trend"), _selected(params, "macd_cross"), _selected(params, "golden_cross")
+    daily_trends = _selected(params, "trend_daily") or _selected(params, "trend")
+    weekly_trends = _selected(params, "trend_weekly")
+    monthly_trends = _selected(params, "trend_monthly")
+    macds, crosses = _selected(params, "macd_cross"), _selected(params, "golden_cross")
     market = (params.get("market") or [""])[0].strip().lower()
     filtered = []
     excluded_missing = 0
@@ -172,7 +206,9 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
             continue
         if not all(_passes(row["annual_dimensions"].get(name), bound) for name, bound in annual_dimension_ranges.items()): continue
         if not all(_passes(row["quarterly_dimensions"].get(name), bound) for name, bound in quarterly_dimension_ranges.items()): continue
-        if trends and not ({str(row.get("trend") or ""), str(row.get("short_trend") or ""), str(row.get("momentum") or "")} & trends): continue
+        if daily_trends and str(row.get("trend_daily") or "") not in daily_trends: continue
+        if weekly_trends and str(row.get("trend_weekly") or "") not in weekly_trends: continue
+        if monthly_trends and str(row.get("trend_monthly") or "") not in monthly_trends: continue
         if macds and str(row.get("macd_cross") or "") not in macds: continue
         if crosses and str(row.get("golden_cross") or "") not in crosses: continue
         filtered.append(row)

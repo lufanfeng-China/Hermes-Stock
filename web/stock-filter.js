@@ -1,38 +1,121 @@
 (function () {
   'use strict';
+
   var form = document.getElementById('filter-form');
   var results = document.getElementById('results');
-  var meta = document.getElementById('meta');
+  var status = document.getElementById('status');
   var pages = document.getElementById('pagination');
-  var error = document.getElementById('error');
+  var matchCount = document.getElementById('match-count');
+  var sort = document.getElementById('sort');
   var currentPage = 1;
-  function esc(v) { var d = document.createElement('div'); d.textContent = v == null ? '—' : String(v); return d.innerHTML; }
-  function score(v) { return v == null ? '—' : Number(v).toFixed(1); }
-  function params(page) {
-    var p = new URLSearchParams(), multi = { trend: true, macd_cross: true, golden_cross: true }, values = {};
-    new FormData(form).forEach(function (value, key) {
-      if (!String(value).trim()) return;
-      if (multi[key]) { (values[key] || (values[key] = [])).push(value); } else { p.set(key, value); }
+  var multi = { trend_daily: true, trend_weekly: true, trend_monthly: true, macd_cross: true, golden_cross: true };
+
+  function esc(value) {
+    var node = document.createElement('span');
+    node.textContent = value == null || value === '' ? '—' : String(value);
+    return node.innerHTML;
+  }
+
+  function fixed(value, digits) {
+    var number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(digits == null ? 1 : digits) : '—';
+  }
+
+  function selectedValues(field) {
+    return Array.prototype.slice.call(field && field.selectedOptions || []).map(function (option) { return option.value; });
+  }
+
+  function requestParams(page) {
+    var query = new URLSearchParams();
+    Array.prototype.slice.call(form.elements).forEach(function (field) {
+      if (!field.name || field.disabled) return;
+      if (multi[field.name]) {
+        var values = selectedValues(field);
+        if (values.length) query.set(field.name, values.join(','));
+        return;
+      }
+      if (String(field.value || '').trim()) query.set(field.name, field.value);
     });
-    Object.keys(values).forEach(function (key) { p.set(key, values[key].join(',')); });
-    p.set('page', String(page)); p.set('page_size', '50'); return p;
+    query.set('page', String(page));
+    query.set('page_size', '50');
+    return query;
   }
-  function render(data) {
-    results.innerHTML = (data.rows || []).map(function (r) {
-      var href = '/stock-analysis.html?market=' + encodeURIComponent(r.market) + '&symbol=' + encodeURIComponent(r.symbol) + '&name=' + encodeURIComponent(r.stock_name || '');
-      return '<tr><td><a href="' + href + '"><strong>' + esc(r.stock_name) + '</strong> ' + esc(r.market) + ':' + esc(r.symbol) + '</a></td><td>' + esc(r.industry) + '</td><td class="num">' + score(r.rps_total) + '</td><td>' + score(r.annual_total) + (r.annual_period ? ' <small class="muted">' + esc(r.annual_period) + '</small>' : '') + '</td><td>' + score(r.quarterly_total) + (r.quarterly_period ? ' <small class="muted">' + esc(r.quarterly_period) + '</small>' : '') + '</td><td>' + esc(r.short_trend_label || r.trend_label) + '</td><td>' + esc(r.macd_cross_label) + '</td><td>' + esc(r.golden_cross_label) + '</td></tr>';
-    }).join('') || '<tr><td colspan="8" class="muted">没有符合条件的股票。</td></tr>';
-    meta.textContent = '命中 ' + data.total_matched + ' / 全市场 ' + data.total_universe + '｜数据日期 ' + (data.data_as_of || '—') + '｜字段缺失排除 ' + (data.excluded_missing || 0) + '｜第 ' + data.page + '/' + data.total_pages + ' 页，每页 50 只';
+
+  function rpsCell(row) {
+    return '<span class="rps-total">' + fixed(row.rps_total) + '</span>' +
+      '<span class="subvalue rps-split">' + [row.rps_20, row.rps_50, row.rps_120, row.rps_250].map(function (value) { return fixed(value, 0); }).join(' / ') + '</span>';
+  }
+
+  function healthCell(score, period) {
+    return '<span class="health">' + fixed(score) + '</span>' + (period ? '<span class="subvalue">' + esc(period) + '</span>' : '');
+  }
+
+  function renderRows(data) {
+    if (!(data.rows || []).length) {
+      results.innerHTML = '<tr><td colspan="8" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
+      return;
+    }
+    results.innerHTML = data.rows.map(function (row) {
+      var href = '/stock-analysis.html?market=' + encodeURIComponent(row.market) + '&symbol=' + encodeURIComponent(row.symbol) + '&name=' + encodeURIComponent(row.stock_name || '');
+      var trend = [row.trend_daily_label || row.trend_label, row.trend_weekly_label, row.trend_monthly_label].map(function (value) { return esc(value); }).join(' / ');
+      var cross = [row.macd_cross_label, row.golden_cross_label].filter(Boolean).map(esc).join('<br>') || '—';
+      return '<tr>' +
+        '<td><a class="stock-link" href="' + href + '">' + esc(row.stock_name) + '</a><span class="stock-code">' + esc(row.market) + ':' + esc(row.symbol) + '</span></td>' +
+        '<td>' + esc(row.industry) + '</td>' +
+        '<td class="num">' + fixed(row.price, 2) + '</td>' +
+        '<td class="num">' + rpsCell(row) + '</td>' +
+        '<td>' + healthCell(row.annual_total, row.annual_period) + '</td>' +
+        '<td>' + healthCell(row.quarterly_total, row.quarterly_period) + '</td>' +
+        '<td>' + trend + '</td>' +
+        '<td>' + cross + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderPagination(data) {
     pages.innerHTML = '';
-    function button(label, target, disabled) { var b = document.createElement('button'); b.type = 'button'; b.className = 'nav-link'; b.textContent = label; b.disabled = disabled; b.onclick = function () { run(target); }; pages.appendChild(b); }
-    button('上一页', data.page - 1, data.page <= 1); button('下一页', data.page + 1, data.page >= data.total_pages);
+    var meta = document.createElement('span');
+    meta.className = 'page-meta';
+    meta.textContent = '第 ' + data.page + ' / ' + data.total_pages + ' 页 · 每页 50 只';
+    pages.appendChild(meta);
+    [['上一页', data.page - 1, data.page <= 1], ['下一页', data.page + 1, data.page >= data.total_pages]].forEach(function (item) {
+      var button = document.createElement('button');
+      button.type = 'button'; button.className = 'page-button'; button.textContent = item[0]; button.disabled = item[2];
+      button.addEventListener('click', function () { run(item[1]); });
+      pages.appendChild(button);
+    });
   }
+
+  function render(data) {
+    matchCount.textContent = Number(data.total_matched || 0).toLocaleString('zh-CN');
+    status.classList.remove('error');
+    status.textContent = '全市场 ' + Number(data.total_universe || 0).toLocaleString('zh-CN') + ' 只 · 数据日期 ' + (data.data_as_of || '—') + ' · 已因已启用字段缺失排除 ' + Number(data.excluded_missing || 0).toLocaleString('zh-CN') + ' 只';
+    renderRows(data);
+    renderPagination(data);
+  }
+
   async function run(page) {
-    currentPage = page || 1; error.classList.add('hidden'); meta.textContent = '正在按全市场条件筛选…';
-    try { var response = await fetch('/api/stock-filter?' + params(currentPage)); var data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error && data.error.message || '筛选失败'); render(data); }
-    catch (e) { error.textContent = e.message; error.classList.remove('hidden'); meta.textContent = '筛选失败'; }
+    currentPage = page || 1;
+    status.classList.remove('error');
+    status.textContent = '正在按全市场条件筛选…';
+    results.innerHTML = '<tr><td colspan="8" class="empty-state">正在加载筛选结果…</td></tr>';
+    pages.innerHTML = '';
+    try {
+      var response = await fetch('/api/stock-filter?' + requestParams(currentPage).toString());
+      var data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error && data.error.message || '筛选服务未返回有效结果');
+      render(data);
+    } catch (error) {
+      matchCount.textContent = '—';
+      status.classList.add('error');
+      status.textContent = error.message;
+      results.innerHTML = '<tr><td colspan="8" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
+    }
   }
+
   form.addEventListener('submit', function (event) { event.preventDefault(); run(1); });
   form.addEventListener('reset', function () { window.setTimeout(function () { run(1); }, 0); });
+  document.getElementById('reset-top').addEventListener('click', function () { form.reset(); run(1); });
+  sort.addEventListener('change', function () { run(1); });
   run(1);
 }());
