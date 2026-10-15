@@ -28,6 +28,14 @@ class StrictFinancialSnapshotContractTest(unittest.TestCase):
         self.assertEqual(record["quarterly"]["anchor_period"], "2026Q2")
         self.assertIn("growth", record["quarterly"]["dimensions"])
         self.assertNotEqual(set(record["annual"]["dimensions"]), set(record["quarterly"]["dimensions"]))
+        quality = record["quarterly"]["quality"]
+        self.assertGreater(quality["revenue_yoy"], 0)
+        self.assertGreater(quality["ex_net_profit_yoy"], 0)
+        self.assertGreaterEqual(quality["ttm_fcf_margin"], 0)
+        self.assertEqual(quality["profitability_status"], "stable")
+        self.assertFalse(quality["has_high_or_critical_alert"])
+        self.assertEqual(record["composite"]["mode"], "blended")
+        self.assertIsNotNone(record["composite"]["score"])
 
 
 if __name__ == "__main__":

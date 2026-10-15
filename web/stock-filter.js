@@ -7,6 +7,8 @@
   var pages = document.getElementById('pagination');
   var matchCount = document.getElementById('match-count');
   var sort = document.getElementById('sort');
+  var presetInput = form.elements.preset;
+  var presetOptions = Array.prototype.slice.call(document.querySelectorAll('[data-preset]'));
   var currentPage = 1;
   var multi = { trend_daily: true, trend_weekly: true, trend_monthly: true, macd_cross: true, golden_cross: true };
 
@@ -23,6 +25,13 @@
 
   function selectedValues(field) {
     return Array.prototype.slice.call(field && field.selectedOptions || []).map(function (option) { return option.value; });
+  }
+
+  function setPreset(value) {
+    presetInput.value = value || '';
+    presetOptions.forEach(function (option) {
+      option.classList.toggle('is-active', option.dataset.preset === presetInput.value);
+    });
   }
 
   function requestParams(page) {
@@ -114,8 +123,11 @@
   }
 
   form.addEventListener('submit', function (event) { event.preventDefault(); run(1); });
-  form.addEventListener('reset', function () { window.setTimeout(function () { run(1); }, 0); });
-  document.getElementById('reset-top').addEventListener('click', function () { form.reset(); run(1); });
+  form.addEventListener('reset', function () { window.setTimeout(function () { setPreset(presetInput.value); run(1); }, 0); });
+  document.getElementById('reset-top').addEventListener('click', function () { form.reset(); });
+  presetOptions.forEach(function (option) {
+    option.addEventListener('click', function () { form.reset(); setPreset(option.dataset.preset); });
+  });
   sort.addEventListener('change', function () { run(1); });
   run(1);
 }());

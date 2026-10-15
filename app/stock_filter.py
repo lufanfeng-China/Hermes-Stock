@@ -14,7 +14,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 FINAL = ROOT / "data" / "derived" / "datasets" / "final"
 PAGE_SIZE = 50
-SORT_FIELDS = {"rps_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
+SORT_FIELDS = {"rps_total", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
 
 
 def _num(value: Any) -> float | None:
@@ -38,6 +38,32 @@ def _passes(value: Any, bounds: tuple[float | None, float | None]) -> bool:
         return True
     number = _num(value)
     return number is not None and (lo is None or number >= lo) and (hi is None or number <= hi)
+
+
+def matches_financial_reversal(row: dict[str, Any]) -> bool:
+    """Return whether a row meets the auditable standard financial-reversal preset.
+
+    The long-term annual score must be a comparable five-year assessment.  The
+    latest-quarter score must clear the standard-reversal threshold and the
+    improvement must be supported by profitable growth, non-negative TTM FCF,
+    no profitability deterioration, and no high/critical quarterly alert.
+    """
+    annual, quarterly = _num(row.get("annual_total")), _num(row.get("quarterly_total"))
+    if annual is None or quarterly is None:
+        return False
+    if row.get("annual_assessment_track") != "five_year":
+        return False
+    if (_num(row.get("annual_coverage_weight")) or 0) < 85 or (_num(row.get("quarterly_coverage_weight")) or 0) < 85:
+        return False
+    if not (annual <= 55 and quarterly >= 70 and quarterly - annual >= 25):
+        return False
+    if not all((_num(row.get(key)) or 0) > 0 for key in ("quarterly_revenue_yoy", "quarterly_ex_net_profit_yoy")):
+        return False
+    if (_num(row.get("quarterly_ttm_fcf_margin")) or -float("inf")) < 0:
+        return False
+    if str(row.get("quarterly_profitability_status") or "") not in {"stable", "improving"}:
+        return False
+    return row.get("quarterly_high_or_critical_alert") is False
 
 
 def classify_timeframe_trend(closes: list[float]) -> str | None:
@@ -140,6 +166,8 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
         tech = tech_rows.get(symbol, {})
         financial = strict_financial.get(key, {})
         a, q = financial.get("annual", {}), financial.get("quarterly", {})
+        composite = financial.get("composite") or {}
+        q_quality = q.get("quality") or {}
         industry = industries.get((market, symbol), {})
         valuation = valuations.get((market, symbol), {})
         qfq = qfq_latest.get((market, symbol), {})
@@ -155,8 +183,13 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "turnover_5_sum": qfq.get("turnover_5_sum"), "turnover_5_avg": qfq.get("turnover_5_avg"), "qfq_as_of": qfq.get("qfq_as_of"),
             "rps_20": _num(r.get("rps_20")), "rps_50": _num(r.get("rps_50")),
             "rps_120": _num(r.get("rps_120")), "rps_250": _num(r.get("rps_250")), "rps_total": round(total, 2),
+            "composite_total": _num(composite.get("score")), "composite_mode": composite.get("mode"),
             "annual_total": _num(a.get("score")), "annual_dimensions": a.get("dimensions") or {}, "annual_derived": a.get("derived") or {},
-            "quarterly_total": _num(q.get("score")), "quarterly_dimensions": q.get("dimensions") or {},
+            "annual_assessment_track": a.get("assessment_track"), "annual_coverage_weight": _num(a.get("coverage_weight")),
+            "quarterly_total": _num(q.get("score")), "quarterly_dimensions": q.get("dimensions") or {}, "quarterly_coverage_weight": _num(q.get("coverage_weight")),
+            "quarterly_revenue_yoy": _num(q_quality.get("revenue_yoy")), "quarterly_ex_net_profit_yoy": _num(q_quality.get("ex_net_profit_yoy")),
+            "quarterly_ttm_fcf_margin": _num(q_quality.get("ttm_fcf_margin")), "quarterly_profitability_status": q_quality.get("profitability_status"),
+            "quarterly_high_or_critical_alert": q_quality.get("has_high_or_critical_alert"),
             "annual_period": a.get("anchor_period"), "quarterly_period": q.get("anchor_period"),
             "trend_daily": tech.get("trend"), "trend_daily_label": tech.get("trend_label"),
             "trend_weekly": qfq.get("trend_weekly"), "trend_weekly_label": qfq.get("trend_weekly_label"),
@@ -183,10 +216,12 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if page_size != PAGE_SIZE: raise ValueError("page_size is fixed at 50")
         sort = (params.get("sort") or ["rps_total"])[0]
         if sort not in SORT_FIELDS: raise ValueError("unsupported sort")
+        preset = (params.get("preset") or [""])[0].strip()
+        if preset not in {"", "financial_reversal"}: raise ValueError("unsupported preset")
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
-        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "annual_total", "quarterly_total")}
+        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total")}
         annual_dimension_ranges = {name: _range(params, f"annual_{name}") for name in ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")}
         quarterly_dimension_ranges = {name: _range(params, f"quarterly_{name}") for name in ("growth", "profitability", "cash", "working_capital", "reinvestment", "financial_risk")}
     except ValueError as exc:
@@ -201,6 +236,7 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     excluded_missing = 0
     for row in rows:
         if market and row["market"] != market: continue
+        if preset == "financial_reversal" and not matches_financial_reversal(row): continue
         if not all(_passes(row.get(key), bound) for key, bound in ranges.items()):
             if any(bound != (None, None) and row.get(key) is None for key, bound in ranges.items()): excluded_missing += 1
             continue

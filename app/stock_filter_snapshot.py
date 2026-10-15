@@ -10,6 +10,7 @@ from typing import Any
 
 import pandas as pd
 
+from app.financial.composite_health import build_composite_financial_health
 from app.financial.health import build_financial_health
 from app.financial.quarterly_monitor import build_quarterly_financial_monitor
 
@@ -52,6 +53,19 @@ def _quarterly_dimensions(monitor: dict[str, Any]) -> dict[str, float | None]:
     return {str(item.get("code")): _number(item.get("points")) for item in (monitor.get("realtime_score") or {}).get("breakdown") or []}
 
 
+def _quarterly_quality(monitor: dict[str, Any]) -> dict[str, Any]:
+    """Persist only the disclosed evidence required by the reversal filter."""
+    dimensions = {str(item.get("code")): item for item in monitor.get("dimensions") or []}
+    alerts = monitor.get("alerts") or []
+    return {
+        "revenue_yoy": _number((monitor.get("yoy") or {}).get("revenue")),
+        "ex_net_profit_yoy": _number((monitor.get("yoy") or {}).get("ex_net_profit")),
+        "ttm_fcf_margin": _number((monitor.get("ttm") or {}).get("fcf_margin")),
+        "profitability_status": dimensions.get("profitability", {}).get("status"),
+        "has_high_or_critical_alert": any(str(item.get("severity") or "") in {"high", "critical"} for item in alerts),
+    }
+
+
 def build_strict_financial_record(
     reports: list[dict[str, Any]], *, industry_level_1: str | None,
     annual_anchor: str, quarterly_anchor: str,
@@ -60,10 +74,12 @@ def build_strict_financial_record(
     annual_reports = [row for row in reports if str(row.get("period") or "").endswith("A")]
     health = build_financial_health(annual_reports, industry_level_1=industry_level_1)
     monitor = build_quarterly_financial_monitor(reports, industry_level_1=industry_level_1)
+    composite = build_composite_financial_health(health, monitor)
     annual_reason = health.get("reason") or (None if health.get("score") is not None else "annual_score_unavailable")
     realtime = monitor.get("realtime_score") or {}
     quarterly_reason = monitor.get("reason") or realtime.get("reason") or (None if realtime.get("score") is not None else "quarterly_score_unavailable")
     return {
+        "composite": composite,
         "annual": {
             "anchor_period": annual_anchor,
             "periods": list(health.get("periods") or []),
@@ -82,6 +98,7 @@ def build_strict_financial_record(
             "coverage_weight": _number(realtime.get("coverage_weight")),
             "score_coverage_status": realtime.get("status") or monitor.get("status"),
             "dimensions": _quarterly_dimensions(monitor),
+            "quality": _quarterly_quality(monitor),
             "reason": quarterly_reason,
         },
     }

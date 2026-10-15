@@ -26,10 +26,23 @@ class StockFilterPageTest(unittest.TestCase):
         for name in (
             "rps_20_min", "rps_50_min", "rps_120_min", "rps_250_min", "rps_total_min",
             "price_min", "total_market_cap_min", "free_float_market_cap_min", "pe_ttm_min",
-            "annual_total_min", "quarterly_total_min",
+            "annual_total_min", "quarterly_total_min", "composite_total_min",
+            "annual_growth_quality_min", "annual_profitability_min", "annual_cash_quality_min",
+            "annual_working_capital_min", "annual_reinvestment_min", "annual_financial_risk_min",
+            "quarterly_growth_min", "quarterly_profitability_min", "quarterly_cash_min",
+            "quarterly_working_capital_min", "quarterly_reinvestment_min", "quarterly_financial_risk_min",
             "trend_daily", "trend_weekly", "trend_monthly", "macd_cross", "golden_cross",
         ):
             self.assertIn(f'name="{name}"', html)
+    def test_financial_reversal_preset_is_a_top_of_sidebar_real_filter_control(self):
+        html = PAGE.read_text(encoding="utf-8")
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+
+        self.assertIn('class="preset-block"', html)
+        self.assertIn('data-preset="financial_reversal"', html)
+        self.assertIn('name="preset"', html)
+        self.assertLess(html.index('class="preset-block"'), html.index('data-filter-group="rps"'))
+        self.assertIn('presetInput', script)
 
 
 if __name__ == "__main__":
