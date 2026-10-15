@@ -22,11 +22,11 @@
     .quiet-button, .reset-button, .page-button { color:var(--sf-muted); border:0; background:transparent; cursor:pointer; font:inherit; font-size:12px; padding:6px; border-radius:7px; }
     .quiet-button:hover, .reset-button:hover, .page-button:hover { color:var(--sf-text); background:rgba(255,255,255,.06); }
     .filter-form { display:grid; gap:8px; }
-    .filter-group { margin:0; border:1px solid var(--sf-line); border-radius:10px; background:rgba(4,13,12,.24); padding:0 11px 11px; }
+    .filter-group { display:block; margin:0; border:1px solid var(--sf-line); border-radius:10px; background:rgba(4,13,12,.24); padding:0 11px 11px; }
     .filter-group legend { padding:0 5px; color:var(--sf-text); font-weight:700; font-size:13px; }
     .filter-group legend span { color:var(--sf-accent); margin-right:6px; }
     .filter-note { color:var(--sf-muted); font-size:11px; line-height:1.45; margin:0 0 9px; }
-    .range-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 8px; }
+    .range-grid { display:grid; grid-template-columns:1fr; gap:9px; }
     .filter-field { display:block; min-width:0; color:#c7d6d0; font-size:11px; line-height:1.3; }
     .filter-field.full { grid-column:1/-1; }
     .range-pair { display:grid; grid-template-columns:minmax(0,1fr) 8px minmax(0,1fr); gap:5px; align-items:center; margin-top:5px; }
