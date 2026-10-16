@@ -31,8 +31,8 @@ from app.pipeline.state import (
     _update_data_update_job_state, _append_data_update_job_output,
     _record_data_update_progress, DataUpdateStepError, _format_timestamp,
 )
-from app.pipeline.commands import _latest_trading_day_for_refresh, archive_daily_is_ready, _latest_minute_trading_day
-from app.pipeline.runner import start_data_update_job, run_full_data_update
+from app.pipeline.commands import _latest_trading_day_for_refresh
+from app.pipeline.runner import start_data_update_job, start_data_update_task, run_full_data_update
 from app.industry.templates import _industry_template_tags, _build_industry_valuation_percentile_payload
 
 # Bottleneck discovery module
@@ -576,6 +576,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-score-industry-total-peers":
             self.handle_stock_score_industry_total_peers(parsed.query)
             return
+        if parsed.path == "/api/industry-cash-profit-peers":
+            self.handle_industry_cash_profit_peers(parsed.query)
+            return
         if parsed.path == "/api/industry-financial-health-peers":
             self.handle_industry_financial_health_peers(parsed.query)
             return
@@ -689,6 +692,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/data-update-retry":
             self.handle_data_update_retry()
+            return
+        if parsed.path == "/api/data-update-task":
+            self.handle_data_update_task()
             return
         # ── End Bottleneck ──
         if parsed.path == "/api/save-capital-flow":
@@ -2047,6 +2053,22 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 {"ok": False, "error": {"code": "stock_score_industry_total_peers_error", "message": str(exc)}},
             )
 
+    def handle_industry_cash_profit_peers(self, query: str) -> None:
+        from app.financial.reports import build_industry_financial_health_peers
+
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol.isdigit() or len(symbol) != 6:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol 参数不合法"}})
+            return
+        try:
+            source = build_industry_financial_health_peers(market, symbol)
+            rows = [{key: item.get(key) for key in ("market", "symbol", "stock_name", "is_current_stock", "cash_profit")} for item in source.get("rows", [])]
+            self.respond_json(HTTPStatus.OK, {"ok": source.get("ok", False), "market": market, "symbol": symbol, "industry_level_2": source.get("industry_level_2"), "rows": rows})
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "industry_cash_profit_peers_error", "message": str(exc)}})
+
     def handle_industry_financial_health_peers(self, query: str) -> None:
         from app.financial.reports import build_industry_financial_health_peers
 
@@ -2190,32 +2212,18 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         job = _data_update_job_snapshot()
         trading_day = _latest_trading_day_for_refresh()
 
-        # Task definitions with descriptions
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        tasks = []
-
-        if trading_day and trading_day != today_str and archive_daily_is_ready(trading_day):
-            tasks.append({
-                'id': 'archive_daily',
-                'name': '归档每日数据',
-                'desc': f'归档交易日 {trading_day} 的日线/分钟线/快照数据',
-            })
-        elif trading_day and trading_day != today_str:
-            latest_minute_day = _latest_minute_trading_day() or '未检测到'
-            tasks.append({
-                'id': 'archive_daily',
-                'name': '归档每日数据（等待分钟数据）',
-                'desc': f'跳过 {trading_day}：本地分钟数据仅到 {latest_minute_day}，同步通达信分钟线后将自动归档',
-                'skipped': True,
-            })
-        tasks.extend([
+        # archive_daily intentionally is not a workbench task: it produces a
+        # legacy 1m/15m archive for one symbol and is not an input to current
+        # financial, RPS, MACD, valuation, screening, or analysis indicators.
+        tasks = [
+            {'id': 'sync_tdx_qfq_exports', 'name': '接入并核验前复权日K线', 'desc': '读取通达信 T0002/export 前复权日线，写入覆盖范围审计清单；不改写通达信源文件'},
             {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
             {'id': 'fetch_financial_online', 'name': '在线获取最新财报', 'desc': '从新浪财经接口拉取最新财报数据（含 Q2 季报）'},
             {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
             {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
-        ])
+        ]
 
         # Determine which tasks are completed (based on current data freshness)
         snapshot_updated = status.get('financial_snapshot', {}).get('updated_at')
@@ -2238,6 +2246,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 'current_progress_text': job.get('current_progress_text', ''),
                 'error': job.get('error'),
                 'can_retry_failed': job.get('can_retry_failed', False),
+                'task_states': job.get('task_states', {}),
             },
             'tasks': tasks,
         })
@@ -2247,6 +2256,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
 
     def handle_data_update_retry(self) -> None:
         self._handle_data_update_start(retry_failed=True)
+
+    def handle_data_update_task(self) -> None:
+        if not _is_allowed_local_origin(self.headers.get('Origin'), self.headers.get('Referer')):
+            self.respond_json(HTTPStatus.FORBIDDEN, {"ok": False, "error": {"code": "forbidden_origin", "message": "仅允许本地页面触发数据更新"}}); return
+        try:
+            length = int(self.headers.get('Content-Length', 0)); body = json.loads(self.rfile.read(length) or b'{}')
+            task_id = str(body.get('task_id') or '').strip()
+            payload = start_data_update_task(task_id)
+            self.respond_json(HTTPStatus.OK if payload.get('ok') else HTTPStatus.CONFLICT, payload)
+        except (ValueError, json.JSONDecodeError):
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_task", "message": "task_id 参数不合法"}})
 
     def handle_save_capital_flow(self) -> None:
         """接收浏览器端资金流向数据，追加写入 Parquet"""

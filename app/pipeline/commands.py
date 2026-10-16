@@ -1,4 +1,4 @@
-"""Data update commands and orchestration."""
+"""Commands for the daily-data update workbench."""
 import importlib
 import subprocess
 import sys
@@ -97,32 +97,17 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
                 '--reuse-existing-complete',
             ],
         )]
-    commands: list[tuple[str, list[str]]] = []
-    today = datetime.now().strftime('%Y-%m-%d')
-    # archive_daily needs complete local minute bars; daily snapshots may update
-    # before minute data has been exported/synced from Tongdaxin.
-    if trading_day and trading_day != today and archive_daily_is_ready(trading_day):
-        commands.append((
-            'archive_daily',
-            [
-                TONGDAXIN_PYTHON,
-                str(PROJECT_ROOT / 'scripts/archive_daily.py'),
-                '--trading-day',
-                trading_day,
-                '--force-rerun',
-                '--rerun-reason',
-                'manual-dashboard-refresh',
-            ],
-        ))
-    commands.extend([
+    commands: list[tuple[str, list[str]]] = [
+        # The workbench deliberately excludes archive_daily: that legacy archive
+        # builds 1-minute/15-minute artifacts for a single symbol, while current
+        # production indicators are daily-bar and financial-data based.
+        ('sync_tdx_qfq_exports', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/sync_tdx_qfq_exports.py')]),
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
         ('fetch_financial_online', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/fetch_latest_financial_online.py')]),
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
-        (
-            'refresh_rps_daily',
-            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/refresh_rps_daily.py'), '--ndays', '120'],
-        ),
+        # Incrementally recompute from the last published RPS day through the current QFQ day.
+        ('refresh_rps_daily', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/refresh_rps_daily.py')]),
         (
             'rebuild_macd_signals',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_macd_signals.py'),
@@ -135,6 +120,6 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         #     [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/predict_kronos.py'),
         #      '--tdxdir', TONGDAXIN_DIR],
         # ),
-    ])
+    ]
     return commands
 

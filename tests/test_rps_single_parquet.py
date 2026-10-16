@@ -283,7 +283,10 @@ class SingleParquetRpsTests(unittest.TestCase):
                 patch.object(refresh, "load_qfq_series", return_value={}),
                 patch.object(refresh, "reference_qfq_calendar", return_value=["2026-07-30"]),
                 patch.object(refresh, "compute_rps_rows", return_value=[rps_row("2026-07-30", "sh", "600001", 80)]),
-                patch.object(refresh, "eligible_universe_by_day", return_value={"2026-07-30": {("sh", "600001")}}),
+                patch.object(
+                    refresh, "eligible_universe_and_positions_by_day",
+                    return_value=({"2026-07-30": {("sh", "600001")}}, {("sh", "600001"): {"2026-07-30": 250}}),
+                ),
                 patch.object(refresh, "refresh_from_computed_rows", return_value={"ok": True}),
             ):
                 self.assertEqual(refresh.main(), 0)

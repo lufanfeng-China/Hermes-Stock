@@ -63,6 +63,7 @@ def _quarterly_quality(monitor: dict[str, Any]) -> dict[str, Any]:
         "ttm_fcf_margin": _number((monitor.get("ttm") or {}).get("fcf_margin")),
         "profitability_status": dimensions.get("profitability", {}).get("status"),
         "has_high_or_critical_alert": any(str(item.get("severity") or "") in {"high", "critical"} for item in alerts),
+        "triggered_red_flag_count": len(alerts),
     }
 
 
@@ -99,6 +100,7 @@ def build_strict_financial_record(
             "score_coverage_status": realtime.get("status") or monitor.get("status"),
             "dimensions": _quarterly_dimensions(monitor),
             "quality": _quarterly_quality(monitor),
+            "triggered_red_flag_count": len(monitor.get("alerts") or []),
             "reason": quarterly_reason,
         },
     }

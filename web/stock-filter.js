@@ -59,9 +59,23 @@
     return '<span class="health">' + fixed(score) + '</span>' + (period ? '<span class="subvalue">' + esc(period) + '</span>' : '');
   }
 
+  function reportReleaseReturnCell(row) {
+    var value = Number(row.report_release_return_pct);
+    if (!Number.isFinite(value)) return '—';
+    var sign = value > 0 ? '+' : '';
+    var klass = value > 0 ? 'report-return positive' : value < 0 ? 'report-return negative' : 'report-return';
+    var title = '财报公告日后首个交易日（T+1）开盘至最新原始日线收盘价；T+1：' + (row.report_release_entry_trading_day || '—') + '；最新收盘：' + (row.report_release_latest_close_as_of || '—');
+    return '<span class="' + klass + '" title="' + esc(title) + '">' + sign + fixed(value, 2) + '%</span>';
+  }
+
+  function redFlagCell(row) {
+    var value = Number(row.quarterly_triggered_red_flag_count);
+    return Number.isInteger(value) && value >= 0 ? '<span class="red-flag-count" title="最新当季监测已触发的红旗规则数量">' + value + '</span>' : '—';
+  }
+
   function renderRows(data) {
     if (!(data.rows || []).length) {
-      results.innerHTML = '<tr><td colspan="8" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
+      results.innerHTML = '<tr><td colspan="10" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
       return;
     }
     results.innerHTML = data.rows.map(function (row) {
@@ -75,6 +89,8 @@
         '<td class="num">' + rpsCell(row) + '</td>' +
         '<td>' + healthCell(row.annual_total, row.annual_period) + '</td>' +
         '<td>' + healthCell(row.quarterly_total, row.quarterly_period) + '</td>' +
+        '<td class="num">' + reportReleaseReturnCell(row) + '</td>' +
+        '<td>' + redFlagCell(row) + '</td>' +
         '<td>' + trend + '</td>' +
         '<td>' + cross + '</td>' +
       '</tr>';
@@ -107,7 +123,7 @@
     currentPage = page || 1;
     status.classList.remove('error');
     status.textContent = '正在按全市场条件筛选…';
-    results.innerHTML = '<tr><td colspan="8" class="empty-state">正在加载筛选结果…</td></tr>';
+    results.innerHTML = '<tr><td colspan="10" class="empty-state">正在加载筛选结果…</td></tr>';
     pages.innerHTML = '';
     try {
       var response = await fetch('/api/stock-filter?' + requestParams(currentPage).toString());
@@ -118,13 +134,20 @@
       matchCount.textContent = '—';
       status.classList.add('error');
       status.textContent = error.message;
-      results.innerHTML = '<tr><td colspan="8" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
+      results.innerHTML = '<tr><td colspan="10" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
     }
   }
 
   form.addEventListener('submit', function (event) { event.preventDefault(); run(1); });
   form.addEventListener('reset', function () { window.setTimeout(function () { setPreset(presetInput.value); run(1); }, 0); });
   document.getElementById('reset-top').addEventListener('click', function () { form.reset(); });
+  Array.prototype.slice.call(document.querySelectorAll('.filter-group-toggle')).forEach(function (button) {
+    button.addEventListener('click', function () {
+      var group = button.closest('fieldset');
+      var collapsed = group.classList.toggle('is-collapsed');
+      button.setAttribute('aria-expanded', String(!collapsed));
+    });
+  });
   presetOptions.forEach(function (option) {
     option.addEventListener('click', function () { form.reset(); setPreset(option.dataset.preset); });
   });

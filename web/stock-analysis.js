@@ -436,7 +436,8 @@
     const chartRows = latestQuarter ? [...seriesRows, latestQuarter] : seriesRows;
     target.innerHTML = `<div class="health-series-chart-grid">${HEALTH_SERIES_CHARTS.map(([label, key, suffix]) => {
       const chartId = `health-series-chart-${key}`;
-      return `<article class="health-series-chart-card"><div class="health-series-chart-heading"><h4>${healthMetricLabel(key, label)}</h4><span>${suffix === 'pct' ? '单位：百分点' : suffix ? '单位：%' : '倍'}</span></div><div id="${chartId}" class="analysis-metric-status">暂无可用数据</div></article>`;
+      const clickable = key === 'annual_cash_profit_ratio' ? ' data-cash-profit-peers role="button" tabindex="0" title="查看二级行业全部股票现金利润比"' : '';
+      return `<article class="health-series-chart-card"${clickable}><div class="health-series-chart-heading"><h4>${healthMetricLabel(key, label)}</h4><span>${suffix === 'pct' ? '单位：百分点' : suffix ? '单位：%' : '倍'}</span></div><div id="${chartId}" class="analysis-metric-status">暂无可用数据</div></article>`;
     }).join('')}</div>`;
 
     HEALTH_SERIES_CHARTS.forEach(([, key, suffix]) => {
@@ -447,6 +448,21 @@
       const values = rows.map((row, index) => row.values ? row.values[key] : Number(series[key]?.[index]));
       renderBars(chartId, rows, values, (value) => healthSeriesValue(key, value, suffix), 'health');
     });
+  }
+
+  function renderCashProfitPeers(payload) {
+    const body = document.getElementById('industry-cash-profit-peer-table'); if (!body) return;
+    const rows = [...(payload.rows || [])].map(row => ({ ...row, annual_value: row.cash_profit?.annual?.value, annual_yoy: row.cash_profit?.annual?.yoy_pct, quarter_value: row.cash_profit?.quarter?.value, quarter_yoy: row.cash_profit?.quarter?.yoy_pct, ttm_value: row.cash_profit?.ttm?.value, ttm_yoy: row.cash_profit?.ttm?.yoy_pct }));
+    const sort = state.cashProfitPeerSort || { key: 'annual_value', direction: -1 };
+    rows.sort((a,b) => sort.key === 'stock_name' ? String(a.stock_name || '').localeCompare(String(b.stock_name || ''), 'zh-CN') * sort.direction : ((Number.isFinite(Number(a[sort.key])) ? Number(a[sort.key]) : -Infinity) - (Number.isFinite(Number(b[sort.key])) ? Number(b[sort.key]) : -Infinity)) * sort.direction);
+    const ratio = (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '—'; const pct = (v) => Number.isFinite(Number(v)) ? `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%` : '—';
+    body.innerHTML = rows.map(row => `<tr class="${row.is_current_stock ? 'industry-health-peer-current' : ''}"><td><button type="button" class="industry-health-peer-stock-trigger" data-open-stock="${escapeHtml(row.market)}:${escapeHtml(row.symbol)}" title="打开 ${escapeHtml(row.stock_name || row.symbol)} 股票分析"><span class="industry-health-peer-stock-main">${escapeHtml(row.stock_name || row.symbol)}</span><span class="industry-health-peer-stock-meta">${escapeHtml(`${row.market || ''}:${row.symbol || ''}`)}</span></button></td><td>${ratio(row.annual_value)}<span class="industry-health-peer-period"> ${escapeHtml(row.cash_profit?.annual?.period || '')}</span></td><td>${pct(row.annual_yoy)}</td><td>${ratio(row.quarter_value)}<span class="industry-health-peer-period"> ${escapeHtml(row.cash_profit?.quarter?.period || '')}</span></td><td>${pct(row.quarter_yoy)}</td><td>${ratio(row.ttm_value)}<span class="industry-health-peer-period"> ${row.ttm_value == null ? '' : 'TTM'}</span></td><td>${pct(row.ttm_yoy)}</td></tr>`).join('');
+  }
+
+  async function showCashProfitPeers() {
+    const dialog = document.getElementById('industry-cash-profit-peer-dialog'); const title = document.getElementById('industry-cash-profit-peer-title'); const status = document.getElementById('industry-cash-profit-peer-status');
+    if (!dialog || !state.selected) return; dialog.showModal(); title.textContent = '二级行业现金利润比对照'; status.textContent = '正在加载该二级行业全量股票的年报、当季和 TTM 现金利润比…';
+    try { const r = await fetch(`/api/industry-cash-profit-peers?market=${encodeURIComponent(state.selected.market)}&symbol=${encodeURIComponent(state.selected.symbol)}`); const payload = await r.json(); if (!r.ok || !payload.ok) throw new Error(payload?.error?.message || '数据不可用'); state.cashProfitPeers = payload; title.textContent = `${payload.industry_level_2 || '当前二级行业'}｜现金利润比对照`; status.textContent = `共 ${payload.rows.length} 只股票；现金利润比 = 经营现金流 ÷ 扣非归母净利润。当季为累计披露值；TTM 由本期累计 + 上年年报 − 上年同期累计计算；增长率为同口径同比。点击列头排序，点击股票打开分析页。`; renderCashProfitPeers(payload); } catch (e) { status.textContent = `加载失败：${e.message}`; }
   }
 
   function scoreFormationCopy(item, scoreItem) {
@@ -895,6 +911,47 @@
     risk.textContent = `风险覆盖层：${overlay.message || '尚未完成风险规则评估。'} 数值分不因该提示重复扣减。`;
   }
 
+  function renderFinancialReversalBadge(indicator) {
+    const badge = document.getElementById('financial-health-reversal-badge');
+    if (!badge) return;
+    const matched = indicator?.matched === true;
+    badge.hidden = !matched;
+    badge.textContent = '财报反转';
+    badge.title = matched
+      ? `符合财报反转标准｜最新 ${indicator.quarterly_period || '财报'}`
+      : '';
+  }
+
+  function renderReportReleasePricePerformance(performance) {
+    const target = document.getElementById('financial-health-release-return');
+    if (!target) return;
+    const value = Number(performance?.return_pct);
+    const available = performance?.available === true && Number.isFinite(value);
+    target.hidden = !available;
+    if (!available) {
+      target.className = 'financial-health-release-return';
+      target.title = '';
+      return;
+    }
+    const tone = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
+    target.className = `financial-health-release-return ${tone}`;
+    const amount = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+    target.querySelector('strong').textContent = amount;
+    target.title = `原始价｜财报公告 ${performance.announce_date || '—'}；T+1 ${performance.entry_trading_day || '—'} 开盘 ${performance.entry_open ?? '—'}；当前 ${performance.current_price ?? '—'}（${performance.current_price_as_of || '实时'}）`;
+  }
+
+  function showReportReleasePriceTrend() {
+    const trend = state.reportReleasePriceTrend;
+    const dialog = document.getElementById('report-release-price-trend-dialog'); const svg = document.getElementById('report-release-price-trend-svg'); const meta = document.getElementById('report-release-price-trend-meta');
+    if (!dialog || !svg || trend?.available !== true || !trend.points?.length) return;
+    const rows = trend.points, marks = trend.markers || {}; const values = [...rows.map(r=>Number(r.close)), ...Object.values(marks).map(m=>Number(m?.price))].filter(Number.isFinite); if (!values.length) return;
+    const W=920,H=330,L=58,R=28,T=25,B=46,pw=W-L-R,ph=H-T-B,min=Math.min(...values),max=Math.max(...values),pad=Math.max((max-min)*.12,max*.025),lo=min-pad,hi=max+pad,y=v=>T+ph-(v-lo)/(hi-lo)*ph,x=i=>L+(rows.length<2?pw/2:i*pw/(rows.length-1));
+    const esc=escapeHtml, path=rows.map((r,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(Number(r.close)).toFixed(1)}`).join(' '); let grid=''; for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,yy=y(v);grid+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="rgba(98,184,255,.2)" stroke-dasharray="4 5"/><text x="${L-8}" y="${yy+4}" text-anchor="end" fill="#89a9bb" font-size="11">${v.toFixed(2)}</text>`;}
+    const ticks=rows.map((r,i)=>(i===0||i===rows.length-1||i%Math.ceil(rows.length/6)===0)?`<text x="${x(i)}" y="${H-14}" text-anchor="middle" fill="#89a9bb" font-size="10">${esc(r.trading_day.slice(5))}</text>`:'').join('');
+    const specs=[['entry_open','T+1 开盘价','#ffc36f'],['high','最高价','#ff8d8d'],['low','最低价','#73dfc4'],['current','当前价','#8bd8ff']]; const markerSvg=specs.map(([key,label,color])=>{const m=marks[key]; if(!m||!Number.isFinite(Number(m.price)))return ''; const i=Math.max(0,rows.findIndex(r=>r.trading_day===m.trading_day)); const xx=x(i),yy=y(Number(m.price)),anchor=i===0?'start':i===rows.length-1?'end':'middle',labelX=i===0?xx+8:i===rows.length-1?xx-8:xx; return `<circle cx="${xx}" cy="${yy}" r="5" fill="${color}" stroke="#07131a" stroke-width="2"><title>${esc(`${label}｜${m.trading_day}｜${Number(m.price).toFixed(2)}`)}</title></circle><text x="${labelX}" y="${yy-9}" text-anchor="${anchor}" fill="${color}" font-size="11">${label} ${Number(m.price).toFixed(2)}</text>`;}).join('');
+    svg.innerHTML=`${grid}<path d="${path}" fill="none" stroke="#62b8ff" stroke-width="3"/>${markerSvg}${ticks}`; meta.textContent=`原始价收盘趋势｜${rows[0].trading_day} 至 ${rows.at(-1).trading_day}｜标记为 T+1 开盘、区间最高/最低及当前价。`; dialog.showModal();
+  }
+
   function renderHealthComparisonTable(health, monitor) {
     const target = document.getElementById('health-comparison-body');
     if (!target) return;
@@ -1181,6 +1238,9 @@
     const basicMarket = document.getElementById('basic-market-grid');
     if (basicMarket) { basicMarket.innerHTML = '<div class="analysis-metric-status">加载基础行情…</div>'; document.getElementById('basic-market-period').textContent = '加载中'; }
     renderCompositeFinancialHealth(null);
+    renderFinancialReversalBadge(null);
+    state.reportReleasePriceTrend = null;
+    renderReportReleasePricePerformance(null);
     renderHealthComparisonTable(null, null);
     renderValuationPerformanceLinkage(null, null, null);
     renderIndustryFinancialPosition(null);
@@ -1200,15 +1260,7 @@
         state.financialCache.delete(cacheKey);
         state.financialCache.set(cacheKey, cached);
       }
-      const payload = cacheIsFresh
-        ? cached.payload
-        : await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`, { signal: controller.signal }).then(async (response) => {
-          const body = await response.json();
-          if (!response.ok || !body.ok) throw new Error(body?.error?.message || `HTTP ${response.status}`);
-          putFinancialCache(cacheKey, body);
-          return body;
-        });
-      const [valuation, profile, pricePercentile, peHistory] = await Promise.all([
+      const supplementaryRequests = Promise.all([
         fetch(`/api/relative-valuation?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
@@ -1222,12 +1274,24 @@
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
       ]);
+      const payload = cacheIsFresh
+        ? cached.payload
+        : await fetch(`/api/stock-score-report-history?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}&years=6`, { signal: controller.signal }).then(async (response) => {
+          const body = await response.json();
+          if (!response.ok || !body.ok) throw new Error(body?.error?.message || `HTTP ${response.status}`);
+          putFinancialCache(cacheKey, body);
+          return body;
+        });
+      const [valuation, profile, pricePercentile, peHistory] = await supplementaryRequests;
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
       state.stockProfile = profile;
       renderNicheLeaderBadge(profile);
       renderBasicMarket(valuation, payload.reports, profile, pricePercentile, peHistory, payload.quarterly_monitor, payload.industry_financial_position);
       renderCompositeFinancialHealth(payload.composite_financial_health);
+      renderFinancialReversalBadge(payload.financial_reversal);
+      state.reportReleasePriceTrend = payload.report_release_price_trend || null;
+      renderReportReleasePricePerformance(payload.report_release_price_performance);
       renderValuationPerformanceLinkage(valuation, payload.health, payload.quarterly_monitor);
       renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
       renderIndustryFinancialPosition(payload.industry_financial_position);
@@ -1314,6 +1378,9 @@
   document.addEventListener('click', (event) => { if (event.target.closest('[data-stock-kline-history]')) showStockKlineHistory(); });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-stock-kline-history]')) { event.preventDefault(); showStockKlineHistory(); } });
   const stockKlineDialog=document.getElementById('stock-kline-dialog'); stockKlineDialog?.querySelector('.stock-kline-close')?.addEventListener('click',()=>stockKlineDialog.close()); stockKlineDialog?.addEventListener('click',(event)=>{if(event.target===stockKlineDialog)stockKlineDialog.close();});
+  document.addEventListener('click', (event) => { if (event.target.closest('[data-report-release-price-trend]')) showReportReleasePriceTrend(); });
+  document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-report-release-price-trend]')) { event.preventDefault(); showReportReleasePriceTrend(); } });
+  const reportReleaseTrendDialog = document.getElementById('report-release-price-trend-dialog'); reportReleaseTrendDialog?.querySelector('.report-release-price-trend-close')?.addEventListener('click', () => reportReleaseTrendDialog.close()); reportReleaseTrendDialog?.addEventListener('click', (event) => { if (event.target === reportReleaseTrendDialog) reportReleaseTrendDialog.close(); });
   document.addEventListener('click', (event) => { if (event.target.closest('[data-niche-leader-detail]')) showNicheLeaderDetail(); });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-niche-leader-detail]')) { event.preventDefault(); showNicheLeaderDetail(); } });
   const nicheLeaderDialog = document.getElementById('niche-leader-dialog');
@@ -1328,6 +1395,12 @@
   document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-valuation-peers]')) showIndustryValuationPeers(); });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-industry-valuation-peers]')) { event.preventDefault(); showIndustryValuationPeers(); } });
   document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-health-peers]')) showIndustryHealthPeers(); });
+  document.addEventListener('click', (event) => { if (event.target.closest('[data-cash-profit-peers]')) showCashProfitPeers(); });
+  document.addEventListener('click', (event) => { const stock = event.target.closest('[data-open-stock]')?.dataset.openStock; if (!stock) return; const [market, symbol] = stock.split(':'); window.location.href = `stock-analysis.html?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`; });
+  const cashProfitDialog = document.getElementById('industry-cash-profit-peer-dialog');
+  cashProfitDialog?.querySelector('.industry-cash-profit-peer-close')?.addEventListener('click', () => cashProfitDialog.close());
+  cashProfitDialog?.addEventListener('click', (event) => { if (event.target === cashProfitDialog) cashProfitDialog.close(); });
+  document.querySelectorAll('[data-cash-peer-sort]').forEach((header) => header.addEventListener('click', () => { const key = header.dataset.cashPeerSort; const old = state.cashProfitPeerSort || {}; state.cashProfitPeerSort = { key, direction: old.key === key ? -old.direction : -1 }; if (state.cashProfitPeers) renderCashProfitPeers(state.cashProfitPeers); }));
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-industry-health-peers]')) { event.preventDefault(); showIndustryHealthPeers(); } });
   const industryHealthPeerDialog = document.getElementById('industry-health-peer-dialog');
   industryHealthPeerDialog?.querySelector('.industry-health-peer-close')?.addEventListener('click', () => industryHealthPeerDialog.close());

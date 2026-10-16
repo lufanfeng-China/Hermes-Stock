@@ -6,6 +6,36 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class StockAnalysisPageTests(unittest.TestCase):
+    def test_financial_reversal_badge_is_conditionally_rendered_in_composite_panel(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="financial-health-reversal-badge"', html)
+        self.assertIn('financial-health-reversal-badge', html)
+        self.assertIn('function renderFinancialReversalBadge', js)
+        self.assertIn('payload.financial_reversal', js)
+        self.assertIn('财报反转', html)
+
+    def test_report_release_t_plus_one_return_is_rendered_from_api_evidence(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="financial-health-release-return"', html)
+        self.assertIn('财报发布日 T+1 开盘至今', html)
+        self.assertIn('function renderReportReleasePricePerformance', js)
+        self.assertIn('payload.report_release_price_performance', js)
+
+    def test_report_release_return_opens_raw_price_trend_with_all_four_markers(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="report-release-price-trend-dialog"', html)
+        self.assertIn('id="report-release-price-trend-svg"', html)
+        self.assertIn('data-report-release-price-trend', html)
+        self.assertIn('function showReportReleasePriceTrend', js)
+        self.assertIn('report_release_price_trend', js)
+        for marker in ('T+1 开盘价', '最高价', '最低价', '当前价'):
+            self.assertIn(marker, js)
+
     def test_requested_seven_metric_rows_exist_in_order(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         expected = [

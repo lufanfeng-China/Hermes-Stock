@@ -12,6 +12,9 @@ DATA_UPDATE_JOB_STATE: dict[str, object] = {
     'running': False,
     'can_retry_failed': False,
     'current_progress_text': '暂无数据更新任务',
+    # Per-task state is retained across independent runs; never infer that a
+    # single successful task means every other task has completed.
+    'task_states': {},
 }
 
 

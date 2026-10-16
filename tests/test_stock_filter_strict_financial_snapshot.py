@@ -34,6 +34,7 @@ class StrictFinancialSnapshotContractTest(unittest.TestCase):
         self.assertGreaterEqual(quality["ttm_fcf_margin"], 0)
         self.assertEqual(quality["profitability_status"], "stable")
         self.assertFalse(quality["has_high_or_critical_alert"])
+        self.assertEqual(record["quarterly"]["triggered_red_flag_count"], 0)
         self.assertEqual(record["composite"]["mode"], "blended")
         self.assertIsNotNone(record["composite"]["score"])
 

@@ -102,8 +102,12 @@ def _latest_raw_trading_day(tdxdir: str, symbol: str) -> str:
     return pd.Timestamp(daily.index.max()).date().isoformat()
 
 
-def load_qfq_series(export_dir: Path) -> dict[tuple[str, str], pd.DataFrame]:
+def load_qfq_series(
+    export_dir: Path, *, reference_symbol: str | None = None, tail_rows: int | None = None
+) -> dict[tuple[str, str], pd.DataFrame]:
+    """Load QFQ exports, retaining only the calculation window for non-reference symbols."""
     series: dict[tuple[str, str], pd.DataFrame] = {}
+    reference_symbol = reference_symbol.zfill(6) if reference_symbol else None
     for path in sorted(Path(export_dir).glob("*#*.txt")):
         try:
             market = _market_for_export(path)
@@ -112,6 +116,8 @@ def load_qfq_series(export_dir: Path) -> dict[tuple[str, str], pd.DataFrame]:
         except (FileNotFoundError, ValueError):
             continue
         if len(daily) >= 251:
+            if tail_rows is not None and symbol != reference_symbol:
+                daily = daily.tail(tail_rows)
             series[(market, symbol)] = daily.sort_index()
     if not series:
         raise RuntimeError(f"No QFQ exports with at least 251 daily bars found in {export_dir}")
@@ -124,35 +130,49 @@ def _rank_rps(rows: list[dict[str, Any]], field: str) -> dict[tuple[str, str], f
             for rank, row in enumerate(ordered, start=1)}
 
 
-def eligible_universe_by_day(qfq_series: dict[tuple[str, str], pd.DataFrame], target_dates: list[str]) -> dict[str, set[tuple[str, str]]]:
-    eligible: dict[str, set[tuple[str, str]]] = {}
-    for trading_day in target_dates:
-        day_universe: set[tuple[str, str]] = set()
-        for key, frame in qfq_series.items():
-            dates = _frame_dates(frame)
-            try:
-                index = dates.index(trading_day)
-            except ValueError:
-                continue
-            closes = frame["close"].astype(float).tolist()
-            if index >= 250 and not any(closes[index - window] == 0 for window in (20, 50, 120, 250)):
-                day_universe.add(key)
+def eligible_universe_and_positions_by_day(
+    qfq_series: dict[tuple[str, str], pd.DataFrame], target_dates: list[str]
+) -> tuple[dict[str, set[tuple[str, str]]], dict[tuple[str, str], dict[str, int]]]:
+    """Index each QFQ frame once; avoid repeated list conversions/searches per day."""
+    eligible = {day: set() for day in target_dates}
+    positions: dict[tuple[str, str], dict[str, int]] = {}
+    target_index = pd.to_datetime(target_dates)
+    for key, frame in qfq_series.items():
+        indexes = frame.index.get_indexer(target_index)
+        closes = frame["close"].to_numpy(dtype=float, copy=False)
+        key_positions: dict[str, int] = {}
+        for trading_day, index in zip(target_dates, indexes):
+            if index >= 250 and all(closes[index - window] != 0 for window in (20, 50, 120, 250)):
+                eligible[trading_day].add(key)
+                key_positions[trading_day] = int(index)
+        if key_positions:
+            positions[key] = key_positions
+    for trading_day, day_universe in eligible.items():
         if len(day_universe) < MIN_ELIGIBLE_UNIVERSE:
             raise QfqCoverageError(f"QFQ eligible universe for {trading_day} has {len(day_universe)} symbols; at least {MIN_ELIGIBLE_UNIVERSE} are required for cross-sectional RPS")
-        eligible[trading_day] = day_universe
-    return eligible
+    return eligible, positions
 
 
-def compute_rps_rows(qfq_series: dict[tuple[str, str], pd.DataFrame], ndays: int, reference_dates: list[str]) -> list[dict[str, Any]]:
-    target_dates = reference_dates[-max(1, ndays):]
-    expected_by_day = eligible_universe_by_day(qfq_series, target_dates)
+def eligible_universe_by_day(qfq_series: dict[tuple[str, str], pd.DataFrame], target_dates: list[str]) -> dict[str, set[tuple[str, str]]]:
+    return eligible_universe_and_positions_by_day(qfq_series, target_dates)[0]
+
+
+def compute_rps_rows(
+    qfq_series: dict[tuple[str, str], pd.DataFrame], ndays: int, reference_dates: list[str],
+    expected_by_day: dict[str, set[tuple[str, str]]] | None = None,
+    positions_by_key: dict[tuple[str, str], dict[str, int]] | None = None,
+    target_dates: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    target_dates = target_dates or reference_dates[-max(1, ndays):]
+    if expected_by_day is None or positions_by_key is None:
+        expected_by_day, positions_by_key = eligible_universe_and_positions_by_day(qfq_series, target_dates)
     rows: list[dict[str, Any]] = []
     for trading_day in target_dates:
         cross_section: list[dict[str, Any]] = []
         for market, symbol in sorted(expected_by_day[trading_day]):
             frame = qfq_series[(market, symbol)]
-            index = _frame_dates(frame).index(trading_day)
-            closes = frame["close"].astype(float).tolist()
+            index = positions_by_key[(market, symbol)][trading_day]
+            closes = frame["close"].to_numpy(dtype=float, copy=False)
             cross_section.append({"market": market, "symbol": symbol,
                 "return_20_pct": (closes[index] - closes[index - 20]) / closes[index - 20] * 100,
                 "return_50_pct": (closes[index] - closes[index - 50]) / closes[index - 50] * 100,
@@ -294,12 +314,34 @@ def refresh_from_computed_rows(computed_rows: list[dict[str, Any]], history_parq
     return {"ok": True, "rows": len(merged), "computed_rows": len(computed), "trading_days": int(merged["trading_day"].nunique()), "latest_trading_day": max(computed_days), "price_basis": "tdx_export_qfq"}
 
 
+def _incremental_target_dates(reference_dates: list[str], published_rps_days: set[str], recovery_window: int = 500) -> list[str]:
+    """Repair the most-recent continuous RPS gap without reopening old history.
+
+    Older historical gaps are not silently rewritten by a daily task.  Within
+    the bounded recent reference-calendar window, a newer stray row cannot mask
+    the first missing day: recomputation starts at its prior complete boundary.
+    """
+    if not published_rps_days:
+        raise ValueError("No published RPS history; run an explicit audited bootstrap with --ndays")
+    recent_dates = reference_dates[-recovery_window:]
+    missing_index = next((index for index, day in enumerate(recent_dates) if day not in published_rps_days), None)
+    if missing_index is None:
+        return [recent_dates[-1]]
+    return recent_dates[max(0, missing_index - 1):]
+
+
+def _published_rps_days(history_parquet: Path) -> set[str]:
+    if not history_parquet.exists():
+        return set()
+    return set(pd.read_parquet(history_parquet, columns=["trading_day"])["trading_day"].dropna().astype(str))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Refresh authoritative RPS Parquet from QFQ exports only")
     parser.add_argument("--tdxdir", default=DEFAULT_TDX_DIR)
     parser.add_argument("--qfq-export-dir", default=str(TDX_QFQ_EXPORT_DIR))
     parser.add_argument("--reference-symbol", default=DEFAULT_REFERENCE_SYMBOL)
-    parser.add_argument("--ndays", type=int, default=120)
+    parser.add_argument("--ndays", type=int, default=None, help="explicit bootstrap/rebuild window; omit for incremental refresh from last published RPS day")
     parser.add_argument("--history-parquet", default=str(DEFAULT_FINAL_DIR / RPS_DATASET_FILENAME))
     parser.add_argument("--migrate-legacy", action="store_true", help="run legacy consolidation only and exit (normally automatic)")
     args = parser.parse_args()
@@ -310,11 +352,29 @@ def main() -> int:
             print(json.dumps(migration, ensure_ascii=False))
             return 0
         raw_latest = _latest_raw_trading_day(args.tdxdir, args.reference_symbol)
-        qfq_series = load_qfq_series(Path(args.qfq_export_dir))
+        published_rps_days = _published_rps_days(history_parquet)
+        requested_days = args.ndays
+        if requested_days is None:
+            if not published_rps_days:
+                raise ValueError("No published RPS history; run an explicit audited bootstrap with --ndays")
+            # Retain a bounded catch-up window plus 250-bar lookback; the exact
+            # contiguous repair range is selected from the QFQ reference calendar.
+            requested_days = 500
+        qfq_series = load_qfq_series(
+            Path(args.qfq_export_dir), reference_symbol=args.reference_symbol,
+            tail_rows=max(251, 250 + requested_days),
+        )
         source_reference_dates = reference_qfq_calendar(qfq_series, args.reference_symbol, raw_latest)
         reference_dates = publishable_reference_dates(source_reference_dates, raw_latest)
-        target_dates = reference_dates[-max(1, args.ndays):]
-        summary = refresh_from_computed_rows(compute_rps_rows(qfq_series, args.ndays, reference_dates), history_parquet, eligible_universe_by_day(qfq_series, target_dates))
+        target_dates = (
+            reference_dates[-max(1, args.ndays):]
+            if args.ndays is not None
+            else _incremental_target_dates(reference_dates, published_rps_days)
+        )
+        eligible_by_day, positions_by_key = eligible_universe_and_positions_by_day(qfq_series, target_dates)
+        computed_rows = compute_rps_rows(qfq_series, len(target_dates), reference_dates, eligible_by_day, positions_by_key, target_dates)
+        summary = refresh_from_computed_rows(computed_rows, history_parquet, eligible_by_day)
+        summary["incremental_from_trading_day"] = target_dates[0]
         summary.update({"raw_latest_trading_day": raw_latest, "qfq_latest_trading_day": source_reference_dates[-1], "published_through_trading_day": reference_dates[-1], "legacy_migration": migration})
         print(json.dumps(summary, ensure_ascii=False))
         return 0

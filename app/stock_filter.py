@@ -167,6 +167,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
         financial = strict_financial.get(key, {})
         a, q = financial.get("annual", {}), financial.get("quarterly", {})
         composite = financial.get("composite") or {}
+        release_performance = financial.get("report_release_price_performance") or {}
         q_quality = q.get("quality") or {}
         industry = industries.get((market, symbol), {})
         valuation = valuations.get((market, symbol), {})
@@ -190,6 +191,10 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "quarterly_revenue_yoy": _num(q_quality.get("revenue_yoy")), "quarterly_ex_net_profit_yoy": _num(q_quality.get("ex_net_profit_yoy")),
             "quarterly_ttm_fcf_margin": _num(q_quality.get("ttm_fcf_margin")), "quarterly_profitability_status": q_quality.get("profitability_status"),
             "quarterly_high_or_critical_alert": q_quality.get("has_high_or_critical_alert"),
+            "quarterly_triggered_red_flag_count": q.get("triggered_red_flag_count"),
+            "report_release_return_pct": _num(release_performance.get("return_pct")),
+            "report_release_entry_trading_day": release_performance.get("entry_trading_day"),
+            "report_release_latest_close_as_of": release_performance.get("current_price_as_of"),
             "annual_period": a.get("anchor_period"), "quarterly_period": q.get("anchor_period"),
             "trend_daily": tech.get("trend"), "trend_daily_label": tech.get("trend_label"),
             "trend_weekly": qfq.get("trend_weekly"), "trend_weekly_label": qfq.get("trend_weekly_label"),

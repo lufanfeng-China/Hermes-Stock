@@ -30,7 +30,11 @@
     .preset-name { font-size:13px; font-weight:800; }
     .preset-tags { color:var(--sf-muted); font-size:10px; white-space:nowrap; }
     .filter-group { display:block; margin:0; border:1px solid var(--sf-line); border-radius:10px; background:rgba(4,13,12,.24); padding:0 11px 11px; }
-    .filter-group legend { padding:0 5px; color:var(--sf-text); font-weight:700; font-size:13px; }
+    .filter-group legend { padding:0 5px; }
+    .filter-group-toggle { display:flex; align-items:center; width:100%; gap:6px; border:0; padding:0; color:var(--sf-text); background:transparent; font:inherit; font-weight:700; font-size:13px; text-align:left; cursor:pointer; }
+    .filter-group-toggle::after { content:'⌄'; margin-left:auto; color:var(--sf-muted); font-size:14px; transition:transform .16s ease; }
+    .filter-group.is-collapsed .filter-group-toggle::after { transform:rotate(-90deg); }
+    .filter-group.is-collapsed > :not(legend) { display:none; }
     .filter-group legend span { color:var(--sf-accent); margin-right:6px; }
     .filter-note { color:var(--sf-muted); font-size:11px; line-height:1.45; margin:0 0 9px; }
     .range-grid { display:grid; grid-template-columns:1fr; gap:9px; }
@@ -41,6 +45,8 @@
     .filter-group input, .filter-group select, .sort-select { box-sizing:border-box; width:100%; border:1px solid rgba(151,204,190,.2); background:var(--sf-input); color:var(--sf-text); border-radius:7px; min-height:30px; padding:5px 7px; font:inherit; font-size:12px; outline:none; }
     .filter-group input:focus, .filter-group select:focus, .sort-select:focus { border-color:var(--sf-accent); box-shadow:0 0 0 3px rgba(183,227,107,.1); }
     .filter-group input::placeholder { color:#59716a; }
+    .filter-group input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
+    .filter-group input[type="number"]::-webkit-inner-spin-button, .filter-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
     .trend-grid { display:grid; grid-template-columns:1fr; gap:7px; }
     .trend-grid label { display:grid; grid-template-columns:58px minmax(0,1fr); align-items:start; gap:8px; color:#c7d6d0; font-size:11px; }
     .trend-grid select { margin-top:0; }
@@ -60,7 +66,7 @@
     .filter-status { min-height:20px; padding:10px 18px; color:var(--sf-muted); font-size:12px; border-bottom:1px solid var(--sf-line); }
     .filter-status.error { color:#ff9c91; background:rgba(205,71,64,.08); }
     .result-wrap { overflow:auto; }
-    .filter-table { width:100%; min-width:940px; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
+    .filter-table { width:100%; min-width:1160px; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
     .filter-table th { background:rgba(2,10,9,.24); color:#91a9a2; font-weight:600; text-align:left; white-space:nowrap; padding:11px 13px; }
     .filter-table td { border-top:1px solid rgba(151,204,190,.1); padding:12px 13px; white-space:nowrap; color:#d9e6e0; }
     .filter-table tbody tr { transition:background .18s ease; }
@@ -72,6 +78,7 @@
     .rps-total { color:var(--sf-accent); font-weight:800; }
     .rps-split { color:var(--sf-muted); font-size:10px; }
     .health { display:inline-flex; min-width:31px; justify-content:center; border:1px solid rgba(183,227,107,.24); border-radius:5px; padding:3px 5px; color:#d9eab8; background:rgba(183,227,107,.06); }
+    .report-return { color:#8bd8ff; font-weight:750; }.report-return.positive { color:var(--sf-positive); }.report-return.negative { color:var(--sf-negative); }.red-flag-count { display:inline-flex; min-width:22px; justify-content:center; border:1px solid rgba(255,126,114,.34); border-radius:999px; padding:2px 6px; color:#ff9c91; background:rgba(255,126,114,.08); }
     .empty-state { padding:40px 18px; text-align:center; color:var(--sf-muted); }
     .pagination { display:flex; justify-content:flex-end; align-items:center; gap:6px; padding:13px 18px; border-top:1px solid var(--sf-line); }
     .page-button { border:1px solid var(--sf-line); min-width:31px; color:var(--sf-text); }
@@ -85,8 +92,7 @@
 <body>
   <header class="topbar"><div><p class="eyebrow">STOCK FILTER</p><h1>股票筛选</h1></div><div class="topbar-actions" id="global-nav"></div></header>
   <main class="stock-filter-page">
-    <section class="stock-filter-intro" aria-labelledby="filter-page-title">
-      <div><h2 id="filter-page-title">条件选股</h2><p>所有条件在全市场范围内先过滤、再排序分页。RPS 使用本地最新交易日截面排名；五年年度与当季财务健康严格分开。</p></div>
+    <section class="stock-filter-intro" aria-label="筛选操作">
       <button class="quiet-button" type="button" id="reset-top">↻ 重置全部条件</button>
     </section>
     <div class="stock-filter-workbench">
@@ -98,20 +104,20 @@
             <button class="preset-option" type="button" data-preset="financial_reversal"><span class="preset-name">财报反转</span><span class="preset-tags">标准反转 · 质量确认</span></button>
             <input type="hidden" name="preset" value="">
           </section>
-          <fieldset class="filter-group" data-filter-group="rps"><legend><span>01</span>RPS 强度</legend><div class="range-grid">
+          <fieldset class="filter-group is-collapsed" data-filter-group="rps"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>01</span>RPS 强度</button></legend><div class="range-grid">
             <label class="filter-field">RPS20<div class="range-pair"><input name="rps_20_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_20_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS50<div class="range-pair"><input name="rps_50_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_50_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS120<div class="range-pair"><input name="rps_120_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_120_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS250<div class="range-pair"><input name="rps_250_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_250_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field full">RPS Total<div class="range-pair"><input name="rps_total_min" type="number" min="0" max="400" placeholder="最小"><b>—</b><input name="rps_total_max" type="number" min="0" max="400" placeholder="最大"></div></label>
           </div></fieldset>
-          <fieldset class="filter-group" data-filter-group="market"><legend><span>02</span>基础行情</legend><div class="range-grid">
+          <fieldset class="filter-group is-collapsed" data-filter-group="market"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>02</span>基础行情</button></legend><div class="range-grid">
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">PE-TTM<div class="range-pair"><input name="pe_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="pe_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">总市值（亿）<div class="range-pair"><input name="total_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="total_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">流通市值（亿）<div class="range-pair"><input name="free_float_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="free_float_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
           </div></fieldset>
-          <fieldset class="filter-group" data-filter-group="financial"><legend><span>03</span>财务健康</legend>
+          <fieldset class="filter-group is-collapsed" data-filter-group="financial"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>03</span>财务健康</button></legend>
             <div class="financial-section-title">综合评分</div><div class="range-grid">
               <label class="filter-field">综合分（5年 + 当季）<div class="range-pair"><input name="composite_total_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="composite_total_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
             </div>
@@ -134,12 +140,12 @@
               <label class="filter-field">财务风险（15）<div class="range-pair"><input name="quarterly_financial_risk_min" type="number" min="0" max="15" placeholder="最小"><b>—</b><input name="quarterly_financial_risk_max" type="number" min="0" max="15" placeholder="最大"></div></label>
             </div>
           </fieldset>
-          <fieldset class="filter-group" data-filter-group="trend"><legend><span>04</span>趋势过滤</legend><div class="trend-grid">
-            <label>日线<select name="trend_daily" multiple size="3"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="bearish">空头</option></select></label>
-            <label>周线<select name="trend_weekly" multiple size="3"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="bearish">空头</option></select></label>
-            <label>月线<select name="trend_monthly" multiple size="3"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="bearish">空头</option></select></label>
+          <fieldset class="filter-group is-collapsed" data-filter-group="trend"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>04</span>趋势过滤</button></legend><div class="trend-grid">
+            <label>日线<select name="trend_daily" multiple size="6"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="recovering">修复中</option><option value="neutral">震荡</option><option value="bearish">空头</option><option value="strong_bearish">强空头</option></select></label>
+            <label>周线<select name="trend_weekly" multiple size="4"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="neutral">震荡</option><option value="bearish">空头</option></select></label>
+            <label>月线<select name="trend_monthly" multiple size="4"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="neutral">震荡</option><option value="bearish">空头</option></select></label>
           </div></fieldset>
-          <fieldset class="filter-group" data-filter-group="technical"><legend><span>05</span>MACD / 均线金叉</legend><div class="range-grid">
+          <fieldset class="filter-group is-collapsed" data-filter-group="technical"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>05</span>MACD / 均线金叉</button></legend><div class="range-grid">
             <label class="filter-field">MACD 金叉<select name="macd_cross" multiple size="2"><option value="zero_below">零轴下金叉</option><option value="zero_above">零轴上金叉</option></select></label>
             <label class="filter-field">均线金叉<select name="golden_cross" multiple size="3"><option value="5/10">MA5 / MA10</option><option value="10/20">MA10 / MA20</option><option value="20/60">MA20 / MA60</option></select></label>
           </div></fieldset>
@@ -149,12 +155,12 @@
       <section class="filter-results-panel" aria-labelledby="filter-results-title">
         <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm">PE-TTM（降序）</option></select></div></div>
         <div id="status" class="filter-status">正在加载全市场筛选快照…</div>
-        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th class="num">RPS Total</th><th>五年健康</th><th>当季健康</th><th>日 / 周 / 月趋势</th><th>金叉</th></tr></thead><tbody id="results"></tbody></table></div>
+        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th class="num">RPS Total</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th>触发红旗数量（当季）</th><th>日 / 周 / 月趋势</th><th>金叉</th></tr></thead><tbody id="results"></tbody></table></div>
         <div id="pagination" class="pagination"></div>
       </section>
     </div>
   </main>
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
-  <script src="/stock-filter.js?v=20261015-v3"></script>
+  <script src="/stock-filter.js?v=20261015-report-fields-v5"></script>
 </body>
 </html>
