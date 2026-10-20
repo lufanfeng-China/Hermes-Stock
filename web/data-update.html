@@ -209,6 +209,12 @@
         <div class="sub" id="iv-detail">—</div>
       </div>
       <div class="freshness-card">
+        <div class="label">行业财务指标同业快照</div>
+        <div class="value" id="im-date">读取中...</div>
+        <div class="sub" id="im-detail">—</div>
+        <div class="sub" id="im-error"></div>
+      </div>
+      <div class="freshness-card">
         <div class="label">最后数据更新时间</div>
         <div class="value" id="latest-date">读取中...</div>
         <div class="sub">所有数据集的最新时间</div>
@@ -287,6 +293,12 @@ function renderFreshness(status) {
   $('iv-detail').textContent = status.industry_count
     ? `覆盖 ${status.industry_count} 个行业`
     : '—';
+  const peerSnapshot = status.industry_metric_snapshot || {};
+  $('im-date').textContent = peerSnapshot.updated_at || '—';
+  $('im-detail').textContent = peerSnapshot.coverage
+    ? `覆盖 ${peerSnapshot.member_count || 0} 个成员 / ${peerSnapshot.industry_count || 0} 个行业`
+    : '无同业快照数据';
+  $('im-error').textContent = peerSnapshot.error ? `发布错误：${peerSnapshot.error}` : '';
   $('latest-date').textContent = status.latest_updated_at || '—';
 }
 
@@ -299,6 +311,7 @@ function renderTasks(taskList, job) {
     'archive_daily': 'archive_daily',
     'update_financial_ts': 'update_financial_ts',
     'build_financial_snapshot': 'build_financial_snapshot',
+    'build_industry_metric_snapshot': 'build_industry_metric_snapshot',
     'build_industry_relative_valuation_snapshot': 'build_industry_relative_valuation_snapshot',
     'build_rps_history': 'build_rps_history',
     'update_rps_current': 'update_rps_current',
@@ -411,6 +424,12 @@ function renderButtons(job) {
     startBtn.disabled = true;
     retryBtn.hidden = true;
     errorBanner.classList.remove('active');
+  } else if (job.can_retry_failed) {
+    startBtn.textContent = '▶ 启动更新';
+    startBtn.disabled = true;
+    retryBtn.hidden = false;
+    errorBanner.classList.add('active');
+    errorBanner.textContent = job.error || '部分任务失败，可重试';
   } else if (job.status === 'succeeded') {
     startBtn.textContent = '✅ 已完成';
     startBtn.disabled = true;
@@ -424,12 +443,6 @@ function renderButtons(job) {
         startBtn._succeededTimer = null;
       }, 5000);
     }
-  } else if (job.can_retry_failed) {
-    startBtn.textContent = '▶ 启动更新';
-    startBtn.disabled = true;
-    retryBtn.hidden = false;
-    errorBanner.classList.add('active');
-    errorBanner.textContent = job.error || '部分任务失败，可重试';
   } else if (job.status === 'failed') {
     startBtn.textContent = '▶ 启动更新';
     startBtn.disabled = false;

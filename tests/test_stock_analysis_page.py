@@ -47,7 +47,7 @@ class StockAnalysisPageTests(unittest.TestCase):
             ("资本开支（CapEx）", "capex-chart"), ("商誉", "goodwill-chart"),
             ("应收账款", "accounts-receivable-chart"), ("库存", "inventory-chart"),
         ]
-        self.assertEqual(html.count('<article class="analysis-metric-card">'), 14)
+        self.assertEqual(html.count('<article class="analysis-metric-card"'), 14)
         positions = []
         for label, chart_id in expected:
             positions.append(html.index(f'>{label}<'))
@@ -105,6 +105,17 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('[data-industry-valuation-peers]:focus-visible', html)
         self.assertIn('[data-industry-health-peers]:hover', html)
         self.assertIn('[data-industry-health-peers]:focus-visible', html)
+
+    def test_health_peers_keep_latest_available_reference_separate_but_sortable(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('data-health-peer-view="latest_available_quarterly"', html)
+        self.assertIn('各股最近可用财报', html)
+        self.assertIn("view === 'latest_available_quarterly'", js)
+        self.assertIn("latest_available_quarterly", js)
+        self.assertIn("value !== null && value !== undefined", js)
+        self.assertIn('仅供参考；点击列头可排序，不构成同业排名', js)
+        self.assertNotIn("if (state.industryHealthPeerView === 'latest_available_quarterly') return", js)
 
     def test_basic_market_module_is_above_financial_health_comparison_and_uses_rps_windows(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
@@ -202,6 +213,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('分位', js)
         self.assertIn('覆盖率', js)
         self.assertIn('payload.industry_financial_position', js)
+        self.assertIn('function formatIndustryPositionMetric(value, unit)', js)
+        self.assertIn('formatIndustryPositionMetric(m.industry_median, m.unit)', js)
 
     def test_metric_lineage_drawer_discloses_current_value_basis_formula_inputs_and_non_ttm_reason(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
@@ -432,6 +445,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('comparison-flag-button', js)
 
     def test_health_questions_use_user_facing_six_prompts(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         prompts = (
             '公司过去 5 年有没有持续增长？',
@@ -445,6 +459,11 @@ class StockAnalysisPageTests(unittest.TestCase):
             self.assertIn(prompt, js)
         self.assertIn('function healthQuestionPrompt(code, health)', js)
         self.assertIn('healthQuestionPrompt(item.code, health) || item.title', js)
+        self.assertIn('function healthQuestionStatus(status)', js)
+        self.assertIn('health-question-status ${escapeHtml(status.klass)}', js)
+        self.assertIn('.health-question-card.improving', html)
+        self.assertIn('.health-question-card.watch', html)
+        self.assertIn('.health-question-card.stable', html)
 
     def test_five_year_derived_and_basic_metrics_are_retained(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
@@ -616,6 +635,72 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('ocf - capex if ocf is not None and capex is not None else None', source)
         self.assertIn('销售毛利率(%)(非金融类指标)', source)
         self.assertIn('销售净利率(%)', source)
+
+    def test_industry_peer_metric_dialog_is_generic_config_driven_and_uses_snapshot_metadata(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn('const PEER_METRIC_CONFIG =', js)
+        for metric in ('revenue', 'revenue_growth', 'net_profit', 'ex_net_profit', 'gross_margin', 'net_margin', 'roe_ex', 'debt_ratio', 'ocf', 'free_cf', 'capex', 'goodwill', 'accounts_receivable', 'inventory', 'cash_profit_ratio', 'fcf_margin', 'capex_intensity', 'accounts_receivable_growth_gap', 'inventory_growth_gap'):
+            self.assertIn(f"{metric}: {{", js)
+        self.assertIn('id="industry-metric-peer-dialog"', html)
+        self.assertIn('id="industry-metric-peer-table"', html)
+        self.assertIn('async function showIndustryMetricPeers(metricCode, trigger = null)', js)
+        self.assertIn('/api/industry-metric-peers?', js)
+        self.assertIn('payload.industry_level_2', js)
+        self.assertIn('metric.formula', js)
+        self.assertIn('payload.snapshot_as_of', js)
+        self.assertNotIn('industry-cash-profit-peer-dialog', html)
+
+    def test_industry_peer_metric_triggers_cover_supported_raw_cards_and_use_keyboard_accessibility(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        for metric in ('revenue', 'revenue_growth', 'net_profit', 'ex_net_profit', 'gross_margin', 'net_margin', 'roe_ex', 'debt_ratio', 'ocf', 'free_cf', 'capex', 'goodwill', 'accounts_receivable', 'inventory'):
+            self.assertIn(f'data-industry-metric="{metric}"', html)
+        for metric in ('cash_profit_ratio', 'fcf_margin', 'capex_intensity', 'accounts_receivable_growth_gap', 'inventory_growth_gap'):
+            self.assertIn(f"'{metric}'", js)
+        self.assertIn("event.target.closest('[data-industry-metric]')", js)
+        self.assertIn("event.key === 'Enter' || event.key === ' '", js)
+        self.assertIn("industryMetricDialog?.addEventListener('click'", js)
+
+    def test_industry_peer_metric_table_stably_sorts_current_basis_and_discloses_point_in_time_ttm(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn("industryMetricPeerSort: { key: 'current_value', direction: -1 }", js)
+        self.assertIn('function stablePeerMetricSort', js)
+        self.assertIn('current_value', js)
+        self.assertIn('industry-metric-peer-current', js)
+        self.assertIn('data-industry-metric-sort', js)
+        self.assertIn('TTM 不适用：期末时点值', js)
+        self.assertIn('ttm_supported', js)
+        self.assertIn('stock-analysis.html?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}', js)
+
+    def test_industry_peer_metric_normalizes_api_yuan_and_percentage_point_metadata_for_display(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn("function peerMetricDisplayUnit(unit) { return unit === '元' ? '亿元' : unit; }", js)
+        self.assertIn("const displayUnit = peerMetricDisplayUnit(metric.unit || config.unit);", js)
+        self.assertIn("peerMetricValue(value, displayUnit)", js)
+        self.assertIn("metric.growth_unit === '百分点'", js)
+        self.assertIn("return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(2)} 个百分点`;", js)
+        self.assertIn("const changeLabel = metric.growth_unit === '百分点' ? '变化（百分点）'", js)
+        self.assertIn("单位：${displayUnit}", js)
+
+    def test_industry_peer_metric_sort_controls_are_button_accessible_and_closing_restores_trigger_focus(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn('function industryMetricSortHeader(key, label, sort)', js)
+        self.assertIn('aria-sort="${sort.key === key ? (sort.direction === 1 ? \'ascending\' : \'descending\') : \'none\'}"', js)
+        self.assertIn('type="button" class="industry-metric-peer-sort" data-industry-metric-sort="${key}"', js)
+        self.assertIn('industryMetricPeerTrigger: null', js)
+        self.assertIn('async function showIndustryMetricPeers(metricCode, trigger = null)', js)
+        self.assertIn('state.industryMetricPeerTrigger = trigger || document.activeElement;', js)
+        self.assertIn('showIndustryMetricPeers(trigger.dataset.industryMetric, trigger)', js)
+        self.assertIn("industryMetricDialog?.addEventListener('close', () => { state.industryMetricPeerTrigger?.focus(); state.industryMetricPeerTrigger = null; });", js)
+        self.assertIn('stock-analysis.js?v=20261018-health-peer-sort-bj-filter-v94', html)
 
 
 if __name__ == '__main__':

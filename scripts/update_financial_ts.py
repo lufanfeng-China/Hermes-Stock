@@ -39,6 +39,7 @@ PROJECT = Path(__file__).parent.parent.resolve()
 TDX_CW  = Path(os.environ.get("TDX_CW_DIR", "/home/lufanfeng/tdx_data/vipdoc/cw"))
 OUT_DIR = PROJECT / "data/derived/financial_ts/by_quarter"
 META_FP = PROJECT / "data/derived/financial_ts/meta.json"
+CHANGE_MANIFEST_FP = PROJECT / "data/derived/manifests/financial_changes_current.json"
 
 sys.path.insert(0, "/home/lufanfeng/.venvs/moontdx-china-stock-data/lib/python3.12/site-packages")
 
@@ -102,6 +103,18 @@ def save_meta(meta: dict):
     meta["last_updated"] = pd.Timestamp.now().isoformat()
     with open(META_FP, "w") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
+
+
+def write_change_manifest(updates: list[tuple[str, str, int, int, dict]]) -> None:
+    """Publish the exact dirty symbols for downstream incremental snapshots."""
+    CHANGE_MANIFEST_FP.parent.mkdir(parents=True, exist_ok=True)
+    records = [{"symbol": code, "period": period, "report_date": report_date, "announce_date": announce_date}
+               for code, period, report_date, announce_date, _record in updates]
+    payload = {"generated_at": pd.Timestamp.now().isoformat(), "changed_records": records,
+               "changed_symbols": sorted({item["symbol"] for item in records})}
+    temp = CHANGE_MANIFEST_FP.with_suffix(".tmp")
+    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(CHANGE_MANIFEST_FP)
 
 
 # ── 从 gpcw zip 读取目标股票记录 ───────────────────────────────────────────
@@ -198,12 +211,12 @@ def detect_updates(meta: dict) -> list[tuple[str, str, int, int, dict]]:
         zip_period_str = parse_period(int(zpath.stem[-8:]))
         print(f"  扫描 {zpath.name} (zip_period={zip_period_str})", end=" ... ", flush=True)
 
-        # 以 zip 文件名的 period 为参考，找出 meta 中已知旧于该 zip 的股票
-        # 注意：zip 里可能同时包含多个报告期数据（如同一天发布的 Q3 + A），全部纳入
+        # Include equal-period stocks as well: a later announcement date for the
+        # same report period is a correction and must refresh derived health data.
         candidates = {
             code: latest
             for code, latest in orig_latest.items()
-            if _period_order(latest) < _period_order(zip_period_str)
+            if _period_order(latest) <= _period_order(zip_period_str)
         }
         if not candidates:
             print("无候选股票")
@@ -218,8 +231,13 @@ def detect_updates(meta: dict) -> list[tuple[str, str, int, int, dict]]:
             ad = record["announce_date"]
             new_period = parse_period(int(rd))
             orig_prev = orig_latest.get(code, "")
-            # 以原始 meta 状态判断是否真正更新（不在写入过程中动态判断）
-            if _period_order(new_period) > _period_order(orig_prev):
+            # Accept a genuinely newer report or a newer announcement for the
+            # same report period (financial corrections/restatements).
+            known_period = (meta.get("stocks", {}).get(code, {}).get("periods", {}).get(new_period, {}) or {})
+            known_announce = int(known_period.get("announce_date") or 0)
+            is_new_period = _period_order(new_period) > _period_order(orig_prev)
+            is_revision = new_period == orig_prev and ad > known_announce
+            if is_new_period or is_revision:
                 all_records.append((code, new_period, rd, ad, record))
                 found += 1
 
@@ -291,6 +309,7 @@ def main():
     print(f"\n发现 {len(updates)} 只股票有新财报 (检测耗时 {time.time()-t0:.1f}s)\n")
 
     if not updates:
+        write_change_manifest([])
         print("无需更新，退出")
         sys.exit(0)
 
@@ -327,6 +346,7 @@ def main():
             meta["stocks"][code]["latest_period"] = period_key
 
     save_meta(meta)
+    write_change_manifest(updates)
     print(f"\nMeta 已更新: {meta['stock_count']} 只股票")
     print(f"本次新增 {len(updates)} 条股票-报告期记录")
 

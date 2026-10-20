@@ -68,8 +68,11 @@ def archive_daily_is_ready(trading_day: str | None) -> bool:
 def clear_runtime_data_caches() -> None:
     module_names = [
         'app.search.index',
+        'app.stock_filter',
         'app.relative_valuation.data_loader',
         'app.relative_valuation.history',
+        'app.financial.reports',
+        'app.financial.health_peer_snapshot',
     ]
     for module_name in module_names:
         try:
@@ -89,22 +92,31 @@ def clear_runtime_data_caches() -> None:
 
 def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -> list[tuple[str, list[str]]]:
     if retry_failed:
-        return [(
-            'build_industry_relative_valuation_snapshot',
-            [
-                TONGDAXIN_PYTHON,
-                str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py'),
-                '--reuse-existing-complete',
-            ],
-        )]
+        return [
+            ('build_industry_metric_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_metric_snapshot.py')]),
+            (
+                'build_industry_relative_valuation_snapshot',
+                [
+                    TONGDAXIN_PYTHON,
+                    str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py'),
+                    '--reuse-existing-complete',
+                ],
+            ),
+        ]
     commands: list[tuple[str, list[str]]] = [
         # The workbench deliberately excludes archive_daily: that legacy archive
         # builds 1-minute/15-minute artifacts for a single symbol, while current
         # production indicators are daily-bar and financial-data based.
         ('sync_tdx_qfq_exports', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/sync_tdx_qfq_exports.py')]),
+        ('build_stock_filter_qfq_daily', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_qfq_daily.py')]),
+        # Derived once during data maintenance so /api/stock-filter never groups 12M daily rows.
+        ('build_stock_filter_market_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_market_snapshot.py')]),
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
-        ('fetch_financial_online', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/fetch_latest_financial_online.py')]),
+        ('build_financial_health_peer_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_health_peer_snapshot.py')]),
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
+        # Snapshot-only source for stock-analysis industry peer dialogs.  It is
+        # independently runnable/retryable and never blocks technical tasks.
+        ('build_industry_metric_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_metric_snapshot.py')]),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
         # Incrementally recompute from the last published RPS day through the current QFQ day.
         ('refresh_rps_daily', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/refresh_rps_daily.py')]),

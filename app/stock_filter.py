@@ -8,11 +8,17 @@ from functools import lru_cache
 import json
 from pathlib import Path
 from typing import Any
+from datetime import datetime
+import subprocess
+import sys
 
 import pandas as pd
 
+from app.stock_filter_history_progress import read_progress
+
 ROOT = Path(__file__).resolve().parent.parent
 FINAL = ROOT / "data" / "derived" / "datasets" / "final"
+HISTORICAL_FUNDAMENTALS = FINAL / "stock_filter_fundamental_history"
 PAGE_SIZE = 50
 SORT_FIELDS = {"rps_total", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
 
@@ -66,6 +72,12 @@ def matches_financial_reversal(row: dict[str, Any]) -> bool:
     return row.get("quarterly_high_or_critical_alert") is False
 
 
+def matches_blowup_break(row: dict[str, Any]) -> bool:
+    """Return whether the QFQ volume/price signal and both daily trends pass."""
+    allowed = {"strong_bullish", "bullish", "recovering"}
+    return bool(row.get("blowup_break_volume_price_ok")) and str(row.get("trend_daily") or "") in allowed and str(row.get("short_trend") or "") in allowed
+
+
 def classify_timeframe_trend(closes: list[float]) -> str | None:
     """Classify one homogeneous price timeframe from fast/mid/slow moving averages.
 
@@ -95,36 +107,38 @@ def _read_json(path: Path) -> dict:
 
 
 @lru_cache(maxsize=1)
-def _qfq_latest() -> dict[tuple[str, str], dict[str, float | None]]:
-    """Latest QFQ returns and fixed 5-day turnover from the prebuilt daily snapshot."""
-    path = FINAL / "stock_filter_qfq_daily.parquet"
-    if not path.exists(): return {}
-    frame = pd.read_parquet(path, columns=["market", "symbol", "date", "close", "volume", "free_float_shares"])
-    frame["symbol"] = frame["symbol"].astype(str).str.zfill(6)
-    frame["date"] = pd.to_datetime(frame["date"])
+def _qfq_latest() -> dict[tuple[str, str], dict[str, Any]]:
+    """Load precomputed per-symbol QFQ metrics; never aggregate daily bars in HTTP requests."""
+    payload = _read_json(FINAL / "stock_filter_market_metrics_current.json")
+    metrics = payload.get("metrics") if isinstance(payload, dict) else {}
+    if not isinstance(metrics, dict):
+        return {}
     result = {}
-    trend_labels = {"strong_bullish": "强多头", "bullish": "多头", "bearish": "空头", "neutral": "震荡"}
-    for key, group in frame.groupby(["market", "symbol"], sort=False):
-        group = group.sort_values("date")
-        close = group["close"].astype(float).tolist()
-        weekly_close = group.set_index("date")["close"].resample("W-FRI").last().dropna().astype(float).tolist()
-        monthly_close = group.set_index("date")["close"].resample("ME").last().dropna().astype(float).tolist()
-        latest = close[-1] if close else None
-        weekly_trend = classify_timeframe_trend(weekly_close)
-        monthly_trend = classify_timeframe_trend(monthly_close)
-        item = {"return_1d": None, "return_5d": None, "return_20d": None, "qfq_as_of": str(group.iloc[-1]["date"].date()) if len(group) else None,
-                "trend_weekly": weekly_trend, "trend_weekly_label": trend_labels.get(weekly_trend or ""),
-                "trend_monthly": monthly_trend, "trend_monthly_label": trend_labels.get(monthly_trend or "")}
-        for days in (1, 5, 20):
-            if len(close) > days and close[-1-days] != 0:
-                item[f"return_{days}d"] = round((close[-1] / close[-1-days] - 1) * 100, 4)
-        shares = _num(group.iloc[-1]["free_float_shares"]) if len(group) else None
-        if shares and shares > 0 and len(group) >= 5:
-            total = float(group.tail(5)["volume"].sum()) / shares * 100
-            item["turnover_5_sum"] = round(total, 4); item["turnover_5_avg"] = round(total / 5, 4)
-        else:
-            item["turnover_5_sum"] = item["turnover_5_avg"] = None
-        result[(str(key[0]), str(key[1]).zfill(6))] = item
+    for key, value in metrics.items():
+        if not isinstance(value, dict) or ":" not in str(key):
+            continue
+        market, symbol = str(key).split(":", 1)
+        result[(market.lower(), symbol.zfill(6))] = value
+    return result
+
+
+@lru_cache(maxsize=1)
+def _niche_leaders() -> dict[tuple[str, str], str]:
+    """Read verified niche-leader tags once for the filter universe."""
+    path = FINAL / "dataset_niche_leaders.parquet"
+    if not path.is_file():
+        return {}
+    try:
+        frame = pd.read_parquet(path, columns=["market", "symbol", "is_niche_leader", "niche_category"])
+    except (OSError, ValueError, KeyError):
+        return {}
+    result: dict[tuple[str, str], str] = {}
+    for item in frame.to_dict("records"):
+        if not bool(item.get("is_niche_leader")):
+            continue
+        category = str(item.get("niche_category") or "").strip()
+        if category and category != "未明确":
+            result[(str(item.get("market") or "").lower(), str(item.get("symbol") or "").zfill(6))] = category
     return result
 
 
@@ -148,6 +162,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             rps[(str(item["market"]), str(item["symbol"]).zfill(6))] = item
 
     names = _stock_name_lookup()
+    niche_leaders = _niche_leaders()
     industries = {(str(x.get("market") or "").lower(), str(x.get("symbol") or "").zfill(6)): x for x in load_industry_rows()}
     valuation_rows = _read_json(FINAL / "dataset_industry_valuation_current.json")
     valuations: dict[tuple[str, str], dict[str, Any]] = {}
@@ -175,6 +190,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
         total = sum(_num(r.get(k)) or 0 for k in ("rps_20", "rps_50", "rps_120", "rps_250"))
         rows.append({
             "market": market, "symbol": symbol, "stock_name": names.get((market, symbol), symbol),
+            "niche_leader": niche_leaders.get((market, symbol), ""),
             "industry": industry.get("industry_level_2_name") or industry.get("industry_level_1_name") or "",
             "price": _num(valuation.get("current_price")),
             "total_market_cap": _num(valuation.get("total_market_cap")),
@@ -182,6 +198,8 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "pe_ttm": _num(valuation.get("pe_ttm")), "ps_ttm": _num(valuation.get("ps_ttm")),
             "return_1d": qfq.get("return_1d"), "return_5d": qfq.get("return_5d"), "return_20d": qfq.get("return_20d"),
             "turnover_5_sum": qfq.get("turnover_5_sum"), "turnover_5_avg": qfq.get("turnover_5_avg"), "qfq_as_of": qfq.get("qfq_as_of"),
+            "blowup_break_volume_price_ok": qfq.get("blowup_break_volume_price_ok"), "blowup_break_va": qfq.get("blowup_break_va"),
+            "blowup_break_vol_ratios": qfq.get("blowup_break_vol_ratios") or [], "blowup_break_return_5d": qfq.get("blowup_break_return_5d"),
             "rps_20": _num(r.get("rps_20")), "rps_50": _num(r.get("rps_50")),
             "rps_120": _num(r.get("rps_120")), "rps_250": _num(r.get("rps_250")), "rps_total": round(total, 2),
             "composite_total": _num(composite.get("score")), "composite_mode": composite.get("mode"),
@@ -212,6 +230,47 @@ def _selected(params: dict[str, list[str]], key: str) -> set[str]:
     return {x.strip() for x in (params.get(key) or [""])[0].split(",") if x.strip()}
 
 
+def _historical_universe(as_of_date: str) -> tuple[list[dict[str, Any]], str]:
+    """Load one immutable point-in-time fundamental snapshot.
+
+    The builder writes date-specific files, so this request never substitutes a
+    current financial record for a historical date.
+    """
+    path = HISTORICAL_FUNDAMENTALS / f"{as_of_date}.json"
+    payload = _read_json(path)
+    if not payload or payload.get("as_of_date") != as_of_date or payload.get("schema_version") != "stock-filter-fundamental-history-v2":
+        # Build only the requested trading date and cache it permanently.  A lock
+        # prevents concurrent browser requests from launching duplicate scans.
+        lock = HISTORICAL_FUNDAMENTALS / f"{as_of_date}.building"
+        HISTORICAL_FUNDAMENTALS.mkdir(parents=True, exist_ok=True)
+        if not lock.exists():
+            try:
+                lock.touch(exist_ok=False)
+                log = open(HISTORICAL_FUNDAMENTALS / f"{as_of_date}.log", "a", encoding="utf-8")
+                subprocess.Popen([sys.executable, str(ROOT / "scripts" / "build_stock_filter_fundamental_history.py"), "--trading-day", as_of_date], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            except FileExistsError:
+                pass
+        raise ValueError(f"historical snapshot is building for {as_of_date}; retry after the build completes")
+    stocks = payload.get("stocks") or {}
+    if not isinstance(stocks, dict):
+        raise ValueError(f"invalid historical fundamental snapshot for {as_of_date}")
+    from app.search.index import _stock_name_lookup, load_industry_rows
+    names = _stock_name_lookup()
+    industries = {(str(row.get("market") or "").lower(), str(row.get("symbol") or "").zfill(6)): row for row in load_industry_rows()}
+    rows = []
+    for key, value in stocks.items():
+        if not isinstance(value, dict) or ":" not in str(key):
+            continue
+        market, symbol = str(key).split(":", 1)
+        industry = industries.get((market, symbol.zfill(6)), {})
+        rows.append({"market": market, "symbol": symbol.zfill(6), **value,
+                     "stock_name": names.get((market, symbol.zfill(6)), symbol.zfill(6)),
+                     "industry": industry.get("industry_level_2_name") or industry.get("industry_level_1_name") or "", "rps_total": None,
+                     "annual_dimensions": value.get("annual_dimensions") or {},
+                     "quarterly_dimensions": value.get("quarterly_dimensions") or {}})
+    return rows, as_of_date
+
+
 def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     """Apply server-side filters first, then sort and paginate 50 rows."""
     try:
@@ -222,7 +281,12 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         sort = (params.get("sort") or ["rps_total"])[0]
         if sort not in SORT_FIELDS: raise ValueError("unsupported sort")
         preset = (params.get("preset") or [""])[0].strip()
-        if preset not in {"", "financial_reversal"}: raise ValueError("unsupported preset")
+        if preset not in {"", "financial_reversal", "blowup_break"}: raise ValueError("unsupported preset")
+        as_of_date = (params.get("as_of_date") or [""])[0].strip()
+        if as_of_date:
+            datetime.strptime(as_of_date, "%Y-%m-%d")
+        niche_leader = (params.get("niche_leader") or [""])[0].strip().lower()
+        if niche_leader not in {"", "yes", "no"}: raise ValueError("niche_leader must be yes or no")
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
@@ -231,7 +295,15 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         quarterly_dimension_ranges = {name: _range(params, f"quarterly_{name}") for name in ("growth", "profitability", "cash", "working_capital", "reinvestment", "financial_risk")}
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
-    rows, data_date = _universe()
+    try:
+        rows, data_date = _historical_universe(as_of_date) if as_of_date else _universe()
+    except ValueError as exc:
+        message = str(exc)
+        code = "historical_snapshot_building" if message.startswith("historical snapshot is building") else "historical_snapshot_unavailable"
+        error: dict[str, Any] = {"code": code, "message": message}
+        if code == "historical_snapshot_building" and as_of_date:
+            error["progress"] = read_progress(HISTORICAL_FUNDAMENTALS, as_of_date)
+        return {"ok": False, "error": error}
     daily_trends = _selected(params, "trend_daily") or _selected(params, "trend")
     weekly_trends = _selected(params, "trend_weekly")
     monthly_trends = _selected(params, "trend_monthly")
@@ -242,6 +314,10 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     for row in rows:
         if market and row["market"] != market: continue
         if preset == "financial_reversal" and not matches_financial_reversal(row): continue
+        if preset == "blowup_break" and not matches_blowup_break(row): continue
+        is_niche_leader = bool(str(row.get("niche_leader") or "").strip())
+        if niche_leader == "yes" and not is_niche_leader: continue
+        if niche_leader == "no" and is_niche_leader: continue
         if not all(_passes(row.get(key), bound) for key, bound in ranges.items()):
             if any(bound != (None, None) and row.get(key) is None for key, bound in ranges.items()): excluded_missing += 1
             continue
@@ -256,8 +332,8 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     reverse = (params.get("order") or ["desc"])[0].lower() != "asc"
     filtered.sort(key=lambda row: (_num(row.get(sort)) is not None, _num(row.get(sort)) or -float("inf")), reverse=reverse)
     total = len(filtered); start = (page - 1) * PAGE_SIZE
-    return {"ok": True, "data_as_of": data_date, "total_universe": len(rows), "total_matched": total,
+    return {"ok": True, "data_as_of": data_date, "effective_trade_date": data_date, "is_historical": bool(as_of_date), "total_universe": len(rows), "total_matched": total,
             "page": page, "page_size": PAGE_SIZE, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE),
             "rows": filtered[start:start + PAGE_SIZE], "excluded_missing": excluded_missing,
             "capabilities": {"available": ["rps", "financial_health", "trend", "macd", "ma_golden_cross"],
-                             "pending_snapshot": ["basic_market", "annual_derived", "date_return", "turnover"]}}
+                             "pending_snapshot": ["basic_market", "annual_derived"]}}

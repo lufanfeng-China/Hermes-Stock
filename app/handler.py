@@ -122,10 +122,44 @@ def load_data_update_status() -> dict[str, object]:
             'complete_member_valuation_industry_count': complete_member_valuation_industry_count,
         }
 
+    peer_snapshot_path = DERIVED_FINAL_DIR / 'dataset_industry_metric_peers_current.json'
+    industry_metric_snapshot = None
+    if peer_snapshot_path.exists():
+        updated_at = _format_timestamp(peer_snapshot_path.stat().st_mtime)
+        try:
+            manifest = json.loads(peer_snapshot_path.read_text(encoding='utf-8'))
+            if not isinstance(manifest, dict):
+                raise ValueError('snapshot manifest is not a JSON object')
+            partitions = manifest.get('partitions')
+            members = manifest.get('stock_to_industry')
+            if not isinstance(partitions, dict) or not isinstance(members, dict):
+                raise ValueError('snapshot manifest is missing partitions or stock_to_industry')
+            industry_count = len(partitions)
+            member_count = len(members)
+            industry_metric_snapshot = {
+                'path': str(peer_snapshot_path),
+                'updated_at': manifest.get('built_at') or updated_at,
+                'industry_count': industry_count,
+                'member_count': member_count,
+                'coverage': {'industries': industry_count, 'members': member_count},
+                'error': manifest.get('error'),
+            }
+        except Exception as exc:
+            industry_metric_snapshot = {
+                'path': str(peer_snapshot_path),
+                'updated_at': updated_at,
+                'industry_count': None,
+                'member_count': None,
+                'coverage': None,
+                'error': f'peer snapshot manifest unreadable: {exc}',
+            }
+        latest_timestamps.append(peer_snapshot_path.stat().st_mtime)
+
     return {
         'ok': True,
         'financial_snapshot': financial_snapshot,
         'industry_valuation': industry_valuation,
+        'industry_metric_snapshot': industry_metric_snapshot,
         'data_update_job': _data_update_job_snapshot(),
         'latest_updated_at': _format_timestamp(max(latest_timestamps)) if latest_timestamps else None,
     }
@@ -575,6 +609,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/stock-score-industry-total-peers":
             self.handle_stock_score_industry_total_peers(parsed.query)
+            return
+        if parsed.path == "/api/industry-metric-peers":
+            self.handle_industry_metric_peers(parsed.query)
             return
         if parsed.path == "/api/industry-cash-profit-peers":
             self.handle_industry_cash_profit_peers(parsed.query)
@@ -2053,6 +2090,29 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 {"ok": False, "error": {"code": "stock_score_industry_total_peers_error", "message": str(exc)}},
             )
 
+    def handle_industry_metric_peers(self, query: str) -> None:
+        from app.financial.industry_metric_peers import build_industry_metric_peers
+
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        metric = params.get("metric", [""])[0].strip()
+        try:
+            payload = build_industry_metric_peers(market, symbol, metric)
+            if not payload.get("ok") and payload.get("error", {}).get("code") == "industry_classification_unavailable":
+                self.respond_json(HTTPStatus.NOT_FOUND, payload)
+                return
+            self.respond_json(HTTPStatus.OK, payload)
+        except ValueError as exc:
+            self.respond_json(
+                HTTPStatus.BAD_REQUEST,
+                {"ok": False, "error": {"code": getattr(exc, "code", "invalid_params"), "message": str(exc)}},
+            )
+        except FileNotFoundError as exc:
+            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": {"code": "snapshot_unavailable", "message": str(exc)}})
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "industry_metric_peers_error", "message": str(exc)}})
+
     def handle_industry_cash_profit_peers(self, query: str) -> None:
         from app.financial.reports import build_industry_financial_health_peers
 
@@ -2218,23 +2278,34 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         tasks = [
             {'id': 'sync_tdx_qfq_exports', 'name': '接入并核验前复权日K线', 'desc': '读取通达信 T0002/export 前复权日线，写入覆盖范围审计清单；不改写通达信源文件'},
             {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
-            {'id': 'fetch_financial_online', 'name': '在线获取最新财报', 'desc': '从新浪财经接口拉取最新财报数据（含 Q2 季报）'},
             {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
+            {'id': 'build_stock_filter_qfq_daily', 'name': '重建股票筛选前复权日线', 'desc': '从本地通达信前复权导出重建 OHLCV 日线，供量价预设与行情快照使用'},
+            {'id': 'build_stock_filter_market_snapshot', 'name': '构建股票筛选行情快照', 'desc': '将前复权日线预计算为每股收益、换手率、量价信号与周/月趋势，避免筛选页启动时重算全量日线'},
+            {'id': 'build_financial_health_peer_snapshot', 'name': '增量更新行业财务健康度快照', 'desc': '只重算本次新增或修订财报涉及的股票；失败可独立重试且不阻断技术数据更新'},
+            {'id': 'build_industry_metric_snapshot', 'name': '构建行业财务指标同业快照', 'desc': '发布二级行业同业指标分区快照；失败不阻断 RPS/MACD 技术数据更新'},
             {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ]
 
         # Determine which tasks are completed (based on current data freshness)
-        snapshot_updated = status.get('financial_snapshot', {}).get('updated_at')
+        peer_snapshot = status.get('industry_metric_snapshot')
+        peer_task = (job.get('task_states') or {}).get('build_industry_metric_snapshot')
+        peer_retryable = isinstance(peer_task, dict) and peer_task.get('status') == 'failed'
+        if peer_retryable and not job.get('running'):
+            job = {**job, 'can_retry_failed': True}
+        if isinstance(peer_snapshot, dict):
+            if isinstance(peer_task, dict) and peer_task.get('error'):
+                peer_snapshot = {**peer_snapshot, 'error': peer_task['error']}
 
         self.respond_json(HTTPStatus.OK, {
             'ok': True,
             'current_status': {
-                'financial_snapshot_updated': status.get('financial_snapshot', {}).get('updated_at'),
-                'financial_report_date': status.get('financial_snapshot', {}).get('report_date'),
-                'industry_valuation_updated': status.get('industry_valuation', {}).get('updated_at'),
-                'industry_count': status.get('industry_valuation', {}).get('industry_count'),
+                'financial_snapshot_updated': (status.get('financial_snapshot') or {}).get('updated_at'),
+                'financial_report_date': (status.get('financial_snapshot') or {}).get('report_date'),
+                'industry_valuation_updated': (status.get('industry_valuation') or {}).get('updated_at'),
+                'industry_count': (status.get('industry_valuation') or {}).get('industry_count'),
+                'industry_metric_snapshot': peer_snapshot,
                 'latest_updated_at': status.get('latest_updated_at'),
             },
             'job': {

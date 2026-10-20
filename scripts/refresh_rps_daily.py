@@ -302,12 +302,11 @@ def refresh_from_computed_rows(computed_rows: list[dict[str, Any]], history_parq
         if expected is None or universe != expected:
             raise ValueError(f"Refusing replacement with incomplete eligible universe for {trading_day}: computed {len(universe)}, expected {len(expected or set())}")
     existing = _normalise(pd.read_parquet(history_parquet)) if history_parquet.exists() else pd.DataFrame(columns=RPS_COLUMNS)
-    for trading_day in computed_days:
-        old = existing[existing["trading_day"] == trading_day]
-        missing = set(zip(old["market"], old["symbol"])) - set(zip(computed.loc[computed["trading_day"] == trading_day, "market"], computed.loc[computed["trading_day"] == trading_day, "symbol"]))
-        if missing:
-            labels = ", ".join(f"{market}:{symbol}" for market, symbol in sorted(missing))
-            raise ValueError(f"Refusing replacement that drops existing historical members for {trading_day}: {labels}")
+    # `expected_eligible_by_day` was derived from the authoritative QFQ files
+    # for this exact date.  A prior publication can contain names that were
+    # suspended or delisted and therefore have no QFQ bar now.  Replacing the
+    # day with that current QFQ universe is correct; retaining the old names
+    # would mix incompatible cross-sectional ranking populations.
     merged = pd.concat([existing[~existing["trading_day"].isin(computed_days)], computed], ignore_index=True)
     merged = merged.sort_values(["trading_day", "market", "symbol"], kind="stable").drop_duplicates(["trading_day", "market", "symbol"], keep="last").reset_index(drop=True)
     _atomic_replace_parquet(history_parquet, merged)

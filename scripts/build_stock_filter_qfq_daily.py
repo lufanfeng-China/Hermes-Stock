@@ -34,7 +34,7 @@ def main() -> None:
         if not market:
             continue
         try:
-            bars = load_tdx_qfq_daily(symbol).reset_index()[["date", "close", "volume"]]
+            bars = load_tdx_qfq_daily(symbol).reset_index()[["date", "open", "close", "volume"]]
             bars["market"], bars["symbol"] = market, symbol
             raw_float = floats.loc[symbol].get("自由流通股(股)") if symbol in floats.index else None
             bars["free_float_shares"] = pd.to_numeric(raw_float, errors="coerce")
@@ -48,7 +48,7 @@ def main() -> None:
     frame = pd.concat(rows, ignore_index=True).sort_values(["market", "symbol", "date"])
     OUT.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(OUT, index=False)
-    META.write_text(json.dumps({"schema_version": "stock-filter-qfq-daily-v1", "price_basis": "tdx_export_qfq", "float_share_anchor": "2026Q2", "rows": len(frame), "stocks": frame[["market", "symbol"]].drop_duplicates().shape[0], "failures": failures}, ensure_ascii=False), encoding="utf-8")
+    META.write_text(json.dumps({"schema_version": "stock-filter-qfq-daily-v2", "price_basis": "tdx_export_qfq", "float_share_anchor": "2026Q2", "rows": len(frame), "stocks": frame[["market", "symbol"]].drop_duplicates().shape[0], "failures": failures}, ensure_ascii=False), encoding="utf-8")
     print(json.dumps({"output": str(OUT), "rows": len(frame), "stocks": frame[["market", "symbol"]].drop_duplicates().shape[0], "failures": len(failures)}, ensure_ascii=False))
 
 

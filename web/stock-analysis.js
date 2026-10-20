@@ -12,7 +12,7 @@
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
   const MAX_FINANCIAL_CACHE_ENTRIES = 24;
-  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, industryHealthPeers: null, industryHealthPeerView: 'annual', industryHealthPeerSort: { key: 'score', direction: -1 }, stockProfile: null, selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, industryHealthPeers: null, industryHealthPeerView: 'annual', industryHealthPeerSort: { key: 'score', direction: -1 }, industryMetricPeers: null, industryMetricCode: null, industryMetricPeerTrigger: null, industryMetricPeerSort: { key: 'current_value', direction: -1 }, stockProfile: null, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -421,9 +421,9 @@
     const series = health?.series || {};
     const years = series.years || [];
     const HEALTH_SERIES_CHARTS = [
-      ['现金利润比', 'annual_cash_profit_ratio', ''], ['FCF Margin', 'fcf_margin', '%'],
-      ['应收增速差', 'receivable_growth_gap', 'pct'], ['存货增速差', 'inventory_growth_gap', 'pct'],
-      ['CapEx 强度', 'capex_intensity', '%'], ['扣非 ROE', 'roe_ex', '%'],
+      ['现金利润比', 'annual_cash_profit_ratio', '', 'cash_profit_ratio'], ['FCF Margin', 'fcf_margin', '%', 'fcf_margin'],
+      ['应收增速差', 'receivable_growth_gap', 'pct', 'accounts_receivable_growth_gap'], ['存货增速差', 'inventory_growth_gap', 'pct', 'inventory_growth_gap'],
+      ['CapEx 强度', 'capex_intensity', '%', 'capex_intensity'], ['扣非 ROE', 'roe_ex', '%', 'roe_ex'],
     ];
     if (!years.length) { target.textContent = '暂无可用五年派生序列。'; return; }
 
@@ -434,9 +434,9 @@
     });
     const latestQuarter = latestQuarterSeriesPoint(quarterlyMonitor, latestReport);
     const chartRows = latestQuarter ? [...seriesRows, latestQuarter] : seriesRows;
-    target.innerHTML = `<div class="health-series-chart-grid">${HEALTH_SERIES_CHARTS.map(([label, key, suffix]) => {
+    target.innerHTML = `<div class="health-series-chart-grid">${HEALTH_SERIES_CHARTS.map(([label, key, suffix, peerMetric]) => {
       const chartId = `health-series-chart-${key}`;
-      const clickable = key === 'annual_cash_profit_ratio' ? ' data-cash-profit-peers role="button" tabindex="0" title="查看二级行业全部股票现金利润比"' : '';
+      const clickable = peerMetric ? ` data-industry-metric="${peerMetric}" role="button" tabindex="0" title="查看二级行业全部股票${label}"` : '';
       return `<article class="health-series-chart-card"${clickable}><div class="health-series-chart-heading"><h4>${healthMetricLabel(key, label)}</h4><span>${suffix === 'pct' ? '单位：百分点' : suffix ? '单位：%' : '倍'}</span></div><div id="${chartId}" class="analysis-metric-status">暂无可用数据</div></article>`;
     }).join('')}</div>`;
 
@@ -450,19 +450,93 @@
     });
   }
 
-  function renderCashProfitPeers(payload) {
-    const body = document.getElementById('industry-cash-profit-peer-table'); if (!body) return;
-    const rows = [...(payload.rows || [])].map(row => ({ ...row, annual_value: row.cash_profit?.annual?.value, annual_yoy: row.cash_profit?.annual?.yoy_pct, quarter_value: row.cash_profit?.quarter?.value, quarter_yoy: row.cash_profit?.quarter?.yoy_pct, ttm_value: row.cash_profit?.ttm?.value, ttm_yoy: row.cash_profit?.ttm?.yoy_pct }));
-    const sort = state.cashProfitPeerSort || { key: 'annual_value', direction: -1 };
-    rows.sort((a,b) => sort.key === 'stock_name' ? String(a.stock_name || '').localeCompare(String(b.stock_name || ''), 'zh-CN') * sort.direction : ((Number.isFinite(Number(a[sort.key])) ? Number(a[sort.key]) : -Infinity) - (Number.isFinite(Number(b[sort.key])) ? Number(b[sort.key]) : -Infinity)) * sort.direction);
-    const ratio = (v) => Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '—'; const pct = (v) => Number.isFinite(Number(v)) ? `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%` : '—';
-    body.innerHTML = rows.map(row => `<tr class="${row.is_current_stock ? 'industry-health-peer-current' : ''}"><td><button type="button" class="industry-health-peer-stock-trigger" data-open-stock="${escapeHtml(row.market)}:${escapeHtml(row.symbol)}" title="打开 ${escapeHtml(row.stock_name || row.symbol)} 股票分析"><span class="industry-health-peer-stock-main">${escapeHtml(row.stock_name || row.symbol)}</span><span class="industry-health-peer-stock-meta">${escapeHtml(`${row.market || ''}:${row.symbol || ''}`)}</span></button></td><td>${ratio(row.annual_value)}<span class="industry-health-peer-period"> ${escapeHtml(row.cash_profit?.annual?.period || '')}</span></td><td>${pct(row.annual_yoy)}</td><td>${ratio(row.quarter_value)}<span class="industry-health-peer-period"> ${escapeHtml(row.cash_profit?.quarter?.period || '')}</span></td><td>${pct(row.quarter_yoy)}</td><td>${ratio(row.ttm_value)}<span class="industry-health-peer-period"> ${row.ttm_value == null ? '' : 'TTM'}</span></td><td>${pct(row.ttm_yoy)}</td></tr>`).join('');
-  }
+  // This is the single UI contract for every published industry snapshot metric.
+  const PEER_METRIC_CONFIG = {
+    revenue: { label: '营业收入', unit: '亿元', currentBasis: 'ttm' },
+    revenue_growth: { label: '营收增长率', unit: '%', currentBasis: 'quarter', ttmSupported: false },
+    net_profit: { label: '归母净利润', unit: '亿元', currentBasis: 'ttm' },
+    ex_net_profit: { label: '扣非归母净利润', unit: '亿元', currentBasis: 'ttm' },
+    gross_margin: { label: '毛利率', unit: '%', currentBasis: 'ttm' },
+    net_margin: { label: '净利率', unit: '%', currentBasis: 'ttm' },
+    roe_ex: { label: '扣非 ROE', unit: '%', currentBasis: 'ttm' },
+    debt_ratio: { label: '资产负债率', unit: '%', currentBasis: 'quarter', ttmSupported: false },
+    ocf: { label: '经营现金流', unit: '亿元', currentBasis: 'ttm' },
+    free_cf: { label: '自由现金流', unit: '亿元', currentBasis: 'ttm' },
+    capex: { label: '资本开支', unit: '亿元', currentBasis: 'ttm' },
+    goodwill: { label: '商誉', unit: '亿元', currentBasis: 'quarter', ttmSupported: false },
+    accounts_receivable: { label: '应收账款', unit: '亿元', currentBasis: 'quarter', ttmSupported: false },
+    inventory: { label: '库存', unit: '亿元', currentBasis: 'quarter', ttmSupported: false },
+    cash_profit_ratio: { label: '现金利润比', unit: '倍', currentBasis: 'ttm' },
+    fcf_margin: { label: 'FCF Margin', unit: '%', currentBasis: 'ttm' },
+    capex_intensity: { label: '资本开支强度', unit: '%', currentBasis: 'ttm' },
+    accounts_receivable_growth_gap: { label: '应收账款增速差', unit: '%', currentBasis: 'quarter', ttmSupported: false },
+    inventory_growth_gap: { label: '存货增速差', unit: '%', currentBasis: 'quarter', ttmSupported: false },
+  };
 
-  async function showCashProfitPeers() {
-    const dialog = document.getElementById('industry-cash-profit-peer-dialog'); const title = document.getElementById('industry-cash-profit-peer-title'); const status = document.getElementById('industry-cash-profit-peer-status');
-    if (!dialog || !state.selected) return; dialog.showModal(); title.textContent = '二级行业现金利润比对照'; status.textContent = '正在加载该二级行业全量股票的年报、当季和 TTM 现金利润比…';
-    try { const r = await fetch(`/api/industry-cash-profit-peers?market=${encodeURIComponent(state.selected.market)}&symbol=${encodeURIComponent(state.selected.symbol)}`); const payload = await r.json(); if (!r.ok || !payload.ok) throw new Error(payload?.error?.message || '数据不可用'); state.cashProfitPeers = payload; title.textContent = `${payload.industry_level_2 || '当前二级行业'}｜现金利润比对照`; status.textContent = `共 ${payload.rows.length} 只股票；现金利润比 = 经营现金流 ÷ 扣非归母净利润。当季为累计披露值；TTM 由本期累计 + 上年年报 − 上年同期累计计算；增长率为同口径同比。点击列头排序，点击股票打开分析页。`; renderCashProfitPeers(payload); } catch (e) { status.textContent = `加载失败：${e.message}`; }
+  function peerMetricNumber(value) { return Number.isFinite(Number(value)) ? Number(value) : null; }
+  function peerMetricDisplayUnit(unit) { return unit === '元' ? '亿元' : unit; }
+  function peerMetricValue(value, unit) {
+    const numeric = peerMetricNumber(value);
+    if (numeric === null) return '—';
+    if (unit === '亿元') return `${(numeric / 1e8).toFixed(2)} 亿元`;
+    if (unit === '%') return `${numeric.toFixed(2)}%`;
+    return `${numeric.toFixed(2)}${unit || ''}`;
+  }
+  function peerMetricChange(value, unit) {
+    const numeric = peerMetricNumber(value);
+    if (numeric === null) return '—';
+    if (unit === '百分点') return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(2)} 个百分点`;
+    return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(2)}%`;
+  }
+  function stablePeerMetricSort(rows, key, direction) {
+    return rows.map((row, index) => ({ row, index })).sort((left, right) => {
+      const a = left.row[key]; const b = right.row[key];
+      if (key === 'stock_name') return String(a || '').localeCompare(String(b || ''), 'zh-CN') * direction || left.index - right.index;
+      const an = peerMetricNumber(a); const bn = peerMetricNumber(b);
+      if (an === null || bn === null) return an === bn ? left.index - right.index : an === null ? 1 : -1;
+      return (an - bn) * direction || left.index - right.index;
+    }).map(({ row }) => row);
+  }
+  function metricCell(row, basis) { return row.metrics?.[basis] || null; }
+  function industryMetricSortHeader(key, label, sort) {
+    return `<th aria-sort="${sort.key === key ? (sort.direction === 1 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="industry-metric-peer-sort" data-industry-metric-sort="${key}">${escapeHtml(label)} <span aria-hidden="true">↕</span></button></th>`;
+  }
+  function renderIndustryMetricPeers(payload) {
+    const table = document.getElementById('industry-metric-peer-table'); const status = document.getElementById('industry-metric-peer-status');
+    const config = PEER_METRIC_CONFIG[state.industryMetricCode] || {}; if (!table) return;
+    const metric = payload.metric || {}; const displayUnit = peerMetricDisplayUnit(metric.unit || config.unit); const ttmSupported = metric.ttm_supported ?? config.ttmSupported ?? true;
+    const currentBasis = ttmSupported ? (metric.current_basis || config.currentBasis || 'ttm') : 'quarter';
+    const rows = (payload.rows || []).map((row) => {
+      const annual = metricCell(row, 'annual'); const quarter = metricCell(row, 'quarter'); const ttm = metricCell(row, 'ttm'); const current = metricCell(row, currentBasis);
+      return { ...row, annual_value: annual?.value, annual_change: annual?.yoy_value, quarter_value: quarter?.value, quarter_change: quarter?.yoy_value, ttm_value: ttm?.value, ttm_change: ttm?.yoy_value, current_value: current?.value };
+    });
+    const sort = state.industryMetricPeerSort; const sorted = stablePeerMetricSort(rows, sort.key, sort.direction);
+    const changeLabel = metric.growth_unit === '百分点' ? '变化（百分点）' : (metric.change_label || '同比');
+    const cell = (value, period) => `${peerMetricValue(value, displayUnit)}${period ? `<span class="industry-metric-peer-period"> ${escapeHtml(period)}</span>` : ''}`;
+    const change = (value) => peerMetricChange(value, metric.growth_unit || '%');
+    table.innerHTML = `<thead><tr>${[
+      industryMetricSortHeader('stock_name', '股票名称', sort),
+      industryMetricSortHeader('annual_value', '全年', sort),
+      industryMetricSortHeader('annual_change', changeLabel, sort),
+      industryMetricSortHeader('quarter_value', '当季累计', sort),
+      industryMetricSortHeader('quarter_change', changeLabel, sort),
+      ...(ttmSupported ? [industryMetricSortHeader('ttm_value', 'TTM', sort), industryMetricSortHeader('ttm_change', `TTM ${changeLabel}`, sort)] : []),
+    ].join('')}</tr></thead><tbody>${sorted.map((row) => `<tr class="${row.is_current_stock ? 'industry-metric-peer-current' : ''}"><td><button type="button" class="industry-metric-peer-stock-trigger" data-open-stock="${escapeHtml(row.market)}:${escapeHtml(row.symbol)}" title="打开 ${escapeHtml(row.stock_name || row.symbol)} 股票分析"><span>${escapeHtml(row.stock_name || row.symbol)}</span><small>${escapeHtml(`${row.market || ''}:${row.symbol || ''}`)}</small></button></td><td>${cell(row.annual_value, row.metrics?.annual?.period)}</td><td>${change(row.annual_change)}</td><td>${cell(row.quarter_value, row.metrics?.quarter?.period)}</td><td>${change(row.quarter_change)}</td>${ttmSupported ? `<td>${cell(row.ttm_value, row.metrics?.ttm?.period)}</td><td>${change(row.ttm_change)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="${ttmSupported ? 7 : 5}">暂无行业成员数据。</td></tr>`}</tbody>`;
+    if (status) status.textContent = `${payload.coverage ? `覆盖：${payload.coverage.members ?? rows.length} 家成员。` : `共 ${rows.length} 只股票。`} 当前按${currentBasis === 'ttm' ? 'TTM' : '最新期末/当季累计'}降序；缺失值始终排最后。${ttmSupported ? ' 当季为累计披露值；同比仅比较同口径。' : ' TTM 不适用：期末时点值。'} 点击列头排序，点击股票打开分析页。`;
+  }
+  async function showIndustryMetricPeers(metricCode, trigger = null) {
+    const config = PEER_METRIC_CONFIG[metricCode]; const dialog = document.getElementById('industry-metric-peer-dialog'); const title = document.getElementById('industry-metric-peer-title'); const status = document.getElementById('industry-metric-peer-status'); const table = document.getElementById('industry-metric-peer-table');
+    if (!config || !dialog || !state.selected) return;
+    state.industryMetricPeerTrigger = trigger || document.activeElement;
+    state.industryMetricCode = metricCode; state.industryMetricPeers = null; state.industryMetricPeerSort = { key: 'current_value', direction: -1 };
+    if (!dialog.open) dialog.showModal(); title.textContent = `二级行业｜${config.label}`; status.textContent = '正在读取已发布的二级行业指标快照…'; table.innerHTML = '<tbody><tr><td>正在加载行业成员…</td></tr></tbody>';
+    try {
+      const response = await fetch(`/api/industry-metric-peers?market=${encodeURIComponent(state.selected.market)}&symbol=${encodeURIComponent(state.selected.symbol)}&metric=${encodeURIComponent(metricCode)}`);
+      const payload = await response.json(); if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || payload?.reason || '数据不可用');
+      state.industryMetricPeers = payload; const metric = payload.metric || {}; const formula = metric.formula || '公式由行业快照元数据提供'; const displayUnit = peerMetricDisplayUnit(metric.unit || config.unit || '—');
+      title.textContent = `${payload.industry_level_2 || '当前二级行业'}｜${metric.label || config.label}｜${formula}｜单位：${displayUnit}｜快照：${payload.snapshot_as_of || '未提供'}`;
+      renderIndustryMetricPeers(payload);
+    } catch (error) { status.textContent = `加载失败：${error.message || '未知错误'}`; table.innerHTML = '<tbody><tr><td>行业指标快照加载失败。</td></tr></tbody>'; }
   }
 
   function scoreFormationCopy(item, scoreItem) {
@@ -677,6 +751,17 @@
     return HEALTH_QUESTION_PROMPTS[code];
   }
 
+  function healthQuestionStatus(status) {
+    const states = {
+      improving: { klass: 'improving', label: '改善' },
+      stable: { klass: 'stable', label: '平稳' },
+      watch: { klass: 'watch', label: '需关注' },
+      insufficient: { klass: 'unavailable', label: '数据不足' },
+      unavailable: { klass: 'unavailable', label: '数据不足' },
+    };
+    return states[status] || states.unavailable;
+  }
+
   function renderHealthQuestions(health) {
     const target = document.getElementById('health-question-grid');
     const period = document.getElementById('health-question-period');
@@ -684,7 +769,13 @@
     if (!health) { if (period) period.textContent = '选择股票后加载。'; target.textContent = '选择股票后加载。'; return; }
     if (period) period.textContent = annualAssessmentBasis(health);
     const scoreCode = { growth: 'growth_quality', profit_premium: 'growth_quality', profitability: 'profitability', cash_conversion: 'cash_quality', working_capital: 'working_capital', capital_leverage: 'reinvestment' };
-    target.innerHTML = (health.conclusions || []).map((item) => { const code = scoreCode[item.code]; const score = (health.score_breakdown || []).find((row) => row.code === code); const copy = conclusionSummary(item); return `<article class="health-question-card"><h4>${escapeHtml(healthQuestionPrompt(item.code, health) || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHtml(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><p>${escapeHtml(copy.summary)}</p></button></article>`; }).join('') || '暂无可用问题结论。';
+    target.innerHTML = (health.conclusions || []).map((item) => {
+      const code = scoreCode[item.code];
+      const score = (health.score_breakdown || []).find((row) => row.code === code);
+      const copy = conclusionSummary(item);
+      const status = healthQuestionStatus(item.status);
+      return `<article class="health-question-card ${escapeHtml(status.klass)}"><h4>${escapeHtml(healthQuestionPrompt(item.code, health) || item.title)}</h4><button type="button" data-score-source="annual" data-score-code="${escapeHtml(code)}"><span class="health-question-score">${score?.points ?? '—'} / ${score?.weight ?? '—'}</span><span class="health-question-status ${escapeHtml(status.klass)}">${escapeHtml(status.label)}</span><p>${escapeHtml(copy.summary)}</p></button></article>`;
+    }).join('') || '暂无可用问题结论。';
   }
 
   const LATEST_REPORT_CHANGE_CONFIG = {
@@ -1129,16 +1220,17 @@
   }
 
   const HEALTH_PEER_DIMENSIONS = ['growth_quality', 'profitability', 'cash_quality', 'working_capital', 'reinvestment', 'financial_risk'];
-  const formatHealthPeerScore = (value) => Number.isFinite(Number(value)) ? Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1) : '—';
+  const formatHealthPeerScore = (value) => (value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))) ? Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1) : '—';
+  const healthPeerDimension = (score, code) => (score?.dimensions || {})[code];
   function renderIndustryHealthPeers() {
     const payload = state.industryHealthPeers; const view = state.industryHealthPeerView; const body = document.getElementById('industry-health-peer-table'); const status = document.getElementById('industry-health-peer-status');
     if (!payload || !body || !status) return;
-    const { key, direction } = state.industryHealthPeerSort;
-    const rows = [...(payload.rows || [])].sort((a, b) => { const av = key === 'stock_name' ? String(a.stock_name || '') : Number((a[view]?.dimensions || {})[key] ?? a[view]?.[key]); const bv = key === 'stock_name' ? String(b.stock_name || '') : Number((b[view]?.dimensions || {})[key] ?? b[view]?.[key]); if (key === 'stock_name') return av.localeCompare(bv, 'zh-CN') * direction; const aok = Number.isFinite(av), bok = Number.isFinite(bv); if (aok !== bok) return aok ? -1 : 1; return aok ? (av - bv) * direction : String(a.symbol).localeCompare(String(b.symbol)); });
-    const valid = rows.filter(row => Number.isFinite(Number(row[view]?.score))).length;
-    const periods = [...new Set(rows.map(row => view === 'annual' ? (row.annual?.periods || []).join('–') : row.quarterly?.period).filter(Boolean))];
-    status.textContent = `${payload.industry_level_2 || '当前二级行业'}｜${view === 'annual' ? '完整年报健康评分（5年年报；成立期样本单列）' : '当季最新财报监测（TTM + 最新季度资产负债表）'}｜可评分 ${valid}/${rows.length}｜报告期：${periods.join(' / ') || '—'}。点击列头可排序。`;
-    body.innerHTML = rows.map(row => { const score = row[view] || {}; const dims = score.dimensions || {}; return `<tr class="${row.is_current_stock ? 'industry-health-peer-current' : ''}"><td><span class="industry-health-peer-stock">${escapeHtml(row.stock_name || row.symbol)}</span><span class="industry-health-peer-code">${escapeHtml(`${row.market || ''}:${row.symbol || ''}`)}${view === 'annual' ? `｜${escapeHtml(score.assessment_track === 'establishment' ? `${score.sample_years}年样本` : '5年年报')}` : `｜${escapeHtml(score.period || '—')}`}</span></td><td>${formatHealthPeerScore(score.score)}</td>${HEALTH_PEER_DIMENSIONS.map(code => `<td>${formatHealthPeerScore(dims[code])}</td>`).join('')}</tr>`; }).join('') || '<tr><td colspan="8">暂无行业成员数据。</td></tr>';
+    const referenceOnly = view === 'latest_available_quarterly'; const { key, direction } = state.industryHealthPeerSort;
+    const rows = [...(payload.rows || [])].sort((a, b) => { const av = key === 'stock_name' ? String(a.stock_name || '') : Number(key === 'score' ? a[view]?.score : healthPeerDimension(a[view], key, view)); const bv = key === 'stock_name' ? String(b.stock_name || '') : Number(key === 'score' ? b[view]?.score : healthPeerDimension(b[view], key, view)); if (key === 'stock_name') return av.localeCompare(bv, 'zh-CN') * direction; const aok = Number.isFinite(av), bok = Number.isFinite(bv); if (aok !== bok) return aok ? -1 : 1; return aok ? (av - bv) * direction : String(a.symbol).localeCompare(String(b.symbol)); });
+    const valid = rows.filter(row => { const value = row[view]?.score; return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)); }).length;
+    const periods = [...new Set(rows.map(row => view === 'annual' ? (row.annual?.periods || []).join('–') : row[view]?.period).filter(Boolean))];
+    status.textContent = referenceOnly ? `${payload.industry_level_2 || '当前二级行业'}｜各股最近可用财报（TTM + 对应季度资产负债表）｜可展示 ${valid}/${rows.length}｜报告期因公司而异：${periods.join(' / ') || '—'}。仅供参考；点击列头可排序，不构成同业排名。` : `${payload.industry_level_2 || '当前二级行业'}｜${view === 'annual' ? '完整年报健康评分（5年年报；成立期样本单列）' : '当季最新财报监测（TTM + 最新季度资产负债表）'}｜可评分 ${valid}/${rows.length}｜报告期：${periods.join(' / ') || '—'}。点击列头可排序。`;
+    body.innerHTML = rows.map(row => { const score = row[view] || {}; return `<tr class="${row.is_current_stock ? 'industry-health-peer-current' : ''}"><td><span class="industry-health-peer-stock">${escapeHtml(row.stock_name || row.symbol)}</span><span class="industry-health-peer-code">${escapeHtml(`${row.market || ''}:${row.symbol || ''}`)}${view === 'annual' ? `｜${escapeHtml(score.assessment_track === 'establishment' ? `${score.sample_years}年样本` : '5年年报')}` : `｜${escapeHtml(score.period || '—')}${referenceOnly ? '｜仅供参考' : ''}`}</span></td><td>${formatHealthPeerScore(score.score)}</td>${HEALTH_PEER_DIMENSIONS.map(code => `<td>${formatHealthPeerScore(healthPeerDimension(score, code, view))}</td>`).join('')}</tr>`; }).join('') || '<tr><td colspan="8">暂无行业成员数据。</td></tr>';
     document.querySelectorAll('[data-health-peer-view]').forEach(button => button.classList.toggle('active', button.dataset.healthPeerView === view));
   }
   async function showIndustryHealthPeers() {
@@ -1162,13 +1254,19 @@
     target.innerHTML = `<div class="latest-report-change-grid"><article class="latest-report-change-item stable" data-industry-valuation-peers role="button" tabindex="0" title="查看该二级行业全部股票估值位置"><strong>行业内估值位置</strong><p>${escapeHtml(valuation.valuation_band_label || '—')}｜${Number.isFinite(Number(valuation.primary_percentile)) ? `${Number(valuation.primary_percentile).toFixed(1)}% 分位` : '分位不可用'}</p><span class="latest-report-change-basis">个股 ${Number.isFinite(Number(valuation.primary_percentile_value)) ? Number(valuation.primary_percentile_value).toFixed(2) : '—'}；行业加权 ${Number.isFinite(Number(valuation.industry_weighted_pe_ttm)) ? `PE ${Number(valuation.industry_weighted_pe_ttm).toFixed(2)}` : '—'}</span></article><article class="latest-report-change-item stable" data-industry-health-peers role="button" tabindex="0" title="查看该二级行业全部股票财务健康度"><strong>财务健康度</strong><p>${escapeHtml(healthScore)}</p><span class="latest-report-change-basis">完整年报：${escapeHtml((health?.periods || []).join('、') || '—')}</span></article><article class="latest-report-change-item ${alerts.length || flags.length ? 'watch' : 'stable'}"><strong>季度变化与红旗</strong><p>季度变化：${alerts.length ? `${alerts.length} 项提示` : '暂无提示'}；红旗：${flags.length} 项</p><span class="latest-report-change-basis">${escapeHtml([...alerts.map((item) => item.title), ...flags.map((item) => item.title)].join('；') || '无已列示事项')}</span></article></div>`;
   }
 
+  function formatIndustryPositionMetric(value, unit) {
+    if (!Number.isFinite(Number(value))) return '—';
+    const suffix = String(unit || '').trim();
+    return `${Number(value).toFixed(2)}${suffix ? ` ${escapeHtml(suffix)}` : ''}`;
+  }
+
   function renderIndustryFinancialPosition(position) {
     const target = document.getElementById('industry-financial-position'); const period = document.getElementById('industry-financial-position-period');
     if (!target || !period) return;
     if (position?.status !== 'available') { period.textContent = '行业对比暂不可用'; target.textContent = '缺少可对齐的行业快照数据。'; return; }
     period.textContent = `${position.industry_level_2}｜${position.report_period}｜覆盖率 ${position.period_alignment_coverage}%（${position.aligned_sample_count}/${position.industry_member_count}）`;
     target.className = '';
-    const rows = Object.values(position.metrics || {}).map((m) => `<tr><td>${escapeHtml(m.label)}</td><td>${Number.isFinite(m.company_value) ? m.company_value.toFixed(2) : '—'} ${escapeHtml(m.unit || '')}</td><td>${Number.isFinite(m.industry_median) ? m.industry_median.toFixed(2) : '—'}</td><td>${Number.isFinite(m.percentile) ? `${m.percentile.toFixed(1)}%` : '—'}</td><td>${m.sample_count || 0}</td></tr>`).join('');
+    const rows = Object.values(position.metrics || {}).map((m) => `<tr><td>${escapeHtml(m.label)}</td><td>${formatIndustryPositionMetric(m.company_value, m.unit)}</td><td>${formatIndustryPositionMetric(m.industry_median, m.unit)}</td><td>${Number.isFinite(m.percentile) ? `${m.percentile.toFixed(1)}%` : '—'}</td><td>${m.sample_count || 0}</td></tr>`).join('');
     target.innerHTML = `<table class="health-comparison-table"><thead><tr><th>指标</th><th>公司</th><th>行业中位数</th><th>分位</th><th>样本数</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
@@ -1395,12 +1493,14 @@
   document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-valuation-peers]')) showIndustryValuationPeers(); });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-industry-valuation-peers]')) { event.preventDefault(); showIndustryValuationPeers(); } });
   document.addEventListener('click', (event) => { if (event.target.closest('[data-industry-health-peers]')) showIndustryHealthPeers(); });
-  document.addEventListener('click', (event) => { if (event.target.closest('[data-cash-profit-peers]')) showCashProfitPeers(); });
+  document.addEventListener('click', (event) => { const trigger = event.target.closest('[data-industry-metric]'); if (trigger) showIndustryMetricPeers(trigger.dataset.industryMetric, trigger); });
+  document.addEventListener('keydown', (event) => { const trigger = event.target.closest('[data-industry-metric]'); if ((event.key === 'Enter' || event.key === ' ') && trigger) { event.preventDefault(); showIndustryMetricPeers(trigger.dataset.industryMetric, trigger); } });
   document.addEventListener('click', (event) => { const stock = event.target.closest('[data-open-stock]')?.dataset.openStock; if (!stock) return; const [market, symbol] = stock.split(':'); window.location.href = `stock-analysis.html?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}`; });
-  const cashProfitDialog = document.getElementById('industry-cash-profit-peer-dialog');
-  cashProfitDialog?.querySelector('.industry-cash-profit-peer-close')?.addEventListener('click', () => cashProfitDialog.close());
-  cashProfitDialog?.addEventListener('click', (event) => { if (event.target === cashProfitDialog) cashProfitDialog.close(); });
-  document.querySelectorAll('[data-cash-peer-sort]').forEach((header) => header.addEventListener('click', () => { const key = header.dataset.cashPeerSort; const old = state.cashProfitPeerSort || {}; state.cashProfitPeerSort = { key, direction: old.key === key ? -old.direction : -1 }; if (state.cashProfitPeers) renderCashProfitPeers(state.cashProfitPeers); }));
+  const industryMetricDialog = document.getElementById('industry-metric-peer-dialog');
+  industryMetricDialog?.querySelector('.industry-metric-peer-close')?.addEventListener('click', () => industryMetricDialog.close());
+  industryMetricDialog?.addEventListener('click', (event) => { if (event.target === industryMetricDialog) industryMetricDialog.close(); });
+  industryMetricDialog?.addEventListener('close', () => { state.industryMetricPeerTrigger?.focus(); state.industryMetricPeerTrigger = null; });
+  document.getElementById('industry-metric-peer-table')?.addEventListener('click', (event) => { const header = event.target.closest('[data-industry-metric-sort]'); if (!header || !state.industryMetricPeers) return; const key = header.dataset.industryMetricSort; const old = state.industryMetricPeerSort; state.industryMetricPeerSort = { key, direction: old.key === key ? -old.direction : 1 }; renderIndustryMetricPeers(state.industryMetricPeers); });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-industry-health-peers]')) { event.preventDefault(); showIndustryHealthPeers(); } });
   const industryHealthPeerDialog = document.getElementById('industry-health-peer-dialog');
   industryHealthPeerDialog?.querySelector('.industry-health-peer-close')?.addEventListener('click', () => industryHealthPeerDialog.close());

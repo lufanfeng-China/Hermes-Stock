@@ -144,6 +144,29 @@ class SingleParquetRpsTests(unittest.TestCase):
             self.assertFalse((final_dir / "dataset_stock_rps_manifest.json").exists())
             self.assertFalse((final_dir / "rps_generations").exists())
 
+    def test_refresh_replaces_a_day_with_the_current_qfq_eligible_universe_when_old_members_are_absent(self) -> None:
+        """Suspended/delisted names absent from the new QFQ day must not block refresh."""
+        refresh = load_refresh_module()
+        with TemporaryDirectory() as temporary_dir:
+            parquet = Path(temporary_dir) / "dataset_stock_rps_history.parquet"
+            pd.DataFrame([
+                rps_row("2026-10-15", "sh", "600001", 80),
+                rps_row("2026-10-15", "sh", "600002", 70),
+            ]).to_parquet(parquet, index=False)
+
+            refresh.refresh_from_computed_rows(
+                [rps_row("2026-10-15", "sh", "600001", 99)],
+                parquet,
+                {"2026-10-15": {("sh", "600001")}},
+            )
+
+            refreshed = pd.read_parquet(parquet)
+            self.assertEqual(
+                list(zip(refreshed["market"], refreshed["symbol"])),
+                [("sh", "600001")],
+            )
+            self.assertEqual(refreshed.iloc[0]["rps_20"], 99)
+
     def test_refresh_failed_atomic_swap_retains_old_parquet(self) -> None:
         refresh = load_refresh_module()
         with TemporaryDirectory() as temporary_dir:

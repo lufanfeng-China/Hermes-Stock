@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.financial.industry_metric_snapshot import SUPPORTED_METRICS, build_metric_cells
 from app.financial.reports import _materialize_financial_report, _load_raw_daily_bars, build_report_release_price_performance
 from app.search import index as search_index
 from app.stock_filter_snapshot import build_strict_financial_record
@@ -26,7 +27,9 @@ from app.stock_filter_snapshot import build_strict_financial_record
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE = ROOT / "data" / "derived" / "financial_ts" / "by_quarter"
 OUT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__2026Q2.json"
-PERIODS = ("2021A", "2022A", "2023A", "2024A", "2025A", "2025Q2", "2026Q2")
+# Include the prior comparable quarter so every TTM peer metric can disclose a
+# same-basis year-on-year value; 2024Q2 is not used by annual health scoring.
+PERIODS = ("2021A", "2022A", "2023A", "2024A", "2024Q2", "2025A", "2025Q2", "2026Q2")
 
 
 class _Materializer:
@@ -94,6 +97,9 @@ def build_snapshot() -> dict:
         record = build_strict_financial_record(
             reports, industry_level_1=industry_l1, annual_anchor="2025A", quarterly_anchor="2026Q2",
         )
+        # Persist raw, period-labelled peer cells once at snapshot build time.  The
+        # click-path API will only map industry members and read these cells.
+        record["peer_metrics"] = {metric: build_metric_cells(reports, metric) for metric in sorted(SUPPORTED_METRICS)}
         raw_bars = _load_raw_daily_bars(search_index, symbol)
         latest_close = raw_bars[-1].get("close") if raw_bars else None
         record["report_release_price_performance"] = build_report_release_price_performance(

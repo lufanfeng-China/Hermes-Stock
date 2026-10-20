@@ -17,7 +17,7 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertEqual(len(re.findall(r"<fieldset[^>]+data-filter-group=", html)), 5)
         for label in ("RPS 强度", "基础行情", "财务健康", "趋势过滤", "MACD / 均线金叉"):
             self.assertIn(label, html)
-        for removed in ("年度派生财报指标", "特定日期内涨跌幅", "N日换手率", "PS-TTM", "PB / 1/5/20日涨跌幅"):
+        for removed in ("年度派生财报指标", "特定日期内涨跌幅", "N日换手率", "PB / 1/5/20日涨跌幅"):
             self.assertNotIn(removed, html)
 
     def test_requested_filters_have_real_form_contracts(self):
@@ -31,7 +31,7 @@ class StockFilterPageTest(unittest.TestCase):
             "annual_working_capital_min", "annual_reinvestment_min", "annual_financial_risk_min",
             "quarterly_growth_min", "quarterly_profitability_min", "quarterly_cash_min",
             "quarterly_working_capital_min", "quarterly_reinvestment_min", "quarterly_financial_risk_min",
-            "trend_daily", "trend_weekly", "trend_monthly", "macd_cross", "golden_cross",
+            "niche_leader", "trend_daily", "trend_weekly", "trend_monthly", "macd_cross", "golden_cross",
         ):
             self.assertIn(f'name="{name}"', html)
     def test_trend_controls_expose_every_backend_supported_status(self):
@@ -77,6 +77,45 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertIn('name="preset"', html)
         self.assertLess(html.index('class="preset-block"'), html.index('data-filter-group="rps"'))
         self.assertIn('presetInput', script)
+
+    def test_blowup_break_preset_is_a_real_top_of_sidebar_filter_control(self):
+        html = PAGE.read_text(encoding="utf-8")
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+
+        self.assertIn('data-preset="blowup_break"', html)
+        self.assertIn("爆量突破", html)
+        self.assertIn("presetInput", script)
+
+    def test_historical_signal_date_control_has_a_real_form_contract(self):
+        html = PAGE.read_text(encoding="utf-8")
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+
+        self.assertIn('name="as_of_date"', html)
+        self.assertIn('历史基本面选股', html)
+        self.assertIn("as_of_date", script)
+        self.assertIn("is_historical", script)
+
+    def test_historical_snapshot_building_retries_without_rendering_a_terminal_error(self):
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+
+        self.assertIn("historical_snapshot_building", script)
+        self.assertIn("scheduleHistoricalSnapshotRetry", script)
+        self.assertIn("正在生成历史快照", script)
+
+    def test_historical_snapshot_progress_renders_a_percentage_bar(self):
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+
+        self.assertIn("error.progress", script)
+        self.assertIn("<progress", script)
+        self.assertIn("progress.percent", script)
+
+    def test_preset_selection_preserves_historical_signal_date_and_does_not_disable_blowup_button(self):
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+
+        self.assertIn("var preservedSignalDate = asOfDate.value", script)
+        self.assertIn("asOfDate.value = preservedSignalDate", script)
+        self.assertNotIn("option.disabled = historical", script)
+
     def test_result_table_displays_report_release_return_and_quarterly_red_flag_count_from_api_rows(self):
         html = PAGE.read_text(encoding="utf-8")
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")

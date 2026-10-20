@@ -99,9 +99,11 @@
       <aside class="filter-sidebar" aria-label="筛选条件">
         <div class="filter-sidebar-head"><h3>筛选条件</h3><button class="reset-button" type="reset" form="filter-form">重置</button></div>
         <form id="filter-form" class="filter-form">
+          <section class="preset-block" aria-label="历史基本面选股"><div class="preset-block-head"><span>历史基本面选股</span><span>公告日 point-in-time</span></div><label class="filter-field">信号日期<input name="as_of_date" type="date"></label><p class="filter-note">财报只采用该日及以前已公告版本，PE/PS 使用当日原始收盘价；选择预设时会保留信号日期。</p></section>
           <section class="preset-block" aria-labelledby="preset-title">
             <div class="preset-block-head"><span id="preset-title">预设条件</span><span>一键筛选</span></div>
             <button class="preset-option" type="button" data-preset="financial_reversal"><span class="preset-name">财报反转</span><span class="preset-tags">标准反转 · 质量确认</span></button>
+            <button class="preset-option" type="button" data-preset="blowup_break"><span class="preset-name">爆量突破</span><span class="preset-tags">5日连续放量 · 趋势确认</span></button>
             <input type="hidden" name="preset" value="">
           </section>
           <fieldset class="filter-group is-collapsed" data-filter-group="rps"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>01</span>RPS 强度</button></legend><div class="range-grid">
@@ -114,10 +116,12 @@
           <fieldset class="filter-group is-collapsed" data-filter-group="market"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>02</span>基础行情</button></legend><div class="range-grid">
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">PE-TTM<div class="range-pair"><input name="pe_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="pe_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
+            <label class="filter-field">PS-TTM<div class="range-pair"><input name="ps_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="ps_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">总市值（亿）<div class="range-pair"><input name="total_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="total_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">流通市值（亿）<div class="range-pair"><input name="free_float_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="free_float_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
           </div></fieldset>
           <fieldset class="filter-group is-collapsed" data-filter-group="financial"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>03</span>财务健康</button></legend>
+            <div class="financial-section-title">标签条件</div><div class="range-grid"><label class="filter-field">细分龙头（Y/N）<select name="niche_leader"><option value="">不限</option><option value="yes">Y（是）</option><option value="no">N（否）</option></select></label></div>
             <div class="financial-section-title">综合评分</div><div class="range-grid">
               <label class="filter-field">综合分（5年 + 当季）<div class="range-pair"><input name="composite_total_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="composite_total_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
             </div>
@@ -155,12 +159,12 @@
       <section class="filter-results-panel" aria-labelledby="filter-results-title">
         <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm">PE-TTM（降序）</option></select></div></div>
         <div id="status" class="filter-status">正在加载全市场筛选快照…</div>
-        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th class="num">RPS Total</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th>触发红旗数量（当季）</th><th>日 / 周 / 月趋势</th><th>金叉</th></tr></thead><tbody id="results"></tbody></table></div>
+        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th>PE / PS（TTM）</th><th class="num">RPS Total</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th>触发红旗数量（当季）</th><th>日 / 周 / 月趋势</th><th>金叉</th></tr></thead><tbody id="results"></tbody></table></div>
         <div id="pagination" class="pagination"></div>
       </section>
     </div>
   </main>
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
-  <script src="/stock-filter.js?v=20261015-report-fields-v5"></script>
+  <script src="/stock-filter.js?v=20261019-historical-pit-market-progress-v4"></script>
 </body>
 </html>

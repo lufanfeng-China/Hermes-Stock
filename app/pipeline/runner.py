@@ -102,6 +102,11 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
             'stderr_tail': stderr_tail,
         })
         if result.returncode != 0:
+            # The peer snapshot is a self-contained financial presentation
+            # artifact.  Its failure must stay visible and retryable, but must
+            # not stop RPS/MACD technical data maintenance.
+            if step_name in {'build_industry_metric_snapshot', 'build_financial_health_peer_snapshot'}:
+                continue
             raise DataUpdateStepError(
                 step_name,
                 f'{step_name} 数据更新已停止或失败（exit code {result.returncode}）',
@@ -149,7 +154,14 @@ def _run_data_update_worker(retry_failed: bool = False, task_name: str | None = 
             for step in result.get('steps', []):
                 name = step.get('name')
                 if name:
-                    task_states[str(name)] = {'status': 'done', 'finished_at': _format_timestamp(time.time())}
+                    finished = _format_timestamp(time.time())
+                    if step.get('ok'):
+                        task_states[str(name)] = {'status': 'done', 'finished_at': finished}
+                    else:
+                        task_states[str(name)] = {
+                            'status': 'failed', 'finished_at': finished,
+                            'error': _tail_lines(step.get('stderr_tail') or step.get('stdout_tail') or '任务失败'),
+                        }
         _update_data_update_job_state(
             status='succeeded',
             running=False,

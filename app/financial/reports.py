@@ -298,29 +298,18 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
             return row_symbol.startswith(("0", "1", "2", "3", "4", "8"))
         return row_symbol.startswith(("4", "8", "9"))
 
+    # User requests must never parse full-market raw CW archives.  The update
+    # pipeline normalizes those archives into period Parquet files; retain only
+    # the selected stock's rows here and leave all scoring formulas unchanged.
+    from app.financial.warehouse_reports import load_symbol_financial_rows
+
     matched_reports: list[dict[str, object]] = []
     stock_name = search_index._stock_name_lookup().get((market, symbol), "")
-    latest_year: int | None = None
-    earliest_year: int | None = None
-
-    for report_date, fp in search_index._all_financial_files():
-        report_year = int(str(report_date or "0")[:4] or "0")
-        if earliest_year is not None and report_year < earliest_year:
-            break
-        loaded = search_index._load_file(fp)
-        if loaded is None:
+    for warehouse_row in load_symbol_financial_rows(symbol, years=years):
+        matched_row = warehouse_row["row"]
+        period_label = str(warehouse_row["period"])
+        if not row_matches(str(getattr(matched_row, "name", symbol))):
             continue
-        _date_str, df = loaded
-
-        matched_row = None
-        for row_symbol, row in df.iterrows():
-            if row_matches(str(row_symbol)):
-                matched_row = row
-                break
-        if matched_row is None:
-            continue
-
-        period_label = _report_date_to_period_label(str(report_date))
         announce_raw = None
         if hasattr(matched_row, "get"):
             for announce_field in ("announce_date", "财报公告日期"):
@@ -329,19 +318,17 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
                     announce_raw = candidate
                     break
         announce_date = _normalize_announce_date(announce_raw) or ""
-
-        matched_reports.append(
-            {
-                "report_date": str(report_date),
-                "announce_date": announce_date,
-                "year": str(report_date)[:4],
-                "period": period_label,
-                "row": matched_row,
-            }
-        )
-        if latest_year is None:
-            latest_year = report_year
-            earliest_year = latest_year - years + 1
+        report_date = str(matched_row.get("report_date") or "")
+        if not report_date:
+            suffix_date = {"Q1": "0331", "Q2": "0630", "Q3": "0930", "A": "1231"}.get(period_label[4:], "")
+            report_date = f"{period_label[:4]}{suffix_date}"
+        matched_reports.append({
+            "report_date": report_date,
+            "announce_date": announce_date,
+            "year": period_label[:4],
+            "period": period_label,
+            "row": matched_row,
+        })
 
     if not matched_reports:
         raise ValueError(f"no recent financial reports found for {market}:{symbol}")
@@ -470,55 +457,14 @@ def _materialize_financial_report(search_index, seed: dict[str, object]) -> dict
 
 @lru_cache(maxsize=128)
 def build_industry_financial_health_peers(market: str, symbol: str) -> dict[str, object]:
-    """Return every secondary-industry member's annual and quarterly health views.
+    """Return an industry view by filtering the published per-stock health snapshot.
 
-    The two views deliberately remain separate: ``annual`` is exclusively derived
-    from complete annual reports, while ``quarterly`` is the independent TTM/latest-
-    balance monitor. Missing coverage is represented by ``None``, never zero.
+    This route is intentionally read-only: all full-universe financial scoring runs
+    during data maintenance, never while a user waits on the dialog.
     """
-    search_index = importlib.import_module("app.search.index")
     market, symbol = str(market or "").strip().lower(), str(symbol or "").strip()
     if market not in {"sh", "sz", "bj"} or not symbol.isdigit() or len(symbol) != 6:
         raise ValueError("market must be sh, sz or bj and symbol must be a 6-digit code")
-    industry_map = search_index._load_industry_map()
-    industry_level_2, industry_level_1 = industry_map.get((market, symbol), (None, None))
-    if not industry_level_2:
-        return {"ok": False, "market": market, "symbol": symbol, "industry_level_1": industry_level_1,
-                "industry_level_2": None, "rows": [], "reason": "industry_classification_unavailable"}
-
-    annual_codes = ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")
-    quarterly_code_map = {"growth": "growth_quality", "profitability": "profitability", "cash": "cash_quality",
-                          "working_capital": "working_capital", "reinvestment": "reinvestment", "financial_risk": "financial_risk"}
-    names = search_index._stock_name_lookup()
-    members = sorted((peer_market, peer_symbol) for (peer_market, peer_symbol), (peer_ind2, _peer_ind1) in industry_map.items()
-                     if peer_ind2 == industry_level_2)
-    rows: list[dict[str, object]] = []
-    for peer_market, peer_symbol in members:
-        base = {"market": peer_market, "symbol": peer_symbol, "stock_name": names.get((peer_market, peer_symbol), peer_symbol),
-                "is_current_stock": peer_market == market and peer_symbol == symbol}
-        annual = {"score": None, "periods": [], "assessment_track": None, "sample_years": 0, "coverage_weight": 0,
-                  "status": "unavailable", "dimensions": {code: None for code in annual_codes}}
-        quarterly = {"score": None, "period": None, "coverage_weight": 0, "status": "unavailable",
-                     "dimensions": {code: None for code in annual_codes}}
-        try:
-            payload = load_recent_three_year_financial_reports(peer_market, peer_symbol, years=6)
-            health = payload.get("health") or {}
-            annual.update({key: health.get(key) for key in ("score", "periods", "assessment_track", "sample_years", "coverage_weight", "status")})
-            annual["dimensions"] = {item["code"]: item.get("score") for item in health.get("dimensions", []) if item.get("code") in annual_codes}
-            annual["dimensions"] = {code: annual["dimensions"].get(code) for code in annual_codes}
-            monitor = payload.get("quarterly_monitor") or {}
-            realtime = monitor.get("realtime_score") or {}
-            quarterly.update({"score": realtime.get("score"), "period": monitor.get("latest_period"),
-                              "coverage_weight": realtime.get("coverage_weight") or 0, "status": realtime.get("status") or monitor.get("status") or "unavailable"})
-            quarterly["dimensions"] = {quarterly_code_map[item["code"]]: item.get("points") for item in realtime.get("breakdown", []) if item.get("code") in quarterly_code_map}
-            quarterly["dimensions"] = {code: quarterly["dimensions"].get(code) for code in annual_codes}
-            base["stock_name"] = payload.get("stock_name") or base["stock_name"]
-            base["cash_profit"] = build_cash_profit_peer_values(payload.get("reports") or [])
-        except Exception as exc:  # retain every mapped industry member and disclose unavailable coverage
-            annual["reason"] = str(exc)
-            quarterly["reason"] = str(exc)
-            base["cash_profit"] = build_cash_profit_peer_values([])
-        rows.append({**base, "annual": annual, "quarterly": quarterly})
-    return {"ok": True, "market": market, "symbol": symbol, "industry_level_1": industry_level_1,
-            "industry_level_2": industry_level_2, "rows": rows}
+    from app.financial.health_peer_snapshot import build_industry_health_peer_response
+    return build_industry_health_peer_response(market, symbol)
 
