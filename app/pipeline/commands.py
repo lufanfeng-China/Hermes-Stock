@@ -109,6 +109,9 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         # production indicators are daily-bar and financial-data based.
         ('sync_tdx_qfq_exports', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/sync_tdx_qfq_exports.py')]),
         ('build_stock_filter_qfq_daily', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_qfq_daily.py')]),
+        # Dedicated full OHLCV materialization for the independent first-wave event scanner.
+        ('build_first_wave_qfq_ohlcv', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_first_wave_qfq_ohlcv.py')]),
+        ('build_first_wave_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_first_wave_snapshot.py')]),
         # Derived once during data maintenance so /api/stock-filter never groups 12M daily rows.
         ('build_stock_filter_market_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_market_snapshot.py')]),
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),

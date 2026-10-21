@@ -3,6 +3,7 @@
   const PAGES = [
     { href: '/stock-analysis.html', label: '股票分析' },
     { href: '/stock-filter.html', label: '股票筛选' },
+    { href: '/first-wave-start.html', label: '第一波启动' },
     { href: '/financial-report.html', label: '财报分析' },
     { href: '/watchlist.html', label: '自选股' },
     { href: '/concept-temperature.html', label: '概念温度' },
