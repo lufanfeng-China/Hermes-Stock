@@ -7,6 +7,7 @@ import pandas as pd
 
 def measure(df):
  out={'events':int(len(df)),'tradable':int((df.execution_status=='tradable').sum()),'untradable':int((df.execution_status!='tradable').sum()),'by_execution':df.execution_status.value_counts().to_dict()}
+ out['untradable_rate_pct']=round(out['untradable']/out['events']*100,4) if out['events'] else None
  for h in (5,10,20):
   values=pd.to_numeric(df[f'return_{h}d_pct'],errors='coerce').dropna();dd=pd.to_numeric(df[f'max_drawdown_{h}d_pct'],errors='coerce').dropna()
   out[f'{h}d']={'complete_samples':int(len(values)),'mean_return_pct':round(float(values.mean()),4) if len(values) else None,'median_return_pct':round(float(values.median()),4) if len(values) else None,'win_rate_pct':round(float((values>0).mean()*100),2) if len(values) else None,'mean_max_drawdown_pct':round(float(dd.mean()),4) if len(dd) else None,'median_max_drawdown_pct':round(float(dd.median()),4) if len(dd) else None}
