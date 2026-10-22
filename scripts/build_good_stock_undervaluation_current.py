@@ -16,7 +16,6 @@ sys.path.insert(0, str(ROOT))
 from app.undervaluation.service import _strict_snapshot, build_current_diagnosis
 
 OUT = ROOT / "data" / "derived" / "datasets" / "final" / "good_stock_undervaluation_current.json"
-LOCK = OUT.with_suffix(".building")
 
 
 def main() -> None:
@@ -24,11 +23,12 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=0, help="Test-only cap; 0 means all records")
     parser.add_argument("--output", type=Path, default=OUT)
     args = parser.parse_args()
-    if LOCK.exists():
-        raise SystemExit(f"existing build lock: {LOCK}")
-    LOCK.parent.mkdir(parents=True, exist_ok=True)
-    LOCK.write_text(json.dumps({"started_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8")
-    atexit.register(lambda: LOCK.unlink(missing_ok=True))
+    lock = args.output.with_suffix(".building")
+    if lock.exists():
+        raise SystemExit(f"existing build lock: {lock}")
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(json.dumps({"started_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8")
+    atexit.register(lambda: lock.unlink(missing_ok=True))
     keys = sorted((_strict_snapshot().get("stocks") or {}).keys())
     if args.limit > 0:
         keys = keys[:args.limit]
