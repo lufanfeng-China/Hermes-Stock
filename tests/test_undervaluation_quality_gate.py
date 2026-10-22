@@ -48,6 +48,17 @@ class QualityGateTests(unittest.TestCase):
         self.assertEqual("INSUFFICIENT_EVIDENCE", result["status"])
         self.assertFalse(result["eligible"])
         self.assertEqual(["core_red_flag_family_unavailable:leverage_solvency"], result["reasons"])
+    def test_returns_not_applicable_for_excluded_financial_or_real_estate_industry(self):
+        from app.undervaluation.quality_gate import evaluate_quality_gate
+
+        result = evaluate_quality_gate({
+            "status": "not_applicable",
+            "reason": "银行使用专用资本安全规则",
+        })
+
+        self.assertEqual("NOT_APPLICABLE", result["status"])
+        self.assertFalse(result["eligible"])
+        self.assertEqual(["银行使用专用资本安全规则"], result["reasons"])
 
 
 if __name__ == "__main__":

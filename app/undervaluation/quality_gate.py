@@ -24,6 +24,16 @@ def _number(value: Any) -> float | None:
 def evaluate_quality_gate(annual_health: dict[str, Any] | None) -> dict[str, Any]:
     """Evaluate the frozen annual quality gateway without quarterly overrides."""
     health = annual_health or {}
+    if health.get("status") == "not_applicable":
+        reason = str(health.get("reason") or "industry_specific_rules_not_ready")
+        return {
+            "version": "good-stock-quality-gate-v1",
+            "status": "NOT_APPLICABLE",
+            "eligible": False,
+            "reasons": [reason],
+            "annual_score": None,
+            "annual_coverage_weight": None,
+        }
     reasons: list[str] = []
     if health.get("assessment_track") != "five_year":
         reasons.append("annual_health_not_five_year_comparable")
