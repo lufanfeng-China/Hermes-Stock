@@ -26,6 +26,8 @@ class StockFilterFundamentalHistoryTest(unittest.TestCase):
         self.assertEqual(row["latest_announce_date"], "2024-04-01")
         self.assertEqual(row["pe_ttm"], round(10.0 / 1.3, 4))
         self.assertEqual(row["ps_ttm"], round((10.0 * 100000000) / (130000 * 10000), 4))
+        self.assertEqual(row["good_stock_quality"]["status"], "INSUFFICIENT_EVIDENCE")
+        self.assertEqual(row["quarterly_momentum"]["status"], "UNAVAILABLE")
 
     def test_negative_ttm_eps_and_missing_ttm_revenue_are_unavailable(self):
         from app.stock_filter_fundamental_history import valuation_from_available_report

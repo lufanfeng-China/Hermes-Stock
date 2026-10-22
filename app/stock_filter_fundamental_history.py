@@ -123,12 +123,22 @@ def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dic
         market_metrics = market_metrics_by_key.get(key) or {}
         annual = {'score': None, 'dimensions': {}, 'anchor_period': annual_anchor, 'reason': 'annual_score_unavailable'}
         quarterly = {'score': None, 'dimensions': {}, 'anchor_period': latest_period, 'quality': {}, 'reason': 'quarterly_score_unavailable'}
+        good_stock_quality = {
+            'version': 'good-stock-quality-gate-v1', 'status': 'INSUFFICIENT_EVIDENCE', 'eligible': False,
+            'reasons': ['five_complete_annual_reports_not_available_at_as_of_date'],
+        }
+        quarterly_momentum = {
+            'version': 'good-stock-quarterly-momentum-v1', 'status': 'UNAVAILABLE', 'improving': False,
+            'period': None, 'reasons': ['latest_cumulative_quarter_not_available_at_as_of_date'],
+        }
         if len(annual_periods) >= 5:
             try:
                 from app.stock_filter_snapshot import build_strict_financial_record
                 l1, _l2 = industry_by_key.get((market, symbol), (None, None))
                 strict = build_strict_financial_record(_materialize_reports(rows), industry_level_1=l1, annual_anchor=annual_anchor or '', quarterly_anchor=latest_period)
                 annual, quarterly = strict['annual'], strict['quarterly']
+                good_stock_quality = strict['good_stock_quality']
+                quarterly_momentum = strict['quarterly_momentum']
             except (KeyError, TypeError, ValueError):
                 pass
         ttm_eps = _ttm_eps(latest_period, rows)
@@ -144,6 +154,7 @@ def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dic
             'quarterly_ttm_fcf_margin': (quarterly.get('quality') or {}).get('ttm_fcf_margin'),
             'quarterly_profitability_status': (quarterly.get('quality') or {}).get('profitability_status'),
             'quarterly_high_or_critical_alert': (quarterly.get('quality') or {}).get('has_high_or_critical_alert'),
+            'good_stock_quality': good_stock_quality, 'quarterly_momentum': quarterly_momentum,
             'latest_period': latest_period, 'latest_announce_date': announce, 'ttm_eps': round(ttm_eps, 6) if ttm_eps is not None else None,
             'price': _number(raw_close_by_symbol.get(symbol)), 'price_raw_close': _number(raw_close_by_symbol.get(symbol)),
             'trend_daily': market_metrics.get('trend_daily'), 'trend_daily_label': market_metrics.get('trend_daily_label'),
