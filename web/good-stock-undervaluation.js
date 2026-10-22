@@ -1,7 +1,8 @@
 (function () {
   const $ = id => document.getElementById(id);
   const esc = value => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const card = (title, value, detail, good) => `<article class="diag-card"><h3>${esc(title)}</h3><strong class="${good === true ? 'ok' : good === false ? 'bad' : ''}">${esc(value)}</strong><p class="muted">${esc(detail || '')}</p></article>`;
+  const label = value => ({QUALITY_ELIGIBLE_HAS_MARGIN:'质量合格 · 估值安全边际成立',QUALITY_ELIGIBLE_NO_MARGIN:'质量合格 · 当前估值不低',QUALITY_ELIGIBLE:'质量合格',NO_MARGIN:'未形成双估值安全边际',HAS_MARGIN:'双估值安全边际成立',NOT_IMPROVING:'未改善',IMPROVING:'改善中'}[value] || value || '—');
+  const card = (title, value, detail, good) => `<article class="diag-card"><h3>${esc(title)}</h3><div class="diag-value ${good === true ? 'ok' : good === false ? 'bad' : ''}">${esc(label(value))}</div><p class="diag-detail">${esc(detail || '')}</p></article>`;
   async function run() {
     const symbol = $('symbol').value.trim(); const market = $('market').value;
     if (!/^\d{6}$/.test(symbol)) { $('status').textContent = '请输入 6 位股票代码'; return; }
