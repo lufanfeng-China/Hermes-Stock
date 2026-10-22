@@ -507,6 +507,77 @@ def build_financial_health(
             red_flag_severity["fcf_two_year_negative"] = "critical"
         elif fcf_margin is not None and fcf_margin <= -5:
             red_flag_severity["fcf_two_year_negative"] = "high"
+    if "debt_ratio_rising" in red_flag_severity:
+        recent_four_debt = values["debt_ratio"][-4:]
+        if (all(value is not None for value in recent_four_debt)
+                and all(a < b for a, b in zip(recent_four_debt, recent_four_debt[1:]))
+                and recent_four_debt[-1] - recent_four_debt[0] >= 15
+                and recent_four_debt[-1] >= 70):
+            red_flag_severity["debt_ratio_rising"] = "critical"
+        elif recent_debt[-1] - recent_debt[0] >= 10 and recent_debt[-1] >= 60:
+            red_flag_severity["debt_ratio_rising"] = "high"
+    if all(value is not None and value >= 30 - 1e-9 for value in receivable_gaps[-2:]) and all(value is not None and value >= 30 - 1e-9 for value in inventory_gaps[-2:]):
+        for code in ("receivables_growth_gap", "inventory_growth_gap"):
+            if code in red_flag_severity:
+                red_flag_severity[code] = "high"
+    def profit_cfo_divergence(previous_profit: float | None, current_profit: float | None, previous_cfo: float | None, current_cfo: float | None) -> bool:
+        return (current_profit is not None and current_profit > 0 and current_cfo is not None
+                and (_growth(previous_profit, current_profit) or float("-inf")) >= 10
+                and (_growth(previous_cfo, current_cfo) or float("inf")) <= -30
+                and current_cfo / current_profit < .5)
+    profit_cfo_divergences = [profit_cfo_divergence(previous_profit, current_profit, previous_cfo, current_cfo) for previous_profit, current_profit, previous_cfo, current_cfo in zip(values["ex_net_profit"], values["ex_net_profit"][1:], values["ocf"], values["ocf"][1:])]
+    if "ex_profit_up_ocf_down" in red_flag_severity and profit_cfo_divergences[-1]:
+        red_flag_severity["ex_profit_up_ocf_down"] = "critical" if all(profit_cfo_divergences[-2:]) and values["ocf"][-1] < 0 else "high"
+    def declining_by(series: list[float | None], years: int, minimum: float) -> bool:
+        recent = series[-years:]
+        return all(value is not None for value in recent) and all(a > b for a, b in zip(recent, recent[1:])) and recent[0] - recent[-1] >= minimum
+    margin_roe_codes = ("gross_margin_two_year_decline", "roe_ex_decline")
+    if all(code in red_flag_severity for code in margin_roe_codes):
+        if declining_by(values["gross_margin"], 5, 10) and declining_by(values["roe_ex"], 5, 5):
+            severity = "critical"
+        elif declining_by(values["gross_margin"], 4, 5) and declining_by(values["roe_ex"], 4, 3):
+            severity = "high"
+        else:
+            severity = "watch"
+        for code in margin_roe_codes:
+            red_flag_severity[code] = severity
+    def revenue_profit_divergence(previous_revenue: float | None, current_revenue: float | None, previous_profit: float | None, current_profit: float | None) -> bool:
+        return (
+            (_growth(previous_revenue, current_revenue) or float("-inf")) > 0
+            and previous_profit is not None and current_profit is not None
+            and current_profit < previous_profit
+        )
+    ex_net_margins = [
+        None if revenue in (None, 0) or profit is None else profit / revenue * 100
+        for revenue, profit in zip(values["revenue"], values["ex_net_profit"])
+    ]
+    revenue_profit_divergences = [
+        revenue_profit_divergence(previous_revenue, current_revenue, previous_profit, current_profit)
+        for previous_revenue, current_revenue, previous_profit, current_profit in zip(
+            values["revenue"], values["revenue"][1:], values["ex_net_profit"], values["ex_net_profit"][1:]
+        )
+    ]
+    if "revenue_up_ex_profit_down" in red_flag_severity:
+        if (all(revenue_profit_divergences[-3:])
+                and ex_net_margins[-4] is not None and ex_net_margins[-1] is not None
+                and ex_net_margins[-1] - ex_net_margins[-4] <= -5):
+            red_flag_severity["revenue_up_ex_profit_down"] = "critical"
+        elif (all(revenue_profit_divergences[-2:])
+                and ex_net_margins[-3] is not None and ex_net_margins[-1] is not None
+                and ex_net_margins[-1] - ex_net_margins[-3] <= -3):
+            red_flag_severity["revenue_up_ex_profit_down"] = "high"
+    if "capex_up_revenue_growth_down" in red_flag_severity:
+        recent_five_capex = values["capex"][-5:]
+        recent_five_intensities = capex_intensities[-5:]
+        recent_two_revenue_growths = revenue_growths[-2:]
+        if (
+            all(value is not None for value in recent_five_capex)
+            and all(a is not None and b is not None and a < b for a, b in zip(recent_five_capex, recent_five_capex[1:]))
+            and recent_five_intensities[0] is not None and recent_five_intensities[-1] is not None
+            and recent_five_intensities[-1] - recent_five_intensities[0] >= 10
+            and all(value is not None and value <= 0 for value in recent_two_revenue_growths)
+        ):
+            red_flag_severity["capex_up_revenue_growth_down"] = "high"
     for item in flags:
         item["severity"] = red_flag_severity[item["code"]]
     result["red_flag_severity"] = red_flag_severity

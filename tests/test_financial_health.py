@@ -434,6 +434,66 @@ class FinancialHealthTests(unittest.TestCase):
         self.assertEqual("high", fcf_flag["severity"])
         self.assertEqual("high", health["red_flag_severity"]["fcf_two_year_negative"])
 
+    def test_assigns_debt_severity_at_high_and_critical_boundaries(self):
+        def health_for(debts):
+            reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=debt, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, debt in enumerate(debts)]
+            return build_financial_health(reports)
+
+        high = health_for([40, 40, 50, 55, 60])
+        critical = health_for([40, 45, 55, 60, 70])
+
+        self.assertEqual(high['red_flag_severity']['debt_ratio_rising'], 'high')
+        self.assertEqual(critical['red_flag_severity']['debt_ratio_rising'], 'critical')
+
+    def test_assigns_working_capital_high_only_when_both_metrics_persist(self):
+        reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=receivable, inventory=inventory, capex=3, goodwill=0, equity=60, total_assets=100) for i, (receivable, inventory) in enumerate([(10, 10), (10, 10), (10, 10), (13, 13), (16.9, 16.9)])]
+        health = build_financial_health(reports)
+
+        self.assertEqual(health['red_flag_severity']['receivables_growth_gap'], 'high')
+        self.assertEqual(health['red_flag_severity']['inventory_growth_gap'], 'high')
+
+    def test_assigns_profit_cfo_severity_at_high_and_critical_boundaries(self):
+        def health_for(cfos):
+            reports = [annual(2021 + i, revenue=100, ex_net_profit=profit, ocf=cfo, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, (profit, cfo) in enumerate(zip([10, 10, 10, 11, 12.2], cfos))]
+            return build_financial_health(reports)
+
+        self.assertEqual(health_for([12, 12, 12, 8, 5])['red_flag_severity']['ex_profit_up_ocf_down'], 'high')
+        self.assertEqual(health_for([12, 12, 12, 5, -1])['red_flag_severity']['ex_profit_up_ocf_down'], 'critical')
+
+    def test_assigns_margin_roe_severity_at_high_and_critical_boundaries(self):
+        def health_for(margins, roes):
+            reports = [annual(2021 + i, revenue=100, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=margin, net_margin=10, roe_ex=roe, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, (margin, roe) in enumerate(zip(margins, roes))]
+            return build_financial_health(reports)
+
+        high = health_for([40, 40, 38, 36, 35], [20, 20, 19, 18, 17])
+        critical = health_for([40, 37, 34, 31, 30], [20, 18, 16, 14, 12])
+        for code in ('gross_margin_two_year_decline', 'roe_ex_decline'):
+            self.assertEqual(high['red_flag_severity'][code], 'high')
+            self.assertEqual(critical['red_flag_severity'][code], 'critical')
+
+    def test_assigns_revenue_profit_severity_at_high_and_critical_boundaries(self):
+        def health_for(revenues, profits):
+            reports = [annual(2021 + i, revenue=revenue, ex_net_profit=profit, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100) for i, (revenue, profit) in enumerate(zip(revenues, profits))]
+            return build_financial_health(reports)
+
+        high = health_for([100, 100, 100, 110, 121], [20, 20, 20, 18, 16])
+        critical = health_for([100, 110, 121, 133, 146], [20, 18, 16, 14, 12])
+        self.assertEqual(high['red_flag_severity']['revenue_up_ex_profit_down'], 'high')
+        self.assertEqual(critical['red_flag_severity']['revenue_up_ex_profit_down'], 'critical')
+
+    def test_assigns_high_severity_to_persistent_capex_efficiency_deterioration(self):
+        reports = [
+            annual(2021, revenue=100, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=1, goodwill=0, equity=60, total_assets=100),
+            annual(2022, revenue=100, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=2, goodwill=0, equity=60, total_assets=100),
+            annual(2023, revenue=95, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100),
+            annual(2024, revenue=90, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=4, goodwill=0, equity=60, total_assets=100),
+            annual(2025, revenue=85, ex_net_profit=10, ocf=12, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=10, goodwill=0, equity=60, total_assets=100),
+        ]
+
+        health = build_financial_health(reports)
+
+        self.assertEqual("high", health["red_flag_severity"]["capex_up_revenue_growth_down"])
+
     def test_rejects_non_contiguous_annual_periods(self):
         reports = [annual(year, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=60, total_assets=100) for year in (2018, 2019, 2021, 2023, 2025)]
         health = build_financial_health(reports)
