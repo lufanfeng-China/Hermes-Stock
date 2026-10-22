@@ -56,6 +56,7 @@ from app.search.index import (
 )
 from app.industry.heatmap import DEFAULT_INDUSTRY_LIMIT, industry_heatmap_response
 from app.relative_valuation.service import build_relative_valuation_result
+from app.undervaluation.service import build_current_diagnosis
 from app.valuation.models import (
     calc_intrinsic_value_dcf,
     calc_gordon_growth,
@@ -642,6 +643,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/industry-valuation-percentile":
             self.handle_industry_valuation_percentile(parsed.query)
+            return
+        if parsed.path == "/api/good-stock-undervaluation":
+            self.handle_good_stock_undervaluation(parsed.query)
             return
         if parsed.path == "/api/relative-valuation":
             self.handle_relative_valuation(parsed.query)
@@ -2887,6 +2891,19 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "valuation_error", "message": str(exc)}},
             )
+
+    def handle_good_stock_undervaluation(self, query: str) -> None:
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or not symbol.isdigit() or len(symbol) != 6:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_params", "message": "market/symbol 参数不合法"}})
+            return
+        try:
+            result = build_current_diagnosis(market, symbol)
+            self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.NOT_FOUND, result)
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "good_stock_undervaluation_error", "message": str(exc)}})
 
     def handle_relative_valuation(self, query: str) -> None:
         params = parse_qs(query)
