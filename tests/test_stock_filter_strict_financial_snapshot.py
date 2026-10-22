@@ -37,6 +37,8 @@ class StrictFinancialSnapshotContractTest(unittest.TestCase):
         self.assertEqual(record["quarterly"]["triggered_red_flag_count"], 0)
         self.assertEqual(record["composite"]["mode"], "blended")
         self.assertIsNotNone(record["composite"]["score"])
+        self.assertEqual(record["good_stock_quality"]["annual_score"], record["annual"]["score"])
+        self.assertEqual(record["quarterly_momentum"]["status"], "IMPROVING")
 
 
 if __name__ == "__main__":

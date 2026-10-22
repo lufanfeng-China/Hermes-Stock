@@ -13,6 +13,8 @@ import pandas as pd
 from app.financial.composite_health import build_composite_financial_health
 from app.financial.health import build_financial_health
 from app.financial.quarterly_monitor import build_quarterly_financial_monitor
+from app.undervaluation.quality_gate import evaluate_quality_gate
+from app.undervaluation.quarterly_momentum import evaluate_quarterly_momentum
 
 
 def _number(value: Any) -> float | None:
@@ -81,6 +83,10 @@ def build_strict_financial_record(
     quarterly_reason = monitor.get("reason") or realtime.get("reason") or (None if realtime.get("score") is not None else "quarterly_score_unavailable")
     return {
         "composite": composite,
+        # Annual quality and quarterly operating momentum are deliberately emitted
+        # as separate tracks: the latter never overrides the annual gate.
+        "good_stock_quality": evaluate_quality_gate(health),
+        "quarterly_momentum": evaluate_quarterly_momentum(monitor),
         "annual": {
             "anchor_period": annual_anchor,
             "periods": list(health.get("periods") or []),
