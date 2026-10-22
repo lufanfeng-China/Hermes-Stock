@@ -495,6 +495,21 @@ def build_financial_health(
     goodwill_growth = _growth(values["goodwill"][-2], values["goodwill"][-1])
     if goodwill_growth is not None and goodwill_growth > 20 and not profit_improved:
         flags.append(_flag("goodwill_up_profit_not", "商誉增长但扣非利润未同步改善", f"商誉同比增长 {goodwill_growth:.1f}%，扣非归母净利润绝对额未改善。"))
+
+    trailing_negative_fcf_years = 0
+    for value in reversed(values["free_cf"]):
+        if value is None or value >= 0:
+            break
+        trailing_negative_fcf_years += 1
+    red_flag_severity: dict[str, str] = {item["code"]: "watch" for item in flags}
+    if "fcf_two_year_negative" in red_flag_severity:
+        if trailing_negative_fcf_years >= 3 and fcf_margin is not None and fcf_margin <= -10:
+            red_flag_severity["fcf_two_year_negative"] = "critical"
+        elif fcf_margin is not None and fcf_margin <= -5:
+            red_flag_severity["fcf_two_year_negative"] = "high"
+    for item in flags:
+        item["severity"] = red_flag_severity[item["code"]]
+    result["red_flag_severity"] = red_flag_severity
     result["red_flags"] = flags
     result["red_flag_count"] = len(flags)
     def labelled_inputs(*fields: tuple[str, list[float | None]]) -> list[dict[str, Any]]:

@@ -419,6 +419,21 @@ class FinancialHealthTests(unittest.TestCase):
         health = build_financial_health(reports)
         self.assertIn("capex_up_revenue_growth_down", {flag["code"] for flag in health["red_flags"]})
 
+    def test_assigns_high_severity_to_persistent_material_negative_fcf(self):
+        reports = [
+            annual(2021, revenue=100, ex_net_profit=12, ocf=15, free_cf=4, gross_margin=30, net_margin=12, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100),
+            annual(2022, revenue=100, ex_net_profit=12, ocf=15, free_cf=3, gross_margin=30, net_margin=12, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100),
+            annual(2023, revenue=100, ex_net_profit=12, ocf=15, free_cf=2, gross_margin=30, net_margin=12, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100),
+            annual(2024, revenue=100, ex_net_profit=12, ocf=15, free_cf=-4, gross_margin=30, net_margin=12, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100),
+            annual(2025, revenue=100, ex_net_profit=12, ocf=15, free_cf=-6, gross_margin=30, net_margin=12, roe_ex=12, debt_ratio=40, accounts_receivable=10, inventory=10, capex=3, goodwill=0, equity=60, total_assets=100),
+        ]
+
+        health = build_financial_health(reports)
+        fcf_flag = next(flag for flag in health["red_flags"] if flag["code"] == "fcf_two_year_negative")
+
+        self.assertEqual("high", fcf_flag["severity"])
+        self.assertEqual("high", health["red_flag_severity"]["fcf_two_year_negative"])
+
     def test_rejects_non_contiguous_annual_periods(self):
         reports = [annual(year, revenue=100, ex_net_profit=10, ocf=10, free_cf=5, gross_margin=30, net_margin=10, roe_ex=10, debt_ratio=40, accounts_receivable=10, inventory=10, capex=5, goodwill=0, equity=60, total_assets=100) for year in (2018, 2019, 2021, 2023, 2025)]
         health = build_financial_health(reports)
