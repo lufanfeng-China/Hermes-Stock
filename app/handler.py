@@ -56,7 +56,7 @@ from app.search.index import (
 )
 from app.industry.heatmap import DEFAULT_INDUSTRY_LIMIT, industry_heatmap_response
 from app.relative_valuation.service import build_relative_valuation_result
-from app.undervaluation.service import build_current_diagnosis
+from app.undervaluation.service import build_current_diagnosis, load_current_diagnosis_list
 from app.valuation.models import (
     calc_intrinsic_value_dcf,
     calc_gordon_growth,
@@ -643,6 +643,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/industry-valuation-percentile":
             self.handle_industry_valuation_percentile(parsed.query)
+            return
+        if parsed.path == "/api/good-stock-undervaluation-list":
+            self.handle_good_stock_undervaluation_list(parsed.query)
             return
         if parsed.path == "/api/good-stock-undervaluation":
             self.handle_good_stock_undervaluation(parsed.query)
@@ -2891,6 +2894,10 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "valuation_error", "message": str(exc)}},
             )
+
+    def handle_good_stock_undervaluation_list(self, query: str) -> None:
+        category = parse_qs(query).get("category", ["has_margin"])[0].strip()
+        self.respond_json(HTTPStatus.OK, load_current_diagnosis_list(category))
 
     def handle_good_stock_undervaluation(self, query: str) -> None:
         params = parse_qs(query)

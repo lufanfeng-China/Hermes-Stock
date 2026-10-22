@@ -21,6 +21,28 @@ from .valuation_gate import evaluate_margin_evidence
 
 ROOT = Path(__file__).resolve().parents[2]
 STRICT_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__2026Q2.json"
+CURRENT_DIAGNOSIS_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "good_stock_undervaluation_current.json"
+
+
+@lru_cache(maxsize=1)
+def _current_diagnosis_snapshot() -> dict[str, Any]:
+    return json.loads(CURRENT_DIAGNOSIS_SNAPSHOT.read_text(encoding="utf-8")) if CURRENT_DIAGNOSIS_SNAPSHOT.is_file() else {}
+
+
+def load_current_diagnosis_list(category: str = "has_margin") -> dict[str, Any]:
+    payload = _current_diagnosis_snapshot()
+    rows = payload.get("stocks") or []
+    predicates = {
+        "has_margin": lambda row: (row.get("margin") or {}).get("status") == "HAS_MARGIN",
+        "quality_no_margin": lambda row: (row.get("quadrant") or {}).get("quadrant") == "QUALITY_ELIGIBLE_NO_MARGIN",
+        "quality_ineligible": lambda row: (row.get("quality") or {}).get("status") == "NOT_QUALITY_ELIGIBLE",
+        "not_applicable": lambda row: (row.get("quality") or {}).get("status") == "NOT_APPLICABLE",
+        "evidence_unavailable": lambda row: (row.get("margin") or {}).get("status") == "UNAVAILABLE",
+    }
+    selected = [row for row in rows if predicates.get(category, predicates["has_margin"])(row)]
+    selected.sort(key=lambda row: ((row.get("quality") or {}).get("annual_score") or -1, row.get("stock_name") or ""), reverse=True)
+    compact = [{"market": r.get("market"), "symbol": r.get("symbol"), "stock_name": r.get("stock_name"), "industry": r.get("industry_level_2_name"), "quadrant": (r.get("quadrant") or {}).get("quadrant"), "quality_status": (r.get("quality") or {}).get("status"), "annual_score": (r.get("quality") or {}).get("annual_score"), "margin_status": (r.get("margin") or {}).get("status"), "industry_pe_percentile": (r.get("industry") or {}).get("pe_percentile"), "industry_ps_percentile": (r.get("industry") or {}).get("ps_percentile"), "history_pe_percentile": (r.get("own_history") or {}).get("pe_percentile"), "history_ps_percentile": (r.get("own_history") or {}).get("ps_percentile"), "quarterly_momentum": (r.get("quarterly_momentum") or {}).get("status")} for r in selected]
+    return {"ok": bool(payload), "built_at": payload.get("built_at"), "summary": payload.get("summary"), "category": category, "rows": compact}
 
 
 @lru_cache(maxsize=1)
