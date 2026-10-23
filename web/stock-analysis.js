@@ -959,9 +959,16 @@
     const pp = value => num(value) === null ? '—' : `${num(value) > 0 ? '+' : ''}${num(value).toFixed(2)}pp`;
     const value = v => num(v) === null ? '—' : num(v).toFixed(1);
     const anti = rs.anti_fall_status === 'available' ? `${value(rs.down_market_win_rate_20)}% 跑赢率` : '样本不足（<5日）';
-    const cards = [{label:'MRS 相对大盘强弱',value:`${value(rs.mrs_score)}｜${rs.mrs_label || '—'}`},{label:'近期状态',value:rs.relative_strength_state_label || '—'},{label:'ER5',value:pp(rs.excess_return_5_pp)},{label:'ER20',value:pp(rs.excess_return_20_pp)},{label:'ER50',value:pp(rs.excess_return_50_pp)},{label:'抗跌强度（20日）',value:anti,meta:`大盘下跌日 ${rs.down_market_days_20 ?? '—'}｜平均超额 ${pp(rs.down_market_avg_excess_pp_20)}`}];
+    const cards = [
+      { label:'MRS 相对大盘强弱', value:`${value(rs.mrs_score)}｜${rs.mrs_label || '—'}`, definition:'MRS = 40%×RPS20 + 30%×RPS50 + 20%×RPS120 + 10%×RPS250；RPS 为同一全A成分池内的收益排名，分数越高相对越强。' },
+      { label:'近期状态', value:rs.relative_strength_state_label || '—', definition:'比较 MRS 与 ER20：长期强势但 ER20 为负为“高位转弱”；长期弱势但 ER20 为正为“低位转强”；否则为“趋势一致”。' },
+      { label:'ER5', value:pp(rs.excess_return_5_pp), definition:'ER5 = 个股近5个交易日前复权收益 − 全A每日等权大盘近5日复利收益；单位为百分点（pp）。' },
+      { label:'ER20', value:pp(rs.excess_return_20_pp), definition:'ER20 = 个股近20个交易日前复权收益 − 全A每日等权大盘近20日复利收益；单位为百分点（pp）。' },
+      { label:'ER50', value:pp(rs.excess_return_50_pp), definition:'ER50 = 个股近50个交易日前复权收益 − 全A每日等权大盘近50日复利收益；单位为百分点（pp）。' },
+      { label:'抗跌强度（20日）', value:anti, meta:`大盘下跌日 ${rs.down_market_days_20 ?? '—'}｜平均超额 ${pp(rs.down_market_avg_excess_pp_20)}`, className:'anti-fall', definition:'仅统计最近20个交易日中全A每日等权大盘收益小于0的交易日。跑赢率为个股单日收益高于大盘的比例；平均超额为这些下跌日的平均（个股收益−大盘收益）。少于5个下跌日则标记样本不足。' },
+    ];
     period.textContent = `${payload.as_of_date || rs.as_of_date || '—'}｜全A每日等权｜RPS同一成分池`;
-    grid.innerHTML = cards.map(card => `<article class="basic-market-card"><strong>${escapeHtml(card.label)}</strong><span>${escapeHtml(card.value)}</span>${card.meta ? `<em class="basic-market-status">${escapeHtml(card.meta)}</em>` : ''}</article>`).join('');
+    grid.innerHTML = cards.map(card => `<article class="basic-market-card ${card.className || ''}" title="${escapeHtml(card.definition || '')}" aria-label="${escapeHtml(`${card.label}：${card.value}。${card.definition || ''}`)}"><strong>${escapeHtml(card.label)}</strong><span>${escapeHtml(card.value)}</span>${card.meta ? `<em class="basic-market-status">${escapeHtml(card.meta)}</em>` : ''}</article>`).join('');
   }
 
   let stockKlineChart = null;
