@@ -724,7 +724,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('state.industryMetricPeerTrigger = trigger || document.activeElement;', js)
         self.assertIn('showIndustryMetricPeers(trigger.dataset.industryMetric, trigger)', js)
         self.assertIn("industryMetricDialog?.addEventListener('close', () => { state.industryMetricPeerTrigger?.focus(); state.industryMetricPeerTrigger = null; });", js)
-        self.assertIn('stock-analysis.js?v=20261023-market-antifall-dialog-v97', html)
+        self.assertIn('stock-analysis.js?v=20261023-antifall-total-excess-v98', html)
 
 
 if __name__ == '__main__':

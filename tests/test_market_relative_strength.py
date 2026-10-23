@@ -33,7 +33,8 @@ class MarketRelativeStrengthTests(unittest.TestCase):
         self.assertEqual(20, stock["down_market_days_20"])
         self.assertEqual(20, stock["down_market_outperform_days_20"])
         self.assertEqual(100.0, stock["down_market_win_rate_20"])
-        self.assertGreater(stock["down_market_avg_excess_pp_20"], 0)
+        self.assertGreater(stock["down_market_total_excess_pp_20"], 0)
+        self.assertAlmostEqual(stock["down_market_total_excess_pp_20"], sum(item["excess_return_pp"] for item in stock["down_market_detail_20"]), places=3)
         detail = stock["down_market_detail_20"]
         self.assertEqual(20, len(detail))
         self.assertEqual(sorted(item["date"] for item in detail), [item["date"] for item in detail])

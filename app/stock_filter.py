@@ -218,7 +218,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "rps_120": _num(r.get("rps_120")), "rps_250": _num(r.get("rps_250")), "rps_total": round(total, 2),
             "mrs_score": _num(relative.get("mrs_score")), "mrs_label": relative.get("mrs_label"), "relative_strength_state": relative.get("relative_strength_state"), "relative_strength_state_label": relative.get("relative_strength_state_label"),
             "excess_return_5_pp": _num(relative.get("excess_return_5_pp")), "excess_return_20_pp": _num(relative.get("excess_return_20_pp")), "excess_return_50_pp": _num(relative.get("excess_return_50_pp")), "excess_return_120_pp": _num(relative.get("excess_return_120_pp")), "excess_return_250_pp": _num(relative.get("excess_return_250_pp")),
-            "down_market_days_20": _num(relative.get("down_market_days_20")), "down_market_win_rate_20": _num(relative.get("down_market_win_rate_20")), "down_market_avg_excess_pp_20": _num(relative.get("down_market_avg_excess_pp_20")), "anti_fall_status": relative.get("anti_fall_status"),
+            "down_market_days_20": _num(relative.get("down_market_days_20")), "down_market_win_rate_20": _num(relative.get("down_market_win_rate_20")), "down_market_total_excess_pp_20": _num(relative.get("down_market_total_excess_pp_20")), "anti_fall_status": relative.get("anti_fall_status"),
             "composite_total": _num(composite.get("score")), "composite_mode": composite.get("mode"),
             "annual_total": _num(a.get("score")), "annual_dimensions": a.get("dimensions") or {}, "annual_derived": a.get("derived") or {},
             "annual_assessment_track": a.get("assessment_track"), "annual_coverage_weight": _num(a.get("coverage_weight")),
@@ -307,7 +307,7 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
-        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "mrs_score", "excess_return_5_pp", "excess_return_20_pp", "excess_return_50_pp", "excess_return_120_pp", "excess_return_250_pp", "down_market_win_rate_20", "down_market_avg_excess_pp_20", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total")}
+        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "mrs_score", "excess_return_5_pp", "excess_return_20_pp", "excess_return_50_pp", "excess_return_120_pp", "excess_return_250_pp", "down_market_win_rate_20", "down_market_total_excess_pp_20", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total")}
         annual_dimension_ranges = {name: _range(params, f"annual_{name}") for name in ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")}
         quarterly_dimension_ranges = {name: _range(params, f"quarterly_{name}") for name in ("growth", "profitability", "cash", "working_capital", "reinvestment", "financial_risk")}
     except ValueError as exc:
