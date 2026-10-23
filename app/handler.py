@@ -2902,7 +2902,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             page, page_size = int(params.get("page", ["1"])[0]), int(params.get("page_size", ["50"])[0])
         except ValueError:
             page, page_size = 1, 50
-        self.respond_json(HTTPStatus.OK, load_current_diagnosis_list(category, page, page_size))
+        filters = {key: params.get(key, [""])[0] for key in ("industry", "momentum", "min_annual_score", "max_industry_pe", "max_industry_ps", "max_history_pe", "max_history_ps")}
+        self.respond_json(HTTPStatus.OK, load_current_diagnosis_list(category, page, page_size, filters))
 
     def handle_good_stock_undervaluation(self, query: str) -> None:
         params = parse_qs(query)

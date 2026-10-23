@@ -12,6 +12,7 @@ from app.relative_valuation.data_loader import load_industry_valuation_snapshot
 from app.relative_valuation.history import FINANCIAL_TS_DIR, _load_daily_series
 from .diagnosis import classify_quality_margin_quadrant
 from .industry_evidence import evaluate_industry_evidence
+from .price_evidence import summarize_price_percentile
 from .own_valuation_history import (
     build_own_valuation_history,
     build_pit_disclosures_from_period_frames,
@@ -22,6 +23,15 @@ from .valuation_gate import evaluate_margin_evidence
 ROOT = Path(__file__).resolve().parents[2]
 STRICT_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__2026Q2.json"
 CURRENT_DIAGNOSIS_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "good_stock_undervaluation_current.json"
+PRICE_PERCENTILE_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "dataset_price_percentile_5y.json"
+
+
+@lru_cache(maxsize=1)
+def _load_price_percentile_records() -> dict[str, dict[str, Any]]:
+    """Load the QFQ precomputed price-position snapshot keyed by stock code."""
+    if not PRICE_PERCENTILE_SNAPSHOT.is_file():
+        return {}
+    return json.loads(PRICE_PERCENTILE_SNAPSHOT.read_text(encoding="utf-8"))
 
 
 @lru_cache(maxsize=1)
@@ -29,7 +39,7 @@ def _current_diagnosis_snapshot() -> dict[str, Any]:
     return json.loads(CURRENT_DIAGNOSIS_SNAPSHOT.read_text(encoding="utf-8")) if CURRENT_DIAGNOSIS_SNAPSHOT.is_file() else {}
 
 
-def load_current_diagnosis_list(category: str = "has_margin", page: int = 1, page_size: int = 50) -> dict[str, Any]:
+def load_current_diagnosis_list(category: str = "has_margin", page: int = 1, page_size: int = 50, filters: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = _current_diagnosis_snapshot()
     rows = payload.get("stocks") or []
     predicates = {
@@ -40,8 +50,44 @@ def load_current_diagnosis_list(category: str = "has_margin", page: int = 1, pag
         "evidence_unavailable": lambda row: (row.get("margin") or {}).get("status") == "UNAVAILABLE",
     }
     selected = [row for row in rows if predicates.get(category, predicates["has_margin"])(row)]
+    filters = filters or {}
+    industry_query = str(filters.get("industry") or "").strip()
+    momentum = str(filters.get("momentum") or "").strip()
+    def number(value: Any) -> float | None:
+        try: return float(value)
+        except (TypeError, ValueError): return None
+    def passes(row: dict[str, Any]) -> bool:
+        quality, industry, history, quarter = row.get("quality") or {}, row.get("industry") or {}, row.get("own_history") or {}, row.get("quarterly_momentum") or {}
+        if industry_query and industry_query not in str(row.get("industry_level_2_name") or ""): return False
+        if momentum and quarter.get("status") != momentum: return False
+        checks = (("min_annual_score", quality.get("annual_score"), lambda actual, required: actual >= required), ("max_industry_pe", industry.get("pe_percentile"), lambda actual, maximum: actual <= maximum), ("max_industry_ps", industry.get("ps_percentile"), lambda actual, maximum: actual <= maximum), ("max_history_pe", history.get("pe_percentile"), lambda actual, maximum: actual <= maximum), ("max_history_ps", history.get("ps_percentile"), lambda actual, maximum: actual <= maximum))
+        for key, value, compare in checks:
+            threshold = number(filters.get(key))
+            actual = number(value)
+            if threshold is not None and (actual is None or not compare(actual, threshold)): return False
+        return True
+    selected = [row for row in selected if passes(row)]
     selected.sort(key=lambda row: ((row.get("quality") or {}).get("annual_score") or -1, row.get("stock_name") or ""), reverse=True)
-    compact = [{"market": r.get("market"), "symbol": r.get("symbol"), "stock_name": r.get("stock_name"), "industry": r.get("industry_level_2_name"), "quadrant": (r.get("quadrant") or {}).get("quadrant"), "quality_status": (r.get("quality") or {}).get("status"), "annual_score": (r.get("quality") or {}).get("annual_score"), "margin_status": (r.get("margin") or {}).get("status"), "industry_pe_percentile": (r.get("industry") or {}).get("pe_percentile"), "industry_ps_percentile": (r.get("industry") or {}).get("ps_percentile"), "history_pe_percentile": (r.get("own_history") or {}).get("pe_percentile"), "history_ps_percentile": (r.get("own_history") or {}).get("ps_percentile"), "quarterly_momentum": (r.get("quarterly_momentum") or {}).get("status")} for r in selected]
+    price_records = _load_price_percentile_records()
+    compact = []
+    for record in selected:
+        price = summarize_price_percentile(price_records.get(str(record.get("symbol") or "").zfill(6)))
+        compact.append({
+            "market": record.get("market"), "symbol": record.get("symbol"), "stock_name": record.get("stock_name"),
+            "industry": record.get("industry_level_2_name"), "quadrant": (record.get("quadrant") or {}).get("quadrant"),
+            "quality_status": (record.get("quality") or {}).get("status"),
+            "annual_score": (record.get("quality") or {}).get("annual_score"),
+            "margin_status": (record.get("margin") or {}).get("status"),
+            "industry_pe_percentile": (record.get("industry") or {}).get("pe_percentile"),
+            "industry_ps_percentile": (record.get("industry") or {}).get("ps_percentile"),
+            "history_pe_percentile": (record.get("own_history") or {}).get("pe_percentile"),
+            "history_ps_percentile": (record.get("own_history") or {}).get("ps_percentile"),
+            "quarterly_momentum": (record.get("quarterly_momentum") or {}).get("status"),
+            "quarterly_period": (record.get("quarterly_momentum") or {}).get("period"),
+            "price_percentile": price["percentile"], "price_percentile_label": price["label"],
+            "price_percentile_scope": price["scope"], "price_history_years": price["history_years"],
+            "price_percentile_basis": price["basis"],
+        })
     page = max(1, int(page))
     page_size = min(200, max(1, int(page_size)))
     total = len(compact)

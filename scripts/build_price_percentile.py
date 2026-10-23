@@ -79,7 +79,6 @@ def main():
     print(f"Found {len(symbols)} symbols, computing 5-year percentile...")
 
     results: dict[str, dict] = {}
-    cutoff = pd.Timestamp.now() - pd.DateOffset(years=YEARS)
     done = 0
     errors = 0
 
@@ -92,6 +91,8 @@ def main():
 
             daily.index = pd.to_datetime(daily.index)
             daily = daily.sort_index()
+            latest_date = daily.index[-1]
+            cutoff = latest_date - pd.DateOffset(years=YEARS)
             recent = daily[daily.index >= cutoff]
 
             if len(recent) < MIN_DAYS:
@@ -101,7 +102,14 @@ def main():
             closes = recent["close"].dropna().tolist()
             result = compute_percentile(closes)
             if result:
-                result["price_basis"] = "tdx_export_qfq"
+                has_full_five_year_history = daily.index[0] <= cutoff
+                result.update({
+                    "price_basis": "tdx_export_qfq",
+                    "window_start": str(recent.index[0].date()),
+                    "window_end": str(latest_date.date()),
+                    "history_years": YEARS if has_full_five_year_history else round((latest_date - recent.index[0]).days / 365.2425, 2),
+                    "history_scope": "five_year" if has_full_five_year_history else "available_history",
+                })
                 results[symbol] = result
 
             done += 1
