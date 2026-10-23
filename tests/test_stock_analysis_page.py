@@ -700,7 +700,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('state.industryMetricPeerTrigger = trigger || document.activeElement;', js)
         self.assertIn('showIndustryMetricPeers(trigger.dataset.industryMetric, trigger)', js)
         self.assertIn("industryMetricDialog?.addEventListener('close', () => { state.industryMetricPeerTrigger?.focus(); state.industryMetricPeerTrigger = null; });", js)
-        self.assertIn('stock-analysis.js?v=20261018-health-peer-sort-bj-filter-v94', html)
+        self.assertIn('stock-analysis.js?v=20261023-market-relative-strength-v95', html)
 
 
 if __name__ == '__main__':

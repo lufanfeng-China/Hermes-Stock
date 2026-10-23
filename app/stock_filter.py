@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FINAL = ROOT / "data" / "derived" / "datasets" / "final"
 HISTORICAL_FUNDAMENTALS = FINAL / "stock_filter_fundamental_history"
 PAGE_SIZE = 50
-SORT_FIELDS = {"rps_total", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
+SORT_FIELDS = {"rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
 
 
 def _num(value: Any) -> float | None:
@@ -123,6 +123,18 @@ def _qfq_latest() -> dict[tuple[str, str], dict[str, Any]]:
 
 
 @lru_cache(maxsize=1)
+def _relative_strengths() -> dict[tuple[str, str], dict[str, Any]]:
+    from app.market_relative_strength import load_current_snapshot
+    stocks = load_current_snapshot().get("stocks") or {}
+    result = {}
+    for key, value in stocks.items():
+        if isinstance(value, dict) and ":" in str(key):
+            market, symbol = str(key).split(":", 1)
+            result[(market.lower(), symbol.zfill(6))] = value
+    return result
+
+
+@lru_cache(maxsize=1)
 def _niche_leaders() -> dict[tuple[str, str], str]:
     """Read verified niche-leader tags once for the filter universe."""
     path = FINAL / "dataset_niche_leaders.parquet"
@@ -167,6 +179,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
     valuation_rows = _read_json(FINAL / "dataset_industry_valuation_current.json")
     valuations: dict[tuple[str, str], dict[str, Any]] = {}
     qfq_latest = _qfq_latest()
+    relative_strengths = _relative_strengths()
     if isinstance(valuation_rows, list):
         for group in valuation_rows:
             if not isinstance(group, dict):
@@ -187,6 +200,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
         industry = industries.get((market, symbol), {})
         valuation = valuations.get((market, symbol), {})
         qfq = qfq_latest.get((market, symbol), {})
+        relative = relative_strengths.get((market, symbol), {})
         total = sum(_num(r.get(k)) or 0 for k in ("rps_20", "rps_50", "rps_120", "rps_250"))
         rows.append({
             "market": market, "symbol": symbol, "stock_name": names.get((market, symbol), symbol),
@@ -202,6 +216,9 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "blowup_break_vol_ratios": qfq.get("blowup_break_vol_ratios") or [], "blowup_break_return_5d": qfq.get("blowup_break_return_5d"),
             "rps_20": _num(r.get("rps_20")), "rps_50": _num(r.get("rps_50")),
             "rps_120": _num(r.get("rps_120")), "rps_250": _num(r.get("rps_250")), "rps_total": round(total, 2),
+            "mrs_score": _num(relative.get("mrs_score")), "mrs_label": relative.get("mrs_label"), "relative_strength_state": relative.get("relative_strength_state"), "relative_strength_state_label": relative.get("relative_strength_state_label"),
+            "excess_return_5_pp": _num(relative.get("excess_return_5_pp")), "excess_return_20_pp": _num(relative.get("excess_return_20_pp")), "excess_return_50_pp": _num(relative.get("excess_return_50_pp")), "excess_return_120_pp": _num(relative.get("excess_return_120_pp")), "excess_return_250_pp": _num(relative.get("excess_return_250_pp")),
+            "down_market_days_20": _num(relative.get("down_market_days_20")), "down_market_win_rate_20": _num(relative.get("down_market_win_rate_20")), "down_market_avg_excess_pp_20": _num(relative.get("down_market_avg_excess_pp_20")), "anti_fall_status": relative.get("anti_fall_status"),
             "composite_total": _num(composite.get("score")), "composite_mode": composite.get("mode"),
             "annual_total": _num(a.get("score")), "annual_dimensions": a.get("dimensions") or {}, "annual_derived": a.get("derived") or {},
             "annual_assessment_track": a.get("assessment_track"), "annual_coverage_weight": _num(a.get("coverage_weight")),
@@ -290,7 +307,7 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
-        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total")}
+        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "mrs_score", "excess_return_5_pp", "excess_return_20_pp", "excess_return_50_pp", "excess_return_120_pp", "excess_return_250_pp", "down_market_win_rate_20", "down_market_avg_excess_pp_20", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total")}
         annual_dimension_ranges = {name: _range(params, f"annual_{name}") for name in ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")}
         quarterly_dimension_ranges = {name: _range(params, f"quarterly_{name}") for name in ("growth", "profitability", "cash", "working_capital", "reinvestment", "financial_risk")}
     except ValueError as exc:

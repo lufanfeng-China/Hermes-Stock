@@ -57,6 +57,16 @@
       '<span class="subvalue rps-split">' + [row.rps_20, row.rps_50, row.rps_120, row.rps_250].map(function (value) { return fixed(value, 0); }).join(' / ') + '</span>';
   }
 
+  function relativeStrengthCell(row) {
+    var score = Number(row.mrs_score);
+    if (!Number.isFinite(score)) return '—';
+    var er20 = Number(row.excess_return_20_pp);
+    var win = Number(row.down_market_win_rate_20);
+    var er = Number.isFinite(er20) ? (er20 > 0 ? '+' : '') + fixed(er20, 2) + 'pp' : '—';
+    var anti = row.anti_fall_status === 'available' && Number.isFinite(win) ? '抗跌 ' + fixed(win, 1) + '%' : '抗跌样本不足';
+    return '<span class="rps-total">' + fixed(score, 1) + '｜' + esc(row.mrs_label) + '</span><span class="subvalue">ER20 ' + er + ' · ' + anti + '</span><span class="subvalue">' + esc(row.relative_strength_state_label || '—') + '</span>';
+  }
+
   function healthCell(score, period) {
     return '<span class="health">' + fixed(score) + '</span>' + (period ? '<span class="subvalue">' + esc(period) + '</span>' : '');
   }
@@ -81,7 +91,7 @@
 
   function renderRows(data) {
     if (!(data.rows || []).length) {
-      results.innerHTML = '<tr><td colspan="11" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
+      results.innerHTML = '<tr><td colspan="12" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
       return;
     }
     results.innerHTML = data.rows.map(function (row) {
@@ -94,6 +104,7 @@
         '<td class="num">' + fixed(row.price, 2) + '</td>' +
         '<td>' + valuationCell(row) + '</td>' +
         '<td class="num">' + rpsCell(row) + '</td>' +
+        '<td>' + relativeStrengthCell(row) + '</td>' +
         '<td>' + healthCell(row.annual_total, row.annual_period) + '</td>' +
         '<td>' + healthCell(row.quarterly_total, row.quarterly_period) + '</td>' +
         '<td class="num">' + reportReleaseReturnCell(row) + '</td>' +
@@ -133,7 +144,7 @@
     var percent = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
     var stage = progress && progress.stage || '正在准备历史快照';
     status.textContent = '正在生成历史快照：' + stage + '（' + percent + '%），将自动重试。';
-    results.innerHTML = '<tr><td colspan="11" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
+    results.innerHTML = '<tr><td colspan="12" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
     pages.innerHTML = '';
     if (historicalRetryTimer) window.clearTimeout(historicalRetryTimer);
     historicalRetryTimer = window.setTimeout(function () {
@@ -150,7 +161,7 @@
     currentPage = page || 1;
     status.classList.remove('error');
     status.textContent = '正在按全市场条件筛选…';
-    results.innerHTML = '<tr><td colspan="11" class="empty-state">正在加载筛选结果…</td></tr>';
+    results.innerHTML = '<tr><td colspan="12" class="empty-state">正在加载筛选结果…</td></tr>';
     pages.innerHTML = '';
     try {
       var response = await fetch('/api/stock-filter?' + requestParams(currentPage).toString());
@@ -165,7 +176,7 @@
       matchCount.textContent = '—';
       status.classList.add('error');
       status.textContent = error.message;
-      results.innerHTML = '<tr><td colspan="11" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
+      results.innerHTML = '<tr><td colspan="12" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
     }
   }
 

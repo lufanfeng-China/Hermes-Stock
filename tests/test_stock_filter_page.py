@@ -14,8 +14,8 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertIn('class="stock-filter-workbench"', html)
         self.assertIn('class="filter-sidebar"', html)
         self.assertIn('class="filter-results-panel"', html)
-        self.assertEqual(len(re.findall(r"<fieldset[^>]+data-filter-group=", html)), 5)
-        for label in ("RPS 强度", "基础行情", "财务健康", "趋势过滤", "MACD / 均线金叉"):
+        self.assertEqual(len(re.findall(r"<fieldset[^>]+data-filter-group=", html)), 6)
+        for label in ("RPS 强度", "基础行情", "财务健康", "趋势过滤", "MACD / 均线金叉", "相对大盘强弱"):
             self.assertIn(label, html)
         for removed in ("年度派生财报指标", "特定日期内涨跌幅", "N日换手率", "PB / 1/5/20日涨跌幅"):
             self.assertNotIn(removed, html)
@@ -32,6 +32,7 @@ class StockFilterPageTest(unittest.TestCase):
             "quarterly_growth_min", "quarterly_profitability_min", "quarterly_cash_min",
             "quarterly_working_capital_min", "quarterly_reinvestment_min", "quarterly_financial_risk_min",
             "niche_leader", "trend_daily", "trend_weekly", "trend_monthly", "macd_cross", "golden_cross",
+            "mrs_score_min", "excess_return_5_pp_min", "excess_return_20_pp_min", "down_market_win_rate_20_min",
         ):
             self.assertIn(f'name="{name}"', html)
     def test_trend_controls_expose_every_backend_supported_status(self):
@@ -59,12 +60,12 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertIn('input[type="number"]::-webkit-inner-spin-button', html)
         self.assertIn('-webkit-appearance:none;', html)
 
-    def test_all_five_filter_groups_are_collapsed_by_default_and_toggleable(self):
+    def test_all_six_filter_groups_are_collapsed_by_default_and_toggleable(self):
         html = PAGE.read_text(encoding="utf-8")
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
 
-        self.assertEqual(len(re.findall(r'<fieldset class="filter-group is-collapsed" data-filter-group=', html)), 5)
-        self.assertEqual(html.count('class="filter-group-toggle"'), 5)
+        self.assertEqual(len(re.findall(r'<fieldset class="filter-group is-collapsed" data-filter-group=', html)), 6)
+        self.assertEqual(html.count('class="filter-group-toggle"'), 6)
         self.assertIn("filter-group-toggle", script)
         self.assertIn("classList.toggle('is-collapsed'", script)
 

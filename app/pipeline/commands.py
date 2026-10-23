@@ -114,6 +114,7 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ('build_first_wave_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_first_wave_snapshot.py')]),
         # Derived once during data maintenance so /api/stock-filter never groups 12M daily rows.
         ('build_stock_filter_market_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_market_snapshot.py')]),
+        ('build_market_relative_strength', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_market_relative_strength.py')]),
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
         ('build_financial_health_peer_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_health_peer_snapshot.py')]),
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),

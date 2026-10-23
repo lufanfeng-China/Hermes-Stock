@@ -596,6 +596,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-filter":
             self.handle_stock_filter(parsed.query)
             return
+        if parsed.path == "/api/market-relative-strength":
+            self.handle_market_relative_strength(parsed.query)
+            return
         if parsed.path == "/api/first-wave-start":
             self.handle_first_wave_start(parsed.query)
             return
@@ -2019,6 +2022,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         from app.stock_filter import filter_response
         result = filter_response(parse_qs(query))
         self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_market_relative_strength(self, query: str) -> None:
+        from app.market_relative_strength import stock_response
+        params = parse_qs(query)
+        market = (params.get("market") or [""])[0].strip().lower()
+        symbol = (params.get("symbol") or [""])[0].strip()
+        if not market or not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide market and symbol"}})
+            return
+        result = stock_response(market, symbol)
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.NOT_FOUND, result)
 
     def handle_stock_score(self, query: str) -> None:
         from app.search.index import compute_financial_scores, compute_stock_score

@@ -950,6 +950,20 @@
     }).join('');
   }
 
+  function renderMarketRelativeStrength(payload) {
+    const grid = document.getElementById('market-relative-strength-grid'); const period = document.getElementById('market-relative-strength-period');
+    if (!grid || !period) return;
+    const rs = payload?.relative_strength;
+    if (!payload?.ok || !rs) { grid.innerHTML = '<div class="analysis-metric-status">相对大盘强弱数据暂不可用（需在RPS成分池内）。</div>'; period.textContent = '数据不足'; return; }
+    const num = value => Number.isFinite(Number(value)) ? Number(value) : null;
+    const pp = value => num(value) === null ? '—' : `${num(value) > 0 ? '+' : ''}${num(value).toFixed(2)}pp`;
+    const value = v => num(v) === null ? '—' : num(v).toFixed(1);
+    const anti = rs.anti_fall_status === 'available' ? `${value(rs.down_market_win_rate_20)}% 跑赢率` : '样本不足（<5日）';
+    const cards = [{label:'MRS 相对大盘强弱',value:`${value(rs.mrs_score)}｜${rs.mrs_label || '—'}`},{label:'近期状态',value:rs.relative_strength_state_label || '—'},{label:'ER5',value:pp(rs.excess_return_5_pp)},{label:'ER20',value:pp(rs.excess_return_20_pp)},{label:'ER50',value:pp(rs.excess_return_50_pp)},{label:'抗跌强度（20日）',value:anti,meta:`大盘下跌日 ${rs.down_market_days_20 ?? '—'}｜平均超额 ${pp(rs.down_market_avg_excess_pp_20)}`}];
+    period.textContent = `${payload.as_of_date || rs.as_of_date || '—'}｜全A每日等权｜RPS同一成分池`;
+    grid.innerHTML = cards.map(card => `<article class="basic-market-card"><strong>${escapeHtml(card.label)}</strong><span>${escapeHtml(card.value)}</span>${card.meta ? `<em class="basic-market-status">${escapeHtml(card.meta)}</em>` : ''}</article>`).join('');
+  }
+
   let stockKlineChart = null;
   async function showStockKlineHistory() {
     const d=document.getElementById('stock-kline-dialog'), svg=document.getElementById('stock-kline-svg'), title=document.getElementById('stock-kline-title'), status=document.getElementById('stock-kline-status'), s=state.selected?.symbol;
@@ -1362,6 +1376,9 @@
         fetch(`/api/relative-valuation?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
+        fetch(`/api/market-relative-strength?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
         fetch(`/api/stock-profile?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
@@ -1380,12 +1397,13 @@
           putFinancialCache(cacheKey, body);
           return body;
         });
-      const [valuation, profile, pricePercentile, peHistory] = await supplementaryRequests;
+      const [valuation, relativeStrength, profile, pricePercentile, peHistory] = await supplementaryRequests;
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
       state.stockProfile = profile;
       renderNicheLeaderBadge(profile);
       renderBasicMarket(valuation, payload.reports, profile, pricePercentile, peHistory, payload.quarterly_monitor, payload.industry_financial_position);
+      renderMarketRelativeStrength(relativeStrength);
       renderCompositeFinancialHealth(payload.composite_financial_health);
       renderFinancialReversalBadge(payload.financial_reversal);
       state.reportReleasePriceTrend = payload.report_release_price_trend || null;
