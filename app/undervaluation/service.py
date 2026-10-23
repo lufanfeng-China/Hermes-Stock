@@ -29,7 +29,7 @@ def _current_diagnosis_snapshot() -> dict[str, Any]:
     return json.loads(CURRENT_DIAGNOSIS_SNAPSHOT.read_text(encoding="utf-8")) if CURRENT_DIAGNOSIS_SNAPSHOT.is_file() else {}
 
 
-def load_current_diagnosis_list(category: str = "has_margin") -> dict[str, Any]:
+def load_current_diagnosis_list(category: str = "has_margin", page: int = 1, page_size: int = 50) -> dict[str, Any]:
     payload = _current_diagnosis_snapshot()
     rows = payload.get("stocks") or []
     predicates = {
@@ -42,7 +42,11 @@ def load_current_diagnosis_list(category: str = "has_margin") -> dict[str, Any]:
     selected = [row for row in rows if predicates.get(category, predicates["has_margin"])(row)]
     selected.sort(key=lambda row: ((row.get("quality") or {}).get("annual_score") or -1, row.get("stock_name") or ""), reverse=True)
     compact = [{"market": r.get("market"), "symbol": r.get("symbol"), "stock_name": r.get("stock_name"), "industry": r.get("industry_level_2_name"), "quadrant": (r.get("quadrant") or {}).get("quadrant"), "quality_status": (r.get("quality") or {}).get("status"), "annual_score": (r.get("quality") or {}).get("annual_score"), "margin_status": (r.get("margin") or {}).get("status"), "industry_pe_percentile": (r.get("industry") or {}).get("pe_percentile"), "industry_ps_percentile": (r.get("industry") or {}).get("ps_percentile"), "history_pe_percentile": (r.get("own_history") or {}).get("pe_percentile"), "history_ps_percentile": (r.get("own_history") or {}).get("ps_percentile"), "quarterly_momentum": (r.get("quarterly_momentum") or {}).get("status")} for r in selected]
-    return {"ok": bool(payload), "built_at": payload.get("built_at"), "summary": payload.get("summary"), "category": category, "rows": compact}
+    page = max(1, int(page))
+    page_size = min(200, max(1, int(page_size)))
+    total = len(compact)
+    start = (page - 1) * page_size
+    return {"ok": bool(payload), "built_at": payload.get("built_at"), "summary": payload.get("summary"), "category": category, "page": page, "page_size": page_size, "total": total, "rows": compact[start:start + page_size]}
 
 
 @lru_cache(maxsize=1)

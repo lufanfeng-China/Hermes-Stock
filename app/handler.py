@@ -2896,8 +2896,13 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             )
 
     def handle_good_stock_undervaluation_list(self, query: str) -> None:
-        category = parse_qs(query).get("category", ["has_margin"])[0].strip()
-        self.respond_json(HTTPStatus.OK, load_current_diagnosis_list(category))
+        params = parse_qs(query)
+        category = params.get("category", ["has_margin"])[0].strip()
+        try:
+            page, page_size = int(params.get("page", ["1"])[0]), int(params.get("page_size", ["50"])[0])
+        except ValueError:
+            page, page_size = 1, 50
+        self.respond_json(HTTPStatus.OK, load_current_diagnosis_list(category, page, page_size))
 
     def handle_good_stock_undervaluation(self, query: str) -> None:
         params = parse_qs(query)
