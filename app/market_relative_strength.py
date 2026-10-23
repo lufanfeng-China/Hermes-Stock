@@ -87,8 +87,17 @@ def build_market_relative_strength(frame: pd.DataFrame, *, min_eligible_universe
         down_dates = benchmark_daily_20[benchmark_daily_20 < 0].index
         stock_down = daily_by_date.reindex(down_dates).dropna()
         excess_daily = stock_down - benchmark_daily.reindex(stock_down.index)
+        down_market_detail = [
+            {
+                "date": str(date.date()),
+                "market_return_pct": round(float(benchmark_daily.loc[date]) * 100, 4),
+                "stock_return_pct": round(float(stock_down.loc[date]) * 100, 4),
+                "excess_return_pp": round(float(excess_daily.loc[date]) * 100, 4),
+            }
+            for date in excess_daily.index
+        ]
         down_days = len(excess_daily)
-        record.update({"down_market_days_20": int(down_days), "down_market_outperform_days_20": int((excess_daily > 0).sum()), "down_market_win_rate_20": round(float((excess_daily > 0).mean() * 100), 2) if down_days else None, "down_market_avg_excess_pp_20": round(float(excess_daily.mean() * 100), 4) if down_days else None, "anti_fall_status": "available" if down_days >= MIN_ANTIFALL_DAYS else "sample_insufficient"})
+        record.update({"down_market_days_20": int(down_days), "down_market_outperform_days_20": int((excess_daily > 0).sum()), "down_market_win_rate_20": round(float((excess_daily > 0).mean() * 100), 2) if down_days else None, "down_market_avg_excess_pp_20": round(float(excess_daily.mean() * 100), 4) if down_days else None, "down_market_detail_20": down_market_detail, "anti_fall_status": "available" if down_days >= MIN_ANTIFALL_DAYS else "sample_insufficient"})
         stocks[key] = record
     ranks = {days: _rank_percentiles(values) for days, values in window_returns.items()}
     for key, record in stocks.items():

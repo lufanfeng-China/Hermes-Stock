@@ -965,10 +965,32 @@
       { label:'ER5', value:pp(rs.excess_return_5_pp), definition:'ER5 = 个股近5个交易日前复权收益 − 全A每日等权大盘近5日复利收益；单位为百分点（pp）。' },
       { label:'ER20', value:pp(rs.excess_return_20_pp), definition:'ER20 = 个股近20个交易日前复权收益 − 全A每日等权大盘近20日复利收益；单位为百分点（pp）。' },
       { label:'ER50', value:pp(rs.excess_return_50_pp), definition:'ER50 = 个股近50个交易日前复权收益 − 全A每日等权大盘近50日复利收益；单位为百分点（pp）。' },
-      { label:'抗跌强度（20日）', value:anti, meta:`大盘下跌日 ${rs.down_market_days_20 ?? '—'}｜平均超额 ${pp(rs.down_market_avg_excess_pp_20)}`, className:'anti-fall', definition:'仅统计最近20个交易日中全A每日等权大盘收益小于0的交易日。跑赢率为个股单日收益高于大盘的比例；平均超额为这些下跌日的平均（个股收益−大盘收益）。少于5个下跌日则标记样本不足。' },
+      { label:'抗跌强度（20日）', value:anti, meta:`大盘下跌日 ${rs.down_market_days_20 ?? '—'}｜平均超额 ${pp(rs.down_market_avg_excess_pp_20)}`, className:'anti-fall', clickable:true, definition:'仅统计最近20个交易日中全A每日等权大盘收益小于0的交易日。跑赢率为个股单日收益高于大盘的比例；平均超额为这些下跌日的平均（个股收益−大盘收益）。少于5个下跌日则标记样本不足。点击查看每个大盘下跌日的日期、大盘跌幅和股票涨跌幅。' },
     ];
     period.textContent = `${payload.as_of_date || rs.as_of_date || '—'}｜全A每日等权｜RPS同一成分池`;
-    grid.innerHTML = cards.map(card => `<article class="basic-market-card ${card.className || ''}" title="${escapeHtml(card.definition || '')}" aria-label="${escapeHtml(`${card.label}：${card.value}。${card.definition || ''}`)}"><strong>${escapeHtml(card.label)}</strong><span>${escapeHtml(card.value)}</span>${card.meta ? `<em class="basic-market-status">${escapeHtml(card.meta)}</em>` : ''}</article>`).join('');
+    grid.innerHTML = cards.map(card => `<article class="basic-market-card ${card.className || ''}"${card.clickable ? ' data-market-antifall-detail role="button" tabindex="0"' : ''} title="${escapeHtml(card.definition || '')}" aria-label="${escapeHtml(`${card.label}：${card.value}。${card.definition || ''}`)}"><strong>${escapeHtml(card.label)}</strong><span>${escapeHtml(card.value)}</span>${card.meta ? `<em class="basic-market-status">${escapeHtml(card.meta)}</em>` : ''}</article>`).join('');
+    const trigger = grid.querySelector('[data-market-antifall-detail]');
+    if (trigger) {
+      const open = () => showMarketAntiFallDetail(rs.down_market_detail_20 || []);
+      trigger.addEventListener('click', open);
+      trigger.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
+    }
+  }
+
+  function showMarketAntiFallDetail(rows) {
+    const dialog = document.getElementById('market-antifall-detail-dialog');
+    const title = document.getElementById('market-antifall-detail-title');
+    const meta = document.getElementById('market-antifall-detail-meta');
+    const table = document.getElementById('market-antifall-detail-table');
+    const close = dialog?.querySelector('.market-antifall-detail-close');
+    if (!dialog || !title || !meta || !table) return;
+    const stock = state.selected || {};
+    const format = value => Number.isFinite(Number(value)) ? `${Number(value) > 0 ? '+' : ''}${Number(value).toFixed(2)}%` : '—';
+    title.textContent = `抗跌强度：大盘下跌日明细 — ${stock.stock_name || stock.symbol || ''}`;
+    meta.textContent = `最近20个交易日内共 ${rows.length} 个全A每日等权大盘下跌日｜涨跌幅均为前复权单日收益。`;
+    table.innerHTML = rows.length ? rows.map(row => `<tr><td>${escapeHtml(row.date || '—')}</td><td>${format(row.market_return_pct)}</td><td>${format(row.stock_return_pct)}</td><td>${format(row.excess_return_pp)}</td></tr>`).join('') : '<tr><td colspan="4">暂无可比的大盘下跌日数据。</td></tr>';
+    close.onclick = () => dialog.close();
+    dialog.showModal();
   }
 
   let stockKlineChart = null;

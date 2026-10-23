@@ -6,6 +6,18 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class StockAnalysisPageTests(unittest.TestCase):
+    def test_antifall_card_opens_auditable_down_market_day_dialog(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="market-antifall-detail-dialog"', html)
+        self.assertIn('id="market-antifall-detail-table"', html)
+        for heading in ('日期', '大盘涨跌幅', '股票涨跌幅', '超额收益'):
+            self.assertIn(f'>{heading}<', html)
+        self.assertIn('function showMarketAntiFallDetail', js)
+        self.assertIn('data-market-antifall-detail', js)
+        self.assertIn('down_market_detail_20', js)
+
     def test_market_relative_strength_cards_have_definitions_and_double_width_antifall_card(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -14,7 +26,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('#market-relative-strength-grid .basic-market-card.anti-fall { grid-column:span 2; }', html)
         self.assertIn('definition:', js)
         self.assertIn('MRS = 40%×RPS20 + 30%×RPS50 + 20%×RPS120 + 10%×RPS250', js)
-        self.assertIn('class="basic-market-card ${card.className || \'\'}" title="${escapeHtml(card.definition || \'\')}"', js)
+        self.assertIn('class="basic-market-card ${card.className || \'\'}"${card.clickable ?', js)
+        self.assertIn('title="${escapeHtml(card.definition || \'\')}"', js)
         self.assertIn("className:'anti-fall'", js)
 
     def test_financial_reversal_badge_is_conditionally_rendered_in_composite_panel(self):
@@ -711,7 +724,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('state.industryMetricPeerTrigger = trigger || document.activeElement;', js)
         self.assertIn('showIndustryMetricPeers(trigger.dataset.industryMetric, trigger)', js)
         self.assertIn("industryMetricDialog?.addEventListener('close', () => { state.industryMetricPeerTrigger?.focus(); state.industryMetricPeerTrigger = null; });", js)
-        self.assertIn('stock-analysis.js?v=20261023-market-relative-strength-v96', html)
+        self.assertIn('stock-analysis.js?v=20261023-market-antifall-dialog-v97', html)
 
 
 if __name__ == '__main__':

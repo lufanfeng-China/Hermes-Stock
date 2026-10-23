@@ -34,6 +34,12 @@ class MarketRelativeStrengthTests(unittest.TestCase):
         self.assertEqual(20, stock["down_market_outperform_days_20"])
         self.assertEqual(100.0, stock["down_market_win_rate_20"])
         self.assertGreater(stock["down_market_avg_excess_pp_20"], 0)
+        detail = stock["down_market_detail_20"]
+        self.assertEqual(20, len(detail))
+        self.assertEqual(sorted(item["date"] for item in detail), [item["date"] for item in detail])
+        self.assertTrue(all(item["market_return_pct"] < 0 for item in detail))
+        self.assertTrue(all(item["stock_return_pct"] > 0 for item in detail))
+        self.assertTrue(all(item["excess_return_pp"] > 0 for item in detail))
 
     def test_marks_antifall_as_insufficient_when_fewer_than_five_down_days(self) -> None:
         from app.market_relative_strength import build_market_relative_strength
