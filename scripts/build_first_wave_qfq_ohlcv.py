@@ -15,8 +15,10 @@ META = OUT.with_suffix(".meta.json")
 
 def eligible(row: dict) -> tuple[str, str, str] | None:
     symbol = str(row.get("symbol") or "").zfill(6); name = str(row.get("stock_name") or "").strip()
-    market = "sh" if symbol.startswith("6") else "sz" if symbol.startswith(("00", "30")) else ""
-    if not market or not name or "ST" in name.upper() or name.startswith("*ST"): return None
+    market = "sh" if symbol.startswith("6") else "sz" if symbol.startswith(("00", "30")) else "bj" if symbol.startswith("92") else ""
+    source_market = str(row.get("market") or market).lower()
+    if source_market != market: return None  # Do not reinterpret SH 000001 (index) as SZ 000001.
+    if len(symbol) != 6 or not symbol.isdigit() or not market or not name or "ST" in name.upper() or name.upper().startswith("S"): return None
     return market, symbol, name
 
 def main() -> None:

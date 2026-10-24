@@ -2,7 +2,9 @@
 from __future__ import annotations
 from typing import Any
 import pandas as pd
-from app.first_wave_start import scan_symbol
+# Legacy event/score studies retain their explicit v1 semantics.
+# The live page and snapshot builder use first_wave_start v2 instead.
+from app.first_wave_legacy_v1 import scan_symbol
 
 
 def scan_continuous_events(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str) -> list[dict[str, Any]]:

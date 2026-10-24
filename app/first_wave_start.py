@@ -1,7 +1,8 @@
-"""Deterministic, auditable first-wave strength-start event scanner.
+"""Deterministic five-condition first-wave scanner for QFQ daily bars.
 
-Signals are calculated exclusively from front-adjusted OHLCV.  The caller must
-supply bars truncated at ``as_of_date``; this module never looks ahead.
+The caller must supply front-adjusted close/volume; no raw-price fallback is
+performed. ``scan_symbol`` truncates at ``as_of_date`` and requires its exact bar.
+Platform/event helpers are retained only for legacy research consumers.
 """
 from __future__ import annotations
 
@@ -104,67 +105,52 @@ def _prior_wave(frame: pd.DataFrame, platform_start: int) -> tuple[bool, float |
 
 
 def scan_symbol(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str, as_of_date: str) -> dict[str, Any] | None:
-    """Return one frozen current event or None.  No current/future data fallback."""
-    if not REQUIRED_COLUMNS <= set(bars.columns): raise ValueError("bars lack required OHLCV columns")
-    data = bars.copy(); data["date"] = pd.to_datetime(data["date"]); data = data[data["date"] <= pd.Timestamp(as_of_date)].sort_values("date").reset_index(drop=True)
-    if len(data) < 69 or data["date"].duplicated().any() or (data[["open","high","low","close","volume","amount"]].isna().any().any()): return None
-    # candidate B must be in the final four visible bars; first valid breakout after its chosen platform is frozen.
-    event = None
-    for bidx in range(max(68, len(data) - 4), len(data)):
-        platform = choose_platform(data.iloc[:bidx])
-        if not platform: continue
-        if float(data.iloc[bidx]["close"]) >= platform["pressure"] * 1.01:
-            event = (bidx, platform); break
-    if not event: return None
-    bidx, p = event; b = data.iloc[bidx]; observed = data.iloc[bidx:]
-    state = classify_event(pressure=p["pressure"], closes=observed["close"].astype(float).tolist())
-    if state in {"FAILED_BREAKOUT", "EXTENDED", "LATE_ENTRY"}: return None
-    if len(data.iloc[-10:]) != 10 or float(data.iloc[-10:]["amount"].mean()) < 50_000_000: return None
-    before_start = bidx - p["platform_days"]
-    has_wave, wave_gain, wave_high = _prior_wave(data, before_start)
-    background_count = before_start
-    tags: list[str] = []
-    classification = "FIRST_WAVE_ELIGIBLE"
-    platform_min_close = float(data.iloc[before_start:bidx]["close"].min())
-    if has_wave and wave_high and (wave_high - platform_min_close) / wave_high <= .10:
-        return None  # CONTINUATION: hard exclusion from first-wave lists
-    if has_wave:
-        classification = "REBASE_REVIEW"; tags.append("prior_wave_rebase_review")
-    elif background_count < 120:
-        classification = "FIRST_WAVE_WATCH"; tags.append("background_under_120_days")
-    structure, structure_detail, structure_tags = _score_platform(p); tags.extend(structure_tags)
-    breakthrough_pct = (float(b["close"]) / p["pressure"] - 1) * 100
-    break_score = 6 if breakthrough_pct < 1.5 else 10 if breakthrough_pct < 3 else 8 if breakthrough_pct < 5 else 4
-    current_dist = (float(observed.iloc[-1]["close"]) / p["pressure"] - 1) * 100
-    position = 6 if current_dist < 0 else 10 if current_dist < 3 else 8 if current_dist < 5 else 5 if current_dist < 8 else 2
-    structure_total = _round(structure + break_score + position)
-    prior10 = data.iloc[max(0, bidx - 10):bidx]
-    up = prior10[prior10["close"].astype(float).diff().fillna(0) > 0]["volume"].astype(float); down = prior10.drop(up.index)["volume"].astype(float)
-    ratio = float(up.mean() / down.mean()) if len(up) >= 2 and len(down) >= 2 and float(down.mean()) else None
-    flow = 7.5 if ratio is None else 15 if ratio >= 1.5 else 12 if ratio >= 1.25 else 9 if ratio >= 1 else 5 if ratio >= .8 else 0
-    bvol = float(b["volume"] / data.iloc[bidx-5:bidx]["volume"].astype(float).mean())
-    bvol_score = 0 if bvol < .8 else 3 if bvol < 1 else 6 if bvol < 1.3 else 10 if bvol <= 2.5 else 7 if bvol <= 3 else 3
-    if bvol > 3: tags.append("extreme_breakout_volume")
-    centroid = 0.0
-    if bidx >= 10:
-        for col in ("close", "low"):
-            change = (float(data.iloc[bidx-5:bidx][col].mean()) / float(data.iloc[bidx-10:bidx-5][col].mean()) - 1) * 100
-            centroid += 5 if change >= 3 else 4 if change >= 1.5 else 3 if change >= .5 else 2 if change >= 0 else 0
-    volume_total = _round(flow + bvol_score + centroid)
-    rng = float(b["high"] - b["low"])
-    if rng <= 0: return None
-    close_pos = (float(b["close"] - b["low"]) / rng); upper = float(b["high"] - max(b["open"],b["close"])) / rng; body = abs(float(b["close"] - b["open"])) / rng
-    kscore = (6 if close_pos >= .8 else 4 if close_pos >= .7 else 2 if close_pos >= .6 else 0) + (3 if upper <= .2 else 2 if upper <= .35 else 1 if upper <= .5 else 0) + (3 if body >= .6 else 2 if body >= .4 else 1 if body >= .2 else 0)
-    fresh = [12, 10, 8, 6][len(observed)-1]
-    acceptance = 5.5 if len(observed) == 1 else 0.0
-    start_total = _round(fresh + kscore + acceptance)
-    total = _round(structure_total + volume_total + start_total)
-    return {"market": market, "symbol": str(symbol).zfill(6), "stock_name": stock_name, "as_of_date": as_of_date, "classification": classification, "stage": state,
-            "b_date": str(pd.Timestamp(b["date"]).date()), "pressure": round(p["pressure"], 4), "current_close": round(float(observed.iloc[-1]["close"]), 4), "distance_to_pressure_pct": round(current_dist, 4),
-            "platform": p, "structure_score": structure_total, "volume_price_score": volume_total, "start_score": start_total, "total_score": total,
-            "acceptance_score": acceptance, "risk_tags": tags, "evidence": {"breakthrough_pct": round(breakthrough_pct,4), "prior_wave_pct": wave_gain, "average_amount_10d": float(data.iloc[-10:]["amount"].mean()), "breakout_volume_ratio": round(bvol,4), "up_down_volume_ratio": round(ratio,4) if ratio is not None else None, "close_position_ratio": round(close_pos,4), "upper_shadow_ratio": round(upper,4), "body_ratio": round(body,4), "structure": structure_detail}}
+    """Evaluate the five AND conditions on caller-supplied QFQ daily bars only."""
+    if not {"date", "close", "volume"} <= set(bars.columns):
+        raise ValueError("bars lack required date/close/volume columns")
+    data = bars.copy()
+    data["date"] = pd.to_datetime(data["date"], errors="coerce")
+    if data["date"].isna().any():
+        return None
+    data = data[data["date"] <= pd.Timestamp(as_of_date)].sort_values("date").reset_index(drop=True)
+    if (len(data) < 60 or data.iloc[-1]["date"] != pd.Timestamp(as_of_date)
+            or data["date"].duplicated().any()):
+        return None
+    # Only the 60 price bars and 31 volume bars required by the five rules
+    # participate in validity checks; older suspension/zero-volume rows are not
+    # an extra exclusion condition.
+    data = data.iloc[-60:].reset_index(drop=True)
+    close = pd.to_numeric(data["close"], errors="coerce").astype(float)
+    volume = pd.to_numeric(data["volume"].iloc[-31:], errors="coerce").astype(float)
+    if any(not math.isfinite(value) or value <= 0 for series in (close, volume) for value in series):
+        return None
+    prior_return = close.iloc[-2] / close.iloc[-32] - 1
+    averages = {days: float(close.iloc[-days:].mean()) for days in (10, 20, 30, 60)}
+    prior_volume = volume.iloc[-31:-1]
+    minimum, maximum = float(prior_volume.min()), float(prior_volume.max())
+    current_volume = float(volume.iloc[-1])
+    day_return = close.iloc[-1] / close.iloc[-2] - 1
+    # Inclusive decimal percentage boundaries tolerate only binary-float noise;
+    # MA ordering remains strictly greater with no tolerance or rounding.
+    prior_in_range = (prior_return >= 0.10 or math.isclose(prior_return, 0.10, rel_tol=0, abs_tol=1e-14)) and (
+        prior_return <= 0.50 or math.isclose(prior_return, 0.50, rel_tol=0, abs_tol=1e-14))
+    day_at_least_five = day_return >= 0.05 or math.isclose(day_return, 0.05, rel_tol=0, abs_tol=1e-14)
+    if not (prior_in_range
+            and averages[10] > averages[20] > averages[30] > averages[60]
+            and current_volume >= 4 * minimum
+            and day_at_least_five
+            and maximum / minimum <= 2.5):
+        return None
+    return {"market": market, "symbol": str(symbol).zfill(6), "stock_name": stock_name,
+            "as_of_date": as_of_date, "signal_date": str(data.iloc[-1]["date"].date()),
+            "current_close": float(close.iloc[-1]), "classification": "FIRST_WAVE_ELIGIBLE",
+            "evidence": {"prior_30d_return_pct": float(prior_return * 100),
+                         **{f"ma{days}": value for days, value in averages.items()},
+                         "prior_30d_min_volume": minimum, "prior_30d_max_volume": maximum,
+                         "current_volume": current_volume, "volume_multiple": current_volume / minimum,
+                         "day_return_pct": float(day_return * 100), "prior_volume_spread": maximum / minimum}}
 
 
 def sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
-    stages = {"FIRST_BREAKOUT": 0, "EARLY_CONFIRMATION": 1}
-    return (-float(row.get("total_score") or 0), stages.get(row.get("stage"), 9), abs(float(row.get("distance_to_pressure_pct") or 0)), str(row.get("market")), str(row.get("symbol")))
+    """Stable deterministic identity ordering; no score or legacy stage gates."""
+    return (str(row.get("market")), str(row.get("symbol")))

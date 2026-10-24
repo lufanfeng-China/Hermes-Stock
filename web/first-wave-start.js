@@ -1,10 +1,80 @@
 (function () {
-  var dateEl=document.getElementById('as-of-date'), statusEl=document.getElementById('status'), resultsEl=document.getElementById('results'), disclosureEl=document.getElementById('disclosure');
-  function esc(value){return String(value==null?'—':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function score(v){return v==null?'—':Number(v).toFixed(1);}
-  function renderGroup(title, items, kind){var cards=items.map(function(r){var p=r.platform||{},e=r.evidence||{};return '<article class="fw-card '+kind+'"><header><strong>'+esc(r.stock_name)+' '+esc(r.market)+':'+esc(r.symbol)+'</strong><b>'+score(r.total_score)+'</b></header><div class="fw-grid"><span>结构 '+score(r.structure_score)+'/30</span><span>量价 '+score(r.volume_price_score)+'/35</span><span>启动 '+score(r.start_score)+'/35</span><span>'+esc(r.stage)+'</span><span>B日 '+esc(r.b_date)+'</span><span>距压力 '+score(r.distance_to_pressure_pct)+'%</span></div><p>平台 '+esc(p.platform_start)+'–'+esc(p.platform_end)+'｜'+esc(p.platform_days)+' 日｜宽 '+score(p.width_pct)+'%｜压力 '+score(r.pressure)+'</p><p class="tags">'+(r.risk_tags||[]).map(esc).join(' · ')+'</p><details><summary>展开审计证据</summary><pre>'+esc(JSON.stringify({platform:p,evidence:e,classification:r.classification},null,2))+'</pre></details></article>';}).join('');return '<section><h2>'+title+' <small>'+items.length+'</small></h2>'+(cards||'<p class="empty">无符合候选</p>')+'</section>';}
-  function render(payload){var g=payload.groups||{}; disclosureEl.textContent=payload.disclosure||'';resultsEl.innerHTML=renderGroup('主榜：第一波合格',g.main||[],'main')+renderGroup('降级：第一波观察',g.first_wave_watch||[],'watch')+renderGroup('降级：重新筑底复核',g.rebase_review||[],'rebase');}
-  var retryTimer=null;
-  async function load(){var q=dateEl.value?'?as_of_date='+encodeURIComponent(dateEl.value):'';statusEl.textContent='加载中…';try{var res=await fetch('/api/first-wave-start'+q);var p=await res.json();if(!p.ok){var err=p.error||{};if(err.code==='historical_snapshot_building'){var pg=err.progress||{};statusEl.textContent=(err.message||'构建中')+' '+(pg.percent||0)+'% · '+(pg.stage||'');clearTimeout(retryTimer);retryTimer=setTimeout(load,3000);return;}throw new Error(err.message||'请求失败');}clearTimeout(retryTimer);render(p);statusEl.textContent=(p.is_historical?'历史':'当前')+' 数据日期：'+p.data_as_of;}catch(e){resultsEl.innerHTML='';disclosureEl.textContent='';statusEl.textContent='无法加载：'+e.message;}}
-  document.getElementById('load').addEventListener('click',load);document.getElementById('current').addEventListener('click',function(){dateEl.value='';load();});load();
+  'use strict';
+  var dateEl = document.getElementById('as-of-date');
+  var statusEl = document.getElementById('status');
+  var resultsEl = document.getElementById('results');
+  var disclosureEl = document.getElementById('disclosure');
+  var retryTimer = null;
+  var requestId = 0;
+
+  function esc(value) {
+    return String(value == null ? '—' : value).replace(/[&<>"']/g, function (c) {
+      return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+  }
+  function number(value, suffix, digits) {
+    if (value == null || value === '' || !Number.isFinite(Number(value))) return '—';
+    return Number(value).toFixed(digits == null ? 2 : digits) + (suffix || '');
+  }
+  function evidenceLine(label, value) {
+    return '<div><dt>' + label + '</dt><dd>' + value + '</dd></div>';
+  }
+  function renderCandidate(row) {
+    var e = row.evidence || {};
+    var query = new URLSearchParams({market: row.market || '', symbol: row.symbol || '', name: row.stock_name || ''});
+    return '<article class="fw-card"><header><div><a class="stock-link" href="/stock-analysis.html?' + esc(query.toString()) + '">' + esc(row.stock_name) + '</a> <span class="stock-code">' + esc(row.market) + ':' + esc(row.symbol) + '</span></div><span class="eligible">五条件全部符合</span></header>' +
+      '<p class="candidate-meta">数据日 ' + esc(row.as_of_date) + ' · 信号日 ' + esc(row.signal_date) + ' · 前复权收盘价 ' + number(row.current_close) + '</p>' +
+      '<dl class="fw-grid">' +
+      evidenceLine('截至昨日30日涨幅', number(e.prior_30d_return_pct, '%')) +
+      evidenceLine('当日 MA10 / MA20 / MA30 / MA60', [e.ma10, e.ma20, e.ma30, e.ma60].map(function (v) { return number(v, '', 4); }).join(' / ')) +
+      evidenceLine('当量 / 此前30日最小量', number(e.volume_multiple, ' 倍')) +
+      evidenceLine('当天前复权涨幅', number(e.day_return_pct, '%')) +
+      evidenceLine('此前30日最大量 / 最小量', number(e.prior_volume_spread, ' 倍')) +
+      evidenceLine('当天成交量（原始单位）', number(e.current_volume)) +
+      evidenceLine('此前30日最小量（原始单位）', number(e.prior_30d_min_volume)) +
+      evidenceLine('此前30日最大量（原始单位）', number(e.prior_30d_max_volume)) +
+      '</dl><details><summary>展开审计证据（原始字段）</summary><pre>' + esc(JSON.stringify({classification: row.classification, evidence: e}, null, 2)) + '</pre></details></article>';
+  }
+  function render(payload) {
+    var groups = payload.groups || {};
+    var items = groups.main || [];
+    disclosureEl.textContent = payload.disclosure || '';
+    resultsEl.innerHTML = '<section aria-label="当日五条件候选"><h2>当日五条件候选 <small>' + items.length + ' 只</small></h2>' +
+      (items.map(renderCandidate).join('') || '<p class="empty">当日无同时满足全部五条件的候选。</p>') + '</section>';
+  }
+  async function load() {
+    var activeRequest = ++requestId;
+    var q = dateEl.value ? '?as_of_date=' + encodeURIComponent(dateEl.value) : '';
+    clearTimeout(retryTimer);
+    resultsEl.innerHTML = '';
+    disclosureEl.textContent = '';
+    statusEl.textContent = '加载中…';
+    try {
+      var res = await fetch('/api/first-wave-start' + q);
+      var p = await res.json();
+      if (activeRequest !== requestId) return;
+      if (!p.ok) {
+        var err = p.error || {};
+        if (err.code === 'historical_snapshot_building') {
+          var pg = err.progress || {};
+          statusEl.textContent = (err.message || '构建中') + ' ' + (pg.percent || 0) + '% · ' + (pg.stage || '');
+          clearTimeout(retryTimer);
+          retryTimer = setTimeout(load, 3000);
+          return;
+        }
+        throw new Error(err.message || '请求失败');
+      }
+      clearTimeout(retryTimer);
+      render(p);
+      statusEl.textContent = (p.is_historical ? '历史' : '当前') + ' 数据日期：' + p.data_as_of;
+    } catch (e) {
+      if (activeRequest !== requestId) return;
+      resultsEl.innerHTML = '';
+      disclosureEl.textContent = '';
+      statusEl.textContent = '无法加载：' + e.message;
+    }
+  }
+  document.getElementById('load').addEventListener('click', load);
+  document.getElementById('current').addEventListener('click', function () { dateEl.value = ''; load(); });
+  load();
 })();
