@@ -106,8 +106,8 @@ def _prior_wave(frame: pd.DataFrame, platform_start: int) -> tuple[bool, float |
 
 def scan_symbol(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str, as_of_date: str) -> dict[str, Any] | None:
     """Evaluate the five AND conditions on caller-supplied QFQ daily bars only."""
-    if not {"date", "close", "volume"} <= set(bars.columns):
-        raise ValueError("bars lack required date/close/volume columns")
+    if not {"date", "open", "close", "volume"} <= set(bars.columns):
+        raise ValueError("bars lack required date/open/close/volume columns")
     data = bars.copy()
     data["date"] = pd.to_datetime(data["date"], errors="coerce")
     if data["date"].isna().any():
@@ -124,6 +124,9 @@ def scan_symbol(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str
     volume = pd.to_numeric(data["volume"].iloc[-31:], errors="coerce").astype(float)
     if any(not math.isfinite(value) or value <= 0 for series in (close, volume) for value in series):
         return None
+    current_open = _f(data.iloc[-1]["open"])
+    if current_open is None or current_open <= 0:
+        return None
     prior_return = close.iloc[-2] / close.iloc[-32] - 1
     averages = {days: float(close.iloc[-days:].mean()) for days in (10, 20, 30, 60)}
     prior_volume = volume.iloc[-31:-1]
@@ -137,14 +140,15 @@ def scan_symbol(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str
     day_at_least_five = day_return >= 0.05 or math.isclose(day_return, 0.05, rel_tol=0, abs_tol=1e-14)
     if not (prior_in_range
             and averages[10] > averages[20] > averages[30] > averages[60]
-            and current_volume >= 4 * minimum
+            and current_volume >= 3 * minimum
             and day_at_least_five
-            and maximum / minimum <= 2.5):
+            and close.iloc[-1] > current_open
+            and maximum / minimum <= 3):
         return None
     return {"market": market, "symbol": str(symbol).zfill(6), "stock_name": stock_name,
             "as_of_date": as_of_date, "signal_date": str(data.iloc[-1]["date"].date()),
             "current_close": float(close.iloc[-1]), "classification": "FIRST_WAVE_ELIGIBLE",
-            "evidence": {"prior_30d_return_pct": float(prior_return * 100),
+            "evidence": {"current_open": current_open, "prior_30d_return_pct": float(prior_return * 100),
                          **{f"ma{days}": value for days, value in averages.items()},
                          "prior_30d_min_volume": minimum, "prior_30d_max_volume": maximum,
                          "current_volume": current_volume, "volume_multiple": current_volume / minimum,

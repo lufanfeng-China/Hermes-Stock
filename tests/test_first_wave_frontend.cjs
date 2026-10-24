@@ -26,7 +26,7 @@ async function page(responses) {
 const row = {
   market: 'sh', symbol: '600001', stock_name: '测试<&股', as_of_date: '2026-10-23', signal_date: '2026-10-23',
   current_close: 12.35, classification: 'FIRST_WAVE_ELIGIBLE',
-  evidence: {prior_30d_return_pct: 23.45, ma10: 12.1, ma20: 11.8, ma30: 11.3, ma60: 10.9,
+  evidence: {current_open: 11.8, prior_30d_return_pct: 23.45, ma10: 12.1, ma20: 11.8, ma30: 11.3, ma60: 10.9,
     prior_30d_min_volume: 12345, prior_30d_max_volume: 23456, current_volume: 56789,
     volume_multiple: 4.6, day_return_pct: 6.12, prior_volume_spread: 1.9},
 };
@@ -54,6 +54,8 @@ test('renders only the five-rule candidate group with linked name and full audit
   for (const text of ['2026-10-23', '12.35', 'FIRST_WAVE_ELIGIBLE']) assert.ok(html.includes(text));
   for (const text of ['不应出现', '平台', '评分', '主榜', '降级', '重新筑底', 'NaN', 'undefined']) assert.ok(!html.includes(text), text);
   assert.ok(elements.status.textContent.includes('2026-10-23'));
+  assert.ok(html.includes('当日开盘 / 收盘（前复权）'));
+  assert.ok(html.includes('<dd>11.80 / 12.35</dd>'));
 });
 
 test('historical build clears previous-date candidates, polls, and current button resets date', async () => {
@@ -118,9 +120,9 @@ test('page stylesheet supports rules, evidence, mobile layout and no retired tie
 
 test('page discloses the five AND rules and their exact windows and boundaries', () => {
   const html = fs.readFileSync(path.join(web, 'first-wave-start.html'), 'utf8');
-  for (const text of ['五条件 v2', '全部满足（AND）', 'close[t-1] / close[t-31] - 1', '10% ≤', '≤ 50%', 'MA10 > MA20 > MA30 > MA60', '包含当天', '不附加', 'volume[t] ≥ 4 × min(volume[t-30:t-1])', 'close[t] / close[t-1] - 1 ≥ 5%', 'max(volume[t-30:t-1]) / min(volume[t-30:t-1]) ≤ 2.5', '排除当天', '前复权', '不做收益回测']) {
+  for (const text of ['五条件 v3', '全部满足（AND）', 'close[t-1] / close[t-31] - 1', '10% ≤', '≤ 50%', 'MA10 > MA20 > MA30 > MA60', '包含当天', '不附加', 'volume[t] ≥ 3 × min(volume[t-30:t-1])', 'close[t] / close[t-1] - 1 ≥ 5%', 'max(volume[t-30:t-1]) / min(volume[t-30:t-1]) ≤ 3', 'close[t] > open[t]', '排除当天', '前复权', '不做收益回测']) {
     assert.ok(html.includes(text), `missing rule disclosure: ${text}`);
   }
-  for (const asset of ['css', 'js']) assert.ok(html.includes(`/first-wave-start.${asset}?v=20261024-five-rules-v5`));
+  for (const asset of ['css', 'js']) assert.ok(html.includes(`/first-wave-start.${asset}?v=20261024-three-times-bullish-v6`));
   for (const id of ['global-nav', 'as-of-date', 'load', 'current', 'status', 'results']) assert.ok(html.includes(`id="${id}"`));
 });

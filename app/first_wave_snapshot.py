@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FINAL = ROOT / "data" / "derived" / "datasets" / "final"
 CURRENT = FINAL / "first_wave_start_current.json"
 HISTORY = FINAL / "first_wave_start_history"
-SCHEMA_VERSION = "first-wave-start-v2-five-rules"
+SCHEMA_VERSION = "first-wave-start-v3-three-times-bullish"
 
 
 def response_from_rows(rows: list[dict[str, Any]], *, as_of_date: str, data_date: str, historical: bool) -> dict[str, Any]:

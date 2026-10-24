@@ -29,6 +29,7 @@
       evidenceLine('当日 MA10 / MA20 / MA30 / MA60', [e.ma10, e.ma20, e.ma30, e.ma60].map(function (v) { return number(v, '', 4); }).join(' / ')) +
       evidenceLine('当量 / 此前30日最小量', number(e.volume_multiple, ' 倍')) +
       evidenceLine('当天前复权涨幅', number(e.day_return_pct, '%')) +
+      evidenceLine('当日开盘 / 收盘（前复权）', number(e.current_open) + ' / ' + number(row.current_close)) +
       evidenceLine('此前30日最大量 / 最小量', number(e.prior_volume_spread, ' 倍')) +
       evidenceLine('当天成交量（原始单位）', number(e.current_volume)) +
       evidenceLine('此前30日最小量（原始单位）', number(e.prior_30d_min_volume)) +

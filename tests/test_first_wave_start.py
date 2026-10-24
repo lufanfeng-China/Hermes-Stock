@@ -18,6 +18,7 @@ def eligible_bars(count=60):
     return pd.DataFrame({
         "date": pd.bdate_range("2026-01-01", periods=count),
         "close": closes,
+        "open": [12.0] * count,
         "volume": [100.0] * (count - 1) + [400.0],
     })
 
@@ -43,7 +44,7 @@ class FirstWaveStartTest(unittest.TestCase):
         evidence = result["evidence"]
         self.assertEqual(set(evidence), {"prior_30d_return_pct", "ma10", "ma20", "ma30", "ma60",
                                          "prior_30d_min_volume", "prior_30d_max_volume", "current_volume",
-                                         "volume_multiple", "day_return_pct", "prior_volume_spread"})
+                                         "volume_multiple", "day_return_pct", "prior_volume_spread", "current_open"})
         self.assertAlmostEqual(evidence["prior_30d_return_pct"], 20)
         self.assertAlmostEqual(evidence["day_return_pct"], 5)
         self.assertEqual(evidence["volume_multiple"], 4)
@@ -83,7 +84,7 @@ class FirstWaveStartTest(unittest.TestCase):
     def test_requires_sixty_bars_and_required_columns(self):
         bars = eligible_bars()
         self.assertIsNone(scan(bars.iloc[1:]))
-        for column in ("date", "close", "volume"):
+        for column in ("date", "open", "close", "volume"):
             with self.subTest(column=column), self.assertRaises(ValueError):
                 scan(bars.drop(columns=column), "2026-03-25")
 
@@ -100,13 +101,25 @@ class FirstWaveStartTest(unittest.TestCase):
                 self.assertEqual(scan(bars) is not None, accepted)
 
     def test_volume_multiple_and_spread_inclusive_bounds(self):
-        for current, maximum, accepted in ((400, 250, True), (399.999, 250, False),
-                                            (400, 250.001, False), (10000, 250, True)):
+        for current, maximum, accepted in ((300, 300, True), (299.999, 300, False),
+                                            (300, 300.001, False), (10000, 300, True)):
             with self.subTest(current=current, maximum=maximum):
                 bars = eligible_bars()
                 bars.loc[30, "volume"] = maximum
                 bars.loc[59, "volume"] = current
                 self.assertEqual(scan(bars) is not None, accepted)
+
+    def test_signal_day_must_close_strictly_above_open(self):
+        for opening, expected in ((12.0, True), (12.6, False), (12.7, False), (0, False), (float("nan"), False), (float("inf"), False)):
+            with self.subTest(opening=opening):
+                bars = eligible_bars()
+                bars.loc[59, "open"] = opening
+                self.assertEqual(scan(bars) is not None, expected)
+
+    def test_historical_bad_open_outside_signal_day_is_irrelevant(self):
+        bars = eligible_bars()
+        bars.loc[:58, "open"] = float("nan")
+        self.assertIsNotNone(scan(bars))
 
     def test_stable_sort_ignores_legacy_scores(self):
         rows = [{"market": "sz", "symbol": "000001", "total_score": 100},
@@ -146,15 +159,15 @@ class FirstWaveStartTest(unittest.TestCase):
     def test_volume_window_is_exactly_thirty_prior_bars_excluding_today(self):
         bars = eligible_bars()
         bars.loc[28, "volume"] = 10000  # t-31 outside volume window
-        bars.loc[29, "volume"] = 250    # t-30 included
+        bars.loc[29, "volume"] = 300    # t-30 included
         result = scan(bars)
         self.assertIsNotNone(result)
         assert result is not None
-        self.assertEqual(result["evidence"]["prior_30d_max_volume"], 250)
-        bars.loc[29, "volume"] = 251
+        self.assertEqual(result["evidence"]["prior_30d_max_volume"], 300)
+        bars.loc[29, "volume"] = 301
         self.assertIsNone(scan(bars))
         bars.loc[29, "volume"] = 100
-        bars.loc[58, "volume"] = 251  # t-1 included
+        bars.loc[58, "volume"] = 301  # t-1 included
         self.assertIsNone(scan(bars))
 
     def test_prior_return_uses_t_minus_31_not_t_minus_30(self):
