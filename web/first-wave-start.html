@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>第一波强势启动 · 四条件 v4</title>
+  <title>第一波强势启动 · 四条件 v5</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/first-wave-start.css?v=20261024-20d-no-ma-v7">
+  <link rel="stylesheet" href="/first-wave-start.css?v=20261024-20d-4x-v8">
 </head>
 <body>
   <header class="page-header">
-    <h1>第一波强势启动 <small>四条件 v4</small></h1>
+    <h1>第一波强势启动 <small>四条件 v5</small></h1>
     <p>当日四条件全部满足（AND）才进入候选；基于当日及此前数据，不含未来收益，不做收益回测。</p>
     <div id="global-nav"></div>
   </header>
@@ -25,7 +25,7 @@
       <p>t 为查询交易日；价格使用前复权（QFQ）。不要求均线排列或方向。所有“此前20日”成交量窗口均为 t-20 至 t-1，排除当天；涨幅和量比阈值包含等号，收盘大于开盘为严格大于。规则至少需要22根日线，不保留旧版60日门槛。</p>
       <ol>
         <li><strong>截至昨日20交易日涨幅</strong><code>0% ≤ close[t-1] / close[t-21] - 1 ≤ 20%</code><span>端点使用 t-21 与 t-1，不包含当天涨幅。</span></li>
-        <li><strong>当量放大</strong><code>volume[t] ≥ 3 × min(volume[t-20:t-1])</code><span>当天成交量至少为此前20日最小量的3倍。</span></li>
+        <li><strong>当量放大</strong><code>volume[t] ≥ 4 × min(volume[t-20:t-1])</code><span>当天成交量至少为此前20日最小量的4倍。</span></li>
         <li><strong>当天涨幅与阳线</strong><code>close[t] / close[t-1] - 1 ≥ 5% 且 close[t] > open[t]</code><span>当天前复权收盘价相对昨日涨幅至少5%，同时收盘价必须严格大于开盘价，平盘不通过。</span></li>
         <li><strong>此前量能稳定</strong><code>max(volume[t-20:t-1]) / min(volume[t-20:t-1]) ≤ 2.5</code><span>此前20日最大量与最小量之比不超过2.5。</span></li>
       </ol>
@@ -34,6 +34,6 @@
     <div id="results"></div>
   </main>
   <script src="/nav.js"></script>
-  <script src="/first-wave-start.js?v=20261024-20d-no-ma-v7"></script>
+  <script src="/first-wave-start.js?v=20261024-20d-4x-v8"></script>
 </body>
 </html>

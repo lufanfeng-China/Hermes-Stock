@@ -48,12 +48,12 @@ class RequiredWindowTests(unittest.TestCase):
                 bars["volume"] = 200.0
                 bars.loc[0, "volume"] = 1  # t-21 must not set the minimum
                 bars.loc[index, "volume"] = 100
-                bars.loc[21, "volume"] = 300
+                bars.loc[21, "volume"] = 400
                 result = scan(bars)
                 self.assertIsNotNone(result)
                 assert result is not None
                 self.assertEqual(result["evidence"]["prior_20d_min_volume"], 100)
-                self.assertEqual(result["evidence"]["volume_multiple"], 3)
+                self.assertEqual(result["evidence"]["volume_multiple"], 4)
 
     def test_all_required_closes_and_volumes_must_be_finite_positive(self):
         for column, indices in (("close", range(22)), ("volume", range(1, 22))):

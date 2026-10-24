@@ -136,7 +136,7 @@ def scan_symbol(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str
         prior_return <= 0.20 or math.isclose(prior_return, 0.20, rel_tol=0, abs_tol=1e-14))
     day_at_least_five = day_return >= 0.05 or math.isclose(day_return, 0.05, rel_tol=0, abs_tol=1e-14)
     if not (prior_in_range
-            and current_volume >= 3 * minimum
+            and current_volume >= 4 * minimum
             and day_at_least_five
             and close.iloc[-1] > current_open
             and maximum / minimum <= 2.5):

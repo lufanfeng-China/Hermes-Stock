@@ -47,13 +47,13 @@ class FirstWaveSnapshotTest(unittest.TestCase):
         self.assertEqual(["000001", "000002"], [x["symbol"] for x in result["groups"]["main"]])
         self.assertEqual({"main": 2}, result["counts"])
         self.assertEqual({"main"}, set(result["groups"]))
-        self.assertEqual("first-wave-start-v4-20d-no-ma", result["schema_version"])
+        self.assertEqual("first-wave-start-v5-20d-4x", result["schema_version"])
 
     def test_old_historical_snapshot_is_rebuilt_instead_of_serving_legacy_rules(self):
         from app import first_wave_snapshot as snapshots
         with tempfile.TemporaryDirectory() as directory:
             history = Path(directory)
-            (history / "2026-10-16.json").write_text(json.dumps({"schema_version": "first-wave-start-v3-three-times-bullish", "as_of_date": "2026-10-16", "rows": []}))
+            (history / "2026-10-16.json").write_text(json.dumps({"schema_version": "first-wave-start-v4-20d-no-ma", "as_of_date": "2026-10-16", "rows": []}))
             with patch.object(snapshots, 'HISTORY', history), patch.object(snapshots.subprocess, 'Popen') as launch:
                 result = snapshots.response('2026-10-16')
             self.assertFalse(result['ok'])

@@ -12,7 +12,7 @@ def eligible_bars(count=22):
         "date": pd.bdate_range("2026-01-01", periods=count),
         "close": [10.0] * (count - 2) + [11.0, 11.55],
         "open": [11.0] * count,
-        "volume": [100.0] * (count - 1) + [300.0],
+        "volume": [100.0] * (count - 1) + [400.0],
     })
 
 
@@ -49,13 +49,13 @@ class FirstWaveStartTest(unittest.TestCase):
         self.assertEqual(evidence["current_open"], 11)
         self.assertEqual(evidence["prior_20d_min_volume"], 100)
         self.assertEqual(evidence["prior_20d_max_volume"], 100)
-        self.assertEqual(evidence["current_volume"], 300)
-        self.assertEqual(evidence["volume_multiple"], 3)
+        self.assertEqual(evidence["current_volume"], 400)
+        self.assertEqual(evidence["volume_multiple"], 4)
         self.assertEqual(evidence["prior_volume_spread"], 1)
 
     def test_volume_multiple_and_spread_inclusive_bounds(self):
-        for current, maximum, accepted in ((300, 250, True), (299.999, 250, False),
-                                            (300, 250.001, False), (10000, 250, True)):
+        for current, maximum, accepted in ((400, 250, True), (399.999, 250, False), (300, 250, False),
+                                            (400, 250.001, False), (10000, 250, True)):
             with self.subTest(current=current, maximum=maximum):
                 bars = eligible_bars()
                 bars.loc[1, "volume"] = maximum

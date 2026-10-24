@@ -120,9 +120,9 @@ test('page stylesheet supports rules, evidence, mobile layout and no retired tie
 
 test('page discloses the four AND rules and their exact windows and boundaries', () => {
   const html = fs.readFileSync(path.join(web, 'first-wave-start.html'), 'utf8');
-  for (const text of ['四条件 v4', '全部满足（AND）', 'close[t-1] / close[t-21] - 1', '0% ≤', '≤ 20%', '不要求均线', 'volume[t] ≥ 3 × min(volume[t-20:t-1])', 'close[t] / close[t-1] - 1 ≥ 5%', 'max(volume[t-20:t-1]) / min(volume[t-20:t-1]) ≤ 2.5', 'close[t] > open[t]', '排除当天', '前复权', '不做收益回测']) {
+  for (const text of ['四条件 v5', '全部满足（AND）', 'close[t-1] / close[t-21] - 1', '0% ≤', '≤ 20%', '不要求均线', 'volume[t] ≥ 4 × min(volume[t-20:t-1])', 'close[t] / close[t-1] - 1 ≥ 5%', 'max(volume[t-20:t-1]) / min(volume[t-20:t-1]) ≤ 2.5', 'close[t] > open[t]', '排除当天', '前复权', '不做收益回测']) {
     assert.ok(html.includes(text), `missing rule disclosure: ${text}`);
   }
-  for (const asset of ['css', 'js']) assert.ok(html.includes(`/first-wave-start.${asset}?v=20261024-20d-no-ma-v7`));
+  for (const asset of ['css', 'js']) assert.ok(html.includes(`/first-wave-start.${asset}?v=20261024-20d-4x-v8`));
   for (const id of ['global-nav', 'as-of-date', 'load', 'current', 'status', 'results']) assert.ok(html.includes(`id="${id}"`));
 });
