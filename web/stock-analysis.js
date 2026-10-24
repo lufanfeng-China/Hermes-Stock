@@ -1309,7 +1309,15 @@
     if (position?.status !== 'available') { period.textContent = '行业对比暂不可用'; target.textContent = '缺少可对齐的行业快照数据。'; return; }
     period.textContent = `${position.industry_level_2}｜${position.report_period}｜覆盖率 ${position.period_alignment_coverage}%（${position.aligned_sample_count}/${position.industry_member_count}）`;
     target.className = '';
-    const rows = Object.values(position.metrics || {}).map((m) => `<tr><td>${escapeHtml(m.label)}</td><td>${formatIndustryPositionMetric(m.company_value, m.unit)}</td><td>${formatIndustryPositionMetric(m.industry_median, m.unit)}</td><td>${Number.isFinite(m.percentile) ? `${m.percentile.toFixed(1)}%` : '—'}</td><td>${m.sample_count || 0}</td></tr>`).join('');
+    const rows = Object.entries(position.metrics || {}).map(([code, m]) => {
+      const hasValue = m.company_value !== null && m.company_value !== undefined && Number.isFinite(Number(m.company_value));
+      const hasPercentile = m.percentile !== null && m.percentile !== undefined && Number.isFinite(Number(m.percentile));
+      const peerPercentile = hasPercentile ? Number(m.percentile) : NaN;
+      const status = !hasValue ? metricStatus('unavailable', '数据不足')
+        : ['ar_days', 'inv_days'].includes(code) ? peerMetricStatus(peerPercentile) || metricStatus('unavailable', '同业数据不足')
+        : operatingMetricStatus(code === 'ocf_to_profit' ? 'cash_profit_ratio' : code, m.company_value, { peerPercentile });
+      return `<tr><td>${escapeHtml(m.label)}</td><td class="industry-position-value ${status.state}" title="${escapeHtml(status.label)}">${hasValue ? formatIndustryPositionMetric(m.company_value, m.unit) : '—'}</td><td>${formatIndustryPositionMetric(m.industry_median, m.unit)}</td><td>${hasPercentile ? `${peerPercentile.toFixed(1)}%` : '—'}</td><td>${m.sample_count || 0}</td></tr>`;
+    }).join('');
     target.innerHTML = `<table class="health-comparison-table"><thead><tr><th>指标</th><th>公司</th><th>行业中位数</th><th>分位</th><th>样本数</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
