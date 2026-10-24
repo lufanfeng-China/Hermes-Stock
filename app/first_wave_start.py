@@ -105,7 +105,7 @@ def _prior_wave(frame: pd.DataFrame, platform_start: int) -> tuple[bool, float |
 
 
 def scan_symbol(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str, as_of_date: str) -> dict[str, Any] | None:
-    """Evaluate the five AND conditions on caller-supplied QFQ daily bars only."""
+    """Evaluate the four 20-day AND conditions on caller-supplied QFQ bars."""
     if not {"date", "open", "close", "volume"} <= set(bars.columns):
         raise ValueError("bars lack required date/open/close/volume columns")
     data = bars.copy()
@@ -113,44 +113,39 @@ def scan_symbol(bars: pd.DataFrame, *, market: str, symbol: str, stock_name: str
     if data["date"].isna().any():
         return None
     data = data[data["date"] <= pd.Timestamp(as_of_date)].sort_values("date").reset_index(drop=True)
-    if (len(data) < 60 or data.iloc[-1]["date"] != pd.Timestamp(as_of_date)
+    if (len(data) < 22 or data.iloc[-1]["date"] != pd.Timestamp(as_of_date)
             or data["date"].duplicated().any()):
         return None
-    # Only the 60 price bars and 31 volume bars required by the five rules
-    # participate in validity checks; older suspension/zero-volume rows are not
-    # an extra exclusion condition.
-    data = data.iloc[-60:].reset_index(drop=True)
+    # Only 22 closes, 21 volumes and the signal day's open are required.
+    # Older prices/volumes and historical opens add no exclusion condition.
+    data = data.iloc[-22:].reset_index(drop=True)
     close = pd.to_numeric(data["close"], errors="coerce").astype(float)
-    volume = pd.to_numeric(data["volume"].iloc[-31:], errors="coerce").astype(float)
+    volume = pd.to_numeric(data["volume"].iloc[-21:], errors="coerce").astype(float)
     if any(not math.isfinite(value) or value <= 0 for series in (close, volume) for value in series):
         return None
     current_open = _f(data.iloc[-1]["open"])
     if current_open is None or current_open <= 0:
         return None
-    prior_return = close.iloc[-2] / close.iloc[-32] - 1
-    averages = {days: float(close.iloc[-days:].mean()) for days in (10, 20, 30, 60)}
-    prior_volume = volume.iloc[-31:-1]
+    prior_return = close.iloc[-2] / close.iloc[-22] - 1
+    prior_volume = volume.iloc[-21:-1]
     minimum, maximum = float(prior_volume.min()), float(prior_volume.max())
     current_volume = float(volume.iloc[-1])
     day_return = close.iloc[-1] / close.iloc[-2] - 1
-    # Inclusive decimal percentage boundaries tolerate only binary-float noise;
-    # MA ordering remains strictly greater with no tolerance or rounding.
-    prior_in_range = (prior_return >= 0.10 or math.isclose(prior_return, 0.10, rel_tol=0, abs_tol=1e-14)) and (
-        prior_return <= 0.50 or math.isclose(prior_return, 0.50, rel_tol=0, abs_tol=1e-14))
+    # Inclusive decimal percentage boundaries tolerate only binary-float noise.
+    prior_in_range = (prior_return >= 0.0 or math.isclose(prior_return, 0.0, rel_tol=0, abs_tol=1e-14)) and (
+        prior_return <= 0.20 or math.isclose(prior_return, 0.20, rel_tol=0, abs_tol=1e-14))
     day_at_least_five = day_return >= 0.05 or math.isclose(day_return, 0.05, rel_tol=0, abs_tol=1e-14)
     if not (prior_in_range
-            and averages[10] > averages[20] > averages[30] > averages[60]
             and current_volume >= 3 * minimum
             and day_at_least_five
             and close.iloc[-1] > current_open
-            and maximum / minimum <= 3):
+            and maximum / minimum <= 2.5):
         return None
     return {"market": market, "symbol": str(symbol).zfill(6), "stock_name": stock_name,
             "as_of_date": as_of_date, "signal_date": str(data.iloc[-1]["date"].date()),
             "current_close": float(close.iloc[-1]), "classification": "FIRST_WAVE_ELIGIBLE",
-            "evidence": {"current_open": current_open, "prior_30d_return_pct": float(prior_return * 100),
-                         **{f"ma{days}": value for days, value in averages.items()},
-                         "prior_30d_min_volume": minimum, "prior_30d_max_volume": maximum,
+            "evidence": {"current_open": current_open, "prior_20d_return_pct": float(prior_return * 100),
+                         "prior_20d_min_volume": minimum, "prior_20d_max_volume": maximum,
                          "current_volume": current_volume, "volume_multiple": current_volume / minimum,
                          "day_return_pct": float(day_return * 100), "prior_volume_spread": maximum / minimum}}
 

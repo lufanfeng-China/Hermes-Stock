@@ -22,26 +22,25 @@
   function renderCandidate(row) {
     var e = row.evidence || {};
     var query = new URLSearchParams({market: row.market || '', symbol: row.symbol || '', name: row.stock_name || ''});
-    return '<article class="fw-card"><header><div><a class="stock-link" href="/stock-analysis.html?' + esc(query.toString()) + '">' + esc(row.stock_name) + '</a> <span class="stock-code">' + esc(row.market) + ':' + esc(row.symbol) + '</span></div><span class="eligible">五条件全部符合</span></header>' +
+    return '<article class="fw-card"><header><div><a class="stock-link" href="/stock-analysis.html?' + esc(query.toString()) + '">' + esc(row.stock_name) + '</a> <span class="stock-code">' + esc(row.market) + ':' + esc(row.symbol) + '</span></div><span class="eligible">四条件全部符合</span></header>' +
       '<p class="candidate-meta">数据日 ' + esc(row.as_of_date) + ' · 信号日 ' + esc(row.signal_date) + ' · 前复权收盘价 ' + number(row.current_close) + '</p>' +
       '<dl class="fw-grid">' +
-      evidenceLine('截至昨日30日涨幅', number(e.prior_30d_return_pct, '%')) +
-      evidenceLine('当日 MA10 / MA20 / MA30 / MA60', [e.ma10, e.ma20, e.ma30, e.ma60].map(function (v) { return number(v, '', 4); }).join(' / ')) +
-      evidenceLine('当量 / 此前30日最小量', number(e.volume_multiple, ' 倍')) +
+      evidenceLine('截至昨日20日涨幅', number(e.prior_20d_return_pct, '%')) +
+      evidenceLine('当量 / 此前20日最小量', number(e.volume_multiple, ' 倍')) +
       evidenceLine('当天前复权涨幅', number(e.day_return_pct, '%')) +
       evidenceLine('当日开盘 / 收盘（前复权）', number(e.current_open) + ' / ' + number(row.current_close)) +
-      evidenceLine('此前30日最大量 / 最小量', number(e.prior_volume_spread, ' 倍')) +
+      evidenceLine('此前20日最大量 / 最小量', number(e.prior_volume_spread, ' 倍')) +
       evidenceLine('当天成交量（原始单位）', number(e.current_volume)) +
-      evidenceLine('此前30日最小量（原始单位）', number(e.prior_30d_min_volume)) +
-      evidenceLine('此前30日最大量（原始单位）', number(e.prior_30d_max_volume)) +
+      evidenceLine('此前20日最小量（原始单位）', number(e.prior_20d_min_volume)) +
+      evidenceLine('此前20日最大量（原始单位）', number(e.prior_20d_max_volume)) +
       '</dl><details><summary>展开审计证据（原始字段）</summary><pre>' + esc(JSON.stringify({classification: row.classification, evidence: e}, null, 2)) + '</pre></details></article>';
   }
   function render(payload) {
     var groups = payload.groups || {};
     var items = groups.main || [];
     disclosureEl.textContent = payload.disclosure || '';
-    resultsEl.innerHTML = '<section aria-label="当日五条件候选"><h2>当日五条件候选 <small>' + items.length + ' 只</small></h2>' +
-      (items.map(renderCandidate).join('') || '<p class="empty">当日无同时满足全部五条件的候选。</p>') + '</section>';
+    resultsEl.innerHTML = '<section aria-label="当日四条件候选"><h2>当日四条件候选 <small>' + items.length + ' 只</small></h2>' +
+      (items.map(renderCandidate).join('') || '<p class="empty">当日无同时满足全部四条件的候选。</p>') + '</section>';
   }
   async function load() {
     var activeRequest = ++requestId;

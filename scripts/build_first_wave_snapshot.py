@@ -49,7 +49,7 @@ def main() -> None:
             lock.parent.mkdir(parents=True, exist_ok=True)
             lock.touch(exist_ok=True)
             failure.unlink(missing_ok=True)
-            write_progress(HISTORY, date, stage='扫描五条件第一波启动', percent=1)
+            write_progress(HISTORY, date, stage='扫描20日四条件第一波启动', percent=1)
         rows = []
         groups = df.groupby(['market', 'symbol'], sort=True)
         total = groups.ngroups
@@ -59,7 +59,7 @@ def main() -> None:
             if found:
                 rows.append(found)
             if historical and (index % 25 == 0 or index == total):
-                write_progress(HISTORY, date, stage='扫描五条件第一波启动', percent=2 + 96 * index / total, completed=index, total=total)
+                write_progress(HISTORY, date, stage='扫描20日四条件第一波启动', percent=2 + 96 * index / total, completed=index, total=total)
         payload = {'schema_version': SCHEMA_VERSION, 'as_of_date': date, 'data_date': str(df.date.max().date()),
                    'price_basis': 'tdx_export_qfq', 'amount_basis': 'tdx_export_daily_amount', 'rows': rows}
         atomic_json(out, payload)
