@@ -90,15 +90,6 @@ def clear_runtime_data_caches() -> None:
 
 
 
-def _manual_data_update_commands() -> list[tuple[str, list[str]]]:
-    """Occasional public-source snapshots: explicit single-task runs only."""
-    script = str(PROJECT_ROOT / 'scripts/update_external_risk.py')
-    return [
-        ('update_company_pledge', [TONGDAXIN_PYTHON, script, '--dataset', 'company_pledge']),
-        ('update_related_transactions', [TONGDAXIN_PYTHON, script, '--dataset', 'related_transactions']),
-    ]
-
-
 def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -> list[tuple[str, list[str]]]:
     if retry_failed:
         return [

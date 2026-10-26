@@ -2307,18 +2307,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         """Return data freshness + pending task list with descriptions."""
         status = load_data_update_status()
         job = _data_update_job_snapshot()
-        from app.data.external_risk_updates import load_external_risk_status
-        external_status = load_external_risk_status()
-        # Restore occasional-task failure badges from disk after a server restart.
-        # These failures never disable the unrelated regular update pipeline.
-        recorded_states = job.get('task_states')
-        task_states = recorded_states.copy() if isinstance(recorded_states, dict) else {}
-        for dataset in ('company_pledge', 'related_transactions'):
-            task_id = f'update_{dataset}'
-            persisted = external_status.get(dataset) or {}
-            if task_id not in task_states and persisted.get('error'):
-                task_states[task_id] = {'status': 'failed', 'error': persisted['error']}
-        job = {**job, 'task_states': task_states}
         trading_day = _latest_trading_day_for_refresh()
 
         # archive_daily intentionally is not a workbench task: it produces a
@@ -2336,11 +2324,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ]
-
-        tasks.extend([
-            {'id': 'update_company_pledge', 'name': '更新公司整体质押（不定期）', 'manual_only': True, 'desc': '仅单独手动执行，不参与常规更新；公司整体统计不是大股东个人质押率，最新/旧统计日分离，缺记录不补零'},
-            {'id': 'update_related_transactions', 'name': '更新关联交易明细（2026年公告，不定期）', 'manual_only': True, 'desc': '仅单独手动执行，不参与常规更新；刷新2026年公告范围全部分页，保留原始金额与币种，不直接计算关联销售占营收比例'},
-        ])
 
         # Determine which tasks are completed (based on current data freshness)
         peer_snapshot = status.get('industry_metric_snapshot')
@@ -2360,8 +2343,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 'industry_valuation_updated': (status.get('industry_valuation') or {}).get('updated_at'),
                 'industry_count': (status.get('industry_valuation') or {}).get('industry_count'),
                 'industry_metric_snapshot': peer_snapshot,
-                'company_pledge': external_status.get('company_pledge', {}),
-                'related_transactions': external_status.get('related_transactions', {}),
                 'latest_updated_at': status.get('latest_updated_at'),
             },
             'job': {

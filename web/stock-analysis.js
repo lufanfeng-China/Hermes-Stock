@@ -1010,75 +1010,6 @@
     } catch(e) { meta.textContent=`加载 PE-TTM 历史失败：${e.message}`; }
   }
 
-  function renderGovernanceRisk(governance) {
-    const root = document.getElementById('governance-risk-items');
-    if (!root) return;
-    const dialog = document.getElementById('governance-evidence-dialog');
-    if (dialog?.open) dialog.close();
-    document.getElementById('governance-evidence-content').textContent = '';
-    document.getElementById('governance-evidence-title').textContent = '治理风险证据';
-    // Scores, classifications and deductions are authoritative backend results.
-    // Never recalculate thresholds, aggregate rule hits, or mutate financial scores here.
-    const numberText = (value) => typeof value === 'number' && Number.isFinite(value) ? String(value) : '—';
-    document.getElementById('governance-original-score').textContent = numberText(governance?.original_score);
-    document.getElementById('governance-adjusted-score').textContent = governance?.complete === true ? numberText(governance.adjusted_score) : '—';
-    const policy = '独立于年度红旗、季度监测及原财务风险覆盖层，不参与策略筛选。每项按后端最高命中档扣 0/5/10/20 分，仅扣一次；完整时原分减两项扣分，最低为 0。';
-    document.getElementById('governance-risk-note').textContent = governance?.complete === true
-      ? `治理评估完整。${policy}`
-      : `治理评估未完整：缺数据不代表零风险，暂不提供治理调整分；已知风险仍保留。${policy}`;
-    root.replaceChildren();
-    const supplied = Array.isArray(governance?.items) ? governance.items : [];
-    const codes = [['major_shareholder_pledge', '大股东股权质押'], ['related_sales', '关联销售']];
-    for (const [code, fallbackTitle] of codes) {
-      const item = supplied.find((row) => row?.code === code);
-      const level = item?.level || 'unavailable';
-      const color = ({normal:'blue', watch:'yellow', high:'yellow', critical:'red'})[level] || 'gray';
-      const baseLabel = ({normal:'正常', watch:'注意', high:'高关注', critical:'极高风险'})[level] || '未评估';
-      const emphasis = [item?.highly_pledged === true ? '高度质押' : '', item?.high_dependence === true ? '高度依赖' : ''].filter(Boolean).join('、');
-      const label = emphasis ? `${baseLabel}（${emphasis}）` : baseLabel;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = `governance-risk-card ${color}`;
-      const title = document.createElement('strong'); title.textContent = item?.title || fallbackTitle;
-      const value = document.createElement('span');
-      value.textContent = `${numberText(item?.ratio_pct)}${typeof item?.ratio_pct === 'number' ? '%' : ''} · ${label} · ${numberText(item?.deduction) === '—' ? '扣分未评估' : `扣 ${numberText(item.deduction)} 分`}`;
-      const reason = document.createElement('span');
-      reason.textContent = `${item?.complete === false && level !== 'unavailable' ? '升级未完整评估；' : ''}${item?.reason || '缺少可核验证据，未评估。'} · 查看证据`;
-      button.append(title, value, reason);
-      button.addEventListener('click', () => showGovernanceEvidence(item, fallbackTitle));
-      root.append(button);
-    }
-  }
-
-  function showGovernanceEvidence(item, fallbackTitle) {
-    const dialog = document.getElementById('governance-evidence-dialog');
-    if (!dialog) return;
-    document.getElementById('governance-evidence-title').textContent = `${item?.title || fallbackTitle}｜治理风险证据`;
-    const lines = [`评估状态：${item?.complete === true ? '完整' : '未完整评估'}`, `风险等级：${item?.label || item?.level || '未评估'}`, `比例：${typeof item?.ratio_pct === 'number' && Number.isFinite(item.ratio_pct) ? `${item.ratio_pct}%` : '未评估'}`, `本项扣分：${typeof item?.deduction === 'number' && Number.isFinite(item.deduction) ? item.deduction : '未评估'}（最高档仅扣一次）`, `原因：${item?.reason || '缺少可核验证据，未评估。'}`];
-    // All evidence (including nested source/date/input/rule fields) is text only.
-    // A URL is never interpolated as HTML, and non-http(s) URLs are rejected.
-    const names = {source:'来源', source_name:'来源名称', date:'日期', report_date:'报告日期', as_of_date:'截至日期', numerator:'分子', denominator:'分母', numerator_value:'分子数值', denominator_value:'分母数值', rule_results:'规则状态', status:'状态', reason:'原因', title:'规则名称', evidence:'证据', inputs:'原始输入', url:'来源网址', source_url:'来源网址'};
-    const visit = (value, path) => {
-      if (value && typeof value === 'object') {
-        const entries = Object.entries(value);
-        if (!entries.length) lines.push(`${path}：未提供`);
-        for (const [key, child] of entries) visit(child, `${path} / ${names[key] || key}`);
-      } else {
-        let text = value == null ? '未提供' : String(value);
-        if (/url|网址/i.test(path)) {
-          try { const parsed = new URL(text); if (!['http:', 'https:'].includes(parsed.protocol)) text = '非 HTTP/HTTPS 来源地址已隐藏'; }
-          catch { text = '来源地址不可用'; }
-        }
-        lines.push(`${path}：${text}`);
-      }
-    };
-    visit(item?.ratio_inputs ?? item?.details ?? null, '比例原始输入（分子 / 分母 / 口径）');
-    visit(item?.evidence ?? null, '证据（来源 / 日期 / 分子 / 分母）');
-    visit(item?.rule_results ?? null, '规则状态');
-    document.getElementById('governance-evidence-content').textContent = lines.join('\n');
-    if (!dialog.open) dialog.showModal();
-  }
-
   function renderCompositeFinancialHealth(composite) {
     const root = document.getElementById('financial-health-composite');
     const score = document.getElementById('financial-health-composite-score');
@@ -1456,7 +1387,6 @@
     const basicMarket = document.getElementById('basic-market-grid');
     if (basicMarket) { basicMarket.innerHTML = '<div class="analysis-metric-status">加载基础行情…</div>'; document.getElementById('basic-market-period').textContent = '加载中'; }
     renderCompositeFinancialHealth(null);
-    renderGovernanceRisk(null);
     renderFinancialReversalBadge(null);
     state.reportReleasePriceTrend = null;
     renderReportReleasePricePerformance(null);
@@ -1512,7 +1442,6 @@
       renderBasicMarket(valuation, payload.reports, profile, pricePercentile, peHistory, payload.quarterly_monitor, payload.industry_financial_position);
       renderMarketRelativeStrength(relativeStrength);
       renderCompositeFinancialHealth(payload.composite_financial_health);
-      renderGovernanceRisk(payload.governance_risk);
       renderFinancialReversalBadge(payload.financial_reversal);
       state.reportReleasePriceTrend = payload.report_release_price_trend || null;
       renderReportReleasePricePerformance(payload.report_release_price_performance);
@@ -1535,7 +1464,6 @@
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;
-      renderGovernanceRisk(null);
       renderHealthComparisonTable(null, null);
       renderLatestReportChanges(null);
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
@@ -1641,11 +1569,6 @@
   const industryValuationHistoryDialog = document.getElementById('industry-valuation-history-dialog');
   industryValuationHistoryDialog?.querySelector('.industry-valuation-history-close')?.addEventListener('click', () => industryValuationHistoryDialog.close());
   industryValuationHistoryDialog?.addEventListener('click', (event) => { if (event.target === industryValuationHistoryDialog) industryValuationHistoryDialog.close(); });
-  const governanceDialog = document.getElementById('governance-evidence-dialog');
-  document.getElementById('governance-evidence-close')?.addEventListener('click', () => governanceDialog?.close());
-  governanceDialog?.addEventListener('click', (event) => { if (event.target === governanceDialog) governanceDialog.close(); });
-  renderGovernanceRisk(null);
-
   const lineageDialog = document.getElementById('metric-lineage-dialog');
   lineageDialog?.addEventListener('click', (event) => { if (event.target === lineageDialog || event.target.closest('.metric-lineage-close')) lineageDialog.close(); });
 
