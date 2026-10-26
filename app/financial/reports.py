@@ -9,6 +9,20 @@ from app.financial.health import build_financial_health
 from app.financial.quarterly_monitor import build_quarterly_financial_monitor
 from app.financial.industry_position import build_industry_financial_position
 from app.financial.composite_health import build_composite_financial_health
+from app.financial.governance_risk import build_governance_risk, load_governance_evidence
+
+
+def _align_governance_annual_period(evidence, reports):
+    """Do not present an older annual related-sales ratio as the latest year."""
+    if not isinstance(evidence, dict):
+        return evidence
+    annual_years = [int(str(row.get("period"))[:4]) for row in reports
+                    if isinstance(row, dict) and re.fullmatch(r"[0-9]{4}A", str(row.get("period") or ""))]
+    sales = evidence.get("related_sales")
+    ratio = sales.get("ratio") if isinstance(sales, dict) else None
+    if annual_years and isinstance(sales, dict) and isinstance(ratio, dict) and ratio.get("period_end") != f"{max(annual_years):04d}-12-31":
+        return {**evidence, "related_sales": {**sales, "ratio": {**ratio, "stale": True}}}
+    return evidence
 
 
 def _cash_profit_ratio(metrics: dict[str, object] | None) -> float | None:
@@ -364,6 +378,8 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         industry_level_1=industry["level_1"],
     )
     composite_financial_health = build_composite_financial_health(health, quarterly_monitor)
+    governance_evidence = _align_governance_annual_period(load_governance_evidence(symbol), reports)
+    governance_risk = build_governance_risk(composite_financial_health.get("score"), governance_evidence)
     financial_reversal = build_financial_reversal_indicator(health, quarterly_monitor)
     report_release_price = build_latest_report_release_price_performance(search_index, market, symbol, latest_report)
     report_release_price_performance = report_release_price["performance"]
@@ -382,6 +398,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "health": health,
         "quarterly_monitor": quarterly_monitor,
         "composite_financial_health": composite_financial_health,
+        "governance_risk": governance_risk,
         "financial_reversal": financial_reversal,
         "report_release_price_performance": report_release_price_performance,
         "report_release_price_trend": report_release_price_trend,
