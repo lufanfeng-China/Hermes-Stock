@@ -11,7 +11,7 @@ from app.pipeline.state import (
     _append_data_update_job_output, _record_data_update_progress, _tail_lines,
     DataUpdateStepError, _format_timestamp,
 )
-from app.pipeline.commands import _data_update_commands, _latest_trading_day_for_refresh, clear_runtime_data_caches
+from app.pipeline.commands import _data_update_commands, _manual_data_update_commands, _latest_trading_day_for_refresh, clear_runtime_data_caches
 
 from app.data.rps_history import _load_rps_history_dataset, _load_rps_trading_days, _load_stock_rps_history_dataset
 
@@ -125,18 +125,26 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
     }
 
 
+def _command_for_single_task(task_name: str) -> list[str] | None:
+    # External snapshots have no dependency on the local trading calendar/TDX.
+    manual = dict(_manual_data_update_commands())
+    if task_name in manual:
+        return manual[task_name]
+    return dict(_data_update_commands(_latest_trading_day_for_refresh())).get(task_name)
+
+
 def run_data_update_task(task_name: str, progress_callback=None) -> dict[str, object]:
     """Run exactly one declared update command; never replays prior tasks."""
-    commands = dict(_data_update_commands(_latest_trading_day_for_refresh()))
-    command = commands.get(task_name)
+    command = _command_for_single_task(task_name)
     if command is None:
         raise ValueError(f'unsupported data update task: {task_name}')
     _update_data_update_job_state(current_step=task_name, current_industry=None, progress_index=None, progress_total=None, current_progress_text=f"当前步骤：{task_name} 正在运行...", last_line='')
     result = _run_data_update_command(task_name, command, progress_callback=progress_callback)
     if result.returncode != 0:
         raise DataUpdateStepError(task_name, f'{task_name} 数据更新已停止或失败（exit code {result.returncode}）', returncode=result.returncode, stdout_tail=_tail_lines(result.stdout), stderr_tail=_tail_lines(result.stderr))
-    clear_runtime_data_caches()
-    _load_rps_history_dataset.cache_clear(); _load_rps_trading_days.cache_clear(); _load_stock_rps_history_dataset.cache_clear()
+    if task_name not in dict(_manual_data_update_commands()):
+        clear_runtime_data_caches()
+        _load_rps_history_dataset.cache_clear(); _load_rps_trading_days.cache_clear(); _load_stock_rps_history_dataset.cache_clear()
     return {'ok': True, 'steps': [{'name': task_name, 'ok': True, 'returncode': 0, 'stdout_tail': _tail_lines(result.stdout), 'stderr_tail': _tail_lines(result.stderr)}]}
 
 
@@ -200,6 +208,11 @@ def _run_data_update_worker(retry_failed: bool = False, task_name: str | None = 
 
 
 def start_data_update_job(retry_failed: bool = False) -> dict[str, object]:
+    if retry_failed:
+        previous = _data_update_job_snapshot()
+        task_name = previous.get('task_name')
+        if previous.get('mode') == 'single_task' and previous.get('status') == 'failed' and task_name in dict(_manual_data_update_commands()):
+            return start_data_update_task(str(task_name))
     if not DATA_UPDATE_LOCK.acquire(blocking=False):
         return {'ok': False, 'error': {'code': 'data_update_busy', 'message': '已有数据更新任务在运行中'}}
     now = _format_timestamp(time.time())
@@ -226,8 +239,7 @@ def start_data_update_job(retry_failed: bool = False) -> dict[str, object]:
 
 
 def start_data_update_task(task_name: str) -> dict[str, object]:
-    commands = dict(_data_update_commands(_latest_trading_day_for_refresh()))
-    if task_name not in commands:
+    if _command_for_single_task(task_name) is None:
         return {'ok': False, 'error': {'code': 'unsupported_task', 'message': '不支持或当前不可执行的数据更新任务'}}
     if not DATA_UPDATE_LOCK.acquire(blocking=False):
         return {'ok': False, 'error': {'code': 'data_update_busy', 'message': '已有数据更新任务在运行中'}}

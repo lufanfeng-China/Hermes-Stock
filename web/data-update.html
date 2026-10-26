@@ -56,6 +56,7 @@
       border-bottom: 1px solid rgba(124,224,195,0.06);
       transition: background 0.15s;
     }
+    .task-section-label { padding:12px 16px; font-size:12px; color:var(--accent); background:rgba(124,224,195,.05); border-bottom:1px solid rgba(124,224,195,.15); }
     .task-row:last-child { border-bottom: none; }
     .task-row.running {
       background: rgba(124,224,195,0.08);
@@ -217,12 +218,28 @@
       <div class="freshness-card">
         <div class="label">最后数据更新时间</div>
         <div class="value" id="latest-date">读取中...</div>
-        <div class="sub">所有数据集的最新时间</div>
+        <div class="sub">财务/估值数据集的最新时间</div>
       </div>
       <div class="freshness-card">
         <div class="label">RPS 快照</div>
         <div class="value">跟随行业估值快照时间</div>
         <div class="sub">依赖 RPS 历史数据</div>
+      </div>
+      <div class="freshness-card">
+        <div class="label">公司整体质押 · 不定期更新</div>
+        <div class="value" id="pledge-date">读取中...</div>
+        <div class="sub" id="pledge-detail">—</div>
+        <div class="sub" id="pledge-updated">—</div>
+        <div class="sub">公司整体口径，非大股东个人质押率；旧日记录不是当前值</div>
+        <div class="sub" id="pledge-error"></div>
+      </div>
+      <div class="freshness-card">
+        <div class="label">关联交易明细 · 不定期更新</div>
+        <div class="value" id="related-date">读取中...</div>
+        <div class="sub" id="related-detail">—</div>
+        <div class="sub" id="related-updated">—</div>
+        <div class="sub">2026年公告范围，非交易发生年；尚非关联销售收入占比</div>
+        <div class="sub" id="related-error"></div>
       </div>
     </div>
 
@@ -300,6 +317,16 @@ function renderFreshness(status) {
     : '无同业快照数据';
   $('im-error').textContent = peerSnapshot.error ? `发布错误：${peerSnapshot.error}` : '';
   $('latest-date').textContent = status.latest_updated_at || '—';
+  const pledge = status.company_pledge || {};
+  $('pledge-date').textContent = pledge.data_date || '未入库';
+  $('pledge-detail').textContent = pledge.available ? `来源 ${pledge.row_count ?? '—'} 条；最新日 ${pledge.latest_date_rows ?? '—'} 条 / 较早 ${pledge.older_date_rows ?? '—'} 条` : '尚无可信本地快照，可单独执行下方任务';
+  $('pledge-updated').textContent = `本地入库时间：${pledge.updated_at || '—'}`;
+  $('pledge-error').textContent = pledge.error ? `最近更新失败（保留原可信快照）：${pledge.error}` : '';
+  const related = status.related_transactions || {};
+  $('related-date').textContent = related.data_date || '未入库';
+  $('related-detail').textContent = related.available ? `明细 ${related.row_count ?? '—'} 条 / ${related.company_count ?? '—'} 家公司；以公告日期筛选` : '尚无可信本地快照，可单独执行下方任务';
+  $('related-updated').textContent = `本地入库时间：${related.updated_at || '—'}`;
+  $('related-error').textContent = related.error ? `最近更新失败（保留原可信快照）：${related.error}` : '';
 }
 
 function renderTasks(taskList, job) {
@@ -344,9 +371,10 @@ function renderTasks(taskList, job) {
     let status = recorded.status || 'pending';
     // Legacy/full-pipeline fallback only while an older job lacks task records.
     if (!recorded.status && job.running && i === runningIdx) status = 'running';
-    if (!recorded.status && job.running && i < runningIdx) status = 'done';
+    if (!recorded.status && job.running && i < runningIdx && job.mode !== 'single_task' && !t.manual_only) status = 'done';
 
-    return `<div class="task-row ${rowClass(status)}">
+    const section = t.manual_only && (i === 0 || !taskList[i - 1].manual_only) ? '<div class="task-section-label">不定期更新 · 仅单项执行，不参与“启动更新”的常规流程</div>' : '';
+    return `${section}<div class="task-row ${rowClass(status)}">
       <span class="task-num">${i + 1}</span>
       <span class="task-status">${statusIcon(status)}</span>
       <span class="task-info">
@@ -387,7 +415,7 @@ function renderProgress(job) {
     bar.style.width = '100%';
     bar.style.animation = '';
     pct.textContent = '100%';
-    label.textContent = '全部完成';
+    label.textContent = job.mode === 'single_task' ? '本项更新完成' : '常规更新完成';
   } else if (job.status === 'failed') {
     wrap.classList.remove('active');
     bar.style.animation = '';
@@ -400,7 +428,7 @@ function renderProgress(job) {
 function renderStatusLine(job) {
   const line = $('status-line');
   if (job.status === 'succeeded') {
-    line.textContent = '✅ 数据更新全部完成';
+    line.textContent = job.mode === 'single_task' ? '✅ 本项数据更新完成，其他任务未被执行' : '✅ 常规数据更新完成（不含不定期任务）';
     line.style.color = 'var(--accent)';
   } else if (job.status === 'failed') {
     line.textContent = '❌ 数据更新失败：' + (job.error || '未知错误');
@@ -426,7 +454,7 @@ function renderButtons(job) {
     errorBanner.classList.remove('active');
   } else if (job.can_retry_failed) {
     startBtn.textContent = '▶ 启动更新';
-    startBtn.disabled = true;
+    startBtn.disabled = job.mode !== 'single_task';
     retryBtn.hidden = false;
     errorBanner.classList.add('active');
     errorBanner.textContent = job.error || '部分任务失败，可重试';
