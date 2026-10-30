@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 # --- tunable thresholds (empirical defaults; calibrate against distribution) ---
@@ -76,15 +77,40 @@ def _slope(ma_arr: list[float | None], ago: int) -> float | None:
     return (now - then) / then
 
 
+def prepare_bars(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop rows that cannot be used as technical bars.
+
+    Tongdaxin's front-adjusted export writes suspended sessions as a 0.00 price
+    row.  Keeping those rows corrupts MA20/MA60, the 60-bar high/low range and
+    the volume ratio, which fabricates stages (A-share names can carry hundreds
+    of such rows).  Both the scalar and the series path call this, so they stay
+    consistent with each other and with the price series a human sees.
+
+    Technical indicators compare a bar with the previous *traded* bar, so
+    dropping the placeholder is the correct treatment — not forward-filling.
+    """
+    if df.empty:
+        return df
+    required = ("open", "high", "low", "close", "volume")
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(f"bars are missing columns: {', '.join(missing)}")
+    prices = df[["high", "low", "close"]].astype(float)
+    usable = np.isfinite(prices).all(axis=1) & (prices["close"] > 0) & (prices["high"] > 0) & (prices["low"] > 0)
+    return df.loc[usable]
+
+
 def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
     """Classify the current lifecycle stage of a stock.
 
     `df` must be a DataFrame indexed by date (ascending) with at least the
     columns ``open``, ``high``, ``low``, ``close``, ``volume`` (amount optional).
+    Suspended placeholder rows (0.00 prices) are dropped first.
 
     Returns a dict with keys: ``status``, ``region``, ``region_label``,
     ``stage``, ``stage_label``, ``detail``, ``evidence``.
     """
+    df = prepare_bars(df)
     closes = [float(x) for x in df["close"].tolist()]
     highs = [float(x) for x in df["high"].tolist()]
     lows = [float(x) for x in df["low"].tolist()]

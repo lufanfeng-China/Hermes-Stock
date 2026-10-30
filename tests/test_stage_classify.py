@@ -124,6 +124,25 @@ def test_b3_retest_holds_above_prior_low():
     assert r["stage_label"] == "回踩确认"
 
 
+def test_zero_price_placeholder_bars_are_dropped_before_classification():
+    """TDX exports suspended sessions as extra 0.00 rows; they must not reach the MAs."""
+    from app.stage_classify import prepare_bars
+
+    closes = lin(100, 170, 70) + lin(168.5, 159, 20)
+    clean = bars(closes)
+    # placeholder rows carry no price information at all — inserting them must not
+    # change the classification, otherwise a suspension would rewrite history
+    dirty_closes = closes[:61] + [0.0] + closes[61:72] + [0.0] + closes[72:83] + [0.0] + closes[83:]
+    dirty = bars(dirty_closes)
+
+    assert len(prepare_bars(dirty)) == len(dirty) - 3
+    expected = classify_stage(clean)
+    got = classify_stage(dirty)
+    assert (got["region"], got["stage"]) == (expected["region"], expected["stage"])
+    for field in ("ma20", "ma60", "slope20", "slope60", "bias20", "vol_ratio"):
+        assert got["evidence"][field] == expected["evidence"][field]
+
+
 def test_all_stages_have_labels_and_evidence():
     # every declared stage/region must carry a label, and evidence is populated
     assert set(_STAGE_LABELS) == {"D1", "D2", "D3", "B1", "B2", "B3",
