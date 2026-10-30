@@ -73,6 +73,7 @@ def clear_runtime_data_caches() -> None:
         'app.relative_valuation.history',
         'app.financial.reports',
         'app.financial.health_peer_snapshot',
+        'app.undervaluation.service',
     ]
     for module_name in module_names:
         try:
@@ -102,6 +103,8 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
                     '--reuse-existing-complete',
                 ],
             ),
+            ('build_good_stock_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_financial_snapshot.py')]),
+            ('build_good_stock_undervaluation_current', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_undervaluation_current.py')]),
         ]
     commands: list[tuple[str, list[str]]] = [
         # The workbench deliberately excludes archive_daily: that legacy archive
@@ -122,6 +125,9 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         # independently runnable/retryable and never blocks technical tasks.
         ('build_industry_metric_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_metric_snapshot.py')]),
         ('build_industry_relative_valuation_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_relative_valuation_snapshot.py')]),
+        # Independent local-only good-stock publications; never overwrite legacy financial rankings.
+        ('build_good_stock_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_financial_snapshot.py')]),
+        ('build_good_stock_undervaluation_current', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_undervaluation_current.py')]),
         # Incrementally recompute from the last published RPS day through the current QFQ day.
         ('refresh_rps_daily', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/refresh_rps_daily.py')]),
         (

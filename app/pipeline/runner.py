@@ -54,16 +54,47 @@ def _run_data_update_command(
     return SimpleNamespace(returncode=returncode, stdout="".join(stdout_lines), stderr=stderr_text)
 
 
+GOOD_STOCK_TASKS = {'build_good_stock_financial_snapshot', 'build_good_stock_undervaluation_current'}
+
+
+def _record_step_result(step):
+    task_states = dict(DATA_UPDATE_JOB_STATE.get('task_states') or {})
+    task_states[step['name']] = {
+        'status': 'done' if step['ok'] else 'failed',
+        'finished_at': _format_timestamp(time.time()),
+        **({} if step['ok'] else {'error': step.get('stderr_tail') or step.get('stdout_tail') or '任务失败'}),
+    }
+    _update_data_update_job_state(task_states=task_states)
+
+
 def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> dict[str, object]:
     trading_day = _latest_trading_day_for_refresh()
     steps: list[dict[str, object]] = []
     commands = _data_update_commands(trading_day, retry_failed=retry_failed)
 
+    # Legacy retry subset remains intact; good-stock retries only replay its
+    # failed publications, not unrelated downloads or already successful work.
+    if retry_failed:
+        states = DATA_UPDATE_JOB_STATE.get('task_states') or {}
+        good_stock_failed = any(states.get(name, {}).get('status') == 'failed' for name in GOOD_STOCK_TASKS)
+        commands = [(name, cmd) for name, cmd in commands
+                    if states.get(name, {}).get('status') == 'failed'
+                    or (name not in GOOD_STOCK_TASKS and not good_stock_failed)]
+    financial_failed = False
     for step_name, command in commands:
+        if step_name == 'build_good_stock_undervaluation_current' and financial_failed:
+            step = {'name': step_name, 'ok': False, 'returncode': None,
+                    'stderr_tail': '好股专用财报构建失败；保留旧诊断快照，修复后重试', 'stdout_tail': '', 'skipped': True}
+            steps.append(step)
+            _record_step_result(step)
+            continue
         # A command may stay quiet for minutes (notably full-market RPS).  Publish
         # the step at launch instead of waiting for a parseable stdout line, so the
         # UI never remains pinned to the previous completed step.
+        task_states = dict(DATA_UPDATE_JOB_STATE.get('task_states') or {})
+        task_states[step_name] = {'status': 'running', 'started_at': _format_timestamp(time.time())}
         _update_data_update_job_state(
+            task_states=task_states,
             current_step=step_name,
             current_industry=None,
             progress_index=None,
@@ -73,7 +104,16 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
         )
         try:
             result = _run_data_update_command(step_name, command, progress_callback=progress_callback)
-        except subprocess.TimeoutExpired as exc:
+        except (subprocess.SubprocessError, OSError) as exc:
+            if step_name in GOOD_STOCK_TASKS:
+                step = {'name': step_name, 'ok': False, 'returncode': None,
+                        'stdout_tail': '', 'stderr_tail': str(exc)}
+                steps.append(step)
+                _record_step_result(step)
+                financial_failed = step_name == 'build_good_stock_financial_snapshot'
+                continue
+            if not isinstance(exc, subprocess.TimeoutExpired):
+                raise
             stdout_tail = _tail_lines(exc.stdout.decode('utf-8', errors='replace') if isinstance(exc.stdout, bytes) else exc.stdout)
             stderr_tail = _tail_lines(exc.stderr.decode('utf-8', errors='replace') if isinstance(exc.stderr, bytes) else exc.stderr)
             steps.append({
@@ -101,7 +141,11 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
             'stdout_tail': stdout_tail,
             'stderr_tail': stderr_tail,
         })
+        _record_step_result(steps[-1])
         if result.returncode != 0:
+            if step_name in GOOD_STOCK_TASKS:
+                financial_failed = step_name == 'build_good_stock_financial_snapshot'
+                continue
             # The peer snapshot is a self-contained financial presentation
             # artifact.  Its failure must stay visible and retryable, but must
             # not stop RPS/MACD technical data maintenance.
@@ -120,7 +164,7 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
     _load_rps_trading_days.cache_clear()
     _load_stock_rps_history_dataset.cache_clear()
     return {
-        'ok': True,
+        'ok': all(step['ok'] for step in steps),
         'steps': steps,
     }
 
@@ -162,12 +206,14 @@ def _run_data_update_worker(retry_failed: bool = False, task_name: str | None = 
                             'status': 'failed', 'finished_at': finished,
                             'error': _tail_lines(step.get('stderr_tail') or step.get('stdout_tail') or '任务失败'),
                         }
+        failed = [step for step in result.get('steps', []) if not step.get('ok')]
         _update_data_update_job_state(
-            status='succeeded',
+            status='failed' if failed else 'succeeded',
             running=False,
-            can_retry_failed=False,
+            can_retry_failed=bool(failed),
             finished_at=_format_timestamp(time.time()),
-            current_progress_text='数据更新完成',
+            current_progress_text='部分独立任务失败；其他更新已完成，可重试失败项' if failed else '数据更新完成',
+            error='；'.join(str(step.get('name')) for step in failed) or None,
             data_update_status=status_payload,
             task_states=task_states,
         )

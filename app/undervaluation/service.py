@@ -21,12 +21,31 @@ from .own_valuation_history import (
 from .valuation_gate import evaluate_margin_evidence
 
 ROOT = Path(__file__).resolve().parents[2]
-STRICT_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__2026Q2.json"
+STRICT_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "good_stock_financial_current.json"
 CURRENT_DIAGNOSIS_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "good_stock_undervaluation_current.json"
 PRICE_PERCENTILE_SNAPSHOT = ROOT / "data" / "derived" / "datasets" / "final" / "dataset_price_percentile_5y.json"
 
 
-@lru_cache(maxsize=1)
+def _file_fingerprint(path: Path) -> tuple:
+    try:
+        stat = path.stat()
+        return (str(path), stat.st_mtime_ns, stat.st_size, stat.st_ino)
+    except FileNotFoundError:
+        return (str(path), None)
+
+
+def _file_cached(path_getter):
+    """Cache by published file identity, retaining the public cache_clear hook."""
+    def decorate(function):
+        cached = lru_cache(maxsize=1)(lambda fingerprint: function())
+        def load():
+            return cached(_file_fingerprint(path_getter()))
+        load.cache_clear = cached.cache_clear
+        return load
+    return decorate
+
+
+@_file_cached(lambda: PRICE_PERCENTILE_SNAPSHOT)
 def _load_price_percentile_records() -> dict[str, dict[str, Any]]:
     """Load the QFQ precomputed price-position snapshot keyed by stock code."""
     if not PRICE_PERCENTILE_SNAPSHOT.is_file():
@@ -34,7 +53,7 @@ def _load_price_percentile_records() -> dict[str, dict[str, Any]]:
     return json.loads(PRICE_PERCENTILE_SNAPSHOT.read_text(encoding="utf-8"))
 
 
-@lru_cache(maxsize=1)
+@_file_cached(lambda: CURRENT_DIAGNOSIS_SNAPSHOT)
 def _current_diagnosis_snapshot() -> dict[str, Any]:
     return json.loads(CURRENT_DIAGNOSIS_SNAPSHOT.read_text(encoding="utf-8")) if CURRENT_DIAGNOSIS_SNAPSHOT.is_file() else {}
 
@@ -84,6 +103,10 @@ def load_current_diagnosis_list(category: str = "has_margin", page: int = 1, pag
             "history_ps_percentile": (record.get("own_history") or {}).get("ps_percentile"),
             "quarterly_momentum": (record.get("quarterly_momentum") or {}).get("status"),
             "quarterly_period": (record.get("quarterly_momentum") or {}).get("period"),
+            "latest_report_period": record.get("latest_report_period"),
+            "latest_report_date": record.get("latest_report_date"),
+            "latest_announce_date": record.get("latest_announce_date"),
+            "financial_evidence": record.get("financial_evidence"),
             "price_percentile": price["percentile"], "price_percentile_label": price["label"],
             "price_percentile_scope": price["scope"], "price_history_years": price["history_years"],
             "price_percentile_basis": price["basis"],
@@ -92,10 +115,10 @@ def load_current_diagnosis_list(category: str = "has_margin", page: int = 1, pag
     page_size = min(200, max(1, int(page_size)))
     total = len(compact)
     start = (page - 1) * page_size
-    return {"ok": bool(payload), "built_at": payload.get("built_at"), "summary": payload.get("summary"), "category": category, "page": page, "page_size": page_size, "total": total, "rows": compact[start:start + page_size]}
+    return {"ok": bool(payload), "built_at": payload.get("built_at"), "summary": payload.get("summary"), "source_metadata": payload.get("source_metadata"), "category": category, "page": page, "page_size": page_size, "total": total, "rows": compact[start:start + page_size]}
 
 
-@lru_cache(maxsize=1)
+@_file_cached(lambda: STRICT_SNAPSHOT)
 def _strict_snapshot() -> dict[str, Any]:
     return json.loads(STRICT_SNAPSHOT.read_text(encoding="utf-8")) if STRICT_SNAPSHOT.is_file() else {}
 
@@ -123,27 +146,40 @@ def build_current_diagnosis(market: str, symbol: str) -> dict[str, Any]:
     quality = record.get("good_stock_quality") or {}
     industry_name = None
     # The valuation loader owns the membership mapping and enforces its snapshot date.
-    from app.relative_valuation.data_loader import load_stock_relative_valuation_inputs
-    stock = load_stock_relative_valuation_inputs(market, symbol) or {}
+    # We only need identity here. Full live valuation inputs recomputed financial
+    # metrics/quotes that this assembler immediately discarded; all valuation
+    # evidence below already comes from the published industry snapshot.
+    from app.relative_valuation.data_loader import _industry_row_lookup, _stock_name_lookup
+    stock = _industry_row_lookup().get((market, symbol)) or {}
+    stock_name = str(stock.get('stock_name') or _stock_name_lookup().get((market, symbol)) or symbol).strip()
     industry_name = stock.get("industry_level_2_name")
     industry_snapshot = load_industry_valuation_snapshot(str(industry_name or "")) or {}
     industry = evaluate_industry_evidence(market=market, symbol=symbol, industry_snapshot=industry_snapshot)
     as_of_date = str(industry_snapshot.get("trading_day") or "")
     if not as_of_date:
-        return {"ok": False, "status": "UNAVAILABLE", "quality": quality, "industry": industry, "reasons": ["industry_snapshot_date_missing"]}
-    dates, closes = _load_daily_series(market, symbol)
-    disclosures = build_pit_disclosures_from_period_frames(period_frames=_period_frames(), symbol=symbol, as_of_date=as_of_date)
-    own_history = summarize_own_valuation_history(build_own_valuation_history(
-        bars=[{"trading_day": day, "close": close} for day, close in zip(dates, closes)],
-        disclosures=disclosures, as_of_date=as_of_date,
-    ))
+        # Missing valuation evidence is a diagnosed UNAVAILABLE row, not a batch
+        # execution failure or permission to silently remove this security.
+        own_history = {"status": "UNAVAILABLE", "reasons": ["industry_snapshot_date_missing"]}
+    else:
+        dates, closes = _load_daily_series(market, symbol)
+        disclosures = build_pit_disclosures_from_period_frames(period_frames=_period_frames(), symbol=symbol, as_of_date=as_of_date)
+        own_history = summarize_own_valuation_history(build_own_valuation_history(
+            bars=[{"trading_day": day, "close": close} for day, close in zip(dates, closes)],
+            disclosures=disclosures, as_of_date=as_of_date,
+        ))
     margin = evaluate_margin_evidence(quality=quality, industry=industry, history=own_history)
     quadrant = classify_quality_margin_quadrant(quality, margin)
     return {
         "ok": True, "schema_version": "good-stock-undervaluation-current-v1",
-        "market": market, "symbol": symbol, "stock_name": stock.get("stock_name"),
+        "market": market, "symbol": symbol, "stock_name": stock_name,
         "as_of_date": as_of_date, "industry_level_2_name": industry_name,
         "quality": quality, "industry": industry, "own_history": own_history,
         "margin": margin, "quadrant": quadrant, "quarterly_momentum": record.get("quarterly_momentum"),
+        "financial_evidence": record.get("financial_evidence"),
+        "latest_report_period": record.get("latest_report_period"),
+        "latest_report_date": record.get("latest_report_date"),
+        "latest_announce_date": record.get("latest_announce_date"),
+        "financial_source_as_of": _strict_snapshot().get("as_of_date"),
+        "financial_source_built_at": _strict_snapshot().get("built_at"),
         "pit_scope": "current_snapshot_only",
     }

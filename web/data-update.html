@@ -345,7 +345,7 @@ function renderTasks(taskList, job) {
     let status = recorded.status || 'pending';
     // Legacy/full-pipeline fallback only while an older job lacks task records.
     if (!recorded.status && job.running && i === runningIdx) status = 'running';
-    if (!recorded.status && job.running && i < runningIdx && job.mode !== 'single_task') status = 'done';
+    if (!recorded.status && job.running && i < runningIdx && job.mode !== 'single_task' && !t.id.startsWith('build_good_stock_')) status = 'done';
 
     return `<div class="task-row ${rowClass(status)}">
       <span class="task-num">${i + 1}</span>

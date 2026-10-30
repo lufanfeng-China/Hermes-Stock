@@ -2321,6 +2321,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'build_financial_health_peer_snapshot', 'name': '增量更新行业财务健康度快照', 'desc': '只重算本次新增或修订财报涉及的股票；失败可独立重试且不阻断技术数据更新'},
             {'id': 'build_industry_metric_snapshot', 'name': '构建行业财务指标同业快照', 'desc': '发布二级行业同业指标分区快照；失败不阻断 RPS/MACD 技术数据更新'},
             {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
+            {'id': 'build_good_stock_financial_snapshot', 'name': '构建好股低估专用财报快照', 'desc': '使用本地财报时序库，逐股最新已披露季度 + 年度五年；不替换严格同周期排名文件，可独立执行/重试'},
+            {'id': 'build_good_stock_undervaluation_current', 'name': '构建好股低估诊断快照', 'desc': '依赖本地前复权行情、好股专用财报、行业估值；独立原子发布，失败保留旧版且不阻断技术更新'},
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ]

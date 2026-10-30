@@ -30,7 +30,9 @@ def _row_for(period_frames: dict[str, Any], period: str, symbol: str) -> Any | N
     frame = period_frames.get(period)
     if frame is None:
         return None
-    matches = frame.loc[str(symbol).zfill(6)] if str(symbol).zfill(6) in frame.index.astype(str) else None
+    # Warehouse indices are already security-code strings. Casting the full
+    # index here rebuilt thousands of labels for each of the per-stock lookups.
+    matches = frame.loc[str(symbol).zfill(6)] if str(symbol).zfill(6) in frame.index else None
     if matches is None:
         return None
     return matches.iloc[0] if getattr(matches, "ndim", 1) > 1 else matches

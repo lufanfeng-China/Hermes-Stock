@@ -77,11 +77,20 @@ def main(argv: list[str] | None = None) -> None:
                     if isinstance(failure, dict):
                         print(f"- {failure.get('industry_level_2_name')}: {failure.get('error')}", flush=True)
 
-    path = write_current_industry_snapshots(
-        progress_callback=print_progress,
-        reuse_existing_complete=args.reuse_existing_complete,
-        continue_on_error=not args.fail_fast,
-    )
+    # This command publishes a local daily-close snapshot, not an intraday
+    # quote scan. The shared loader also serves live pages, so scope this guard
+    # to this offline command and restore it even if the build fails.
+    from app.search import index as search_index
+    original_live_quote = search_index._load_realtime_quote_snapshot
+    search_index._load_realtime_quote_snapshot = lambda *args, **kwargs: None
+    try:
+        path = write_current_industry_snapshots(
+            progress_callback=print_progress,
+            reuse_existing_complete=args.reuse_existing_complete,
+            continue_on_error=not args.fail_fast,
+        )
+    finally:
+        search_index._load_realtime_quote_snapshot = original_live_quote
     print(f"Wrote industry valuation snapshot to {path}", flush=True)
 
 
