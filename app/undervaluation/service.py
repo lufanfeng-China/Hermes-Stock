@@ -103,6 +103,8 @@ def load_current_diagnosis_list(category: str = "has_margin", page: int = 1, pag
             "history_ps_percentile": (record.get("own_history") or {}).get("ps_percentile"),
             "quarterly_momentum": (record.get("quarterly_momentum") or {}).get("status"),
             "quarterly_period": (record.get("quarterly_momentum") or {}).get("period"),
+            "quarterly_profit_change": ((record.get("quarterly_momentum") or {}).get("evidence") or {}).get("profit_change"),
+            "quarterly_momentum_reasons": (record.get("quarterly_momentum") or {}).get("reasons") or [],
             "latest_report_period": record.get("latest_report_period"),
             "latest_report_date": record.get("latest_report_date"),
             "latest_announce_date": record.get("latest_announce_date"),

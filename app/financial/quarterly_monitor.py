@@ -101,6 +101,29 @@ def _growth(previous: float | None, current: float | None) -> float | None:
     return (current / previous - 1) * 100
 
 
+def _profit_comparison(current: float | None, previous: float | None,
+                       current_period: str, previous_period: str) -> dict[str, Any]:
+    delta = current - previous if current is not None and previous is not None else None
+    direction, status, label = "unavailable", "unavailable", "数据不足"
+    if delta is not None and current is not None and previous is not None:
+        direction = "improving" if delta > 0 else "deteriorating" if delta < 0 else "flat"
+        if delta == 0:
+            status, label = "flat", "持平"
+        elif previous < 0 <= current and current > 0:
+            status, label = "turnaround", "扭亏"
+        elif previous > 0 > current:
+            status, label = "profit_to_loss", "盈转亏"
+        elif delta > 0:
+            status, label = ("loss_narrowing", "减亏") if previous < 0 else ("profit_growth", "增盈")
+        else:
+            status, label = ("profit_decline", "盈利下滑") if previous > 0 else ("loss_widening", "亏损扩大")
+    return {"current": current, "previous": previous, "delta": delta,
+            "yoy_pct": delta / abs(previous) * 100 if delta is not None and previous is not None and previous != 0 else None,
+            "status": status, "label": label, "direction": direction,
+            "current_period": current_period, "previous_period": previous_period,
+            "formula": "(current-previous)/abs(previous)*100"}
+
+
 def _year(period: str) -> int | None:
     try:
         return int(str(period)[:4])
@@ -108,8 +131,21 @@ def _year(period: str) -> int | None:
         return None
 
 
-def _not_available(reason: str, status: str = "unavailable") -> dict[str, Any]:
-    return {"status": status, "reason": reason, "latest_period": None, "ttm": {}, "dimensions": [], "alerts": []}
+def _not_available(reason: str, status: str = "unavailable", *, reports: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    result = {"status": status, "reason": reason, "latest_period": None, "ttm": {}, "dimensions": [], "alerts": [], "profit_comparisons": {}}
+    # Unsupported industry or absent TTM inputs do not erase independently
+    # observable cumulative-profit amounts. This is evidence, not a score.
+    quarters = [row for row in reports or [] if str(row.get("period") or "")[-2:] in {"Q1", "Q2", "Q3"}]
+    if quarters:
+        latest = max(quarters, key=lambda row: str(row.get("report_date") or ""))
+        period = str(latest.get("period"))
+        year = _year(period)
+        result.update(latest_period=period, as_of=latest.get("report_date"))
+        if year is not None:
+            previous_period = f"{year - 1}{period[-2:]}"
+            prior = next((row for row in reports or [] if row.get("period") == previous_period), {})
+            result["profit_comparisons"] = {"ex_net_profit": _profit_comparison(_metric(latest, "ex_net_profit"), _metric(prior, "ex_net_profit"), period, previous_period)}
+    return result
 
 
 def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_level_1: str | None) -> dict[str, Any]:
@@ -120,9 +156,9 @@ def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_le
     the latest quarter-end balance and compare against the same quarter last year.
     """
     if not industry_level_1 or not str(industry_level_1).strip():
-        return _not_available("industry_classification_unavailable", "not_applicable")
+        return _not_available("industry_classification_unavailable", "not_applicable", reports=reports)
     if industry_level_1 in SPECIAL_INDUSTRY_L1:
-        return _not_available("special_industry_not_applicable", "not_applicable")
+        return _not_available("special_industry_not_applicable", "not_applicable", reports=reports)
     by_period = {str(row.get("period") or ""): row for row in reports}
     quarters = [row for row in reports if str(row.get("period") or "")[-2:] in {"Q1", "Q2", "Q3"}]
     if not quarters:
@@ -136,7 +172,7 @@ def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_le
     prior_quarter = by_period.get(f"{year - 1}{suffix}")
     prior_annual = by_period.get(f"{year - 1}A")
     if not prior_quarter or not prior_annual:
-        return _not_available("ttm_comparison_base_unavailable")
+        return _not_available("ttm_comparison_base_unavailable", reports=reports)
 
     ttm: dict[str, float | None] = {}
     for key in FLOW_FIELDS:
@@ -145,6 +181,8 @@ def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_le
     ttm["free_cf"] = ttm["ocf"] - ttm["capex"] if None not in (ttm["ocf"], ttm["capex"]) else None
     ttm_margin = ttm["free_cf"] / ttm["revenue"] * 100 if ttm["free_cf"] is not None and ttm["revenue"] not in (None, 0) else None
     current_yoy = {key: _growth(_metric(prior_quarter, key), _metric(latest, key)) for key in FLOW_FIELDS}
+    profit_change = _profit_comparison(_metric(latest, "ex_net_profit"), _metric(prior_quarter, "ex_net_profit"), period, f"{year - 1}{suffix}")
+    current_yoy["ex_net_profit"] = profit_change["yoy_pct"]
     receivable_gap = _growth(_metric(prior_quarter, "accounts_receivable"), _metric(latest, "accounts_receivable"))
     inventory_gap = _growth(_metric(prior_quarter, "inventory"), _metric(latest, "inventory"))
     revenue_yoy = current_yoy["revenue"]
@@ -157,12 +195,22 @@ def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_le
     def alert(code: str, title: str, detail: str, severity_basis: dict[str, Any]) -> None:
         alerts.append({"code": code, "title": title, "detail": detail,
                        "severity": severity_basis["severity"], "severity_basis": severity_basis})
-    if revenue_yoy is not None and revenue_yoy > 0 and current_yoy["ex_net_profit"] is not None and current_yoy["ex_net_profit"] < 0:
+    if revenue_yoy is not None and revenue_yoy > 0 and profit_change["direction"] == "deteriorating":
         basis = classify_alert_severity("revenue_profit_divergence", revenue_yoy=revenue_yoy, ex_net_profit_yoy=current_yoy["ex_net_profit"])
-        alert("revenue_up_profit_down", "收入增长但扣非利润下降", f"最新累计营收同比 {revenue_yoy:.1f}%，扣非利润同比 {current_yoy['ex_net_profit']:.1f}%，利润相对营收增速差 {basis['growth_gap_pct']:.1f}pct；{_high_severity_threshold_note(basis)}", basis)
-    if current_yoy["ex_net_profit"] is not None and current_yoy["ex_net_profit"] > 0 and current_yoy["ocf"] is not None and current_yoy["ocf"] < 0:
+        if profit_change["yoy_pct"] is None:
+            basis = _severity_result("watch", "profit_amount_declining_zero_base", {"ex_net_profit_yoy": None}, {})
+            alert("revenue_up_profit_down", "收入增长但扣非利润下降", "扣非利润金额下降；基期为0，同比不可计算", basis)
+        else:
+            alert("revenue_up_profit_down", "收入增长但扣非利润下降", f"最新累计营收同比 {revenue_yoy:.1f}%，扣非利润同比 {current_yoy['ex_net_profit']:.1f}%，利润相对营收增速差 {basis['growth_gap_pct']:.1f}pct；{_high_severity_threshold_note(basis)}", basis)
+    if profit_change["direction"] == "improving" and current_yoy["ocf"] is not None and current_yoy["ocf"] < 0:
         basis = classify_alert_severity("profit_cash_divergence", ex_net_profit_yoy=current_yoy["ex_net_profit"], ocf_yoy=current_yoy["ocf"], ttm_ocf=ttm["ocf"])
-        alert("profit_up_ocf_down", "扣非利润改善但经营现金流下降", f"扣非利润同比 {current_yoy['ex_net_profit']:.1f}%，CFO 同比 {current_yoy['ocf']:.1f}%，增速差 {basis['metrics']['growth_gap_pct']:.1f}pct；{_high_severity_threshold_note(basis)}", basis)
+        if profit_change["yoy_pct"] is None:
+            severity = "critical" if current_yoy["ocf"] <= -50 and ttm["ocf"] is not None and ttm["ocf"] < 0 else "high" if current_yoy["ocf"] <= -20 else "watch"
+            basis["severity"] = severity
+            basis["rule"] = "profit_amount_improving_zero_base"
+            alert("profit_up_ocf_down", "扣非利润改善但经营现金流下降", f"扣非金额增加；基期为0，同比不可计算；CFO同比 {current_yoy['ocf']:.1f}%", basis)
+        else:
+            alert("profit_up_ocf_down", "扣非利润改善但经营现金流下降", f"扣非利润同比 {current_yoy['ex_net_profit']:.1f}%，CFO 同比 {current_yoy['ocf']:.1f}%，增速差 {basis['metrics']['growth_gap_pct']:.1f}pct；{_high_severity_threshold_note(basis)}", basis)
     if receivable_gap is not None and receivable_gap > 15:
         basis = classify_alert_severity("working_capital_gap", growth_gap_pct=receivable_gap)
         alert("receivables_growth_gap", "应收账款增长明显快于营收", f"应收增速较营收高 {receivable_gap:.1f}pct；{_high_severity_threshold_note(basis)}", basis)
@@ -197,7 +245,7 @@ def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_le
     profit_watch = (gross_prior is not None and below(gross_now, gross_prior - 2)) or (net_prior is not None and below(net_now, net_prior - 2))
     profit_improve = gross_prior is not None and net_prior is not None and above(gross_now, gross_prior + 2) and above(net_now, net_prior + 2)
     dimensions = [
-        dimension("growth", "核心增长质量", (revenue_yoy, current_yoy["ex_net_profit"]), above(revenue_yoy, 0) and below(current_yoy["ex_net_profit"], 0), above(revenue_yoy, 0) and above(current_yoy["ex_net_profit"], 0), f"累计营收同比 {show(revenue_yoy)}%；扣非利润同比 {show(current_yoy['ex_net_profit'])}%"),
+        dimension("growth", "核心增长质量", (revenue_yoy, profit_change["delta"]), above(revenue_yoy, 0) and profit_change["direction"] == "deteriorating", above(revenue_yoy, 0) and profit_change["direction"] == "improving", f"累计营收同比 {show(revenue_yoy)}%；扣非利润{profit_change['label']}；同比 " + (f"{show(current_yoy['ex_net_profit'])}%" if current_yoy["ex_net_profit"] is not None else "不可计算（基期为0或数据缺失）")),
         dimension("profitability", "盈利能力", (gross_now, gross_prior, net_now, net_prior), profit_watch, profit_improve, f"毛利率 {show(gross_now)}%；净利率 {show(net_now)}%"),
         dimension("cash", "现金含金量", (ttm_margin,), below(ttm_margin, 0), ttm_margin is not None and ttm_margin >= 5, f"TTM FCF Margin {show(ttm_margin)}%"),
         dimension("working_capital", "营运资本", (receivable_gap, inventory_gap), above(receivable_gap, 15) or above(inventory_gap, 15), receivable_gap is not None and inventory_gap is not None and receivable_gap <= -5 and inventory_gap <= -5, f"应收增速差 {show(receivable_gap)}pct；存货增速差 {show(inventory_gap)}pct"),
@@ -211,5 +259,5 @@ def build_quarterly_financial_monitor(reports: list[dict[str, Any]], industry_le
     realtime_score = {"score": score, "weight": 100, "coverage_weight": coverage_weight,
                       "status": "complete" if coverage_weight == 100 else "partial" if score is not None else "insufficient",
                       "reason": None if score is not None else "quarterly_score_coverage_insufficient",
-                      "version": "quarterly-v1", "breakdown": [{"code": item["code"], "title": item["title"], "weight": weights[item["code"]], "status": item["status"], "available": item["available"], "points": round(weights[item["code"]] * status_ratio[item["status"]], 1) if item["available"] else None} for item in dimensions]}
-    return {"status": "available", "reason": None, "latest_period": period, "as_of": latest.get("report_date"), "basis": "TTM + latest_quarter_balance", "ttm": {**ttm, "fcf_margin": ttm_margin}, "yoy": current_yoy, "latest": {key: _metric(latest, key) for key in BALANCE_FIELDS}, "gaps": {"receivable_growth_gap": receivable_gap, "inventory_growth_gap": inventory_gap, "debt_ratio_change": debt_change}, "dimensions": dimensions, "alerts": alerts, "aggregate_alert_severity": aggregate_severity, "realtime_score": realtime_score}
+                      "version": "quarterly-v2-profit-direction", "breakdown": [{"code": item["code"], "title": item["title"], "weight": weights[item["code"]], "status": item["status"], "available": item["available"], "points": round(weights[item["code"]] * status_ratio[item["status"]], 1) if item["available"] else None} for item in dimensions]}
+    return {"status": "available", "reason": None, "latest_period": period, "as_of": latest.get("report_date"), "basis": "TTM + latest_quarter_balance", "ttm": {**ttm, "fcf_margin": ttm_margin}, "yoy": current_yoy, "profit_comparisons": {"ex_net_profit": profit_change}, "latest": {key: _metric(latest, key) for key in BALANCE_FIELDS}, "gaps": {"receivable_growth_gap": receivable_gap, "inventory_growth_gap": inventory_gap, "debt_ratio_change": debt_change}, "dimensions": dimensions, "alerts": alerts, "aggregate_alert_severity": aggregate_severity, "realtime_score": realtime_score}

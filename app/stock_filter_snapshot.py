@@ -106,6 +106,7 @@ def build_strict_financial_record(
             "score_coverage_status": realtime.get("status") or monitor.get("status"),
             "dimensions": _quarterly_dimensions(monitor),
             "quality": _quarterly_quality(monitor),
+            "profit_comparisons": monitor.get("profit_comparisons") or {},
             "triggered_red_flag_count": len(monitor.get("alerts") or []),
             "reason": quarterly_reason,
         },
