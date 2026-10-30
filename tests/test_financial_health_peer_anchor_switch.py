@@ -42,7 +42,9 @@ class FinancialHealthPeerAnchorSwitchTests(unittest.TestCase):
 
     def test_incremental_refresh_updates_only_changed_symbols_when_anchors_match(self):
         selection = {"annual_anchor": "2025A", "quarterly_anchor": "2026Q3", "periods": ["2021A", "2022A", "2023A", "2024A", "2025A", "2025Q3", "2026Q3"]}
-        existing = {"annual_anchor": selection["annual_anchor"], "quarterly_anchor": selection["quarterly_anchor"], "periods_loaded": selection["periods"], "stocks": {"sh:600001": {"old": 1}, "sz:000001": {"old": 2}}}
+        # The published-basis check compares schema_version alongside the anchors, so a
+        # snapshot that should be treated as comparable must carry the current schema.
+        existing = {"schema_version": builder.CURRENT_SNAPSHOT_SCHEMA, "annual_anchor": selection["annual_anchor"], "quarterly_anchor": selection["quarterly_anchor"], "periods_loaded": selection["periods"], "stocks": {"sh:600001": {"old": 1}, "sz:000001": {"old": 2}}}
         with tempfile.TemporaryDirectory() as directory:
             current = Path(directory) / "financial_health_peer_snapshot_current.json"
             current.write_text(json.dumps(existing), encoding="utf-8")

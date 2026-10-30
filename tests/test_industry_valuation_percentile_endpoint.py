@@ -3,8 +3,15 @@ from unittest import mock
 
 
 class IndustryValuationPercentilePayloadTests(unittest.TestCase):
+    # The payload builder moved from scripts/serve_stock_dashboard.py to app/industry/templates.py
+    # during the server split; it re-imports build_relative_valuation_result at module level.
+    @staticmethod
+    def _templates():
+        from app.industry import templates as server
+        return server
+
     def test_payload_uses_selected_stock_primary_metric_and_marks_invalid_values_not_comparable(self) -> None:
-        from scripts import serve_stock_dashboard as server
+        server = self._templates()
 
         snapshot = {
             "scores": {
@@ -58,7 +65,7 @@ class IndustryValuationPercentilePayloadTests(unittest.TestCase):
         self.assertEqual(5, rows[3]["ps_ttm"])
 
     def test_payload_uses_relative_valuation_primary_metric_when_summary_falls_back_to_ps(self) -> None:
-        from scripts import serve_stock_dashboard as server
+        server = self._templates()
 
         snapshot = {
             "scores": {
@@ -102,7 +109,7 @@ class IndustryValuationPercentilePayloadTests(unittest.TestCase):
         self.assertAlmostEqual(33.3333333, rows[0]["valuation_percentile"], places=4)
 
     def test_payload_builds_peer_rows_from_live_members_when_snapshot_has_no_member_rows(self) -> None:
-        from scripts import serve_stock_dashboard as server
+        server = self._templates()
 
         snapshot = {
             "scores": {

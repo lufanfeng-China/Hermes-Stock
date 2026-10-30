@@ -4,6 +4,14 @@ import os
 import re
 import subprocess
 
+from app.financial.prompts import (
+    build_ai_financial_report_prompt,
+    build_sub_indicator_explanation_prompt,
+    load_sub_indicator_score_context,
+)
+from app.financial.reports import load_recent_three_year_financial_reports
+from app.industry.templates import _industry_template_tags
+
 DEFAULT_HERMES_MODEL = os.environ.get("HERMES_MODEL", "").strip()
 
 def generate_stock_ai_report(market: str, symbol: str) -> dict[str, object]:

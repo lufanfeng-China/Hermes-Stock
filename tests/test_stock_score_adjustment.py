@@ -420,6 +420,17 @@ class StockScoreAdjustmentTests(unittest.TestCase):
             ("sh", "600690"): "海尔智家",
         }
 
+        # Peer total_score is the published 60/40 blend of the industry absolute
+        # score and the industry trend score.  Pin the trend percentile payload so
+        # the blend is deterministic instead of depending on a module-level cache.
+        trend_payload = {
+            "sub_indicators": {},
+            "ind_sub_indicators": {
+                key: {sub_key: 50.0 for sub_key, *_ in idx._SUB_DEFS}
+                for key in ("sz:000333", "sz:000651", "sh:600690")
+            },
+        }
+
         with (
             mock.patch.object(idx, "_load_financial_snapshot", return_value=snapshot),
             mock.patch.object(idx, "_load_industry_map", return_value=industry_map),
@@ -429,6 +440,7 @@ class StockScoreAdjustmentTests(unittest.TestCase):
                 ("sz", "000651"): 43.21,
                 ("sh", "600690"): 28.88,
             }),
+            mock.patch.object(idx, "_trend_scores_cache", trend_payload),
             mock.patch(
                 "app.relative_valuation.data_loader.load_industry_valuation_snapshot",
                 return_value={
@@ -453,7 +465,8 @@ class StockScoreAdjustmentTests(unittest.TestCase):
         self.assertEqual(18.5, result["industry_weighted_pe_ttm"])
         self.assertEqual(1.92, result["industry_weighted_ps_ttm"])
         self.assertEqual(["000651", "000333", "600690"], [row["symbol"] for row in result["rows"]])
-        self.assertEqual(80.2, result["rows"][0]["total_score"])
+        # 80.2 (industry absolute) * 0.6 + 50.0 (industry trend percentile) * 0.4
+        self.assertEqual(68.12, result["rows"][0]["total_score"])
         self.assertEqual(72.35, result["rows"][1]["current_price"])
         self.assertEqual(14.8, result["rows"][1]["pe_ttm"])
         self.assertEqual(1.35, result["rows"][1]["ps_ttm"])
@@ -461,7 +474,8 @@ class StockScoreAdjustmentTests(unittest.TestCase):
         self.assertEqual("20260331", result["rows"][1]["report_date"])
         self.assertEqual(83.2, result["rows"][1]["dimension_scores"]["profitability"])
         self.assertEqual(76.0, result["rows"][1]["dimension_scores"]["growth"])
-        self.assertEqual(71.7, round(result["rows"][1]["total_score"], 1))
+        # 71.7 (industry absolute) * 0.6 + 50.0 (industry trend percentile) * 0.4
+        self.assertEqual(63.0, round(result["rows"][1]["total_score"], 1))
 
     def test_build_stock_score_industry_total_peer_benchmark_falls_back_to_live_valuation_when_snapshot_rows_missing(self) -> None:
         from app.search import index as idx
@@ -726,6 +740,10 @@ class StockScoreAdjustmentTests(unittest.TestCase):
             mock.patch.object(idx, "_stock_name_lookup", return_value={("sh", "601600"): "中国铝业"}),
             mock.patch.object(idx, "_load_industry_map", return_value={("sh", "601600"): ("工业金属", "有色")}),
             mock.patch.object(idx, "_load_sub_indicator_component_context", return_value=component_context),
+            # Keep the comparison baseline hermetic: without this the previous-year
+            # row is re-read from whatever local .dat files happen to exist, which
+            # silently replaces the fixture's prev_raw_sub_indicators.
+            mock.patch.object(idx, "_lookup_financial_row", return_value=None),
         ):
             result = idx.compute_stock_score("sh", "601600")
 

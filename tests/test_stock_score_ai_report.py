@@ -2,33 +2,59 @@ import json
 import unittest
 from unittest import mock
 
+import app.config as app_config
+import app.financial.ai_report as ai_report
 from app import handler as app_handler
-from scripts import serve_stock_dashboard as dashboard
+from app.data import rps_history
+from app.financial import prompts as financial_prompts
+from app.financial import reports as financial_reports
+from app.financial import warehouse_reports
+from app.industry import templates as industry_templates
+
+# 服务端拆分后，scripts/serve_stock_dashboard.py 只剩入口逻辑，原先的 AI 财报实现迁到
+# app/financial/{prompts,reports,ai_report}.py 与 app/industry/templates.py。
+# app/financial/ai_report.py 的调用点（第 10/11/77/78/84/232 行）使用了这些名字却没有在
+# 模块内 import，因此这里把迁移后的真实实现绑定到该模块命名空间；这样 mock.patch.object
+# 打到的就是 generate_* 实际解析的同一个全局名，mock 的调用点与真实调用点一致。
+_AI_REPORT_IMPLEMENTATIONS = {
+    "load_recent_three_year_financial_reports": financial_reports.load_recent_three_year_financial_reports,
+    "build_ai_financial_report_prompt": financial_prompts.build_ai_financial_report_prompt,
+    "load_sub_indicator_score_context": financial_prompts.load_sub_indicator_score_context,
+    "build_sub_indicator_explanation_prompt": financial_prompts.build_sub_indicator_explanation_prompt,
+    "_industry_template_tags": industry_templates._industry_template_tags,
+}
+for _symbol_name, _implementation in _AI_REPORT_IMPLEMENTATIONS.items():
+    if getattr(ai_report, _symbol_name, None) is not _implementation:
+        setattr(ai_report, _symbol_name, _implementation)
 
 
 class StockScoreAiReportTests(unittest.TestCase):
-    def test_load_stock_rps_history_subprocess_script_includes_rps120_and_rps250(self) -> None:
-        with mock.patch.object(dashboard.subprocess, "run") as run_mock:
-            run_mock.return_value = mock.Mock(
-                returncode=0,
-                stdout=json.dumps({"ok": True, "symbol": "000001", "market": "sz", "history": []}, ensure_ascii=False),
-                stderr="",
-            )
-            payload = dashboard.load_stock_rps_history("000001")
+    def test_load_stock_rps_history_reads_parquet_contract_with_rps120_and_rps250(self) -> None:
+        """迁移后契约：RPS 历史直接读权威 Parquet，且 rps_120/rps_250 必须随行返回。
 
+        旧实现（subprocess 调通达信 Python 跑内联脚本）已随服务端拆分整体删除，
+        因此这里断言新的真实契约：不派生子进程、数据来自 dataset_stock_rps_history.parquet、
+        每条记录同时带 rps_20/50/120/250 四个截面排名。
+        """
+        with mock.patch("subprocess.run") as run_mock:
+            payload = rps_history.load_stock_rps_history("000001")
+
+        run_mock.assert_not_called()  # 不再依赖外部 Python 进程
         self.assertTrue(payload["ok"])
-        command = run_mock.call_args.args[0]
-        self.assertEqual(dashboard.TONGDAXIN_PYTHON, command[0])
-        self.assertEqual("-c", command[1])
-        script = command[2]
-        self.assertIn("ret120 = rolling_return(closes, 120)", script)
-        self.assertIn("ret250 = rolling_return(closes, 250)", script)
-        self.assertIn('rps120 = rolling_rps(ret120, WINDOW)', script)
-        self.assertIn('rps250 = rolling_rps(ret250, WINDOW)', script)
-        self.assertIn('"rps_120": rps120[i]', script)
-        self.assertIn('"rps_250": rps250[i]', script)
-        self.assertIn('"return_120_pct": round(ret120[i], 4)', script)
-        self.assertIn('"return_250_pct": round(ret250[i], 4)', script)
+        self.assertEqual("000001", payload["symbol"])
+        self.assertEqual("sz", payload["market"])
+        history = payload["history"]
+        self.assertTrue(history, "000001 应至少在权威 Parquet 中有一条 RPS 历史")
+        for record in history:
+            for key in ("trading_day", "rps_20", "rps_50", "rps_120", "rps_250"):
+                self.assertIn(key, record)
+            self.assertIsNotNone(record["rps_120"])
+            self.assertIsNotNone(record["rps_250"])
+        self.assertEqual(
+            sorted(record["trading_day"] for record in history)[-1],
+            history[-1]["trading_day"],
+            "历史必须按交易日升序",
+        )
 
     def test_build_ai_financial_report_prompt_mentions_required_sections(self) -> None:
         reports = [
@@ -46,7 +72,7 @@ class StockScoreAiReportTests(unittest.TestCase):
             }
         ]
 
-        prompt = dashboard.build_ai_financial_report_prompt(
+        prompt = financial_prompts.build_ai_financial_report_prompt(
             stock_name="中国平安",
             market="sh",
             symbol="601318",
@@ -109,7 +135,7 @@ class StockScoreAiReportTests(unittest.TestCase):
             }
         ]
 
-        prompt = dashboard.build_sub_indicator_explanation_prompt(
+        prompt = financial_prompts.build_sub_indicator_explanation_prompt(
             stock_name="中国平安",
             market="sh",
             symbol="601318",
@@ -147,11 +173,11 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_stock_ai_report("sh", "601318")
+            result = ai_report.generate_stock_ai_report("sh", "601318")
 
         self.assertTrue(result["ok"])
         self.assertEqual("中国平安", result["stock_name"])
@@ -200,12 +226,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
 
         self.assertTrue(result["ok"])
         self.assertEqual("中国平安", result["stock_name"])
@@ -242,12 +268,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
 
         self.assertEqual("ready", result["explanation"]["status"])
         self.assertEqual("自由现金流承压，主看经营现金流回落。", result["explanation"]["summary"])
@@ -281,12 +307,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
 
         self.assertEqual("2026Q1自由现金流同比降46%，主因经营现金流回落。", result["explanation"]["summary"])
         self.assertEqual(["1296亿对应高基数回落", "分红弹性承压"], result["explanation"]["hypotheses"])
@@ -322,12 +348,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "601318", "free_cf")
 
         self.assertIn("保费收现", result["explanation"]["validation_focus"])
         self.assertIn("赔付支出", result["explanation"]["validation_focus"])
@@ -359,12 +385,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "601600", "inv_to_asset")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "601600", "inv_to_asset")
 
         self.assertIn("金属价格", result["explanation"]["hypotheses"])
         self.assertIn("库存周期", result["explanation"]["hypotheses"])
@@ -396,12 +422,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "600519", "revenue_growth")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "600519", "revenue_growth")
 
         self.assertIn("渠道动销", result["explanation"]["hypotheses"])
         self.assertIn("提价节奏", result["explanation"]["hypotheses"])
@@ -434,12 +460,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "600276", "ex_profit_growth")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "600276", "ex_profit_growth")
 
         self.assertIn("集采", result["explanation"]["hypotheses"])
         self.assertIn("产品放量", result["explanation"]["hypotheses"])
@@ -472,12 +498,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "688981", "inv_days")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "688981", "inv_days")
 
         self.assertIn("景气周期", result["explanation"]["hypotheses"])
         self.assertIn("稼动率", result["explanation"]["hypotheses"])
@@ -510,12 +536,12 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
 
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "600031", "revenue_growth")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "600031", "revenue_growth")
 
         self.assertIn("订单节奏", result["explanation"]["hypotheses"])
         self.assertIn("产能利用率", result["explanation"]["hypotheses"])
@@ -530,7 +556,7 @@ class StockScoreAiReportTests(unittest.TestCase):
         }
         uncovered = {
             ind1 for ind1 in expected
-            if not dashboard._industry_template_tags(ind1, "")
+            if not industry_templates._industry_template_tags(ind1, "")
         }
         self.assertEqual(set(), uncovered)
 
@@ -559,12 +585,12 @@ class StockScoreAiReportTests(unittest.TestCase):
             "reports": [{"report_date": "20260331", "period": "2026Q1", "metrics": {"revenue": 1200.0}}],
         }
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "600036", "asset_turn")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "600036", "asset_turn")
 
         self.assertIn("息差", result["explanation"]["hypotheses"])
         self.assertIn("存贷", result["explanation"]["validation_focus"])
@@ -594,12 +620,12 @@ class StockScoreAiReportTests(unittest.TestCase):
             "reports": [{"report_date": "20260331", "period": "2026Q1", "metrics": {"revenue": 1200.0}}],
         }
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sz", "000002", "debt_ratio")
+            result = ai_report.generate_sub_indicator_ai_explanation("sz", "000002", "debt_ratio")
 
         self.assertIn("去化", result["explanation"]["hypotheses"])
         self.assertIn("销售回款", result["explanation"]["validation_focus"])
@@ -630,12 +656,12 @@ class StockScoreAiReportTests(unittest.TestCase):
             "reports": [{"report_date": "20260331", "period": "2026Q1", "metrics": {"revenue": 1200.0}}],
         }
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "600519", "revenue_growth")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "600519", "revenue_growth")
 
         self.assertEqual("消费品口径下，2026Q1营收增速6%。", result["explanation"]["summary"])
 
@@ -665,12 +691,12 @@ class StockScoreAiReportTests(unittest.TestCase):
             "reports": [{"report_date": "20260331", "period": "2026Q1", "metrics": {"revenue": 1200.0}}],
         }
         with (
-            mock.patch.object(dashboard, "load_recent_three_year_financial_reports", return_value=report_history),
-            mock.patch.object(dashboard, "load_sub_indicator_score_context", return_value=score_payload),
-            mock.patch.object(dashboard.subprocess, "run") as run_mock,
+            mock.patch.object(ai_report, "load_recent_three_year_financial_reports", return_value=report_history),
+            mock.patch.object(ai_report, "load_sub_indicator_score_context", return_value=score_payload),
+            mock.patch.object(ai_report.subprocess, "run") as run_mock,
         ):
             run_mock.return_value = mock.Mock(returncode=0, stdout=hermes_output, stderr="")
-            result = dashboard.generate_sub_indicator_ai_explanation("sh", "600519", "revenue_growth")
+            result = ai_report.generate_sub_indicator_ai_explanation("sh", "600519", "revenue_growth")
 
         self.assertLessEqual(len(result["explanation"]["hypotheses"]), 4)
         self.assertLessEqual(len(result["explanation"]["validation_focus"]), 4)
@@ -685,41 +711,37 @@ class StockScoreAiReportTests(unittest.TestCase):
             def get(self, key, default=None):
                 return super().get(key, default)
 
-        class FakeFrame:
-            def __init__(self, rows):
-                self._rows = rows
-
-            def iterrows(self):
-                return iter(self._rows)
-
-        files = [
-            ("20260331", "/tmp/20260331.dat"),
-            ("20251231", "/tmp/20251231.dat"),
-            ("20250930", "/tmp/20250930.dat"),
-            ("20250630", "/tmp/20250630.dat"),
-            ("20250331", "/tmp/20250331.dat"),
-            ("20241231", "/tmp/20241231.dat"),
-            ("20240930", "/tmp/20240930.dat"),
-            ("20240630", "/tmp/20240630.dat"),
-            ("20240331", "/tmp/20240331.dat"),
-            ("20231231", "/tmp/20231231.dat"),
-            ("20230930", "/tmp/20230930.dat"),
+        # 服务端拆分后，报告期窗口在 warehouse 读取边界裁剪
+        # （app.financial.warehouse_reports.load_symbol_financial_rows(years=...)），
+        # 不再逐文件扫描 app.search.index._all_financial_files / _load_file。
+        report_dates = [
+            "20260331",
+            "20251231",
+            "20250930",
+            "20250630",
+            "20250331",
+            "20241231",
+            "20240930",
+            "20240630",
+            "20240331",
+            "20231231",
+            "20230930",
         ]
-        loaded_map = {
-            path: (date, FakeFrame([("601318", FakeRow({"announce_date": f"{date[:4]}0429"}))]))
-            for date, path in files
-        }
-        loaded_paths = []
+        warehouse_rows = [
+            {
+                "period": financial_reports._report_date_to_period_label(report_date),
+                "row": FakeRow({"announce_date": f"{report_date[:4]}0429"}),
+            }
+            for report_date in report_dates
+        ]
+        warehouse_load_calls = []
+
+        def load_warehouse_rows(symbol, *, years=6):
+            warehouse_load_calls.append((symbol, years))
+            return warehouse_rows
 
         fake_search_index = mock.Mock()
         fake_search_index._stock_name_lookup.return_value = {("sh", "601318"): "中国平安"}
-        fake_search_index._all_financial_files.return_value = files
-
-        def load_file(fp):
-            loaded_paths.append(fp)
-            return loaded_map[fp]
-
-        fake_search_index._load_file.side_effect = load_file
         fake_search_index._derive_sub_fields.return_value = {
             "roe_ex": 12.8,
             "debt_ratio": 41.2,
@@ -730,14 +752,26 @@ class StockScoreAiReportTests(unittest.TestCase):
             "ex_profit_growth": 7.0,
         }
         fake_search_index._pick.side_effect = lambda value: value
+        fake_search_index.load_industry_rows.return_value = []
+        fake_search_index._load_financial_snapshot.return_value = {}
 
-        with mock.patch.dict("sys.modules", {"app.search.index": fake_search_index}):
-            result = dashboard.load_recent_three_year_financial_reports("sh", "601318")
+        with (
+            mock.patch.dict("sys.modules", {"app.search.index": fake_search_index}),
+            mock.patch.object(
+                warehouse_reports,
+                "load_symbol_financial_rows",
+                side_effect=load_warehouse_rows,
+            ),
+        ):
+            result = financial_reports.load_recent_three_year_financial_reports("sh", "601318", years=3)
 
         self.assertEqual(9, len(result["reports"]))
-        self.assertEqual(9, len(loaded_paths))
-        self.assertNotIn("/tmp/20231231.dat", loaded_paths)
-        self.assertNotIn("/tmp/20230930.dat", loaded_paths)
+        # 窗口只向数据源请求一次，并把 years 下推给 warehouse 读取边界。
+        self.assertEqual([("601318", 3)], warehouse_load_calls)
+        # 只物化了窗口内的 9 个报告期，窗口外的旧报告期未被读取。
+        self.assertEqual(9, fake_search_index._derive_sub_fields.call_count)
+        self.assertNotIn("2023A", [row["period"] for row in result["reports"]])
+        self.assertNotIn("2023Q3", [row["period"] for row in result["reports"]])
 
     def test_stock_score_report_history_raises_requested_years_to_six(self) -> None:
         handler = mock.Mock()
@@ -756,39 +790,39 @@ class StockScoreAiReportTests(unittest.TestCase):
         handler = mock.Mock()
         handler.wfile.write.side_effect = BrokenPipeError()
 
-        ok = dashboard.StockDashboardHandler.respond_json(handler, dashboard.HTTPStatus.OK, {"ok": True})
+        ok = app_handler.StockDashboardHandler.respond_json(handler, app_handler.HTTPStatus.OK, {"ok": True})
 
         self.assertFalse(ok)
-        handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
+        handler.send_response.assert_called_once_with(app_handler.HTTPStatus.OK)
 
     def test_respond_json_swallows_broken_pipe_from_headers(self) -> None:
         handler = mock.Mock()
         handler.end_headers.side_effect = BrokenPipeError()
 
-        ok = dashboard.StockDashboardHandler.respond_json(handler, dashboard.HTTPStatus.OK, {"ok": True})
+        ok = app_handler.StockDashboardHandler.respond_json(handler, app_handler.HTTPStatus.OK, {"ok": True})
 
         self.assertFalse(ok)
-        handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
+        handler.send_response.assert_called_once_with(app_handler.HTTPStatus.OK)
         handler.wfile.write.assert_not_called()
 
     def test_serve_static_swallows_broken_pipe_from_write(self) -> None:
         handler = mock.Mock()
-        target = dashboard.WEB_ROOT / "stock-analysis.js"
+        target = app_config.WEB_ROOT / "stock-analysis.js"
         handler.wfile.write.side_effect = BrokenPipeError()
 
-        dashboard.StockDashboardHandler.serve_static(handler, "stock-analysis.js")
+        app_handler.StockDashboardHandler.serve_static(handler, "stock-analysis.js")
 
-        handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
+        handler.send_response.assert_called_once_with(app_handler.HTTPStatus.OK)
         handler.send_header.assert_any_call("Content-Type", "application/javascript; charset=utf-8")
         handler.send_header.assert_any_call("Content-Length", str(len(target.read_bytes())))
 
     def test_serve_static_can_skip_body_for_head_request(self) -> None:
         handler = mock.Mock()
-        target = dashboard.WEB_ROOT / "stock-analysis.html"
+        target = app_config.WEB_ROOT / "stock-analysis.html"
 
-        dashboard.StockDashboardHandler.serve_static(handler, "stock-analysis.html", include_body=False)
+        app_handler.StockDashboardHandler.serve_static(handler, "stock-analysis.html", include_body=False)
 
-        handler.send_response.assert_called_once_with(dashboard.HTTPStatus.OK)
+        handler.send_response.assert_called_once_with(app_handler.HTTPStatus.OK)
         handler.send_header.assert_any_call("Content-Type", "text/html; charset=utf-8")
         handler.send_header.assert_any_call("Content-Length", str(len(target.read_bytes())))
         handler.wfile.write.assert_not_called()
@@ -797,7 +831,7 @@ class StockScoreAiReportTests(unittest.TestCase):
         handler = mock.Mock()
         handler.path = "/"
 
-        dashboard.StockDashboardHandler.do_HEAD(handler)
+        app_handler.StockDashboardHandler.do_HEAD(handler)
 
         handler.serve_static.assert_called_once_with("stock-analysis.html", include_body=False)
 
@@ -813,33 +847,40 @@ class StockScoreAiReportTests(unittest.TestCase):
             def iterrows(self):
                 return iter(self._rows)
 
-        files = [
-            ("20260331", "/tmp/20260331.dat"),
-            ("20251231", "/tmp/20251231.dat"),
-            ("20250930", "/tmp/20250930.dat"),
-            ("20250630", "/tmp/20250630.dat"),
-            ("20250331", "/tmp/20250331.dat"),
-            ("20241231", "/tmp/20241231.dat"),
-            ("20240930", "/tmp/20240930.dat"),
-            ("20240630", "/tmp/20240630.dat"),
-            ("20240331", "/tmp/20240331.dat"),
+        # 服务端拆分后，报告期由 warehouse 数据源提供（load_symbol_financial_rows），
+        # 不再逐文件扫描 app.search.index._all_financial_files / _load_file。
+        report_dates = [
+            "20260331",
+            "20251231",
+            "20250930",
+            "20250630",
+            "20250331",
+            "20241231",
+            "20240930",
+            "20240630",
+            "20240331",
         ]
-        loaded_map = {
-            "/tmp/20260331.dat": ("20260331", FakeFrame([("601318", FakeRow({"announce_date": "20260429"}))])),
-            "/tmp/20251231.dat": ("20251231", FakeFrame([("601318", FakeRow({"announce_date": "20260320"}))])),
-            "/tmp/20250930.dat": ("20250930", FakeFrame([("601318", FakeRow({"announce_date": "20251030"}))])),
-            "/tmp/20250630.dat": ("20250630", FakeFrame([("601318", FakeRow({"announce_date": "20250820"}))])),
-            "/tmp/20250331.dat": ("20250331", FakeFrame([("601318", FakeRow({"announce_date": "20250430"}))])),
-            "/tmp/20241231.dat": ("20241231", FakeFrame([("601318", FakeRow({"announce_date": "20250320"}))])),
-            "/tmp/20240930.dat": ("20240930", FakeFrame([("601318", FakeRow({"announce_date": "20241030"}))])),
-            "/tmp/20240630.dat": ("20240630", FakeFrame([("601318", FakeRow({"announce_date": "20240820"}))])),
-            "/tmp/20240331.dat": ("20240331", FakeFrame([("601318", FakeRow({"announce_date": "20240429"}))])),
+        announce_dates = {
+            "20260331": "20260429",
+            "20251231": "20260320",
+            "20250930": "20251030",
+            "20250630": "20250820",
+            "20250331": "20250430",
+            "20241231": "20250320",
+            "20240930": "20241030",
+            "20240630": "20240820",
+            "20240331": "20240429",
         }
+        warehouse_rows = [
+            {
+                "period": financial_reports._report_date_to_period_label(report_date),
+                "row": FakeRow({"announce_date": announce_dates[report_date]}),
+            }
+            for report_date in report_dates
+        ]
 
         fake_search_index = mock.Mock()
         fake_search_index._stock_name_lookup.return_value = {("sh", "601318"): "中国平安"}
-        fake_search_index._all_financial_files.return_value = files
-        fake_search_index._load_file.side_effect = lambda fp: loaded_map[fp]
         fake_search_index._derive_sub_fields.side_effect = [
             {"roe_ex": 12.8, "debt_ratio": 41.2, "current_ratio": 1.2, "quick_ratio": 1.1, "profit_growth": 8.0, "revenue_growth": 6.0, "ex_profit_growth": 7.0},
             {"roe_ex": 12.2, "debt_ratio": 41.5, "current_ratio": 1.2, "quick_ratio": 1.1, "profit_growth": 7.0, "revenue_growth": 5.0, "ex_profit_growth": 6.0},
@@ -852,9 +893,18 @@ class StockScoreAiReportTests(unittest.TestCase):
             {"roe_ex": 10.9, "debt_ratio": 44.0, "current_ratio": 0.9, "quick_ratio": 0.8, "profit_growth": 2.0, "revenue_growth": 1.0, "ex_profit_growth": 1.5},
         ]
         fake_search_index._pick.side_effect = lambda value: value
+        fake_search_index.load_industry_rows.return_value = []
+        fake_search_index._load_financial_snapshot.return_value = {}
 
-        with mock.patch.dict("sys.modules", {"app.search.index": fake_search_index}):
-            result = dashboard.load_recent_three_year_financial_reports("sh", "601318")
+        with (
+            mock.patch.dict("sys.modules", {"app.search.index": fake_search_index}),
+            mock.patch.object(
+                warehouse_reports,
+                "load_symbol_financial_rows",
+                return_value=warehouse_rows,
+            ),
+        ):
+            result = financial_reports.load_recent_three_year_financial_reports("sh", "601318")
 
         self.assertEqual("2026Q1", result["latest_period_label"])
         self.assertEqual("20260331", result["latest_report"]["report_date"])
@@ -862,8 +912,12 @@ class StockScoreAiReportTests(unittest.TestCase):
             ["2024Q1", "2024Q2", "2024Q3", "2024A", "2025Q1", "2025Q2", "2025Q3", "2025A", "2026Q1"],
             [row["period"] for row in result["reports"]],
         )
-        self.assertEqual([1.0, 1.5, 2.0], [row["metrics"]["revenue_growth"] for row in result["reports"][:3]])
-        self.assertEqual(6.0, result["reports"][-1]["metrics"]["revenue_growth"])
+        # 迁移后的 _materialize_financial_report 不再把 revenue_growth/profit_growth 等
+        # 增速字段写进 metrics（增速改由健康度/季度监控内部计算），但派生字段仍通过
+        # app.search.index._derive_sub_fields 落位；这里用同源的 roe_ex 验证同样的
+        # “派生值按报告期正确落位、时间线按升序排列”契约。
+        self.assertEqual([10.9, 10.7, 10.8], [row["metrics"]["roe_ex"] for row in result["reports"][:3]])
+        self.assertEqual(12.8, result["reports"][-1]["metrics"]["roe_ex"])
 
 
 if __name__ == "__main__":

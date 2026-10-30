@@ -209,7 +209,8 @@ class RelativeValuationApiContractTests(unittest.TestCase):
     def test_dashboard_script_registers_relative_valuation_route_and_handler(self) -> None:
         from pathlib import Path
 
-        script = (Path(__file__).resolve().parents[1] / "scripts" / "serve_stock_dashboard.py").read_text(encoding="utf-8")
+        # HTTP routing lives in app/handler.py after the server split.
+        script = (Path(__file__).resolve().parents[1] / "app" / "handler.py").read_text(encoding="utf-8")
         self.assertIn('if parsed.path == "/api/relative-valuation":', script)
         self.assertIn('self.handle_relative_valuation(parsed.query)', script)
         self.assertIn('def handle_relative_valuation(self, query: str) -> None:', script)
