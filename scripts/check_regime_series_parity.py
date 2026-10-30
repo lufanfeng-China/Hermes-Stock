@@ -1,8 +1,11 @@
 """Parity: vectorised A/B/C/D series must match the scalar classifier bar by bar."""
 import random
 import sys
+from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.stage_regime import classify_regime
 from app.stage_regime_series import classify_regime_series
