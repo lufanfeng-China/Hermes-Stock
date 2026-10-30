@@ -599,9 +599,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/market-relative-strength":
             self.handle_market_relative_strength(parsed.query)
             return
-        if parsed.path == "/api/first-wave-start":
-            self.handle_first_wave_start(parsed.query)
-            return
         if parsed.path == "/api/stock-score":
             self.handle_stock_score(parsed.query)
             return
@@ -2003,19 +2000,6 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         """Clear entire watchlist."""
         _save_watchlist({"stocks": []})
         self.respond_json(HTTPStatus.OK, {"ok": True})
-
-    def handle_first_wave_start(self, query: str) -> None:
-        """Return independent, auditable first-wave PIT snapshot results."""
-        from app.first_wave_snapshot import response
-        params = parse_qs(query)
-        as_of_date = (params.get("as_of_date") or [""])[0].strip()
-        try:
-            if as_of_date:
-                datetime.strptime(as_of_date, "%Y-%m-%d")
-            result = response(as_of_date)
-            self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
-        except ValueError as exc:
-            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}})
 
     def handle_stock_filter(self, query: str) -> None:
         """Return the new independent all-market stock filter response."""
