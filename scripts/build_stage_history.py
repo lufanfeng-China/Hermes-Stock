@@ -61,7 +61,7 @@ def _parquet_schema():
     ]
     fields += [(name, pa.float64()) for name in (
         "ma5", "ma10", "ma20", "ma60", "slope20", "slope60", "slope20_prev",
-        "bias20", "pos_high_60", "pos_low_60", "vol_ratio",
+        "bias20", "pos_high_60", "pos_low_60", "range_pos_60", "vol_ratio",
         "high_20", "low_20", "high_60", "low_60",
     )]
     return pa.schema(fields)

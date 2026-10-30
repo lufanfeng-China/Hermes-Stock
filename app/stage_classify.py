@@ -38,6 +38,14 @@ BIAS_CLIMAX = 0.18        # close vs MA20 extension that flags U4 climax
 VOL_BREAKOUT = 1.5        # volume / 5-day-average volume for a breakout day
 MIN_DAYS = 60             # minimum bars required to classify
 
+# --- region position gates -------------------------------------------------
+# "base" and "top" used to be decided only by MA60 slope + which side of MA60
+# the close sits on, so a stock 20% below its 60-day high could still be called
+# 底部盘整, and one 13% below the high 高位震荡.  These gates make each region
+# earn its name using where price actually sits inside the 60-bar range.
+BASE_MAX_RANGE_POS = 0.50      # base only accepts the lower half of the 60d range
+TOP_MAX_DIST_FROM_HIGH = 0.10  # top only accepts within 10% of the 60d high
+
 _REGION_LABELS = {"down": "下跌区", "base": "底部区", "up": "上升区", "top": "顶部区"}
 _STAGE_LABELS = {
     "D1": "破位下跌", "D2": "主跌", "D3": "下跌中继",
@@ -149,6 +157,8 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
     pos_high = _safe_div(close - high_60, high_60)
     pos_low = _safe_div(close - low_60, low_60)
     bias20 = _safe_div(close - ma20, ma20)
+    range_span = high_60 - low_60
+    range_pos = _safe_div(close - low_60, range_span, 0.5) if range_span > 0 else 0.5
 
     prior5 = volumes[-6:-1] if len(volumes) >= 6 else volumes[:-1]
     avg5 = sum(prior5) / len(prior5) if prior5 else 1.0
@@ -166,6 +176,7 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
         "slope20": round(slope20, 5), "slope60": round(slope60, 5),
         "bias20": round(bias20, 4),
         "pos_high_60": round(pos_high, 4), "pos_low_60": round(pos_low, 4),
+        "range_pos_60": round(range_pos, 4),
         "vol_ratio": round(vol_ratio, 3),
         "is_60d_high": bool(is_60d_high),
         "is_20d_high": bool(is_20d_high),
@@ -185,9 +196,23 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
 
     # ---- region ----
     if slope60 > FLAT_SLOPE:
-        region = "up" if close > ma60 else "base"
+        if close > ma60:
+            region = "up"
+        elif range_pos > BASE_MAX_RANGE_POS:
+            # MA60 still rising and price fell below it, yet sits in the upper half
+            # of the 60-bar range: an uptrend pullback, not a bottom
+            region = "up"
+        else:
+            region = "base"
     elif slope60 < -FLAT_SLOPE:
-        region = "down" if close < ma60 else "top"
+        if close < ma60:
+            region = "down"
+        elif pos_high < -TOP_MAX_DIST_FROM_HIGH:
+            # MA60 rolling over and price still above it, but already >10% off the
+            # 60-day high: a decline in progress, not high-level churn
+            region = "down"
+        else:
+            region = "top"
     else:
         if slope20 > FLAT_SLOPE and close > ma60:
             region = "up"

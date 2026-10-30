@@ -29,9 +29,11 @@ import numpy as np
 import pandas as pd
 
 from app.stage_classify import (
+    BASE_MAX_RANGE_POS,
     BIAS_CLIMAX,
     FLAT_SLOPE,
     MIN_DAYS,
+    TOP_MAX_DIST_FROM_HIGH,
     VOL_BREAKOUT,
     prepare_bars,
 )
@@ -40,13 +42,13 @@ _SERIES_COLUMNS = [
     "trading_day", "valid", "region", "stage",
     "ma5", "ma10", "ma20", "ma60",
     "slope20", "slope60", "slope20_prev",
-    "bias20", "pos_high_60", "pos_low_60", "vol_ratio",
+    "bias20", "pos_high_60", "pos_low_60", "range_pos_60", "vol_ratio",
     "high_20", "low_20", "high_60", "low_60",
 ]
 
 _EVIDENCE_COLUMNS = [
     "ma5", "ma10", "ma20", "ma60", "slope20", "slope60", "slope20_prev",
-    "bias20", "pos_high_60", "pos_low_60", "vol_ratio",
+    "bias20", "pos_high_60", "pos_low_60", "range_pos_60", "vol_ratio",
     "high_20", "low_20", "high_60", "low_60",
 ]
 
@@ -165,6 +167,10 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
     pos_high_60 = _safe_ratio_like_scalar(closes - high_60, high_60, 0.0)
     pos_low_60 = _safe_ratio_like_scalar(closes - low_60, low_60, 0.0)
     bias20 = _safe_ratio_like_scalar(closes - ma20, ma20, 0.0)
+    range_span = high_60 - low_60
+    with np.errstate(invalid="ignore", divide="ignore"):
+        range_pos_60 = np.where(range_span > 0, (closes - low_60) / range_span, 0.5)
+    range_pos_60 = np.where(np.isfinite(range_pos_60), range_pos_60, 0.5)
     vol_ratio = _safe_ratio_like_scalar(volumes, _prior5_mean_like_scalar(volumes), 1.0)
 
     valid = (np.arange(n) >= (MIN_DAYS - 1)) & np.isfinite(ma60) & np.isfinite(ma20) \
@@ -177,8 +183,10 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
         flat_mid = ~up_mid & ~down_mid
 
         region = np.full(n, None, dtype=object)
-        region[up_mid] = np.where(closes[up_mid] > ma60[up_mid], "up", "base")
-        region[down_mid] = np.where(closes[down_mid] < ma60[down_mid], "down", "top")
+        up_region = np.where((closes > ma60) | (range_pos_60 > BASE_MAX_RANGE_POS), "up", "base")
+        down_region = np.where((closes < ma60) | (pos_high_60 < -TOP_MAX_DIST_FROM_HIGH), "down", "top")
+        region[up_mid] = up_region[up_mid]
+        region[down_mid] = down_region[down_mid]
 
         flat_up = flat_mid & (slope20 > FLAT_SLOPE) & (closes > ma60)
         flat_down = flat_mid & (slope20 < -FLAT_SLOPE) & (closes < ma60)
@@ -236,6 +244,7 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
         "bias20": _round_like_scalar(bias20, 4),
         "pos_high_60": _round_like_scalar(pos_high_60, 4),
         "pos_low_60": _round_like_scalar(pos_low_60, 4),
+        "range_pos_60": _round_like_scalar(range_pos_60, 4),
         "vol_ratio": _round_like_scalar(vol_ratio, 3),
         "high_20": _round_like_scalar(high_20, 3),
         "low_20": _round_like_scalar(low_20, 3),
@@ -286,7 +295,7 @@ def summarise_series_parity(df: pd.DataFrame) -> dict[str, Any]:
         if row["stage"] != expected["stage"]:
             stage_mismatch += 1
         for field in ("ma5", "ma10", "ma20", "ma60", "slope20", "slope60",
-                      "bias20", "pos_high_60", "pos_low_60", "vol_ratio"):
+                      "bias20", "pos_high_60", "pos_low_60", "range_pos_60", "vol_ratio"):
             got, want = row[field], expected["evidence"][field]
             if not (pd.isna(got) and pd.isna(want)) and abs(float(got) - float(want)) > 1e-9:
                 evidence_mismatch += 1
