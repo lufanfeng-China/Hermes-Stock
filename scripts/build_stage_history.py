@@ -38,7 +38,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.stage_classify import BIAS_CLIMAX, FLAT_SLOPE, MIN_DAYS, VOL_BREAKOUT  # noqa: E402
+from app.stage_classify import (  # noqa: E402
+    BASE_MAX_RANGE_POS, BIAS_CLIMAX, EVENT_STAGES, FLAT_SLOPE, MIN_DAYS,
+    TOP_MAX_DIST_FROM_HIGH, VOL_BREAKOUT,
+)
 from app.stage_classify_series import classify_stage_series, summarise_series_parity  # noqa: E402
 from app.tdx.qfq_kline import load_tdx_qfq_daily  # noqa: E402
 
@@ -46,6 +49,27 @@ FINAL = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 RPS_PATH = FINAL / "dataset_stock_rps_history.parquet"
 DEFAULT_OUTPUT = FINAL / "stage_history.parquet"
 PARITY_WINDOW_BARS = 729  # 3 years, same window the parity gate uses
+
+
+def manifest_thresholds() -> dict[str, object]:
+    """Every decision constant that shapes the published labels.
+
+    The manifest is the provenance record for the parquet: if a threshold or a
+    region gate changes, a rebuilt file must say so, otherwise two files with
+    different semantics look identical to an auditor.
+    """
+    return {
+        "FLAT_SLOPE": FLAT_SLOPE,
+        "BIAS_CLIMAX": BIAS_CLIMAX,
+        "VOL_BREAKOUT": VOL_BREAKOUT,
+        "MIN_DAYS": MIN_DAYS,
+        # region position gates: base needs the lower half of the 60-bar range,
+        # top needs to sit within 10% of the 60-day high
+        "BASE_MAX_RANGE_POS": BASE_MAX_RANGE_POS,
+        "TOP_MAX_DIST_FROM_HIGH": TOP_MAX_DIST_FROM_HIGH,
+        # stages that describe a same-day action rather than a state to hold
+        "EVENT_STAGES": sorted(EVENT_STAGES),
+    }
 
 
 def _parquet_schema():
@@ -253,12 +277,7 @@ def main() -> int:
         "forward_returns": "not stored by design; compute separately for evaluation only",
         "source_staleness_check": {"newest_qfq_bar": newest_bar, "rps_trading_day": latest_rps_day},
         "parity": parity,
-        "thresholds": {
-            "FLAT_SLOPE": FLAT_SLOPE,
-            "BIAS_CLIMAX": BIAS_CLIMAX,
-            "VOL_BREAKOUT": VOL_BREAKOUT,
-            "MIN_DAYS": MIN_DAYS,
-        },
+        "thresholds": manifest_thresholds(),
         "universe": {"requested": len(universe), "stocks_written": stocks_used,
                      "stocks_skipped": len(stocks_skipped)},
         "rows": rows_written,

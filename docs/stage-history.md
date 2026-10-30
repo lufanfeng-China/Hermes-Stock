@@ -97,6 +97,8 @@ B2 探底回升、D1 破位下跌描述的是**当日动作**，不是可停留�
 python -c "import json;m=json.load(open('data/derived/datasets/final/stage_history.manifest.json'));print(m['built_at'], m['rows'], m['thresholds'])"
 ```
 
+manifest 的 `thresholds` 会同时记录四个旧刻度常量、两道区域位置门（`BASE_MAX_RANGE_POS`、`TOP_MAX_DIST_FROM_HIGH`）与事件型阶段清单（`EVENT_STAGES`），`source_staleness_check` 与 `parity` 记录两道闸门的实跑结果。也就是说：**新旧两个 parquet 若语义不同，manifest 一定能看出差别**，不会出现「文件不同、溯源相同」。
+
 ## 两条实现，必须逐 bar 一致
 
 | 路径 | 用途 | 文件 |
