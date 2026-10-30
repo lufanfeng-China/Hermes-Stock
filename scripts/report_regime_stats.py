@@ -87,12 +87,19 @@ def main() -> int:
                     if base > 0 and future > 0:
                         bucket[str(stage)][horizon].append(float(future / base - 1) * 100)
 
+    def number(value, digits: int = 2):
+        """A stage that never appears in the sample has no stats — say so, don't crash."""
+        return None if pd.isna(value) else round(float(value), digits)
+
+    def count(value):
+        return 0 if pd.isna(value) else int(value)
+
     rows = []
     for stage in STAGES:
         entry = {"stage": stage, "label": STAGE_LABELS[stage], "bar_share_pct": round(float(share[stage]), 2),
-                 "runs": int(duration.loc[stage, "runs"]), "days_mean": round(float(duration.loc[stage, "mean"]), 2),
-                 "days_median": float(duration.loc[stage, "median"]),
-                 "days_p90": float(duration.loc[stage, "p90"]), "days_max": int(duration.loc[stage, "max"])}
+                 "runs": count(duration.loc[stage, "runs"]), "days_mean": number(duration.loc[stage, "mean"]),
+                 "days_median": number(duration.loc[stage, "median"]),
+                 "days_p90": number(duration.loc[stage, "p90"]), "days_max": count(duration.loc[stage, "max"])}
         for horizon in HORIZONS:
             values = np.asarray(bucket[stage][horizon], dtype=float)
             entry[f"fwd_{horizon}_mean_pct"] = round(float(values.mean()), 2) if values.size else None
@@ -116,10 +123,12 @@ def main() -> int:
              "| 阶段 | 含义 | 行占比 | 段数 | 平均天数 | 中位 | P90 | 最长 | 5日均值 | 5日中位 | 20日均值 | 20日中位 | 20日胜率 |",
              "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for row in rows:
-        lines.append(f"| {row['stage']} | {row['label']} | {row['bar_share_pct']}% | {row['runs']} | {row['days_mean']} | "
-                     f"{row['days_median']:.0f} | {row['days_p90']:.0f} | {row['days_max']} | "
-                     f"{row['fwd_5_mean_pct']}% | {row['fwd_5_median_pct']}% | {row['fwd_20_mean_pct']}% | "
-                     f"{row['fwd_20_median_pct']}% | {row['fwd_20_win_pct']}% |")
+        show = lambda value, suffix="": "—" if value is None else f"{value}{suffix}"
+        lines.append(f"| {row['stage']} | {row['label']} | {row['bar_share_pct']}% | {row['runs']} | "
+                     f"{show(row['days_mean'])} | {show(row['days_median'])} | {show(row['days_p90'])} | {row['days_max']} | "
+                     f"{show(row['fwd_5_mean_pct'], '%')} | {show(row['fwd_5_median_pct'], '%')} | "
+                     f"{show(row['fwd_20_mean_pct'], '%')} | {show(row['fwd_20_median_pct'], '%')} | "
+                     f"{show(row['fwd_20_win_pct'], '%')} |")
     lines += ["", f"全样本：5 日均值 {overall.get('fwd_5_mean_pct')}%，20 日均值 {overall.get('fwd_20_mean_pct')}%（仅检验区分度，不构成收益预测）", "",
               "## 段转换概率（行=% 从该阶段离开后进入的列阶段）", "",
               "| 从 \\ 到 | " + " | ".join(STAGES) + " |", "|---" * (len(STAGES) + 1) + "|"]
