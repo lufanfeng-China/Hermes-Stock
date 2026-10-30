@@ -983,13 +983,19 @@
     const stage = payload?.ok ? payload : null;
     if (!stage) return;
     const cls = { up: 'strong', base: 'neutral', top: 'watch', down: 'risk' }[stage.region] || 'neutral';
+    const eventNote = stage.is_event
+      ? '事件型阶段：只反映当日动作（全市场实测平均仅维持 1–3 个交易日），不宜作为持仓状态。'
+      : '';
     const basis = '阶段判定基于前复权日线（≥60个交易日）：MA5/10/20/60 排列、MA20/MA60 斜率、MA20 乖离率、量比（对比前5日均量）';
     const card = document.createElement('article');
     card.className = `basic-market-card ${cls}`;
     card.style.cssText = 'grid-column:1 / -1;height:auto;min-height:56px';
-    card.title = basis;
-    card.setAttribute('aria-label', `当前阶段：${stage.region_label}｜${stage.stage_label}。${stage.detail || ''}。${basis}`);
-    card.innerHTML = `<strong>当前阶段</strong><span>${escapeHtml(stage.region_label)}｜${escapeHtml(stage.stage_label)}</span><em class="basic-market-status">${escapeHtml(stage.detail || '')}</em>`;
+    card.title = eventNote ? `${basis}\n${eventNote}` : basis;
+    card.setAttribute('aria-label', `当前阶段：${stage.region_label}｜${stage.stage_label}。${stage.detail || ''}。${basis}${eventNote ? ' ' + eventNote : ''}`);
+    const eventBadge = stage.is_event
+      ? '<em class="basic-market-event" title="事件型阶段：只反映当日动作，不宜作为持仓状态">事件</em>'
+      : '';
+    card.innerHTML = `<strong>当前阶段${eventBadge}</strong><span>${escapeHtml(stage.region_label)}｜${escapeHtml(stage.stage_label)}</span><em class="basic-market-status">${escapeHtml(stage.detail || '')}</em>`;
     grid.prepend(card);
   }
 

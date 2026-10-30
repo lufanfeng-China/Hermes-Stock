@@ -208,6 +208,35 @@ def test_u2_still_applies_when_close_holds_above_ma20():
     assert (r["region"], r["stage"]) == ("up", "U2")
 
 
+def test_event_stages_are_flagged_for_callers():
+    """B2/D1 是当日事件而非可停留状态，必须通过 is_event 显式暴露。
+
+    依据：全市场历史里 B2 平均持续 1.51 个交易日、D1 2.79 天，
+    而真正的阶段（D2 6.09、B3 5.54）都在 4 天以上。
+    """
+    from app.stage_classify import EVENT_STAGES
+
+    assert EVENT_STAGES == frozenset({"B2", "D1"})
+
+    b2 = classify(lin(70, 50, 60) + flat(50, 15) + lin(50, 52, 15),
+                  volumes=[1e6] * 89 + [2.5e6])
+    assert (b2["region"], b2["stage"]) == ("base", "B2")
+    assert b2["is_event"] is True
+
+    d1 = classify(flat(110, 85) + [109, 108, 107, 106, 105])
+    assert (d1["region"], d1["stage"]) == ("down", "D1")
+    assert d1["is_event"] is True
+
+    for fixture in (
+        [100.0 + i for i in range(90)],                       # U2
+        [48 + 0.02 * i for i in range(90)],                   # T1
+        [52 - 0.02 * i for i in range(90)],                   # B1
+        lin(100, 170, 70) + lin(168.5, 159, 20),              # U3
+    ):
+        result = classify(fixture)
+        assert result["is_event"] is False, result["stage"]
+
+
 def test_all_stages_have_labels_and_evidence():
     # every declared stage/region must carry a label, and evidence is populated
     assert set(_STAGE_LABELS) == {"D1", "D2", "D3", "B1", "B2", "B3",

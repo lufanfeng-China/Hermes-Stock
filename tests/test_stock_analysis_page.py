@@ -748,6 +748,17 @@ class StockAnalysisPageTests(unittest.TestCase):
         # price basis must stay disclosed: stage is derived from TDX QFQ daily bars
         self.assertIn('阶段判定基于前复权日线', js)
 
+    def test_current_stage_card_flags_event_type_stages(self):
+        """B2/D1 是当日事件，卡片必须显式标注，避免被当成可持有阶段。"""
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn("stage.is_event", js)
+        self.assertIn("basic-market-event", js)
+        self.assertIn("事件", js)
+        self.assertIn(".basic-market-event", html, "事件徽标必须有样式定义")
+        self.assertIn("不宜作为持仓状态", js)
+
 
 if __name__ == '__main__':
     unittest.main()

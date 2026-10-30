@@ -53,6 +53,11 @@ _STAGE_LABELS = {
     "U1": "上升初期", "U2": "主升", "U3": "上升中继", "U4": "加速赶顶",
     "T1": "高位震荡",
 }
+# 事件型阶段：描述的是「当天发生的动作」，不是可以停留的状态。
+# 全市场历史实测：B2 平均持续 1.51 个交易日（中位 1 天），D1 平均 2.79 天；
+# 而真正的阶段（D2 6.09、B3 5.54、B1 4.89）都在 4 天以上。调用方据此决定
+# 是否把它们当作可持仓状态，例如筛选/回测应把它们当触发信号而非持仓依据。
+EVENT_STAGES = frozenset({"B2", "D1"})
 
 
 def _safe_div(a: float, b: float, default: float = 0.0) -> float:
@@ -190,6 +195,7 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
             "region_label": _REGION_LABELS[region],
             "stage": stage,
             "stage_label": _STAGE_LABELS[stage],
+            "is_event": stage in EVENT_STAGES,
             "detail": detail,
             "evidence": evidence,
         }
