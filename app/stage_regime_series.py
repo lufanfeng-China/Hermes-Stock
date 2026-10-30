@@ -17,6 +17,8 @@ from app.stage_regime import (
     PULLBACK_TOL,
     SCORE_STRONG,
     SELL_DAYS_MIN,
+    D_MIN_BIAS20,
+    D_MIN_BOX_POSITION,
     SELL_WINDOW,
     STALL_VOL_SHRINK,
     STAGE_LABELS,
@@ -121,7 +123,13 @@ def classify_regime_series(bars: pd.DataFrame) -> pd.DataFrame:
     stage = np.full(n, "", dtype=object)
     reason = np.full(n, "", dtype=object)
 
-    distribution = (stalling | selling_cluster) & ((close > ma20) | at_high)
+    # 「高位」必须是真的高位：箱体位置 >= 60%，或价格已显著远离 MA20（乖离 >= 5%）。
+    # 否则下跌中继里的抛售日会被误判成「高位派发」。
+    box_position = np.where(box_high > box_low, (close - box_low) / (box_high - box_low), 0.5)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        bias20 = (close - ma20) / ma20
+    high_zone = (box_position >= D_MIN_BOX_POSITION) | (bias20 >= D_MIN_BIAS20)
+    distribution = (stalling | selling_cluster) & high_zone
     strong = (score >= SCORE_STRONG) & (close > ma20) & items["红肥绿瘦"] & ~stalling & ~selling_cluster
 
     stage[distribution] = "D"
@@ -168,7 +176,7 @@ def classify_regime_series(bars: pd.DataFrame) -> pd.DataFrame:
         "box_high": masked(np.round(box_high, 3)),
         "box_low": masked(np.round(box_low, 3)),
         "box_mid": masked(np.round((box_high + box_low) / 2, 3)),
-        "box_position": masked(np.round(np.where(box_high > box_low, (close - box_low) / (box_high - box_low), 0.5), 4)),
+        "box_position": masked(np.round(box_position, 4)),
         "sell_days_15": masked(np.nan_to_num(sell_days, nan=0.0)),
     })
     for key in ITEM_KEYS:

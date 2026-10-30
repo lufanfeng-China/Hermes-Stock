@@ -24,6 +24,8 @@ Deliberate deviations from the original framework text (documented, not silent):
     low, so a downtrend whose minimum sits in the last 20 bars is not mistaken
     for a bottom.
   * Stage precedence is D (派发) > B (刚确认的突破) > C (主升) > A.
+  * 派发 requires a genuinely high position (box position >= 60% or bias20 >= 5%);
+    measured 41.3% of the old D rows sat in the lower half of the box.
 """
 from __future__ import annotations
 
@@ -44,6 +46,9 @@ STALL_VOL_SHRINK = 0.9
 SELL_WINDOW = 15
 SELL_DAYS_MIN = 4
 SCORE_STRONG = 4
+# 「高位派发」的高位口径：箱体位置 >= 60% 或 MA20 乖离 >= 5%
+D_MIN_BOX_POSITION = 0.6
+D_MIN_BIAS20 = 0.05
 
 STAGE_LABELS = {
     "A": "底部构筑/下跌中继",

@@ -70,6 +70,22 @@ def test_stage_d_when_price_high_and_volume_dries_up():
     assert result["score"] <= 3
 
 
+def test_distribution_requires_a_high_position():
+    """扣分项成立但价格只在箱体中部（位置<60%、乖离<5%）时不得判「高位派发」。
+
+    实测旧口径 41.3% 的 D 行箱体位置在 0.5 以下：下跌趋势里的抛售日会被叫成高位派发。
+    """
+    closes = (list(np.linspace(100, 160, 25)) + list(np.linspace(160, 132, 20))
+              + [132, 130, 131, 129, 130, 128, 129, 127, 128, 126, 127, 125, 126, 124, 125])
+    volumes = [1e6] * 45 + [1.1e6, 1.3e6, 1.2e6, 1.5e6, 1.4e6, 1.7e6, 1.6e6, 1.9e6, 1.8e6,
+                            2.1e6, 2.0e6, 2.3e6, 2.2e6, 2.5e6, 2.4e6]
+    result = classify_regime(make_bars(closes, volumes))
+
+    assert result["penalties"]["抛售日密集"] is True, "构造样本应先触发扣分项"
+    assert result["evidence"]["box_position"] < 0.6
+    assert result["stage"] != "D", f"箱体位置 {result['evidence']['box_position']:.2f} 却判派发"
+
+
 def test_stage_a_bottom_when_lows_stop_falling():
     """横盘、低点不再下移、无明显突破 → 底部构筑（A 档）。"""
     closes = [100 + (0.5 if i % 2 else -0.5) for i in range(WINDOW)]
