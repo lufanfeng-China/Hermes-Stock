@@ -1039,7 +1039,7 @@
     const current = payload.current || {};
     const longest = payload.longest || {};
     target.className = '';
-    target.innerHTML = `<div class="stage-timeline-band" role="list" aria-label="近 ${Number(payload.months) || 12} 个月阶段色带">${pieces}</div>`
+    target.innerHTML = `<div class="stage-timeline-band" role="list" aria-label="近 ${Number(payload.window_bars) || Number(payload.bars)} 个交易日阶段色带">${pieces}</div>`
       + '<div class="stage-timeline-summary">'
       + `<span>当前 <strong>${escapeHtml(current.stage_label || '—')}</strong>（已 ${Number(current.trading_days) || 0} 个交易日）</span>`
       + `<span>最长 <strong>${escapeHtml(longest.stage_label || '—')}</strong>（${Number(longest.trading_days) || 0} 天）</span>`
@@ -1047,7 +1047,7 @@
       + `<span>共 ${segments.length} 段</span>`
       + '</div>'
       + '<div class="stage-timeline-detail" id="stage-timeline-detail">点任一色块查看该段细节；色带宽度按停留交易日数分配。</div>';
-    if (period) period.textContent = `${payload.as_of}｜近 ${Number(payload.months) || 12} 个月｜前复权日线`;
+    if (period) period.textContent = `${payload.as_of}｜近 ${Number(payload.window_bars) || Number(payload.bars)} 个交易日｜前复权日线`;
   }
 
   function showMarketAntiFallDetail(rows) {
@@ -1503,7 +1503,7 @@
         fetch(`/api/stage-classify?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
-        fetch(`/api/stage-history-series?symbol=${encodeURIComponent(stock.symbol)}&months=12`, { signal: controller.signal })
+        fetch(`/api/stage-history-series?symbol=${encodeURIComponent(stock.symbol)}&bars=60`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
       ]);

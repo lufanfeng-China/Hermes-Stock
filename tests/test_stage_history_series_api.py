@@ -79,6 +79,20 @@ class StageHistorySeriesTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             stage_history_store.load_stage_series("600000", path=Path(self.tempdir.name) / "absent.parquet")
 
+    def test_bars_window_counts_trading_days(self) -> None:
+        """页面按 60 个交易日取数：窗口根数必须精确，且升序。"""
+        long_path = Path(self.tempdir.name) / "long_bars.parquet"
+        write_history(long_path, day_series("600000", "2026-01-01", ["U2"] * 120, REGION))
+
+        payload = stage_history_store.load_stage_series("600000", bars=30, path=long_path)
+
+        self.assertEqual(30, payload["bars"])
+        self.assertEqual(30, payload["window_bars"])
+        self.assertEqual(30, len(payload["rows"]))
+        days = [row["trading_day"] for row in payload["rows"]]
+        self.assertEqual(sorted(days), days)
+        self.assertEqual(70, payload["judgement_lookback_bars"])
+
     def test_months_window_trims_older_rows(self) -> None:
         long_path = Path(self.tempdir.name) / "long_history.parquet"
         rows = day_series("600000", "2026-01-01", ["U2"] * 120, REGION)

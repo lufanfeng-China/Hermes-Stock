@@ -2053,6 +2053,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         params = parse_qs(query)
         symbol = (params.get("symbol") or [""])[0].strip()
         months_raw = (params.get("months") or [str(DEFAULT_MONTHS)])[0].strip()
+        bars_raw = (params.get("bars") or [""])[0].strip()
         if not symbol:
             self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide symbol"}})
             return
@@ -2061,8 +2062,15 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         except ValueError:
             self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_months", "message": "months must be an integer"}})
             return
+        bars: int | None = None
+        if bars_raw:
+            try:
+                bars = int(bars_raw)
+            except ValueError:
+                self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_bars", "message": "bars must be an integer"}})
+                return
         try:
-            payload = load_stage_series(symbol, months)
+            payload = load_stage_series(symbol, months, bars=bars)
             self.respond_json(HTTPStatus.OK, payload)
         except FileNotFoundError as exc:
             self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {

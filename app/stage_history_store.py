@@ -17,7 +17,9 @@ from app.stage_classify import EVENT_STAGES, _REGION_LABELS, _STAGE_LABELS
 FINAL_DIR = Path(__file__).resolve().parent.parent / "data" / "derived" / "datasets" / "final"
 DEFAULT_HISTORY = FINAL_DIR / "stage_history.parquet"
 
-DEFAULT_MONTHS = 12
+DEFAULT_BARS = 60          # 页面只展示最近 60 个交易日
+MAX_BARS = 750
+DEFAULT_MONTHS = 12        # 兼容旧调用
 MAX_MONTHS = 60
 
 _SERIES_COLUMNS = [
@@ -75,9 +77,13 @@ def load_stage_series(
     symbol: str,
     months: int = DEFAULT_MONTHS,
     *,
+    bars: int | None = None,
     path: Path | None = None,
 ) -> dict[str, Any]:
-    """Return the last `months` of stage labels for one symbol.
+    """Return the last `bars` trading days (or `months`) of stage labels.
+
+    `bars` wins when both are given: the UI shows a 60-trading-day window, and
+    counting bars keeps it stable across holidays.
 
     Raises FileNotFoundError when the history library has not been built yet, and
     KeyError when the symbol has no rows in the window.
@@ -88,6 +94,7 @@ def load_stage_series(
 
     code = str(symbol).strip().zfill(6)
     span = max(1, min(int(months), MAX_MONTHS))
+    bar_span = None if bars is None else max(20, min(int(bars), MAX_BARS))
 
     # push the symbol filter into pyarrow so row groups are pruned instead of
     # materialising all 12.5M rows for every request
@@ -100,8 +107,12 @@ def load_stage_series(
         raise KeyError(code)
 
     as_of = str(frame["trading_day"].iloc[-1])
-    window_start = str((pd.Timestamp(as_of) - pd.DateOffset(months=span)).date())
-    window = frame[frame["trading_day"] >= window_start].reset_index(drop=True)
+    if bar_span is not None:
+        window = frame.tail(bar_span).reset_index(drop=True)
+        window_start = str(window["trading_day"].iloc[0])
+    else:
+        window_start = str((pd.Timestamp(as_of) - pd.DateOffset(months=span)).date())
+        window = frame[frame["trading_day"] >= window_start].reset_index(drop=True)
     if window.empty:
         raise KeyError(code)
 
@@ -127,10 +138,12 @@ def load_stage_series(
         "ok": True,
         "symbol": code,
         "months": span,
+        "window_bars": bar_span,
         "as_of": as_of,
         "window_start": str(window["trading_day"].iloc[0]),
         "price_basis": "tdx_export_qfq",
         "lookahead": "none — each row uses bars up to and including its trading_day",
+        "judgement_lookback_bars": 70,   # 60 均线 + 10 根 MA60 斜率前置
         "bars": len(rows),
         "current": {
             **current.as_dict(),

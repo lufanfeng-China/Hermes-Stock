@@ -759,6 +759,8 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("前复权日线", html)
 
         self.assertIn('/api/stage-history-series?symbol=', js)
+        self.assertIn('&bars=60', js, "页面时间轴必须按 60 个交易日取数")
+        self.assertIn('最近 60 个交易日', html)
         self.assertIn('function renderStageTimeline(payload)', js)
         self.assertIn('renderStageTimeline(stageSeries);', js)
         self.assertIn('data-stage-segment=', js)
