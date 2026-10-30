@@ -977,6 +977,22 @@
     }
   }
 
+  function renderStage(payload) {
+    const grid = document.getElementById('basic-market-grid');
+    if (!grid) return;
+    const stage = payload?.ok ? payload : null;
+    if (!stage) return;
+    const cls = { up: 'strong', base: 'neutral', top: 'watch', down: 'risk' }[stage.region] || 'neutral';
+    const basis = '阶段判定基于前复权日线（≥60个交易日）：MA5/10/20/60 排列、MA20/MA60 斜率、MA20 乖离率、量比（对比前5日均量）';
+    const card = document.createElement('article');
+    card.className = `basic-market-card ${cls}`;
+    card.style.cssText = 'grid-column:1 / -1;height:auto;min-height:56px';
+    card.title = basis;
+    card.setAttribute('aria-label', `当前阶段：${stage.region_label}｜${stage.stage_label}。${stage.detail || ''}。${basis}`);
+    card.innerHTML = `<strong>当前阶段</strong><span>${escapeHtml(stage.region_label)}｜${escapeHtml(stage.stage_label)}</span><em class="basic-market-status">${escapeHtml(stage.detail || '')}</em>`;
+    grid.prepend(card);
+  }
+
   function showMarketAntiFallDetail(rows) {
     const dialog = document.getElementById('market-antifall-detail-dialog');
     const title = document.getElementById('market-antifall-detail-title');
@@ -1425,6 +1441,9 @@
         fetch(`/api/stock-pe-history?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
+        fetch(`/api/stage-classify?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
       ]);
       const payload = cacheIsFresh
         ? cached.payload
@@ -1434,12 +1453,13 @@
           putFinancialCache(cacheKey, body);
           return body;
         });
-      const [valuation, relativeStrength, profile, pricePercentile, peHistory] = await supplementaryRequests;
+      const [valuation, relativeStrength, profile, pricePercentile, peHistory, stage] = await supplementaryRequests;
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
       state.stockProfile = profile;
       renderNicheLeaderBadge(profile);
       renderBasicMarket(valuation, payload.reports, profile, pricePercentile, peHistory, payload.quarterly_monitor, payload.industry_financial_position);
+      renderStage(stage);
       renderMarketRelativeStrength(relativeStrength);
       renderCompositeFinancialHealth(payload.composite_financial_health);
       renderFinancialReversalBadge(payload.financial_reversal);

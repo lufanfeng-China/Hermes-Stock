@@ -724,7 +724,29 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('state.industryMetricPeerTrigger = trigger || document.activeElement;', js)
         self.assertIn('showIndustryMetricPeers(trigger.dataset.industryMetric, trigger)', js)
         self.assertIn("industryMetricDialog?.addEventListener('close', () => { state.industryMetricPeerTrigger?.focus(); state.industryMetricPeerTrigger = null; });", js)
-        self.assertIn('stock-analysis.js?v=20261024-industry-position-colors-v99', html)
+        self.assertRegex(html, r'<script src="stock-analysis\.js\?v=[^"]+"></script>')
+
+    def test_current_stage_card_is_wired_to_stage_classify_api_with_auditable_basis(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        # fetch wiring: the stage request must be part of the supplementary batch
+        self.assertIn('fetch(`/api/stage-classify?symbol=${encodeURIComponent(stock.symbol)}`', js)
+        self.assertIn('return response.ok && body.ok ? body : null;', js)
+        self.assertIn('renderStage(stage);', js)
+
+        # renderer: prepends one full-width card and shows region + stage + detail
+        self.assertIn('function renderStage(payload)', js)
+        self.assertIn('当前阶段', js)
+        self.assertIn('escapeHtml(stage.region_label)', js)
+        self.assertIn('escapeHtml(stage.stage_label)', js)
+        self.assertIn('escapeHtml(stage.detail || \'\')', js)
+        self.assertIn('grid.prepend(card)', js)
+
+        # region -> colour class mapping used by the card
+        self.assertIn("{ up: 'strong', base: 'neutral', top: 'watch', down: 'risk' }", js)
+
+        # price basis must stay disclosed: stage is derived from TDX QFQ daily bars
+        self.assertIn('阶段判定基于前复权日线', js)
 
 
 if __name__ == '__main__':

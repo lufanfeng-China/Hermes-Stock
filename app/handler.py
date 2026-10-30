@@ -599,6 +599,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/market-relative-strength":
             self.handle_market_relative_strength(parsed.query)
             return
+        if parsed.path == "/api/stage-classify":
+            self.handle_stage_classify(parsed.query)
+            return
         if parsed.path == "/api/stock-score":
             self.handle_stock_score(parsed.query)
             return
@@ -2017,6 +2020,24 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         result = stock_response(market, symbol)
         self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.NOT_FOUND, result)
+
+    def handle_stage_classify(self, query: str) -> None:
+        """Return the current lifecycle stage classification for a stock."""
+        from app.stage_classify import classify_stage_from_code
+        params = parse_qs(query)
+        symbol = (params.get("symbol") or [""])[0].strip()
+        if not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide symbol"}})
+            return
+        try:
+            result = classify_stage_from_code(symbol)
+            result["symbol"] = symbol.zfill(6)
+            result["ok"] = (result.get("status") == "ok")
+            self.respond_json(HTTPStatus.OK, result)
+        except FileNotFoundError as exc:
+            self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "not_found", "message": str(exc)}})
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "stage_error", "message": str(exc)}})
 
     def handle_stock_score(self, query: str) -> None:
         from app.search.index import compute_financial_scores, compute_stock_score
