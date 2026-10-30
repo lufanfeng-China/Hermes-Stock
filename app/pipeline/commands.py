@@ -139,6 +139,11 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_macd_signals.py'),
              '--tdxdir', TONGDAXIN_DIR],
         ),
+        # 概念温度快照：读通达信 概念板块.txt + QFQ 日线，逐窗口(3/5/10/20/60)算温度、
+        # 连续天数与热度序列。单次 10-40 分钟，故排在整条流水线末尾：只写
+        # dataset_concept_temperature_current.json，没有任何后续任务读它，
+        # 失败不影响前面每一步，可单独重跑。
+        ('build_concept_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py')]),
         # Optional: Kronos AI prediction (CPU ~10s/stock, 5000 stocks ~14 hours)
         # Uncomment to enable daily AI prediction rebuild:
         # (

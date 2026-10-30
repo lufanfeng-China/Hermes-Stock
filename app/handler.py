@@ -2367,6 +2367,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
             {'id': 'rebuild_stage_history', 'name': '重建阶段历史（A/B/C/D）', 'desc': '按前复权日线逐 bar 判定 A/B/C/D 四阶段并原子发布全市场历史库；含陈旧源阻断、抽样对拍与原子落盘，可独立执行/重试'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
+            {'id': 'build_concept_temperature', 'name': '构建概念温度快照', 'desc': '读通达信概念板块 + 前复权日线，逐窗口(3/5/10/20/60)算概念温度、连续天数与热度序列；单次 10-40 分钟，排在流水线末尾，独立执行/重试，不阻断其他任务'},
         ]
 
         # Determine which tasks are completed (based on current data freshness)
