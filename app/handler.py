@@ -599,6 +599,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/market-relative-strength":
             self.handle_market_relative_strength(parsed.query)
             return
+        if parsed.path == "/api/regime-classify":
+            self.handle_regime_classify(parsed.query)
+
+        if parsed.path == "/api/regime-history-series":
+            self.handle_regime_history_series(parsed.query)
+
         if parsed.path == "/api/stage-classify":
             self.handle_stage_classify(parsed.query)
             return
@@ -2023,6 +2029,56 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         result = stock_response(market, symbol)
         self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.NOT_FOUND, result)
+
+    def handle_regime_classify(self, query: str) -> None:
+        """Return the current A/B/C/D regime for one stock (60-bar window)."""
+        from app.stage_regime import classify_regime
+        from app.tdx.qfq_kline import load_tdx_qfq_daily
+
+        params = parse_qs(query)
+        symbol = (params.get("symbol") or [""])[0].strip()
+        if not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide symbol"}})
+            return
+        try:
+            bars = load_tdx_qfq_daily(symbol)
+        except FileNotFoundError as exc:
+            self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "not_found", "message": str(exc)}})
+            return
+        except Exception as exc:  # noqa: BLE001
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "regime_error", "message": str(exc)}})
+            return
+        try:
+            result = classify_regime(bars)
+        except ValueError as exc:
+            self.respond_json(HTTPStatus.UNPROCESSABLE_ENTITY, {"ok": False, "error": {"code": "insufficient_history", "message": str(exc)}})
+            return
+        result["symbol"] = symbol.zfill(6)
+        result["ok"] = True
+        self.respond_json(HTTPStatus.OK, result)
+
+    def handle_regime_history_series(self, query: str) -> None:
+        """Return one symbol's A/B/C/D labels for the last N trading days."""
+        from app.regime_history_store import DEFAULT_BARS, load_regime_series
+
+        params = parse_qs(query)
+        symbol = (params.get("symbol") or [""])[0].strip()
+        bars_raw = (params.get("bars") or [str(DEFAULT_BARS)])[0].strip()
+        if not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide symbol"}})
+            return
+        try:
+            bars = int(bars_raw)
+        except ValueError:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_bars", "message": "bars must be an integer"}})
+            return
+        try:
+            payload = load_regime_series(symbol, bars)
+            self.respond_json(HTTPStatus.OK, payload)
+        except FileNotFoundError as exc:
+            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": {"code": "regime_history_missing", "message": str(exc)}})
+        except KeyError:
+            self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "not_found", "message": f"no regime rows for {symbol}"}})
 
     def handle_stage_classify(self, query: str) -> None:
         """Return the current lifecycle stage classification for a stock."""

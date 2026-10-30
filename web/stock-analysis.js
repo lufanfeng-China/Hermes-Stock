@@ -980,34 +980,42 @@
   function renderStage(payload) {
     const grid = document.getElementById('basic-market-grid');
     if (!grid) return;
-    const stage = payload?.ok ? payload : null;
-    if (!stage) return;
-    const cls = { up: 'strong', base: 'neutral', top: 'watch', down: 'risk' }[stage.region] || 'neutral';
-    const eventNote = stage.is_event
-      ? '事件型阶段：只反映当日动作（全市场实测平均仅维持 1–3 个交易日），不宜作为持仓状态。'
-      : '';
-    const basis = '阶段判定基于前复权日线（≥60个交易日）：MA5/10/20/60 排列、MA20/MA60 斜率、MA20 乖离率、量比（对比前5日均量）';
+    const regime = payload?.ok ? payload : null;
+    if (!regime) return;
+    const tone = { A: 'neutral', B: 'watch', C: 'strong', D: 'risk' }[regime.stage] || 'neutral';
+    const basis = '阶段判定基于前复权日线最近 60 根：MA20 定位置、5/60 日均量线定性质、60 根最高最低与中轨定边界；6 项正向 + 2 项扣分';
+    const items = regime.items || {};
+    const itemText = Object.entries(items)
+      .map(([key, hit]) => `${hit ? '●' : '○'} ${key}`)
+      .join('　');
+    const penalties = Object.entries(regime.penalties || {})
+      .filter(([, hit]) => hit)
+      .map(([key]) => key);
+    const penaltyText = penalties.length ? `扣分：${penalties.join('、')}` : '无扣分项';
     const card = document.createElement('article');
-    card.className = `basic-market-card ${cls}`;
+    card.className = `basic-market-card ${tone}`;
     card.style.cssText = 'grid-column:1 / -1;height:auto;min-height:56px';
-    card.title = eventNote ? `${basis}\n${eventNote}` : basis;
-    card.setAttribute('aria-label', `当前阶段：${stage.region_label}｜${stage.stage_label}。${stage.detail || ''}。${basis}${eventNote ? ' ' + eventNote : ''}`);
-    const eventBadge = stage.is_event
-      ? '<em class="basic-market-event" title="事件型阶段：只反映当日动作，不宜作为持仓状态">事件</em>'
-      : '';
-    card.innerHTML = `<strong>当前阶段${eventBadge}</strong><span>${escapeHtml(stage.region_label)}｜${escapeHtml(stage.stage_label)}</span><em class="basic-market-status">${escapeHtml(stage.detail || '')}</em>`;
+    card.title = `${basis}\n${itemText}\n${penaltyText}`;
+    card.setAttribute('aria-label', `当前阶段：${regime.stage_label}，得分 ${regime.score}。${regime.reason || ''}`);
+    card.innerHTML = `<strong>当前阶段（${escapeHtml(regime.stage)}）</strong>`
+      + `<span>${escapeHtml(regime.stage_label)}｜量能得分 ${Number(regime.score)}</span>`
+      + `<em class="basic-market-status">${escapeHtml(regime.detail || regime.reason || '')}　${escapeHtml(penaltyText)}</em>`;
     grid.prepend(card);
   }
 
   function stageSegmentDetail(payload, segment) {
     const row = (payload.rows || []).find((item) => item.trading_day === segment.end) || {};
+    const evidence = row.evidence || {};
     const pct = (value) => (Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : '—');
-    const ratio = (value) => (Number.isFinite(Number(value)) ? (Number(value) * 100).toFixed(0) + '%' : '—');
-    return `${segment.region_label}｜${segment.stage_label}：${segment.start} → ${segment.end}（${segment.trading_days} 个交易日）`
-      + `；段末日证据：60日区间位置 ${ratio(row.range_pos_60)}、距60日高点 ${pct(row.pos_high_60)}`
-      + `、MA60斜率 ${pct(row.slope60)}、MA20乖离 ${pct(row.bias20)}`
-      + `、量比 ${Number.isFinite(Number(row.vol_ratio)) ? Number(row.vol_ratio).toFixed(2) : '—'}`
-      + (segment.is_event ? '；事件型：只反映当日动作，不宜作为持仓状态' : '');
+    const hits = Object.entries(row.items || {}).filter(([, hit]) => hit).map(([key]) => key);
+    const penalties = Object.entries(row.penalties || {}).filter(([, hit]) => hit).map(([key]) => key);
+    return `${segment.stage_label}（${segment.stage}）：${segment.start} → ${segment.end}（${segment.trading_days} 个交易日）`
+      + `；段末得分 ${Number.isFinite(Number(row.score)) ? Number(row.score) : '—'}`
+      + `（${hits.length ? hits.join('、') : '无正向项'}${penalties.length ? '；扣分：' + penalties.join('、') : ''}）`
+      + `；箱体 ${Number(evidence.box_low ?? 0).toFixed(2)}~${Number(evidence.box_high ?? 0).toFixed(2)}`
+      + `、箱体位置 ${pct(evidence.box_position)}、MA20 ${Number(evidence.ma20 ?? 0).toFixed(2)}`
+      + `、量能线 5/60 ${Number(evidence.vol_ma5 ?? 0).toFixed(0)}/${Number(evidence.vol_ma60 ?? 0).toFixed(0)}`
+      + `、近15日抛售日 ${Number(evidence.sell_days_15 ?? 0)} 次`;
   }
 
   function renderStageTimeline(payload) {
@@ -1028,10 +1036,9 @@
       return;
     }
     const pieces = segments.map((segment, index) => {
-      const classes = ['stage-timeline-piece', `region-${segment.region}`];
-      if (segment.is_event) classes.push('is-event');
+      const classes = ['stage-timeline-piece', `region-${segment.tone || 'base'}`];
       if (index === segments.length - 1) classes.push('is-current');
-      const label = `${segment.region_label}｜${segment.stage_label} ${segment.start}→${segment.end}（${segment.trading_days} 天）`;
+      const label = `${segment.stage_label}（${segment.stage}） ${segment.start}→${segment.end}（${segment.trading_days} 天）`;
       return `<button type="button" class="${classes.join(' ')}" role="listitem" data-stage-segment="${index}"`
         + ` style="flex-grow:${Number(segment.trading_days) || 1}"`
         + ` title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></button>`;
@@ -1500,10 +1507,10 @@
         fetch(`/api/stock-pe-history?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
-        fetch(`/api/stage-classify?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+        fetch(`/api/regime-classify?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
-        fetch(`/api/stage-history-series?symbol=${encodeURIComponent(stock.symbol)}&bars=60`, { signal: controller.signal })
+        fetch(`/api/regime-history-series?symbol=${encodeURIComponent(stock.symbol)}&bars=60`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
       ]);

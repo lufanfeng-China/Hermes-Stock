@@ -730,20 +730,19 @@ class StockAnalysisPageTests(unittest.TestCase):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
 
         # fetch wiring: the stage request must be part of the supplementary batch
-        self.assertIn('fetch(`/api/stage-classify?symbol=${encodeURIComponent(stock.symbol)}`', js)
+        self.assertIn('fetch(`/api/regime-classify?symbol=${encodeURIComponent(stock.symbol)}`', js)
         self.assertIn('return response.ok && body.ok ? body : null;', js)
         self.assertIn('renderStage(stage);', js)
 
         # renderer: prepends one full-width card and shows region + stage + detail
         self.assertIn('function renderStage(payload)', js)
         self.assertIn('当前阶段', js)
-        self.assertIn('escapeHtml(stage.region_label)', js)
-        self.assertIn('escapeHtml(stage.stage_label)', js)
-        self.assertIn('escapeHtml(stage.detail || \'\')', js)
+        self.assertIn('escapeHtml(regime.stage_label)', js)
+        self.assertIn('escapeHtml(regime.detail || regime.reason || \'\')', js)
         self.assertIn('grid.prepend(card)', js)
 
-        # region -> colour class mapping used by the card
-        self.assertIn("{ up: 'strong', base: 'neutral', top: 'watch', down: 'risk' }", js)
+        # stage -> colour class mapping used by the card
+        self.assertIn("{ A: 'neutral', B: 'watch', C: 'strong', D: 'risk' }", js)
 
         # price basis must stay disclosed: stage is derived from TDX QFQ daily bars
         self.assertIn('阶段判定基于前复权日线', js)
@@ -758,26 +757,26 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn(".stage-timeline-band", html, "色带样式必须存在")
         self.assertIn("前复权日线", html)
 
-        self.assertIn('/api/stage-history-series?symbol=', js)
+        self.assertIn('/api/regime-history-series?symbol=', js)
         self.assertIn('&bars=60', js, "页面时间轴必须按 60 个交易日取数")
         self.assertIn('最近 60 个交易日', html)
         self.assertIn('function renderStageTimeline(payload)', js)
         self.assertIn('renderStageTimeline(stageSeries);', js)
         self.assertIn('data-stage-segment=', js)
-        self.assertIn('region-${segment.region}', js)
+        self.assertIn('region-${segment.tone || \'base\'}', js)
         self.assertIn('class="stage-timeline-detail"', js)
-        self.assertIn('is-event', js)
+        # A/B/C/D 用 tone 着色，不再有事件型阶段
+        self.assertIn("segment.tone", js)
+        self.assertNotIn("is-event", js)
 
-    def test_current_stage_card_flags_event_type_stages(self):
-        """B2/D1 是当日事件，卡片必须显式标注，避免被当成可持有阶段。"""
-        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+    def test_current_stage_card_shows_regime_score_and_items(self):
+        """阶段卡必须显示 A/B/C/D 阶段、量能得分与 6 项正向条目，缺一不可审计。"""
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
 
-        self.assertIn("stage.is_event", js)
-        self.assertIn("basic-market-event", js)
-        self.assertIn("事件", js)
-        self.assertIn(".basic-market-event", html, "事件徽标必须有样式定义")
-        self.assertIn("不宜作为持仓状态", js)
+        self.assertIn("regime.items", js)
+        self.assertIn("regime.penalties", js)
+        self.assertIn("量能得分", js)
+        self.assertIn("{ A: 'neutral', B: 'watch', C: 'strong', D: 'risk' }", js)
 
 
 if __name__ == '__main__':
