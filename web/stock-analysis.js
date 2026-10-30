@@ -12,7 +12,7 @@
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
   const MAX_FINANCIAL_CACHE_ENTRIES = 24;
-  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, industryHealthPeers: null, industryHealthPeerView: 'annual', industryHealthPeerSort: { key: 'score', direction: -1 }, industryMetricPeers: null, industryMetricCode: null, industryMetricPeerTrigger: null, industryMetricPeerSort: { key: 'current_value', direction: -1 }, stockProfile: null, selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, industryHealthPeers: null, industryHealthPeerView: 'annual', industryHealthPeerSort: { key: 'score', direction: -1 }, industryMetricPeers: null, industryMetricCode: null, industryMetricPeerTrigger: null, industryMetricPeerSort: { key: 'current_value', direction: -1 }, stockProfile: null, stageTimeline: null, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -999,6 +999,57 @@
     grid.prepend(card);
   }
 
+  function stageSegmentDetail(payload, segment) {
+    const row = (payload.rows || []).find((item) => item.trading_day === segment.end) || {};
+    const pct = (value) => (Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : '—');
+    const ratio = (value) => (Number.isFinite(Number(value)) ? (Number(value) * 100).toFixed(0) + '%' : '—');
+    return `${segment.region_label}｜${segment.stage_label}：${segment.start} → ${segment.end}（${segment.trading_days} 个交易日）`
+      + `；段末日证据：60日区间位置 ${ratio(row.range_pos_60)}、距60日高点 ${pct(row.pos_high_60)}`
+      + `、MA60斜率 ${pct(row.slope60)}、MA20乖离 ${pct(row.bias20)}`
+      + `、量比 ${Number.isFinite(Number(row.vol_ratio)) ? Number(row.vol_ratio).toFixed(2) : '—'}`
+      + (segment.is_event ? '；事件型：只反映当日动作，不宜作为持仓状态' : '');
+  }
+
+  function renderStageTimeline(payload) {
+    const target = document.getElementById('stage-timeline');
+    const period = document.getElementById('stage-timeline-period');
+    if (!target) return;
+    state.stageTimeline = payload?.ok ? payload : null;
+    if (!payload?.ok) {
+      target.className = 'analysis-metric-status';
+      target.textContent = '阶段历史暂不可用（历史库未构建或缺少该股数据）。';
+      if (period) period.textContent = '阶段历史不可用';
+      return;
+    }
+    const segments = payload.segments || [];
+    if (!segments.length) {
+      target.className = 'analysis-metric-status';
+      target.textContent = '窗口内没有阶段记录。';
+      return;
+    }
+    const pieces = segments.map((segment, index) => {
+      const classes = ['stage-timeline-piece', `region-${segment.region}`];
+      if (segment.is_event) classes.push('is-event');
+      if (index === segments.length - 1) classes.push('is-current');
+      const label = `${segment.region_label}｜${segment.stage_label} ${segment.start}→${segment.end}（${segment.trading_days} 天）`;
+      return `<button type="button" class="${classes.join(' ')}" role="listitem" data-stage-segment="${index}"`
+        + ` style="flex-grow:${Number(segment.trading_days) || 1}"`
+        + ` title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></button>`;
+    }).join('');
+    const current = payload.current || {};
+    const longest = payload.longest || {};
+    target.className = '';
+    target.innerHTML = `<div class="stage-timeline-band" role="list" aria-label="近 ${Number(payload.months) || 12} 个月阶段色带">${pieces}</div>`
+      + '<div class="stage-timeline-summary">'
+      + `<span>当前 <strong>${escapeHtml(current.stage_label || '—')}</strong>（已 ${Number(current.trading_days) || 0} 个交易日）</span>`
+      + `<span>最长 <strong>${escapeHtml(longest.stage_label || '—')}</strong>（${Number(longest.trading_days) || 0} 天）</span>`
+      + `<span>窗口 ${escapeHtml(payload.window_start)} ~ ${escapeHtml(payload.as_of)}（${Number(payload.bars) || 0} 根）</span>`
+      + `<span>共 ${segments.length} 段</span>`
+      + '</div>'
+      + '<div class="stage-timeline-detail" id="stage-timeline-detail">点任一色块查看该段细节；色带宽度按停留交易日数分配。</div>';
+    if (period) period.textContent = `${payload.as_of}｜近 ${Number(payload.months) || 12} 个月｜前复权日线`;
+  }
+
   function showMarketAntiFallDetail(rows) {
     const dialog = document.getElementById('market-antifall-detail-dialog');
     const title = document.getElementById('market-antifall-detail-title');
@@ -1408,6 +1459,8 @@
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     const basicMarket = document.getElementById('basic-market-grid');
     if (basicMarket) { basicMarket.innerHTML = '<div class="analysis-metric-status">加载基础行情…</div>'; document.getElementById('basic-market-period').textContent = '加载中'; }
+    const stageTimelineTarget = document.getElementById('stage-timeline');
+    if (stageTimelineTarget) { stageTimelineTarget.className = 'analysis-metric-status'; stageTimelineTarget.textContent = '加载阶段历史…'; }
     renderCompositeFinancialHealth(null);
     renderFinancialReversalBadge(null);
     state.reportReleasePriceTrend = null;
@@ -1450,6 +1503,9 @@
         fetch(`/api/stage-classify?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
+        fetch(`/api/stage-history-series?symbol=${encodeURIComponent(stock.symbol)}&months=12`, { signal: controller.signal })
+          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
+          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
       ]);
       const payload = cacheIsFresh
         ? cached.payload
@@ -1459,13 +1515,14 @@
           putFinancialCache(cacheKey, body);
           return body;
         });
-      const [valuation, relativeStrength, profile, pricePercentile, peHistory, stage] = await supplementaryRequests;
+      const [valuation, relativeStrength, profile, pricePercentile, peHistory, stage, stageSeries] = await supplementaryRequests;
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
       state.stockProfile = profile;
       renderNicheLeaderBadge(profile);
       renderBasicMarket(valuation, payload.reports, profile, pricePercentile, peHistory, payload.quarterly_monitor, payload.industry_financial_position);
       renderStage(stage);
+      renderStageTimeline(stageSeries);
       renderMarketRelativeStrength(relativeStrength);
       renderCompositeFinancialHealth(payload.composite_financial_health);
       renderFinancialReversalBadge(payload.financial_reversal);
@@ -1555,6 +1612,13 @@
   });
   document.addEventListener('click', (event) => { const trigger = event.target.closest('[data-metric-lineage]'); if (trigger) showMetricLineage(trigger.dataset.metricLineage); });
   document.addEventListener('click', (event) => { if (event.target.closest('[data-stock-kline-history]')) showStockKlineHistory(); });
+  document.addEventListener('click', (event) => {
+    const piece = event.target.closest('[data-stage-segment]');
+    if (!piece || !state.stageTimeline) return;
+    const segment = (state.stageTimeline.segments || [])[Number(piece.dataset.stageSegment)];
+    const detail = document.getElementById('stage-timeline-detail');
+    if (segment && detail) detail.textContent = stageSegmentDetail(state.stageTimeline, segment);
+  });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-stock-kline-history]')) { event.preventDefault(); showStockKlineHistory(); } });
   const stockKlineDialog=document.getElementById('stock-kline-dialog'); stockKlineDialog?.querySelector('.stock-kline-close')?.addEventListener('click',()=>stockKlineDialog.close()); stockKlineDialog?.addEventListener('click',(event)=>{if(event.target===stockKlineDialog)stockKlineDialog.close();});
   document.addEventListener('click', (event) => { if (event.target.closest('[data-report-release-price-trend]')) showReportReleasePriceTrend(); });

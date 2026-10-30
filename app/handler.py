@@ -602,6 +602,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stage-classify":
             self.handle_stage_classify(parsed.query)
             return
+        if parsed.path == "/api/stage-history-series":
+            self.handle_stage_history_series(parsed.query)
+            return
         if parsed.path == "/api/stock-score":
             self.handle_stock_score(parsed.query)
             return
@@ -2038,6 +2041,44 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "not_found", "message": str(exc)}})
         except Exception as exc:
             self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "stage_error", "message": str(exc)}})
+
+    def handle_stage_history_series(self, query: str) -> None:
+        """Return one symbol's stage labels over the last N months.
+
+        Descriptive only: the labels describe price structure per bar, with no
+        lookahead (each row uses bars up to and including its trading_day).
+        """
+        from app.stage_history_store import DEFAULT_MONTHS, load_stage_series
+
+        params = parse_qs(query)
+        symbol = (params.get("symbol") or [""])[0].strip()
+        months_raw = (params.get("months") or [str(DEFAULT_MONTHS)])[0].strip()
+        if not symbol:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide symbol"}})
+            return
+        try:
+            months = int(months_raw)
+        except ValueError:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_months", "message": "months must be an integer"}})
+            return
+        try:
+            payload = load_stage_series(symbol, months)
+            self.respond_json(HTTPStatus.OK, payload)
+        except FileNotFoundError as exc:
+            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {
+                "ok": False,
+                "error": {"code": "stage_history_missing", "message": str(exc)},
+            })
+        except KeyError as exc:
+            self.respond_json(HTTPStatus.NOT_FOUND, {
+                "ok": False,
+                "error": {"code": "not_found", "message": f"no stage history rows for {exc.args[0]}"},
+            })
+        except Exception as exc:  # noqa: BLE001 - surface the reason to the caller
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {
+                "ok": False,
+                "error": {"code": "stage_history_error", "message": str(exc)},
+            })
 
     def handle_stock_score(self, query: str) -> None:
         from app.search.index import compute_financial_scores, compute_stock_score

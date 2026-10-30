@@ -81,6 +81,16 @@ B2 探底回升、D1 破位下跌描述的是**当日动作**，不是可停留�
 
 历史库**不额外存 is_event 列**：它可由 `stage` 直接推出（`stage in {"B2","D1"}`），避免冗余列与口径漂移。下游若要用作持仓信号，请自行按 `stage` 过滤。
 
+## 个股阶段时间轴（`/api/stage-history-series`）
+
+个股分析页新增「生命周期阶段时间轴」区块，读历史库而不是只看当日一个状态：
+
+- 接口：`GET /api/stage-history-series?symbol=600036&months=12`
+- 返回：`rows`（逐日，**升序**，与 K 线接口一致）、`segments`（连续同阶段的段，含起止日与交易日数）、`current`（当前段与已持续天数）、`longest`、`labels`（阶段/区域中文名与事件阶段清单）、`as_of` / `window_start`、`price_basis=tdx_export_qfq`、`lookahead=none`
+- 读法：`app/stage_history_store.load_stage_series()`，对 parquet 下推 `symbol` 过滤（实测 0.08s/次，不物化 12.5M 行）
+- 页面：色带宽度按停留交易日数分配，颜色按区域（上升绿/底部灰/顶部黄/下跌红），事件段底部橙线，当前段白边；点任一段显示该段末日的区间位置、距高点、MA60 斜率、MA20 乖离、量比，事件段附「不宜作为持仓状态」
+- 错误口径：历史库不存在 → 503 `stage_history_missing`；该股无记录 → 404 `not_found`；`months` 非整数 → 400 `invalid_months`
+
 ## 日更（数据更新页的 `rebuild_stage_history`）
 
 阶段历史已接入「数据更新」流水线，作为独立步骤 `rebuild_stage_history`：

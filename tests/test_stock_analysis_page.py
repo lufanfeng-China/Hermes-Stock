@@ -748,6 +748,24 @@ class StockAnalysisPageTests(unittest.TestCase):
         # price basis must stay disclosed: stage is derived from TDX QFQ daily bars
         self.assertIn('阶段判定基于前复权日线', js)
 
+    def test_stage_timeline_section_is_wired_to_the_history_api(self):
+        """个股页的阶段时间轴必须真的读历史库接口，而不是只看当日一个状态。"""
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="stage-timeline-section"', html)
+        self.assertIn('id="stage-timeline"', html)
+        self.assertIn(".stage-timeline-band", html, "色带样式必须存在")
+        self.assertIn("前复权日线", html)
+
+        self.assertIn('/api/stage-history-series?symbol=', js)
+        self.assertIn('function renderStageTimeline(payload)', js)
+        self.assertIn('renderStageTimeline(stageSeries);', js)
+        self.assertIn('data-stage-segment=', js)
+        self.assertIn('region-${segment.region}', js)
+        self.assertIn('class="stage-timeline-detail"', js)
+        self.assertIn('is-event', js)
+
     def test_current_stage_card_flags_event_type_stages(self):
         """B2/D1 是当日事件，卡片必须显式标注，避免被当成可持有阶段。"""
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
