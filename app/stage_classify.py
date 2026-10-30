@@ -268,6 +268,10 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
         if slope20 > 0 and prev_ma60 is not None and prev_close <= prev_ma60:
             return _result("up", "U1",
                            f"上升初期：收盘{close:.2f}刚站上MA60({ma60:.2f})")
+        if close <= ma20:
+            # 主升要求站上 MA20；跌破 MA20 的短期回踩仍属上升中继
+            return _result("up", "U3",
+                           f"上升中继：中期多头，收盘{close:.2f}低于MA20({ma20:.2f})，短期回踩")
         return _result("up", "U2",
                        f"主升：{ma_layout}，收盘{close:.2f}，量比{vol_ratio:.2f}")
 

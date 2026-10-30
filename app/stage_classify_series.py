@@ -225,7 +225,9 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
         close_prev = _shift(closes, 10)
         reclaimed = (slope20 > 0) & np.isfinite(ma60_prev) & (close_prev <= ma60_prev)
         assign(in_up & reclaimed, "U1")
-        assign(in_up, "U2")
+        # 主升要求站上 MA20；跌破 MA20 的短期回踩归上升中继
+        assign(in_up & (closes > ma20), "U2")
+        assign(in_up, "U3")
 
         assign((region == "top") & at_valid, "T1")
 

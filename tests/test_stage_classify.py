@@ -185,6 +185,29 @@ def test_b1_still_exists_for_genuine_lows():
     assert (r["region"], r["stage"]) == ("base", "B1")
 
 
+def test_u2_requires_close_above_ma20():
+    """主升必须站上 MA20；上升区里跌破 MA20 的短期回踩归 U3 上升中继。
+
+    形状：120 根 100→160，最后 2 根小幅回落到 155（低于 MA20 约 0.6%，MA5 仍高于 MA10）。
+    """
+    closes = lin(100, 160, 120) + lin(160, 155, 2)
+    r = classify(closes)
+    assert r["region"] == "up"
+    assert r["evidence"]["bias20"] < 0, "样本必须收盘低于 MA20"
+    assert r["evidence"]["ma5"] > r["evidence"]["ma10"]
+    assert r["stage"] == "U3", f"跌破 MA20 却仍判 {r['stage']}"
+    assert "MA20" in r["detail"]
+
+
+def test_u2_still_applies_when_close_holds_above_ma20():
+    """同样的小幅回落，但收盘仍在 MA20 上方 → 仍属主升 U2。"""
+    closes = lin(100, 160, 120) + lin(160, 158, 2)
+    r = classify(closes)
+    assert r["region"] == "up"
+    assert r["evidence"]["bias20"] > 0
+    assert (r["region"], r["stage"]) == ("up", "U2")
+
+
 def test_all_stages_have_labels_and_evidence():
     # every declared stage/region must carry a label, and evidence is populated
     assert set(_STAGE_LABELS) == {"D1", "D2", "D3", "B1", "B2", "B3",
