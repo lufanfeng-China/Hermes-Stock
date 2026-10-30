@@ -45,6 +45,9 @@ MIN_DAYS = 60             # minimum bars required to classify
 # earn its name using where price actually sits inside the 60-bar range.
 BASE_MAX_RANGE_POS = 0.50      # base only accepts the lower half of the 60d range
 TOP_MAX_DIST_FROM_HIGH = 0.10  # top only accepts within 10% of the 60d high
+# 「上升初期」不是当天事件，而是一段窗口：首次收复 MA60 后，只要一直站稳就
+# 继续算上升初期（最多 U1_MAX_DAYS 个交易日），跌回 MA60 下方立即失效。
+U1_MAX_DAYS = 10
 # A "retest holds the prior low" that is already 8% below MA20 is a deep
 # pullback (R1 territory), not a shallow retest: hand it to the region stage.
 B3_MAX_PULLBACK = -0.08
@@ -287,14 +290,25 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
         if bias20 >= BIAS_CLIMAX:
             return _result("up", "U4",
                            f"加速赶顶：乖离率{bias20*100:.1f}%超{BIAS_CLIMAX*100:.0f}%")
-        # 上升初期 = 「当日首次收复 MA60」且不追高；先于 U3 判断，
-        # 否则首日收复常因 MA5<MA10 被记成上升中继。
-        prev_close = closes[-2] if len(closes) > 1 else closes[-1]
-        prev_ma60 = ma60_arr[-2] if len(ma60_arr) > 1 else ma60
-        if (prev_ma60 is not None and prev_close <= prev_ma60 and close > ma60
-                and abs(bias20) < 0.05 and slope60 > -FLAT_SLOPE):
-            return _result("up", "U1",
-                           f"上升初期：当日首次收复MA60({ma60:.2f})，收盘{close:.2f}，乖离{bias20 * 100:+.1f}%")
+        # 上升初期 = 收复 MA60 后的一段窗口（站稳即延续，跌回即失效），
+        # 先于 U3 判断，否则窗口内的回踩会被整段记成上升中继。
+        reclaim_at = None
+        for back in range(0, U1_MAX_DAYS + 1):
+            index = len(closes) - 1 - back
+            if index < 1:
+                break
+            if ma60_arr[index] is None or ma60_arr[index - 1] is None:
+                continue
+            if closes[index] > ma60_arr[index] and closes[index - 1] <= ma60_arr[index - 1]:
+                reclaim_at = index
+                break
+        if reclaim_at is not None:
+            held = all(closes[i] > ma60_arr[i] for i in range(reclaim_at, len(closes)))
+            if held and abs(bias20) < 0.05 and slope60 > -FLAT_SLOPE:
+                days = len(closes) - 1 - reclaim_at
+                when = "当日" if days == 0 else f"第{days + 1}日"
+                return _result("up", "U1",
+                               f"上升初期：{when}站稳MA60({ma60:.2f})，收盘{close:.2f}，乖离{bias20 * 100:+.1f}%")
         if ma5 < ma10:
             return _result("up", "U3",
                            f"上升中继：中期多头，短期回踩(MA5<MA10)，收盘{close:.2f}")

@@ -30,6 +30,7 @@ import pandas as pd
 
 from app.stage_classify import (
     B3_MAX_PULLBACK,
+    U1_MAX_DAYS,
     BASE_MAX_RANGE_POS,
     BIAS_CLIMAX,
     FLAT_SLOPE,
@@ -231,7 +232,17 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
         assign(in_up & (bias20 >= BIAS_CLIMAX), "U4")
         ma60_prev = _shift(ma60, 1)
         close_prev = _shift(closes, 1)
-        reclaimed = (np.isfinite(ma60_prev) & (close_prev <= ma60_prev) & (closes > ma60)
+        # 最近一次「收复 MA60」的位置，以及之后是否一直站稳
+        reclaim = np.isfinite(ma60_prev) & (close_prev <= ma60_prev) & (closes > ma60)
+        positions = np.arange(n)
+        last_reclaim = np.maximum.accumulate(np.where(reclaim, positions, -1))
+        has_reclaim = last_reclaim >= 0
+        safe_last = np.where(has_reclaim, last_reclaim, 0)
+        below = closes <= ma60
+        cum_below = np.cumsum(below)
+        below_since = cum_below - np.where(has_reclaim, cum_below[safe_last] - below[safe_last], 0)
+        days_since = np.where(has_reclaim, positions - safe_last, np.inf)
+        reclaimed = (has_reclaim & (below_since == 0) & (days_since <= U1_MAX_DAYS)
                      & (np.abs(bias20) < 0.05) & (slope60 > -FLAT_SLOPE))
         assign(in_up & reclaimed, "U1")
         assign(in_up & (ma5 < ma10), "U3")

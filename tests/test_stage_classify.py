@@ -96,6 +96,34 @@ def test_u1_is_the_first_day_reclaiming_ma60():
     assert abs(r["evidence"]["bias20"]) < 0.05
 
 
+def test_u1_lasts_while_the_reclaim_holds():
+    """收复 MA60 之后连续站稳 → 仍是上升初期（不是只有当天）。"""
+    base = lin(100, 160, 120) + lin(160, 147.2, 6) + [148.672]
+    closes = base + [148.9, 149.3, 149.6]
+    r = classify(closes)
+    assert r["region"] == "up"
+    assert r["stage"] == "U1", r["stage"]
+    assert "站稳MA60" in r["detail"]
+
+
+def test_u1_expires_after_the_window():
+    """窗口之外（超过 U1_MAX_DAYS）不再叫上升初期。"""
+    from app.stage_classify import U1_MAX_DAYS
+
+    base = lin(100, 160, 120) + lin(160, 147.2, 6) + [148.672]
+    closes = base + [148.7 + 0.05 * i for i in range(U1_MAX_DAYS + 1)]
+    r = classify(closes)
+    assert r["stage"] != "U1", f"窗口已过仍判 {r['stage']}"
+
+
+def test_u1_invalidates_when_price_falls_back_below_ma60():
+    """收复后又跌回 MA60 下方，即使刚过两天也不算上升初期。"""
+    base = lin(100, 160, 120) + lin(160, 147.2, 6) + [148.672, 149.0]
+    closes = base + [143.0, 144.0]
+    r = classify(closes)
+    assert r["stage"] != "U1", f"跌回 MA60 下方仍判 {r['stage']}"
+
+
 def test_u1_does_not_persist_while_price_stays_above_ma60():
     """连续站上 MA60 之后不再是“刚站上”：旧规则会连续多日标上升初期。"""
     r = classify(flat(100, 80) + lin(100, 110, 10))
