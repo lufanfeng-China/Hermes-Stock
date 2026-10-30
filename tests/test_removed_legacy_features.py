@@ -48,6 +48,33 @@ class RetiredFeatureContractTests(unittest.TestCase):
         ):
             self.assertNotIn(token, handler, token)
 
+    def test_lifecycle_13_state_pipeline_is_retired(self) -> None:
+        """13 状态生命周期模型已被 A/B/C/D 取代：模块、脚本、接口都不许再上线。
+
+        退役原因：B2 在区间上半叫「探底回升」、B3 在 MA60 下行叫「回踩确认」，
+        且 1 日段占比 30%+；替换为四阶段打分后这些口径失效。
+        """
+        retired_files = (
+            "app/stage_classify_series.py",
+            "app/stage_history_store.py",
+            "scripts/build_stage_history.py",
+            "scripts/report_stage_history_stats.py",
+            "scripts/spotcheck_stage_samples.py",
+            "scripts/export_stock_stage_timeline.py",
+            "scripts/check_stage_series_parity.py",
+        )
+        for relative in retired_files:
+            self.assertFalse((ROOT / relative).exists(), relative)
+
+        server = (ROOT / "app" / "handler.py").read_text(encoding="utf-8")
+        for route in ('"/api/stage-classify"', '"/api/stage-history-series"'):
+            self.assertNotIn(route, server, f"{route} 必须随旧模型退役")
+
+        page = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertNotIn("/api/stage-classify", page)
+        self.assertNotIn("/api/stage-history-series", page)
+        self.assertIn("/api/regime-history-series", page)
+
     def test_screener_strategy_builder_is_not_shipped(self) -> None:
         self.assertFalse((ROOT / "scripts" / "build_stock_screener_strategies.py").exists())
 

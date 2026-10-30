@@ -105,7 +105,7 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             ),
             ('build_good_stock_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_financial_snapshot.py')]),
             ('build_good_stock_undervaluation_current', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_undervaluation_current.py')]),
-            ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stage_history.py')]),
+            ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_regime_history.py')]),
         ]
     commands: list[tuple[str, list[str]]] = [
         # The workbench deliberately excludes archive_daily: that legacy archive
@@ -133,7 +133,7 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         # bar from those two sources, and refuses to build when the QFQ source is
         # behind the RPS trading day.  Independently runnable and retryable: no
         # other task reads its output at build time.
-        ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stage_history.py')]),
+        ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_regime_history.py')]),
         (
             'rebuild_macd_signals',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_macd_signals.py'),

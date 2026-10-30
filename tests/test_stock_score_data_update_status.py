@@ -140,7 +140,7 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
 
         self.assertIn("rebuild_stage_history", names)
         command = dict(commands)["rebuild_stage_history"]
-        self.assertTrue(command[1].endswith("scripts/build_stage_history.py"))
+        self.assertTrue(command[1].endswith("scripts/build_regime_history.py"))
         self.assertEqual(pipeline_commands.TONGDAXIN_PYTHON, command[0])
         self.assertGreater(names.index("rebuild_stage_history"), names.index("sync_tdx_qfq_exports"))
         self.assertGreater(names.index("rebuild_stage_history"), names.index("refresh_rps_daily"))
