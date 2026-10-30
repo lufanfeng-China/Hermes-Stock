@@ -2329,6 +2329,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             {'id': 'build_good_stock_financial_snapshot', 'name': '构建好股低估专用财报快照', 'desc': '使用本地财报时序库，逐股最新已披露季度 + 年度五年；不替换严格同周期排名文件，可独立执行/重试'},
             {'id': 'build_good_stock_undervaluation_current', 'name': '构建好股低估诊断快照', 'desc': '依赖本地前复权行情、好股专用财报、行业估值；独立原子发布，失败保留旧版且不阻断技术更新'},
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
+            {'id': 'rebuild_stage_history', 'name': '重建生命周期阶段历史', 'desc': '按前复权日线逐 bar 判定 11 个阶段状态并原子发布全市场历史库；含陈旧源阻断与逐 bar 对拍，独立执行/重试'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
         ]
 

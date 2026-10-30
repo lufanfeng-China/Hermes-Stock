@@ -81,6 +81,22 @@ B2 探底回升、D1 破位下跌描述的是**当日动作**，不是可停留�
 
 历史库**不额外存 is_event 列**：它可由 `stage` 直接推出（`stage in {"B2","D1"}`），避免冗余列与口径漂移。下游若要用作持仓信号，请自行按 `stage` 过滤。
 
+## 日更（数据更新页的 `rebuild_stage_history`）
+
+阶段历史已接入「数据更新」流水线，作为独立步骤 `rebuild_stage_history`：
+
+- 位置：`sync_tdx_qfq_exports` → `build_stock_filter_qfq_daily` → … → `refresh_rps_daily` → **`rebuild_stage_history`** → `rebuild_macd_signals`
+- 为什么排在这里：它同时依赖新的前复权日线（阶段取价）与 RPS 交易日（陈旧源比较），两者都在它之前完成
+- 独立性：不触发下载，不被其它步骤读取产物，失败可单独重试；`retry_failed=True` 的子集里也包含它
+- 运行时：全量重建约 5.3 分钟 / 12.5M 行（5408 只），内置两道闸门（陈旧源阻断 + 30 只 × 3 年逐 bar 对拍）仍会执行
+- 陈旧源阻断：若 QFQ 最新 bar 落后于 RPS 交易日，脚本直接非零退出，不写库；此时应先修数据源，而不是重试
+
+日更后如何确认结果：
+
+```bash
+python -c "import json;m=json.load(open('data/derived/datasets/final/stage_history.manifest.json'));print(m['built_at'], m['rows'], m['thresholds'])"
+```
+
 ## 两条实现，必须逐 bar 一致
 
 | 路径 | 用途 | 文件 |

@@ -8,6 +8,26 @@ from app import handler as app_handler
 
 
 class DataUpdatePlanTests(unittest.TestCase):
+    def test_plan_and_command_registry_do_not_drift(self) -> None:
+        """计划页展示的任务必须都能真正执行，且阶段历史必须在两边都登记。
+
+        两处注册表（handler 的展示目录 / pipeline 的命令表）历史上各写一份，
+        新增步骤时容易只改一边：UI 上点了没反应，或命令跑了但页面看不见。
+        """
+        from app.pipeline import commands as pipeline_commands
+
+        request = Mock()
+        with patch.object(app_handler, "_data_update_job_snapshot", return_value={}):
+            app_handler.StockDashboardHandler.handle_data_update_plan(request)
+        _, payload = request.respond_json.call_args.args
+        plan_ids = [task["id"] for task in payload["tasks"]]
+        command_ids = [name for name, _ in pipeline_commands._data_update_commands(trading_day="2026-10-29")]
+
+        self.assertIn("rebuild_stage_history", plan_ids)
+        self.assertIn("rebuild_stage_history", command_ids)
+        # 展示目录里的每个任务都必须有对应命令，否则点下去无从执行
+        self.assertEqual([], [task_id for task_id in plan_ids if task_id not in command_ids])
+
     def test_plan_discloses_peer_snapshot_freshness_coverage_and_published_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             final_dir = Path(directory)
