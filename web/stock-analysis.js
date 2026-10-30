@@ -993,7 +993,7 @@
       .map(([key]) => key);
     const penaltyText = penalties.length ? `扣分：${penalties.join('、')}` : '无扣分项';
     const card = document.createElement('article');
-    card.className = `basic-market-card ${tone}`;
+    card.className = `basic-market-card stage-${regime.stage} ${tone}`;
     card.style.cssText = 'grid-column:1 / -1;height:auto;min-height:56px';
     card.title = `${basis}\n${itemText}\n${penaltyText}`;
     card.setAttribute('aria-label', `当前阶段：${regime.stage_label}，得分 ${regime.score}。${regime.reason || ''}`);
@@ -1036,7 +1036,7 @@
       return;
     }
     const pieces = segments.map((segment, index) => {
-      const classes = ['stage-timeline-piece', `region-${segment.tone || 'base'}`];
+      const classes = ['stage-timeline-piece', `stage-${segment.stage}`];
       if (index === segments.length - 1) classes.push('is-current');
       const label = `${segment.stage_label}（${segment.stage}） ${segment.start}→${segment.end}（${segment.trading_days} 天）`;
       return `<button type="button" class="${classes.join(' ')}" role="listitem" data-stage-segment="${index}"`
@@ -1052,6 +1052,12 @@
       + `<span>最长 <strong>${escapeHtml(longest.stage_label || '—')}</strong>（${Number(longest.trading_days) || 0} 天）</span>`
       + `<span>窗口 ${escapeHtml(payload.window_start)} ~ ${escapeHtml(payload.as_of)}（${Number(payload.bars) || 0} 根）</span>`
       + `<span>共 ${segments.length} 段</span>`
+      + '</div>'
+      + '<div class="stage-timeline-legend" aria-label="阶段颜色图例">'
+      + '<span class="legend-A"><i></i>A 底部构筑/下跌中继</span>'
+      + '<span class="legend-B"><i></i>B 突破启动确认</span>'
+      + '<span class="legend-C"><i></i>C 主升推进</span>'
+      + '<span class="legend-D"><i></i>D 高位派发</span>'
       + '</div>'
       + '<div class="stage-timeline-detail" id="stage-timeline-detail">点任一色块查看该段细节；色带宽度按停留交易日数分配。</div>';
     if (period) period.textContent = `${payload.as_of}｜近 ${Number(payload.window_bars) || Number(payload.bars)} 个交易日｜前复权日线`;

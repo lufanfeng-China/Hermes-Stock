@@ -763,11 +763,15 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('function renderStageTimeline(payload)', js)
         self.assertIn('renderStageTimeline(stageSeries);', js)
         self.assertIn('data-stage-segment=', js)
-        self.assertIn('region-${segment.tone || \'base\'}', js)
+        self.assertIn('`stage-${segment.stage}`', js)
         self.assertIn('class="stage-timeline-detail"', js)
-        # A/B/C/D 用 tone 着色，不再有事件型阶段
-        self.assertIn("segment.tone", js)
+        # A/B/C/D 各自一种颜色（不是旧的 region-tone 映射），并带图例
+        self.assertIn("`stage-${segment.stage}`", js)
         self.assertNotIn("is-event", js)
+        for code in "ABCD":
+            self.assertIn(f".stage-timeline-piece.stage-{code}", html, f"阶段 {code} 必须有独立颜色")
+        self.assertIn("stage-timeline-legend", js)
+        self.assertIn("stage-timeline-legend", html)
 
     def test_current_stage_card_shows_regime_score_and_items(self):
         """阶段卡必须显示 A/B/C/D 阶段、量能得分与 6 项正向条目，缺一不可审计。"""
