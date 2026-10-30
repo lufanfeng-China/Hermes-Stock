@@ -2074,6 +2074,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         try:
             payload = load_regime_series(symbol, bars)
+            payload["ok"] = True   # 前端统一按 ok 判可用，缺了这个字段会显示「不可用」
             self.respond_json(HTTPStatus.OK, payload)
         except FileNotFoundError as exc:
             self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": {"code": "regime_history_missing", "message": str(exc)}})
