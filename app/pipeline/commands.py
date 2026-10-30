@@ -106,6 +106,8 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             ('build_good_stock_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_financial_snapshot.py')]),
             ('build_good_stock_undervaluation_current', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_undervaluation_current.py')]),
             ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_regime_history.py')]),
+            # 慢且只写自己的快照：失败时最需要“只重跑它”，不能退回整链重来。
+            ('build_concept_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py')]),
         ]
     commands: list[tuple[str, list[str]]] = [
         # The workbench deliberately excludes archive_daily: that legacy archive
