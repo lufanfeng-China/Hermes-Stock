@@ -20,6 +20,8 @@ class RetiredFeatureContractTests(unittest.TestCase):
             "macd-extreme-gc.js",
             "macd-extreme-gc-utils.js",
             "macd-extreme-gc-trend-utils.js",
+            "realtime-screener.html",
+            "realtime-screener.js",
         )
         for asset in retired_assets:
             self.assertFalse((WEB / asset).exists(), asset)
@@ -32,13 +34,16 @@ class RetiredFeatureContractTests(unittest.TestCase):
             "stock-screener",
             "macd-extreme-gc",
             "极值金叉",
+            "realtime-screener",
         ):
             self.assertNotIn(token, navigation, token)
         for token in (
             'parsed.path == "/api/stock-screener"',
             'parsed.path == "/api/macd-extreme-gc"',
+            'parsed.path == "/api/realtime-screener"',
             "handle_stock_screener",
             "handle_macd_gc",
+            "handle_realtime_screener",
             "from app.search.macd_gc import",
         ):
             self.assertNotIn(token, handler, token)
