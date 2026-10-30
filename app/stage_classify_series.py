@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 
 from app.stage_classify import (
+    B3_MAX_PULLBACK,
     BASE_MAX_RANGE_POS,
     BIAS_CLIMAX,
     FLAT_SLOPE,
@@ -209,14 +210,17 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
 
         b3 = ((region == "down") | (region == "base")) \
             & (low_20 > low_60) & (high_20 > ma20) & (closes < ma20) \
-            & (slope60 >= -FLAT_SLOPE) & (range_pos_60 <= BASE_MAX_RANGE_POS)
+            & (slope60 >= -FLAT_SLOPE) & (range_pos_60 <= BASE_MAX_RANGE_POS) \
+            & (bias20 >= B3_MAX_PULLBACK)
         assign(b3, "B3")
 
         # --- per-region stages, in the scalar classifier's priority order ---
         in_down = (region == "down") & at_valid
-        assign(in_down & (ma5 > ma10), "D3")
         assign(in_down & (slope20 < 0) & (slope20_prev >= 0), "D1")
-        assign(in_down, "D2")
+        assign(in_down & (ma5 > ma10), "D3")
+        bearish = (ma5 < ma10) & (ma10 < ma20) & (ma20 < ma60)
+        assign(in_down & bearish, "D2")
+        assign(in_down, "D3")
 
         in_base = (region == "base") & at_valid
         # MA60 仍上行时跌破 MA60 且落在区间下半 = 上升回撤，不是底部盘整
@@ -225,11 +229,12 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
 
         in_up = (region == "up") & at_valid
         assign(in_up & (bias20 >= BIAS_CLIMAX), "U4")
-        assign(in_up & (ma5 < ma10), "U3")
-        ma60_prev = _shift(ma60, 10)
-        close_prev = _shift(closes, 10)
-        reclaimed = (slope20 > 0) & np.isfinite(ma60_prev) & (close_prev <= ma60_prev)
+        ma60_prev = _shift(ma60, 1)
+        close_prev = _shift(closes, 1)
+        reclaimed = (np.isfinite(ma60_prev) & (close_prev <= ma60_prev) & (closes > ma60)
+                     & (np.abs(bias20) < 0.05) & (slope60 > -FLAT_SLOPE))
         assign(in_up & reclaimed, "U1")
+        assign(in_up & (ma5 < ma10), "U3")
         # 主升要求站上 MA20；跌破 MA20 的短期回踩归上升中继
         assign(in_up & (closes > ma20), "U2")
         assign(in_up, "U3")

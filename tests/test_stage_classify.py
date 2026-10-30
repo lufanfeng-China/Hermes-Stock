@@ -86,11 +86,22 @@ def test_u4_climax_excessive_extension():
     assert r["evidence"]["bias20"] >= 0.18
 
 
-def test_u1_early_uptrend_reclaims_ma60():
-    r = classify(flat(100, 80) + lin(100, 110, 10))
-    assert r["stage"] == "U1"
+def test_u1_is_the_first_day_reclaiming_ma60():
+    """上升初期只在“当日首次收复 MA60”那天成立，且不追高（乖离 <5%）。"""
+    closes = lin(100, 160, 120) + lin(160, 147.2, 6) + [148.672]
+    r = classify(closes)
     assert r["region"] == "up"
+    assert r["stage"] == "U1", r["stage"]
     assert r["stage_label"] == "上升初期"
+    assert abs(r["evidence"]["bias20"]) < 0.05
+
+
+def test_u1_does_not_persist_while_price_stays_above_ma60():
+    """连续站上 MA60 之后不再是“刚站上”：旧规则会连续多日标上升初期。"""
+    r = classify(flat(100, 80) + lin(100, 110, 10))
+    assert r["region"] == "up"
+    assert r["stage"] != "U1", r["stage"]
+    assert r["stage"] in {"U2", "U3"}
 
 
 def test_b1_basing_sideways_at_lows():
@@ -322,6 +333,45 @@ def test_b3_still_fires_when_ma60_is_flat_and_prior_low_holds():
     assert r["evidence"]["range_pos_60"] <= 0.5
     assert r["stage"] == "B3", r["stage"]
     assert r["region"] in {"base", "down"}, r["region"]
+
+
+def test_b3_rejects_deep_pullbacks_below_eight_percent():
+    """已经跌破 MA20 超过 8% 的回踩是深度回撤（R1 领域），不是浅回踩确认。"""
+    closes = lin(100, 200, 150) + lin(200, 172, 12)
+    r = classify(closes)
+    assert r["evidence"]["bias20"] < -0.08
+    assert r["stage"] != "B3", f"bias20={r['evidence']['bias20']:.3%} 仍被判 B3"
+    assert (r["region"], r["stage"]) == ("base", "R1")
+
+
+def test_d2_requires_bearish_alignment():
+    """主跌必须是空头排列；均线纠缠一律归下跌中继，不再叫主跌。
+
+    旧规则里 D2 是“下跌区兜底”，全库 19% 的 D2 其实不是空头排列。
+    """
+    closes = lin(100, 200, 120) + lin(200, 180, 50) + lin(180, 185.4, 6)
+    r = classify(closes)
+    assert r["region"] == "down"
+    ev = r["evidence"]
+    assert not (ev["ma5"] < ev["ma10"] < ev["ma20"] < ev["ma60"])
+    assert r["stage"] == "D3", f"纠缠却判 {r['stage']}"
+
+
+def test_d2_still_covers_real_bearish_alignment():
+    """真正的空头排列（且非破位首日、非短期反弹）仍是 D2 主跌。"""
+    closes = lin(200, 120, 90)
+    r = classify(closes)
+    ev = r["evidence"]
+    assert r["region"] == "down"
+    assert ev["ma5"] < ev["ma10"] < ev["ma20"] < ev["ma60"]
+    assert r["stage"] == "D2", r["stage"]
+
+
+def test_d1_takes_priority_over_d3_when_ma20_just_turns_down():
+    """MA20 刚拐头向下优先判破位（实测与 D3 条件几乎不重叠，此处锁顺序）。"""
+    r = classify(flat(110, 85) + [109, 108, 107, 106, 105])
+    assert r["evidence"]["slope20"] < 0
+    assert (r["region"], r["stage"]) == ("down", "D1")
 
 
 def test_all_stages_have_labels_and_evidence():

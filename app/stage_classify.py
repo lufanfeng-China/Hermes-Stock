@@ -45,6 +45,9 @@ MIN_DAYS = 60             # minimum bars required to classify
 # earn its name using where price actually sits inside the 60-bar range.
 BASE_MAX_RANGE_POS = 0.50      # base only accepts the lower half of the 60d range
 TOP_MAX_DIST_FROM_HIGH = 0.10  # top only accepts within 10% of the 60d high
+# A "retest holds the prior low" that is already 8% below MA20 is a deep
+# pullback (R1 territory), not a shallow retest: hand it to the region stage.
+B3_MAX_PULLBACK = -0.08
 
 _REGION_LABELS = {"down": "下跌区", "base": "底部区", "up": "上升区", "top": "顶部区"}
 _STAGE_LABELS = {
@@ -249,19 +252,26 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
 
     if (region in ("base", "down")
             and low_20 > low_60 and high_20 > ma20 and close < ma20
-            and slope60 >= -FLAT_SLOPE and range_pos <= BASE_MAX_RANGE_POS):
+            and slope60 >= -FLAT_SLOPE and range_pos <= BASE_MAX_RANGE_POS
+            and bias20 >= B3_MAX_PULLBACK):
         return _result(region, "B3",
                        f"回踩确认：近20日高点{high_20:.2f}回踩至{close:.2f}，未破前低{low_20:.2f}")
 
     if region == "down":
-        if ma5 > ma10:
-            return _result("down", "D3",
-                           f"下跌中继：中期空头，短期反弹(MA5>MA10)，收盘{close:.2f}，量比{vol_ratio:.2f}")
+        # 破位是「刚发生的事件」，比“短期反弹”更该优先被看到（实测两者几乎不重叠）
         if slope20 < 0 and slope20_prev >= 0:
             return _result("down", "D1",
                            f"破位下跌：MA20刚拐头向下，收盘{close:.2f}")
-        return _result("down", "D2",
-                       f"主跌：{ma_layout}，收盘{close:.2f}，60日新低={'是' if is_60d_low else '否'}")
+        if ma5 > ma10:
+            return _result("down", "D3",
+                           f"下跌中继：中期空头，短期反弹(MA5>MA10)，收盘{close:.2f}，量比{vol_ratio:.2f}")
+        bearish = ma5 < ma10 < ma20 < ma60
+        if bearish:
+            return _result("down", "D2",
+                           f"主跌：{ma_layout}，收盘{close:.2f}，60日新低={'是' if is_60d_low else '否'}")
+        # 均线纠缠（非空头排列）不是主跌，归下跌中继
+        return _result("down", "D3",
+                       f"下跌中继：中期空头，{ma_layout}，收盘{close:.2f}")
 
     if region == "base":
         # MA60 still rising means the mid-term trend is intact and this is a deep
@@ -277,14 +287,17 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
         if bias20 >= BIAS_CLIMAX:
             return _result("up", "U4",
                            f"加速赶顶：乖离率{bias20*100:.1f}%超{BIAS_CLIMAX*100:.0f}%")
+        # 上升初期 = 「当日首次收复 MA60」且不追高；先于 U3 判断，
+        # 否则首日收复常因 MA5<MA10 被记成上升中继。
+        prev_close = closes[-2] if len(closes) > 1 else closes[-1]
+        prev_ma60 = ma60_arr[-2] if len(ma60_arr) > 1 else ma60
+        if (prev_ma60 is not None and prev_close <= prev_ma60 and close > ma60
+                and abs(bias20) < 0.05 and slope60 > -FLAT_SLOPE):
+            return _result("up", "U1",
+                           f"上升初期：当日首次收复MA60({ma60:.2f})，收盘{close:.2f}，乖离{bias20 * 100:+.1f}%")
         if ma5 < ma10:
             return _result("up", "U3",
                            f"上升中继：中期多头，短期回踩(MA5<MA10)，收盘{close:.2f}")
-        prev_close = closes[-11] if len(closes) > 11 else closes[-1]
-        prev_ma60 = ma60_arr[-11] if len(ma60_arr) > 11 else ma60
-        if slope20 > 0 and prev_ma60 is not None and prev_close <= prev_ma60:
-            return _result("up", "U1",
-                           f"上升初期：收盘{close:.2f}刚站上MA60({ma60:.2f})")
         if close <= ma20:
             # 主升要求站上 MA20；跌破 MA20 的短期回踩仍属上升中继
             return _result("up", "U3",
