@@ -52,6 +52,7 @@ _STAGE_LABELS = {
     "B1": "底部盘整", "B2": "探底回升", "B3": "回踩确认",
     "U1": "上升初期", "U2": "主升", "U3": "上升中继", "U4": "加速赶顶",
     "T1": "高位震荡",
+    "R1": "上升回撤", "R2": "下跌反弹",
 }
 # 事件型阶段：描述的是「当天发生的动作」，不是可以停留的状态。
 # 全市场历史实测：B2 平均持续 1.51 个交易日（中位 1 天），D1 平均 2.79 天；
@@ -236,16 +237,20 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
         ma_layout = "纠缠"
 
     # ---- stage ----
-    # B2 探底回升: volume breakout above MA20 (a reversal signal that can fire
-    # while still in the down region).  Forces region to base.
-    if close > ma20 and vol_ratio >= VOL_BREAKOUT and slope20 > 0:
-        return _result("base", "B2",
+    # B2/B3 are *events that happen inside a trend region*.  They label the bar
+    # but never rewrite the region: a volume breakout at range_pos 95% is not a
+    # bottom, and a "pullback holding the prior low" during a falling MA60 is
+    # not a bottom confirmation either.
+    breakout_position_ok = range_pos <= BASE_MAX_RANGE_POS or pos_high <= -TOP_MAX_DIST_FROM_HIGH
+    if (region in ("base", "down") and breakout_position_ok
+            and close > ma20 and vol_ratio >= VOL_BREAKOUT and slope20 > 0):
+        return _result(region, "B2",
                        f"探底回升：放量(量比{vol_ratio:.2f})突破MA20({ma20:.2f})")
 
-    # B3 回踩确认: pullback holding above the prior low after a bounce; only
-    # when mid-term has not turned up (otherwise it is an U3 uptrend pullback).
-    if low_20 > low_60 and high_20 > ma20 and close < ma20 and slope60 <= FLAT_SLOPE:
-        return _result("base", "B3",
+    if (region in ("base", "down")
+            and low_20 > low_60 and high_20 > ma20 and close < ma20
+            and slope60 >= -FLAT_SLOPE and range_pos <= BASE_MAX_RANGE_POS):
+        return _result(region, "B3",
                        f"回踩确认：近20日高点{high_20:.2f}回踩至{close:.2f}，未破前低{low_20:.2f}")
 
     if region == "down":
@@ -259,6 +264,12 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
                        f"主跌：{ma_layout}，收盘{close:.2f}，60日新低={'是' if is_60d_low else '否'}")
 
     if region == "base":
+        # MA60 still rising means the mid-term trend is intact and this is a deep
+        # pullback, not a bottom: label it 上升回撤 instead of 底部盘整.
+        if slope60 > FLAT_SLOPE:
+            return _result("base", "R1",
+                           f"上升回撤：MA60仍上行({slope60 * 100:+.2f}%)，收盘{close:.2f}跌破MA60({ma60:.2f})"
+                           f"，区间位置{range_pos * 100:.0f}%")
         return _result("base", "B1",
                        f"底部盘整：{ma_layout}，收盘{close:.2f}，量比{vol_ratio:.2f}")
 
@@ -282,6 +293,12 @@ def classify_stage(df: pd.DataFrame) -> dict[str, Any]:
                        f"主升：{ma_layout}，收盘{close:.2f}，量比{vol_ratio:.2f}")
 
     # region == "top"
+    # MA60 falling under a price that is still near the high is a rally inside a
+    # downtrend (下跌反弹), not high-level churn.
+    if slope60 < -FLAT_SLOPE:
+        return _result("top", "R2",
+                       f"下跌反弹：MA60仍下行({slope60 * 100:+.2f}%)，收盘{close:.2f}"
+                       f"距60日高点{pos_high * 100:+.1f}%")
     return _result("top", "T1",
                    f"高位震荡：{ma_layout}，收盘{close:.2f}，量比{vol_ratio:.2f}")
 

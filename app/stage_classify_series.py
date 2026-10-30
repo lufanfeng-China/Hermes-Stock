@@ -201,14 +201,16 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
             targets = mask & (stage == None)  # noqa: E711 - elementwise None test
             stage[targets] = code
 
-        # --- global priority signals (may fire outside their home region) ---
-        b2 = (closes > ma20) & (vol_ratio >= VOL_BREAKOUT) & (slope20 > 0)
+        # --- events that live inside a trend region (they never rewrite it) ---
+        near_bottom = (range_pos_60 <= BASE_MAX_RANGE_POS) | (pos_high_60 <= -TOP_MAX_DIST_FROM_HIGH)
+        b2 = ((region == "down") | (region == "base")) & near_bottom \
+            & (closes > ma20) & (vol_ratio >= VOL_BREAKOUT) & (slope20 > 0)
         assign(b2, "B2")
-        region[b2] = "base"
 
-        b3 = (low_20 > low_60) & (high_20 > ma20) & (closes < ma20) & (slope60 <= FLAT_SLOPE)
+        b3 = ((region == "down") | (region == "base")) \
+            & (low_20 > low_60) & (high_20 > ma20) & (closes < ma20) \
+            & (slope60 >= -FLAT_SLOPE) & (range_pos_60 <= BASE_MAX_RANGE_POS)
         assign(b3, "B3")
-        region[b3] = "base"
 
         # --- per-region stages, in the scalar classifier's priority order ---
         in_down = (region == "down") & at_valid
@@ -216,7 +218,10 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
         assign(in_down & (slope20 < 0) & (slope20_prev >= 0), "D1")
         assign(in_down, "D2")
 
-        assign((region == "base") & at_valid, "B1")
+        in_base = (region == "base") & at_valid
+        # MA60 仍上行时跌破 MA60 且落在区间下半 = 上升回撤，不是底部盘整
+        assign(in_base & (slope60 > FLAT_SLOPE), "R1")
+        assign(in_base, "B1")
 
         in_up = (region == "up") & at_valid
         assign(in_up & (bias20 >= BIAS_CLIMAX), "U4")
@@ -229,7 +234,10 @@ def classify_stage_series(df: pd.DataFrame) -> pd.DataFrame:
         assign(in_up & (closes > ma20), "U2")
         assign(in_up, "U3")
 
-        assign((region == "top") & at_valid, "T1")
+        in_top = (region == "top") & at_valid
+        # MA60 下行、价格仍在 MA60 上方且贴近高点 = 下跌反弹，不是高位震荡
+        assign(in_top & (slope60 < -FLAT_SLOPE), "R2")
+        assign(in_top, "T1")
 
     out = pd.DataFrame({
         "trading_day": _trading_day_labels(work.index),

@@ -38,7 +38,9 @@ from app.tdx.qfq_kline import load_tdx_qfq_daily  # noqa: E402
 FINAL = PROJECT_ROOT / "data" / "derived" / "datasets" / "final"
 DEFAULT_HISTORY = FINAL / "stage_history.parquet"
 DEFAULT_REPORT_DIR = Path("/mnt/c/Users/Sky.Lu/Desktop/output")
-STAGE_ORDER = ["D1", "D2", "D3", "B1", "B2", "B3", "U1", "U2", "U3", "U4", "T1"]
+# R1/R2 added 2026-10-30 with the 13-state revision; keep this list in sync with
+# app.stage_classify._STAGE_LABELS or the report silently drops stages.
+STAGE_ORDER = ["D1", "D2", "D3", "B1", "B2", "B3", "R1", "R2", "U1", "U2", "U3", "U4", "T1"]
 FORWARD_WINDOWS = (5, 20)
 
 

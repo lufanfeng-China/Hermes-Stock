@@ -112,16 +112,19 @@ def test_b2_bounce_volume_breakout_above_ma20():
     vols = [1e6] * 89 + [2.5e6]
     r = classify(closes, volumes=vols)
     assert r["stage"] == "B2"
-    assert r["region"] == "base"
     assert r["stage_label"] == "探底回升"
     assert r["evidence"]["vol_ratio"] >= 1.5
+    # 事件只标当天动作，不再把区域改写成底部：中期仍向下就该显示下跌区
+    assert r["region"] == "down"
+    assert r["is_event"] is True
 
 
 def test_b3_retest_holds_above_prior_low():
     r = classify(lin(60, 50, 40) + lin(50, 60, 15) + lin(60, 53, 20) + flat(53, 15))
     assert r["stage"] == "B3"
-    assert r["region"] == "base"
     assert r["stage_label"] == "回踩确认"
+    # 区域按趋势判定：短期斜率仍向下 → 下跌区，不再被强制改成底部区
+    assert r["region"] == "down"
 
 
 def test_zero_price_placeholder_bars_are_dropped_before_classification():
@@ -171,12 +174,23 @@ def test_top_requires_price_near_the_60d_high():
     assert r["stage"] != "T1"
 
 
-def test_top_still_applies_when_price_is_near_the_high():
-    """同样的下跌结构，但反弹回到离高点 7% 以内 → 仍属顶部区 T1（不得被位置门误伤）。"""
+def test_rally_inside_a_downtrend_is_r2_not_t1():
+    """下跌趋势中的反弹（MA60 仍下行、价格回到 MA60 上方且贴近高点）→ R2 下跌反弹。"""
     closes = lin(100, 200, 150) + lin(200, 120, 80) + lin(120, 160, 10)
     r = classify(closes)
     assert r["evidence"]["pos_high_60"] > -0.10
+    assert r["evidence"]["slope60"] < -0.005
+    assert (r["region"], r["stage"]) == ("top", "R2")
+    assert r["stage_label"] == "下跌反弹"
+
+
+def test_t1_still_covers_flat_churn_near_the_high():
+    """MA60 走平、价格贴住 60 日高点的横盘 → 仍是 T1 高位震荡（不得被 R2 抢走）。"""
+    r = classify([48 + 0.02 * i for i in range(90)])
+    assert abs(r["evidence"]["slope60"]) <= 0.005
+    assert r["evidence"]["pos_high_60"] > -0.10
     assert (r["region"], r["stage"]) == ("top", "T1")
+    assert r["stage_label"] == "高位震荡"
 
 
 def test_b1_still_exists_for_genuine_lows():
@@ -220,7 +234,7 @@ def test_event_stages_are_flagged_for_callers():
 
     b2 = classify(lin(70, 50, 60) + flat(50, 15) + lin(50, 52, 15),
                   volumes=[1e6] * 89 + [2.5e6])
-    assert (b2["region"], b2["stage"]) == ("base", "B2")
+    assert (b2["region"], b2["stage"]) == ("down", "B2")
     assert b2["is_event"] is True
 
     d1 = classify(flat(110, 85) + [109, 108, 107, 106, 105])
@@ -237,9 +251,82 @@ def test_event_stages_are_flagged_for_callers():
         assert result["is_event"] is False, result["stage"]
 
 
+def test_uptrend_deep_pullback_is_not_a_bottom_base():
+    """MA60 仍上行、价格跌破 MA60 且落到区间下半 → 上升回撤 R1，不是底部盘整。
+
+    全库实测：旧 B1 里 86.9% 是这种情况（MA60 斜率 > +0.5%），把它们叫底部盘整
+    会掩盖“趋势受损”这一事实。
+    """
+    # 快速跌破后停住：60 日低点就在最近 20 日内（B3 的“未破前低”不成立），
+    # 因此不会先被 B3 抢走，才能验证 R1 本身
+    closes = lin(100, 200, 120) + lin(200, 150, 8) + lin(150, 153, 3)
+    r = classify(closes)
+    assert r["evidence"]["slope60"] > 0.005
+    assert r["evidence"]["range_pos_60"] <= 0.5
+    assert r["evidence"]["low_20"] <= r["evidence"]["low_20"], "sanity"
+    assert (r["region"], r["stage"]) == ("base", "R1"), r["stage"]
+    assert r["stage_label"] == "上升回撤"
+
+
+def test_declining_trend_rally_near_high_is_not_high_level_churn():
+    """MA60 下行、价格弹回 MA60 上方且贴近高点 → 下跌反弹 R2，不是高位震荡。
+
+    全库实测：旧 T1 里 75.2% 的 MA60 斜率 < -0.5%，把它们叫高位震荡会把
+    “下跌趋势里的反弹”读成“顶部件横盘”。
+    """
+    closes = lin(100, 200, 120) + lin(200, 130, 60) + lin(130, 190, 6)
+    r = classify(closes)
+    assert r["evidence"]["slope60"] < -0.005
+    assert r["evidence"]["pos_high_60"] > -0.10
+    assert (r["region"], r["stage"]) == ("top", "R2"), r["stage"]
+    assert r["stage_label"] == "下跌反弹"
+
+
+def test_volume_breakout_at_high_position_is_not_b2():
+    """高位（区间位置 95%、距高点 1%）放量突破 MA20 不能叫探底回升。
+
+    全库实测：旧 B2 里 82.4% 位于区间上半，68.7% 距高点不足 10%。
+    """
+    closes = lin(100, 180, 150) + lin(180, 186, 10)
+    volumes = [1e6] * 159 + [2.0e6]
+    r = classify(closes, volumes=volumes)
+    assert r["evidence"]["range_pos_60"] > 0.9
+    assert r["stage"] != "B2", f"高位放量突破被标成 {r['stage']}"
+    assert r["region"] == "up"
+
+
+def test_b2_still_fires_at_low_position_and_keeps_its_region():
+    """低位放量收复 MA20 仍是 B2，但区域按趋势判定（不再被强制改成底部区）。"""
+    closes = lin(70, 50, 60) + [50.0] * 15 + lin(50, 53, 15)
+    volumes = [1e6] * 89 + [2.5e6]
+    r = classify(closes, volumes=volumes)
+    assert r["stage"] == "B2"
+    assert r["is_event"] is True
+    assert r["evidence"]["range_pos_60"] < 0.5
+    # 中期仍向下、价格已离高点 12% → 该行属下跌区，标签应如实显示
+    assert r["region"] == "down"
+
+
+def test_b3_requires_ma60_not_already_falling():
+    """MA60 已明显下行时不能叫回踩确认（旧规则只有 slope60 ≤ +0.5% 的上限）。"""
+    closes = (lin(100, 200, 100) + lin(200, 110, 40) + lin(110, 148.5, 20) + lin(148.5, 133.65, 6))
+    r = classify(closes)
+    assert r["evidence"]["slope60"] < -0.005
+    assert r["stage"] != "B3", f"MA60 斜率 {r['evidence']['slope60']:.3%} 仍被判 B3"
+
+
+def test_b3_still_fires_when_ma60_is_flat_and_prior_low_holds():
+    closes = lin(60, 50, 40) + lin(50, 60, 15) + lin(60, 53, 20) + [53.0] * 15
+    r = classify(closes)
+    assert abs(r["evidence"]["slope60"]) <= 0.005
+    assert r["evidence"]["range_pos_60"] <= 0.5
+    assert r["stage"] == "B3", r["stage"]
+    assert r["region"] in {"base", "down"}, r["region"]
+
+
 def test_all_stages_have_labels_and_evidence():
     # every declared stage/region must carry a label, and evidence is populated
-    assert set(_STAGE_LABELS) == {"D1", "D2", "D3", "B1", "B2", "B3",
+    assert set(_STAGE_LABELS) == {"D1", "D2", "D3", "B1", "B2", "B3", "R1", "R2",
                                   "U1", "U2", "U3", "U4", "T1"}
     assert set(_REGION_LABELS) == {"down", "base", "up", "top"}
     r = classify([100.0 + i for i in range(90)])
