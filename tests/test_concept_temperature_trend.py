@@ -128,3 +128,50 @@ def test_page_has_trend_buttons_and_sends_the_param():
     assert "仅升温" in html and "仅退坡" in html
     assert "trend-filter" in js and "trendFilter" in js
     assert "'&trend=' + encodeURIComponent(trendFilter)" in js
+
+
+def _streak_fixture():
+    return {"as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq", "min_members": 10,
+            "windows": {"10": {"concepts": [
+                {"concept_code": "A", "temperature": 3, "temperature_streak_days": 1},
+                {"concept_code": "B", "temperature": 3, "temperature_streak_days": 7},
+                {"concept_code": "C", "temperature": 4, "temperature_streak_days": 20, "temperature_streak_capped": True},
+                {"concept_code": "D", "temperature": None, "temperature_streak_days": None},
+            ]}}}
+
+
+def _api(query):
+    from unittest.mock import patch
+
+    from app.api.concept_temperature import handle_concept_temperature
+
+    with patch("app.api.concept_temperature._load", return_value=_streak_fixture()):
+        return handle_concept_temperature(query)
+
+
+def test_api_filters_by_streak_days_range():
+    assert [r["concept_code"] for r in _api("window=10&min_days=7")["concepts"]] == ["B", "C"]
+    assert [r["concept_code"] for r in _api("window=10&max_days=1")["concepts"]] == ["A"]
+    assert [r["concept_code"] for r in _api("window=10&min_days=2&max_days=10")["concepts"]] == ["B"]
+
+
+def test_streak_filter_excludes_unknown_streaks():
+    # D 当天数据不足、没有持续天数，启用天数条件时不计入
+    assert "D" not in [r["concept_code"] for r in _api("window=10&min_days=1")["concepts"]]
+    assert len(_api("window=10")["concepts"]) == 4
+
+
+@pytest.mark.parametrize("query", ["window=10&min_days=0", "window=10&max_days=0",
+                                   "window=10&min_days=5&max_days=2", "window=10&min_days=abc"])
+def test_invalid_streak_bounds_are_rejected(query):
+    result = _api(query)
+    assert result["ok"] is False and result["status"] == 400
+
+
+def test_page_wires_the_streak_inputs():
+    html = (ROOT / "web" / "concept-temperature.html").read_text(encoding="utf-8")
+    js = (ROOT / "web" / "concept-temperature.js").read_text(encoding="utf-8")
+    assert 'id="min-days"' in html and 'id="max-days"' in html
+    assert "持续天数" in html
+    assert "min_days=" in js and "max_days=" in js
+    assert "[minDaysEl, maxDaysEl]" in js

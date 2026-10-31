@@ -29,13 +29,29 @@ def handle_concept_temperature(query: str) -> dict:
     if trend_raw and trend_raw not in {'warming', 'cooling'}:
         return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'trend must be warming or cooling'}
     try:
+        min_days = int(params['min_days']) if str(params.get('min_days', '')).strip() else None
+        max_days = int(params['max_days']) if str(params.get('max_days', '')).strip() else None
+    except ValueError:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'min_days and max_days must be integers'}
+    if (min_days is not None and min_days < 1) or (max_days is not None and max_days < 1):
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'min_days and max_days must be >= 1'}
+    if min_days is not None and max_days is not None and min_days > max_days:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'min_days must not exceed max_days'}
+    try:
         data = _load(); section = data['windows'][window]
         concepts = section['concepts']
         if temperature_raw:
             concepts = [row for row in concepts if row.get('temperature') == int(temperature_raw)]
         if trend_raw:
             concepts = [row for row in concepts if row.get('temperature_trend') == trend_raw]
+        if min_days is not None or max_days is not None:
+            # 启用天数条件时，持续天数未知（当天数据不足）的概念不计入
+            concepts = [row for row in concepts
+                        if isinstance(row.get('temperature_streak_days'), int)
+                        and (min_days is None or row['temperature_streak_days'] >= min_days)
+                        and (max_days is None or row['temperature_streak_days'] <= max_days)]
         return {'ok': True, 'as_of_date': data['as_of_date'], 'window': int(window), 'trend': trend_raw,
+                'min_days': min_days, 'max_days': max_days,
                 'price_basis': data['price_basis'], 'min_members': data['min_members'], 'concepts': concepts}
     except Exception as exc:
         return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}

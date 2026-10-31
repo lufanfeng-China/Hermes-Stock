@@ -18,6 +18,8 @@
   var trendTooltip = document.getElementById('trend-tooltip');
   var temp = '';
   var trendFilter = '';
+  var minDaysEl = document.getElementById('min-days');
+  var maxDaysEl = document.getElementById('max-days');
   var selected = '';
   var currentPage = 1;
   var conceptRows = [];
@@ -146,7 +148,7 @@
     conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
     pagerEl.innerHTML = '';
     try {
-      var url = '/api/concept-temperature?window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '') + (trendFilter ? '&trend=' + encodeURIComponent(trendFilter) : '');
+      var url = '/api/concept-temperature?window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '') + (trendFilter ? '&trend=' + encodeURIComponent(trendFilter) : '') + (minDaysEl && minDaysEl.value ? '&min_days=' + encodeURIComponent(minDaysEl.value) : '') + (maxDaysEl && maxDaysEl.value ? '&max_days=' + encodeURIComponent(maxDaysEl.value) : '');
       var resp = await fetch(url);
       var data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || '加载失败');
@@ -223,6 +225,10 @@
     bindTemperatureTooltips();
   }
 
+  [minDaysEl, maxDaysEl].forEach(function (input) {
+    if (!input) return;
+    input.addEventListener('change', function () { currentPage = 1; loadConcepts(); });
+  });
   document.querySelectorAll('.trend-filter').forEach(function (button) {
     button.addEventListener('click', function () {
       trendFilter = button.dataset.trend || '';
