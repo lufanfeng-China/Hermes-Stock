@@ -41,10 +41,10 @@
   }
   function tempTrend(row) {
     if (row.temperature_trend === 'unknown' || row.temperature_previous == null) return '<span class="trend-flat">—</span>';
-    var arrow = row.temperature_trend === 'warming' ? '↑' : (row.temperature_trend === 'cooling' ? '↓' : '→');
-    var cls = row.temperature_trend === 'warming' ? 'positive' : (row.temperature_trend === 'cooling' ? 'negative' : 'trend-flat');
-    var gap = row.temperature_previous_gap_days && row.temperature_previous_gap_days > 1 ? '（' + row.temperature_previous_gap_days + '日前）' : '';
-    return '<span class="' + cls + '">' + row.temperature_previous + ' → ' + row.temperature + ' ' + arrow + ' ' + esc(row.temperature_trend_label) + gap + '</span>';
+    var arrow = row.temperature_trend === 'warming' ? '↑' : '↓';
+    var cls = row.temperature_trend === 'warming' ? 'positive' : 'negative';
+    return '<span class="' + cls + '" title="前温 ' + row.temperature_previous + '，当前 ' + row.temperature + '">' +
+      row.temperature_previous + ' → ' + row.temperature + ' ' + arrow + ' ' + esc(row.temperature_trend_label) + '</span>';
   }
   function renderSummary(data) {
     var rows = data.concepts || [];

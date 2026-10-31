@@ -67,56 +67,59 @@ def _temperature(score_percentile: float, median_return: float, breadth: float, 
     return 4, "热门"
 
 
-TREND_LABELS = {"warming": "升温", "cooling": "退坡", "flat": "持平", "unknown": "无前值"}
-PREVIOUS_LEVEL_MAX_GAP = 5
+TREND_LABELS = {"warming": "升温", "cooling": "退坡", "unknown": "无前值"}
 
 
-def _previous_level(concept_code: str, history_newest_first: list[dict[str, int | None]]) -> tuple[int | None, int | None]:
-    """Most recent temperature before today, and how many trading days back it was."""
-    for gap, levels in enumerate(history_newest_first[1:PREVIOUS_LEVEL_MAX_GAP + 1], start=1):
+def _previous_level(concept_code: str, history_newest_first: list[dict[str, int | None]],
+                    current: int) -> tuple[int | None, int | None]:
+    """最近一次“与当前不同”的温度，以及它距今多少个交易日。
+
+    跳过缺数据的交易日；连续相同的当前温度不算“前温”——所以前温永远不会等于
+    当前温度，也就不存在“持平”。整段历史都没有不同温度时返回 (None, None)。
+    """
+    for gap, levels in enumerate(history_newest_first[1:], start=1):
         level = levels.get(concept_code)
-        if level is not None:
-            return level, gap
+        if level is None or level == current:
+            continue
+        return level, gap
     return None, None
 
 
 def attach_temperature_streaks(current_rows: list[dict[str, Any]], history_newest_first: list[dict[str, int | None]]) -> None:
-    """Add consecutive trading-day streaks and the previous level for each row.
+    """Add consecutive trading-day streaks and the previous *different* level.
 
-    Each history item maps concept code to its temperature for one trading day,
-    ordered from the current day backwards. A missing/insufficient-data state
-    deliberately has no numerical streak.
+    history_newest_first 按今天向前排序，每项是 code → 温度。
+    temperature_previous 是最近一次不等于当前温度的那一档（不是昨天那一档）。
     """
     for row in current_rows:
         current = row.get("temperature")
         if current is None:
             row["temperature_streak_days"] = None
-        else:
-            days = 0
-            for levels in history_newest_first:
-                if levels.get(row["concept_code"]) != current:
-                    break
-                days += 1
-            row["temperature_streak_days"] = days
-
-        previous, gap = _previous_level(row["concept_code"], history_newest_first)
-        row["temperature_previous"] = previous
-        row["temperature_previous_gap_days"] = gap
-        if current is None or previous is None:
+            row["temperature_previous"] = None
+            row["temperature_previous_gap_days"] = None
             row["temperature_change"] = None
             row["temperature_trend"] = "unknown"
+            row["temperature_trend_label"] = "数据不足"
+            continue
+
+        days = 0
+        for levels in history_newest_first:
+            if levels.get(row["concept_code"]) != current:
+                break
+            days += 1
+        row["temperature_streak_days"] = days
+
+        previous, gap = _previous_level(row["concept_code"], history_newest_first, current)
+        row["temperature_previous"] = previous
+        row["temperature_previous_gap_days"] = gap
+        if previous is None:
+            row["temperature_change"] = None
+            row["temperature_trend"] = "unknown"
+            row["temperature_trend_label"] = "无前值"
         else:
             row["temperature_change"] = int(current) - int(previous)
-            if current > previous:
-                row["temperature_trend"] = "warming"
-            elif current < previous:
-                row["temperature_trend"] = "cooling"
-            else:
-                row["temperature_trend"] = "flat"
-        # 两种“未知”要分开说：今天没数据 ≠ 昨天没数据
-        row["temperature_trend_label"] = (
-            "数据不足" if current is None else ("无前值" if previous is None else TREND_LABELS[row["temperature_trend"]])
-        )
+            row["temperature_trend"] = "warming" if current > previous else "cooling"
+            row["temperature_trend_label"] = TREND_LABELS[row["temperature_trend"]]
 
 
 def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10, as_of: pd.Timestamp | None = None, include_members: bool = True) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
