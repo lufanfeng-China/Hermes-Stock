@@ -24,6 +24,68 @@ HISTORICAL_FUNDAMENTALS = FINAL / "stock_filter_fundamental_history"
 PAGE_SIZE = 50
 SORT_FIELDS = {"eps_ratio_5y", "rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
 
+# 01 股票范围：先锁定股票池，再套用其它筛选条件。
+STOCK_SCOPE_LABELS = {
+    "all": "全部",
+    "csi300": "沪深300",
+    "main_board": "沪深主板",
+    "chinext": "创业板",
+    "star": "科创板",
+}
+
+
+def board_of(market: str, symbol: str) -> str:
+    """Classify a symbol into main / chinext / star / bj / other by market + code prefix."""
+    market = str(market or "").strip().lower()
+    code = str(symbol or "").strip().zfill(6)
+    if market == "bj" or code.startswith(("92", "83", "87", "43", "82")):
+        return "bj"
+    if market == "sh":
+        if code.startswith(("688", "689")):
+            return "star"
+        if code.startswith(("600", "601", "603", "605")):
+            return "main"
+        return "other"
+    if market == "sz":
+        if code.startswith(("300", "301", "302")):
+            return "chinext"
+        if code.startswith(("000", "001", "002", "003")):
+            return "main"
+        return "other"
+    return "other"
+
+
+@lru_cache(maxsize=1)
+def csi300_codes() -> frozenset[str]:
+    """Latest CSI300 constituent list, as bare 6-digit codes."""
+    candidates = sorted(FINAL.glob("csi300_constituents_current*.json"))
+    if not candidates:
+        return frozenset()
+    try:
+        payload = json.loads(candidates[-1].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return frozenset()
+    codes = payload.get("constituents") if isinstance(payload, dict) else payload
+    if not isinstance(codes, list):
+        return frozenset()
+    return frozenset(str(code).strip().zfill(6) for code in codes if str(code).strip())
+
+
+def matches_scope(market: str, symbol: str, scope: str) -> bool:
+    """True when the symbol belongs to the requested 01 股票范围."""
+    if scope in ("", "all"):
+        return True
+    board = board_of(market, symbol)
+    if scope == "csi300":
+        return str(symbol or "").strip().zfill(6) in csi300_codes()
+    if scope == "main_board":
+        return board == "main"
+    if scope == "chinext":
+        return board == "chinext"
+    if scope == "star":
+        return board == "star"
+    return True
+
 
 def _num(value: Any) -> float | None:
     try:
@@ -310,6 +372,8 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
             datetime.strptime(as_of_date, "%Y-%m-%d")
         niche_leader = (params.get("niche_leader") or [""])[0].strip().lower()
         if niche_leader not in {"", "yes", "no"}: raise ValueError("niche_leader must be yes or no")
+        stock_scope = (params.get("stock_scope") or [""])[0].strip().lower() or "all"
+        if stock_scope not in STOCK_SCOPE_LABELS: raise ValueError("stock_scope must be all, csi300, main_board, chinext or star")
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
@@ -344,9 +408,11 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     monthly_trends = _selected(params, "trend_monthly")
     macds, crosses = _selected(params, "macd_cross"), _selected(params, "golden_cross")
     market = (params.get("market") or [""])[0].strip().lower()
+    # 01 股票范围先锁定股票池，再套用其余条件。
+    scoped_rows = [row for row in rows if matches_scope(row.get("market"), row.get("symbol"), stock_scope)]
     filtered = []
     excluded_missing = 0
-    for row in rows:
+    for row in scoped_rows:
         if market and row["market"] != market: continue
         if preset == "financial_reversal" and not matches_financial_reversal(row): continue
         if preset == "blowup_break" and not matches_blowup_break(row): continue
@@ -367,7 +433,9 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     reverse = (params.get("order") or ["desc"])[0].lower() != "asc"
     filtered.sort(key=lambda row: (_num(row.get(sort)) is not None, _num(row.get(sort)) or -float("inf")), reverse=reverse)
     total = len(filtered); start = (page - 1) * PAGE_SIZE
-    return {"ok": True, "data_as_of": data_date, "effective_trade_date": data_date, "is_historical": bool(as_of_date), "total_universe": len(rows), "total_matched": total,
+    return {"ok": True, "data_as_of": data_date, "effective_trade_date": data_date, "is_historical": bool(as_of_date),
+            "stock_scope": stock_scope, "stock_scope_label": STOCK_SCOPE_LABELS[stock_scope],
+            "total_universe": len(scoped_rows), "universe_total": len(rows), "total_matched": total,
             "page": page, "page_size": PAGE_SIZE, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE),
             "rows": filtered[start:start + PAGE_SIZE], "excluded_missing": excluded_missing,
             "capabilities": {"available": ["rps", "financial_health", "trend", "macd", "ma_golden_cross"],

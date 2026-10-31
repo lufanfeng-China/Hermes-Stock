@@ -106,14 +106,18 @@
             <button class="preset-option" type="button" data-preset="blowup_break"><span class="preset-name">爆量突破</span><span class="preset-tags">5日连续放量 · 趋势确认</span></button>
             <input type="hidden" name="preset" value="">
           </section>
-          <fieldset class="filter-group is-collapsed" data-filter-group="rps"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>01</span>RPS 强度</button></legend><div class="range-grid">
+          <fieldset class="filter-group" data-filter-group="scope"><legend><button class="filter-group-toggle" type="button" aria-expanded="true"><span>01</span>股票范围</button></legend><div class="range-grid">
+            <label class="filter-field">范围<select name="stock_scope"><option value="all">全部</option><option value="csi300">沪深300</option><option value="main_board">沪深主板</option><option value="chinext">创业板</option><option value="star">科创板</option></select></label>
+            <p class="filter-note">先按所选范围锁定股票池，再套用下方其它条件；沪深主板含沪市 600/601/603/605 与深市 000/001/002/003，创业板 300/301，科创板 688/689，北交所不在上述任一范围。</p>
+          </fieldset>
+          <fieldset class="filter-group is-collapsed" data-filter-group="rps"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>02</span>RPS 强度</button></legend><div class="range-grid">
             <label class="filter-field">RPS20<div class="range-pair"><input name="rps_20_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_20_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS50<div class="range-pair"><input name="rps_50_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_50_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS120<div class="range-pair"><input name="rps_120_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_120_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS250<div class="range-pair"><input name="rps_250_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_250_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field full">RPS Total<div class="range-pair"><input name="rps_total_min" type="number" min="0" max="400" placeholder="最小"><b>—</b><input name="rps_total_max" type="number" min="0" max="400" placeholder="最大"></div></label>
           </div></fieldset>
-          <fieldset class="filter-group is-collapsed" data-filter-group="market"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>02</span>基础行情</button></legend><div class="range-grid">
+          <fieldset class="filter-group is-collapsed" data-filter-group="market"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>03</span>基础行情</button></legend><div class="range-grid">
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">股价五年分位（%）<div class="range-pair"><input name="price_percentile_5y_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="price_percentile_5y_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
             <p class="filter-note">前复权近五个自然年收盘价经验分位，含当日；越低表示处于自身历史较低位置。启用本条件时，不足五年或缺数据的股票不计入；留空则不限。</p>
@@ -124,7 +128,7 @@
             <label class="filter-field">总市值（亿）<div class="range-pair"><input name="total_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="total_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">流通市值（亿）<div class="range-pair"><input name="free_float_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="free_float_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
           </div></fieldset>
-          <fieldset class="filter-group is-collapsed" data-filter-group="financial"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>03</span>财务健康</button></legend>
+          <fieldset class="filter-group is-collapsed" data-filter-group="financial"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>04</span>财务健康</button></legend>
             <div class="financial-section-title">标签条件</div><div class="range-grid"><label class="filter-field">细分龙头（Y/N）<select name="niche_leader"><option value="">不限</option><option value="yes">Y（是）</option><option value="no">N（否）</option></select></label></div>
             <div class="financial-section-title">综合评分</div><div class="range-grid">
               <label class="filter-field">综合分（5年 + 当季）<div class="range-pair"><input name="composite_total_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="composite_total_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
@@ -148,16 +152,16 @@
               <label class="filter-field">财务风险（15）<div class="range-pair"><input name="quarterly_financial_risk_min" type="number" min="0" max="15" placeholder="最小"><b>—</b><input name="quarterly_financial_risk_max" type="number" min="0" max="15" placeholder="最大"></div></label>
             </div>
           </fieldset>
-          <fieldset class="filter-group is-collapsed" data-filter-group="trend"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>04</span>趋势过滤</button></legend><div class="trend-grid">
+          <fieldset class="filter-group is-collapsed" data-filter-group="trend"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>05</span>趋势过滤</button></legend><div class="trend-grid">
             <label>日线<select name="trend_daily" multiple size="6"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="recovering">修复中</option><option value="neutral">震荡</option><option value="bearish">空头</option><option value="strong_bearish">强空头</option></select></label>
             <label>周线<select name="trend_weekly" multiple size="4"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="neutral">震荡</option><option value="bearish">空头</option></select></label>
             <label>月线<select name="trend_monthly" multiple size="4"><option value="strong_bullish">强多头</option><option value="bullish">多头</option><option value="neutral">震荡</option><option value="bearish">空头</option></select></label>
           </div></fieldset>
-          <fieldset class="filter-group is-collapsed" data-filter-group="technical"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>05</span>MACD / 均线金叉</button></legend><div class="range-grid">
+          <fieldset class="filter-group is-collapsed" data-filter-group="technical"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>06</span>MACD / 均线金叉</button></legend><div class="range-grid">
             <label class="filter-field">MACD 金叉<select name="macd_cross" multiple size="2"><option value="zero_below">零轴下金叉</option><option value="zero_above">零轴上金叉</option></select></label>
             <label class="filter-field">均线金叉<select name="golden_cross" multiple size="3"><option value="5/10">MA5 / MA10</option><option value="10/20">MA10 / MA20</option><option value="20/60">MA20 / MA60</option></select></label>
           </div></fieldset>
-          <fieldset class="filter-group is-collapsed" data-filter-group="relative-strength"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>06</span>相对大盘强弱</button></legend><p class="filter-note">全A可交易股每日等权、与RPS同一成分池、前复权。ER为跑赢大盘百分点；抗跌仅统计最近20日的大盘下跌日。</p><div class="range-grid">
+          <fieldset class="filter-group is-collapsed" data-filter-group="relative-strength"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>07</span>相对大盘强弱</button></legend><p class="filter-note">全A可交易股每日等权、与RPS同一成分池、前复权。ER为跑赢大盘百分点；抗跌仅统计最近20日的大盘下跌日。</p><div class="range-grid">
             <label class="filter-field">MRS 强弱分<div class="range-pair"><input name="mrs_score_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="mrs_score_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
             <label class="filter-field">ER5（pp）<div class="range-pair"><input name="excess_return_5_pp_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="excess_return_5_pp_max" type="number" step="0.1" placeholder="最大"></div></label>
             <label class="filter-field">ER20（pp）<div class="range-pair"><input name="excess_return_20_pp_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="excess_return_20_pp_max" type="number" step="0.1" placeholder="最大"></div></label>

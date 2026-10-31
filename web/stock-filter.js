@@ -147,7 +147,11 @@
     matchCount.textContent = Number(data.total_matched || 0).toLocaleString('zh-CN');
     status.classList.remove('error');
     var historical = data.is_historical ? ' · 历史基本面：公告日 point-in-time · 估值为当日原始收盘价' : '';
-    status.textContent = '全市场 ' + Number(data.total_universe || 0).toLocaleString('zh-CN') + ' 只 · 数据日期 ' + (data.data_as_of || '—') + historical + ' · 已因已启用字段缺失排除 ' + Number(data.excluded_missing || 0).toLocaleString('zh-CN') + ' 只';
+    var scopeLabel = data.stock_scope_label || '全部';
+    var scopeText = scopeLabel === '全部'
+      ? '全市场 ' + Number(data.total_universe || 0).toLocaleString('zh-CN')
+      : '范围 ' + scopeLabel + ' ' + Number(data.total_universe || 0).toLocaleString('zh-CN') + ' 只（全市场 ' + Number(data.universe_total || data.total_universe || 0).toLocaleString('zh-CN') + '）';
+    status.textContent = scopeText + ' · 数据日期 ' + (data.data_as_of || '—') + historical + ' · 已因已启用字段缺失排除 ' + Number(data.excluded_missing || 0).toLocaleString('zh-CN') + ' 只';
     renderRows(data);
     renderPagination(data);
   }
