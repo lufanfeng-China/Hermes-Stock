@@ -18,6 +18,9 @@
   var trendTooltip = document.getElementById('trend-tooltip');
   var temp = '';
   var trendFilter = '';
+  var scopeEl = document.getElementById('scope');
+  var unitHeader = document.getElementById('unit-header');
+  var scope = 'concept';
   var minDaysEl = document.getElementById('min-days');
   var maxDaysEl = document.getElementById('max-days');
   var selected = '';
@@ -137,7 +140,7 @@
     trendMeta.textContent = '加载 ' + windowEl.value + ' 日窗口的过去半年热度分…'; trendTooltip.textContent = '';
     chartEl.replaceChildren(); dialogEl.showModal();
     try {
-      var response = await fetch('/api/concept-temperature/trend?window=' + encodeURIComponent(windowEl.value) + '&concept_code=' + encodeURIComponent(code));
+      var response = await fetch('/api/concept-temperature/trend?scope=' + encodeURIComponent(scope) + '&window=' + encodeURIComponent(windowEl.value) + '&concept_code=' + encodeURIComponent(code));
       var data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || '趋势加载失败');
       trendTitle.textContent = data.concept.concept_name + ' · 热度分趋势';
       trendMeta.textContent = '过去半年 · ' + data.window + ' 日窗口 · 前复权口径 · ' + data.points.length + ' 个交易日';
@@ -148,7 +151,7 @@
     conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
     pagerEl.innerHTML = '';
     try {
-      var url = '/api/concept-temperature?window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '') + (trendFilter ? '&trend=' + encodeURIComponent(trendFilter) : '') + (minDaysEl && minDaysEl.value ? '&min_days=' + encodeURIComponent(minDaysEl.value) : '') + (maxDaysEl && maxDaysEl.value ? '&max_days=' + encodeURIComponent(maxDaysEl.value) : '');
+      var url = '/api/concept-temperature?scope=' + encodeURIComponent(scope) + '&window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '') + (trendFilter ? '&trend=' + encodeURIComponent(trendFilter) : '') + (minDaysEl && minDaysEl.value ? '&min_days=' + encodeURIComponent(minDaysEl.value) : '') + (maxDaysEl && maxDaysEl.value ? '&max_days=' + encodeURIComponent(maxDaysEl.value) : '');
       var resp = await fetch(url);
       var data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || '加载失败');
@@ -166,7 +169,7 @@
     if (!selected) return;
     membersEl.innerHTML = '<tr><td colspan="5" class="empty">加载中…</td></tr>';
     try {
-      var resp = await fetch('/api/concept-temperature/members?window=' + encodeURIComponent(windowEl.value) + '&concept_code=' + encodeURIComponent(selected));
+      var resp = await fetch('/api/concept-temperature/members?scope=' + encodeURIComponent(scope) + '&window=' + encodeURIComponent(windowEl.value) + '&concept_code=' + encodeURIComponent(selected));
       var data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || '加载失败');
       memberTitle.textContent = data.concept.concept_name + ' · 成分股';
@@ -225,6 +228,20 @@
     bindTemperatureTooltips();
   }
 
+  function applyScope() {
+    scope = scopeEl ? scopeEl.value : 'concept';
+    if (unitHeader) unitHeader.textContent = scope === 'industry' ? '二级行业' : '概念';
+    selected = ''; currentPage = 1;
+    memberTitle.textContent = '成分股清单'; memberCount.textContent = '0';
+    memberMeta.textContent = '点击上方查看';
+    membersEl.innerHTML = '<tr><td colspan="5" class="empty">尚未选择' + (scope === 'industry' ? '行业' : '概念') + '</td></tr>';
+    conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
+    loadConcepts();
+  }
+  if (scopeEl) {
+    scopeEl.addEventListener('change', applyScope);
+    applyScope();
+  }
   [minDaysEl, maxDaysEl].forEach(function (input) {
     if (!input) return;
     input.addEventListener('change', function () { currentPage = 1; loadConcepts(); });
