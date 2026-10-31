@@ -58,7 +58,7 @@
       return rows.filter(function (row) { return row.temperature === level; }).length;
     });
     summaryEl.innerHTML = '<div class="stat-card"><div class="val">' + esc(data.as_of_date || '—') + '</div><div class="lbl">数据截至</div></div>' +
-      '<div class="stat-card"><div class="val">' + rows.length + '</div><div class="lbl">当前概念数</div></div>' +
+      '<div class="stat-card"><div class="val">' + rows.length + '</div><div class="lbl">' + (scope === 'industry' ? '当前行业数' : '当前概念数') + '</div></div>' +
       '<div class="stat-card"><div class="val positive">' + counts[5] + '</div><div class="lbl">极热 / 5分</div></div>' +
       '<div class="stat-card"><div class="val">' + counts[4] + '</div><div class="lbl">热门 / 4分</div></div>';
   }
@@ -231,6 +231,8 @@
   function applyScope() {
     scope = scopeEl ? scopeEl.value : 'concept';
     if (unitHeader) unitHeader.textContent = scope === 'industry' ? '二级行业' : '概念';
+    var boardTitle = document.getElementById('board-title');
+    if (boardTitle) boardTitle.textContent = scope === 'industry' ? '行业温度榜' : '概念温度榜';
     selected = ''; currentPage = 1;
     memberTitle.textContent = '成分股清单'; memberCount.textContent = '0';
     memberMeta.textContent = '点击上方查看';
