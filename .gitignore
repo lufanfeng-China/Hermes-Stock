@@ -10,5 +10,10 @@ dist/
 build/
 
 # Runtime archive/derived data
+# 全部派生数据集（parquet / 快照 JSON / 归档行）一律不进版本库：
+# 体积大、可按脚本重建，且每天都在变。仓库只保留生成它们的脚本与口径文档。
+# 若某个小体积参考文件（如指数成分名单）确实需要入库，用 `git add -f` 并在这里
+# 加一条 `!` 例外，否则 git rm --cached 之后就不会再被误提交。
 /data/
+*.parquet
 !/docs/*.example.json
