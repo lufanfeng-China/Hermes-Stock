@@ -73,3 +73,58 @@ def test_page_renders_the_previous_temperature_column():
     assert "function tempTrend(row)" in js and "tempTrend(row)" in js
     assert "row.temperature_previous" in js and "temperature_trend_label" in js
     assert 'colspan="9"' in js and 'colspan="8"' not in js
+
+
+def _fixture():
+    return {"as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq", "min_members": 10,
+            "windows": {"10": {"concepts": [
+                {"concept_code": "A", "temperature": 3, "temperature_trend": "cooling", "temperature_previous": 4},
+                {"concept_code": "B", "temperature": 3, "temperature_trend": "warming", "temperature_previous": 2},
+                {"concept_code": "C", "temperature": 5, "temperature_trend": "warming", "temperature_previous": 4},
+                {"concept_code": "D", "temperature": 2, "temperature_trend": "unknown", "temperature_previous": None},
+            ]}}}
+
+
+def test_api_filters_by_trend_only():
+    from unittest.mock import patch
+
+    from app.api.concept_temperature import handle_concept_temperature
+
+    with patch("app.api.concept_temperature._load", return_value=_fixture()):
+        cooling = handle_concept_temperature("window=10&trend=cooling")
+        warming = handle_concept_temperature("window=10&trend=warming")
+        everything = handle_concept_temperature("window=10")
+
+    assert [row["concept_code"] for row in cooling["concepts"]] == ["A"]
+    assert [row["concept_code"] for row in warming["concepts"]] == ["B", "C"]
+    assert len(everything["concepts"]) == 4
+    assert cooling["trend"] == "cooling"
+
+
+def test_api_combines_trend_with_temperature_level():
+    from unittest.mock import patch
+
+    from app.api.concept_temperature import handle_concept_temperature
+
+    with patch("app.api.concept_temperature._load", return_value=_fixture()):
+        combo = handle_concept_temperature("window=10&temperature=3&trend=warming")
+    assert [row["concept_code"] for row in combo["concepts"]] == ["B"]
+
+
+def test_api_rejects_unknown_trend():
+    from unittest.mock import patch
+
+    from app.api.concept_temperature import handle_concept_temperature
+
+    with patch("app.api.concept_temperature._load", return_value=_fixture()):
+        bad = handle_concept_temperature("window=10&trend=up")
+    assert bad["ok"] is False and bad["status"] == 400
+
+
+def test_page_has_trend_buttons_and_sends_the_param():
+    html = (ROOT / "web" / "concept-temperature.html").read_text(encoding="utf-8")
+    js = (ROOT / "web" / "concept-temperature.js").read_text(encoding="utf-8")
+    assert 'data-trend="warming"' in html and 'data-trend="cooling"' in html
+    assert "仅升温" in html and "仅退坡" in html
+    assert "trend-filter" in js and "trendFilter" in js
+    assert "'&trend=' + encodeURIComponent(trendFilter)" in js

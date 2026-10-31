@@ -25,12 +25,18 @@ def handle_concept_temperature(query: str) -> dict:
     temperature_raw = params.get('temperature', '').strip()
     if temperature_raw and temperature_raw not in {'0', '1', '2', '3', '4', '5'}:
         return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'temperature must be 0 through 5'}
+    trend_raw = params.get('trend', '').strip()
+    if trend_raw and trend_raw not in {'warming', 'cooling'}:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'trend must be warming or cooling'}
     try:
         data = _load(); section = data['windows'][window]
         concepts = section['concepts']
         if temperature_raw:
             concepts = [row for row in concepts if row.get('temperature') == int(temperature_raw)]
-        return {'ok': True, 'as_of_date': data['as_of_date'], 'window': int(window), 'price_basis': data['price_basis'], 'min_members': data['min_members'], 'concepts': concepts}
+        if trend_raw:
+            concepts = [row for row in concepts if row.get('temperature_trend') == trend_raw]
+        return {'ok': True, 'as_of_date': data['as_of_date'], 'window': int(window), 'trend': trend_raw,
+                'price_basis': data['price_basis'], 'min_members': data['min_members'], 'concepts': concepts}
     except Exception as exc:
         return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}
 

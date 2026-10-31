@@ -17,6 +17,7 @@
   var trendMeta = document.getElementById('trend-meta');
   var trendTooltip = document.getElementById('trend-tooltip');
   var temp = '';
+  var trendFilter = '';
   var selected = '';
   var currentPage = 1;
   var conceptRows = [];
@@ -145,7 +146,7 @@
     conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
     pagerEl.innerHTML = '';
     try {
-      var url = '/api/concept-temperature?window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '');
+      var url = '/api/concept-temperature?window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '') + (trendFilter ? '&trend=' + encodeURIComponent(trendFilter) : '');
       var resp = await fetch(url);
       var data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || '加载失败');
@@ -222,6 +223,14 @@
     bindTemperatureTooltips();
   }
 
+  document.querySelectorAll('.trend-filter').forEach(function (button) {
+    button.addEventListener('click', function () {
+      trendFilter = button.dataset.trend || '';
+      currentPage = 1;
+      document.querySelectorAll('.trend-filter').forEach(function (item) { item.classList.toggle('active', item === button); });
+      loadConcepts();
+    });
+  });
   document.querySelectorAll('.temp-filter').forEach(function (button) {
     button.addEventListener('click', function () {
       temp = button.dataset.temp; currentPage = 1;
