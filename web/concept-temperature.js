@@ -39,6 +39,13 @@
     if (row.temperature_streak_days == null) return '—';
     return String(row.temperature_streak_days) + (row.temperature_streak_capped ? '+' : '') + '天';
   }
+  function tempTrend(row) {
+    if (row.temperature_trend === 'unknown' || row.temperature_previous == null) return '<span class="trend-flat">—</span>';
+    var arrow = row.temperature_trend === 'warming' ? '↑' : (row.temperature_trend === 'cooling' ? '↓' : '→');
+    var cls = row.temperature_trend === 'warming' ? 'positive' : (row.temperature_trend === 'cooling' ? 'negative' : 'trend-flat');
+    var gap = row.temperature_previous_gap_days && row.temperature_previous_gap_days > 1 ? '（' + row.temperature_previous_gap_days + '日前）' : '';
+    return '<span class="' + cls + '">' + row.temperature_previous + ' → ' + row.temperature + ' ' + arrow + ' ' + esc(row.temperature_trend_label) + gap + '</span>';
+  }
   function renderSummary(data) {
     var rows = data.concepts || [];
     var counts = [0,1,2,3,4,5].map(function (level) {
@@ -69,12 +76,12 @@
     var start = (currentPage - 1) * PAGE_SIZE;
     var visible = conceptRows.slice(start, start + PAGE_SIZE);
     if (!visible.length) {
-      conceptsEl.innerHTML = '<tr><td colspan="8" class="empty">没有符合该温度的概念</td></tr>';
+      conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">没有符合该温度的概念</td></tr>';
       pagerEl.innerHTML = '';
       return;
     }
     conceptsEl.innerHTML = visible.map(function (row) {
-      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td><button type="button" class="heat-score-btn" data-trend-code="' + esc(row.concept_code) + '" title="查看过去半年热度分趋势">' + Number(row.heat_score).toFixed(1) + '</button></td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + streak(row) + '</td><td>' + row.member_count + '</td></tr>';
+      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td>' + tempTrend(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td><button type="button" class="heat-score-btn" data-trend-code="' + esc(row.concept_code) + '" title="查看过去半年热度分趋势">' + Number(row.heat_score).toFixed(1) + '</button></td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + streak(row) + '</td><td>' + row.member_count + '</td></tr>';
     }).join('');
     conceptsEl.querySelectorAll('.concept-row').forEach(function (row) {
       row.addEventListener('click', function () {
@@ -135,7 +142,7 @@
     } catch (error) { trendMeta.textContent = '加载失败：' + error.message; }
   }
   async function loadConcepts() {
-    conceptsEl.innerHTML = '<tr><td colspan="8" class="empty">加载中…</td></tr>';
+    conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
     pagerEl.innerHTML = '';
     try {
       var url = '/api/concept-temperature?window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '');
@@ -149,7 +156,7 @@
       renderConceptPage();
     } catch (err) {
       conceptMeta.textContent = '加载失败：' + err.message;
-      conceptsEl.innerHTML = '<tr><td colspan="8" class="empty">无法加载概念温度数据</td></tr>';
+      conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">无法加载概念温度数据</td></tr>';
     }
   }
   async function loadMembers() {

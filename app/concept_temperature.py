@@ -67,8 +67,21 @@ def _temperature(score_percentile: float, median_return: float, breadth: float, 
     return 4, "热门"
 
 
+TREND_LABELS = {"warming": "升温", "cooling": "退坡", "flat": "持平", "unknown": "无前值"}
+PREVIOUS_LEVEL_MAX_GAP = 5
+
+
+def _previous_level(concept_code: str, history_newest_first: list[dict[str, int | None]]) -> tuple[int | None, int | None]:
+    """Most recent temperature before today, and how many trading days back it was."""
+    for gap, levels in enumerate(history_newest_first[1:PREVIOUS_LEVEL_MAX_GAP + 1], start=1):
+        level = levels.get(concept_code)
+        if level is not None:
+            return level, gap
+    return None, None
+
+
 def attach_temperature_streaks(current_rows: list[dict[str, Any]], history_newest_first: list[dict[str, int | None]]) -> None:
-    """Add consecutive trading-day streaks for the row's current temperature.
+    """Add consecutive trading-day streaks and the previous level for each row.
 
     Each history item maps concept code to its temperature for one trading day,
     ordered from the current day backwards. A missing/insufficient-data state
@@ -78,13 +91,29 @@ def attach_temperature_streaks(current_rows: list[dict[str, Any]], history_newes
         current = row.get("temperature")
         if current is None:
             row["temperature_streak_days"] = None
-            continue
-        days = 0
-        for levels in history_newest_first:
-            if levels.get(row["concept_code"]) != current:
-                break
-            days += 1
-        row["temperature_streak_days"] = days
+        else:
+            days = 0
+            for levels in history_newest_first:
+                if levels.get(row["concept_code"]) != current:
+                    break
+                days += 1
+            row["temperature_streak_days"] = days
+
+        previous, gap = _previous_level(row["concept_code"], history_newest_first)
+        row["temperature_previous"] = previous
+        row["temperature_previous_gap_days"] = gap
+        if current is None or previous is None:
+            row["temperature_change"] = None
+            row["temperature_trend"] = "unknown"
+        else:
+            row["temperature_change"] = int(current) - int(previous)
+            if current > previous:
+                row["temperature_trend"] = "warming"
+            elif current < previous:
+                row["temperature_trend"] = "cooling"
+            else:
+                row["temperature_trend"] = "flat"
+        row["temperature_trend_label"] = TREND_LABELS[row["temperature_trend"]]
 
 
 def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10, as_of: pd.Timestamp | None = None, include_members: bool = True) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
