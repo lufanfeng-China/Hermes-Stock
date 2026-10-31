@@ -177,6 +177,44 @@
     memberMeta.textContent = '点击上方概念查看'; membersEl.innerHTML = '<tr><td colspan="5" class="empty">尚未选择概念</td></tr>';
     loadConcepts();
   });
+  function bindTemperatureTooltips() {
+    var tip = document.getElementById('temp-tip');
+    if (!tip || tip.dataset.bound === '1') return;
+    tip.dataset.bound = '1';
+    function show(button) {
+      var text = button.getAttribute('data-tip');
+      if (!text) return;
+      tip.textContent = text;
+      tip.setAttribute('data-open', '1');
+      tip.setAttribute('aria-hidden', 'false');
+      var rect = button.getBoundingClientRect();
+      var width = tip.offsetWidth;
+      var left = Math.min(Math.max(8, rect.left + rect.width / 2 - width / 2), window.innerWidth - width - 8);
+      var top = rect.bottom + 10;
+      if (top + tip.offsetHeight > window.innerHeight - 8) top = rect.top - tip.offsetHeight - 10;
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    }
+    function hide() {
+      tip.removeAttribute('data-open');
+      tip.setAttribute('aria-hidden', 'true');
+    }
+    document.querySelectorAll('.temp-filter[data-tip]').forEach(function (button) {
+      button.addEventListener('mouseenter', function () { show(button); });
+      button.addEventListener('focus', function () { show(button); });
+      button.addEventListener('mouseleave', hide);
+      button.addEventListener('blur', hide);
+      button.addEventListener('click', hide);
+    });
+    window.addEventListener('scroll', hide, true);
+  }
+  // 气泡元素在脚本之后解析，必须等 DOM 就绪再绑定。
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindTemperatureTooltips);
+  } else {
+    bindTemperatureTooltips();
+  }
+
   document.querySelectorAll('.temp-filter').forEach(function (button) {
     button.addEventListener('click', function () {
       temp = button.dataset.temp; currentPage = 1;
