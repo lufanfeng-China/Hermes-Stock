@@ -54,3 +54,18 @@ def test_tooltip_binding_survives_the_element_order():
 def test_all_button_has_a_tooltip_too():
     match = re.search(r'data-temp="" data-tip="([^"]+)"', HTML)
     assert match and "全部" in match.group(1)
+
+
+def test_rule_note_is_not_pulled_into_the_clipping_container():
+    """.block-body 用了 overflow-x:auto（等于 overflow-y 也是 auto），
+    说明文字若用负的上边距就会被裁掉上半截——这里锁死不许出现负 margin。"""
+    rule = re.search(r"\.rule-note\{([^}]*)\}", HTML)
+    assert rule, ".rule-note 样式缺失"
+    body = rule.group(1)
+    assert "margin" in body
+    margin = re.search(r"margin:\s*([^;]+)", body).group(1)
+    numbers = re.findall(r"-?\d*\.?\d+", margin)
+    assert numbers and float(numbers[0]) >= 0, f"rule-note 上边距不能为负：{body}"
+    line_height = re.search(r"line-height:\s*([\d.]+)", body)
+    assert line_height and float(line_height.group(1)) >= 1.4, f"说明文字行高过低：{body}"
+    assert "overflow:auto" not in body.replace(" ", "")
