@@ -69,3 +69,39 @@ def test_rule_note_is_not_pulled_into_the_clipping_container():
     line_height = re.search(r"line-height:\s*([\d.]+)", body)
     assert line_height and float(line_height.group(1)) >= 1.4, f"说明文字行高过低：{body}"
     assert "overflow:auto" not in body.replace(" ", "")
+
+
+HEADERS = {
+    "热度分": ("30%", "25%", "20%", "15%", "10%", "分位"),
+    "X日中位涨幅": ("中位数", "前复权"),
+    "上涨广度": ("> 0", "比例"),
+    "相对超额": ("全市场", "中位数", "pp"),
+}
+
+
+def header_tip(label: str) -> str:
+    match = re.search(r'<th data-tip="([^"]+)">%s</th>' % re.escape(label), HTML)
+    assert match, f"表头 {label} 没有悬浮说明"
+    return match.group(1)
+
+
+def test_key_headers_explain_their_formula():
+    for label, tokens in HEADERS.items():
+        text = header_tip(label)
+        for token in tokens:
+            assert token in text, f"{label} 的说明缺少 {token}：{text}"
+
+
+def test_header_copy_matches_the_scoring_code():
+    # 权重必须与 build_temperature_rows 里的加权一致
+    assert "scores[0] * 30" in CODE and "scores[4] * 10" in CODE
+    assert "30%" in header_tip("热度分") and "10%" in header_tip("热度分")
+    # 相对超额 = 概念中位 − 全市场中位
+    assert "market_median" in CODE and "全市场" in header_tip("相对超额")
+    # 广度 = 涨跌幅 > 0 的占比
+    assert "value > 0" in CODE and "> 0" in header_tip("上涨广度")
+
+
+def test_tooltip_binding_covers_any_element_with_a_tip():
+    assert "querySelectorAll('[data-tip]')" in JS
+    assert "th[data-tip]" in HTML and "cursor:help" in HTML

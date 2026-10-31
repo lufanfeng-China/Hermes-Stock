@@ -199,7 +199,7 @@
       tip.removeAttribute('data-open');
       tip.setAttribute('aria-hidden', 'true');
     }
-    document.querySelectorAll('.temp-filter[data-tip]').forEach(function (button) {
+    document.querySelectorAll('[data-tip]').forEach(function (button) {
       button.addEventListener('mouseenter', function () { show(button); });
       button.addEventListener('focus', function () { show(button); });
       button.addEventListener('mouseleave', hide);
