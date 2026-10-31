@@ -31,6 +31,8 @@ STOCK_SCOPE_LABELS = {
     "main_board": "沪深主板",
     "chinext": "创业板",
     "star": "科创板",
+    # 双创 = 科创板 + 创业板
+    "dual_creative": "双创（科创+创业）",
 }
 
 
@@ -84,6 +86,8 @@ def matches_scope(market: str, symbol: str, scope: str) -> bool:
         return board == "chinext"
     if scope == "star":
         return board == "star"
+    if scope == "dual_creative":
+        return board in ("star", "chinext")
     return True
 
 
@@ -373,7 +377,8 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         niche_leader = (params.get("niche_leader") or [""])[0].strip().lower()
         if niche_leader not in {"", "yes", "no"}: raise ValueError("niche_leader must be yes or no")
         stock_scope = (params.get("stock_scope") or [""])[0].strip().lower() or "all"
-        if stock_scope not in STOCK_SCOPE_LABELS: raise ValueError("stock_scope must be all, csi300, main_board, chinext or star")
+        if stock_scope not in STOCK_SCOPE_LABELS:
+            raise ValueError("stock_scope must be one of " + ", ".join(STOCK_SCOPE_LABELS))
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:

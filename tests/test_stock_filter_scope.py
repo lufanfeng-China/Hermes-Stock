@@ -46,6 +46,16 @@ def test_scope_membership():
     assert not matches_scope("sh", "600519", "star")
 
 
+def test_dual_creative_is_star_plus_chinext():
+    assert matches_scope("sh", "688981", "dual_creative")   # 科创板
+    assert matches_scope("sz", "300760", "dual_creative")   # 创业板
+    assert matches_scope("sz", "301269", "dual_creative")
+    assert matches_scope("sh", "689009", "dual_creative")
+    assert not matches_scope("sh", "600519", "dual_creative")   # 沪主板
+    assert not matches_scope("sz", "002594", "dual_creative")   # 深主板
+    assert not matches_scope("bj", "920000", "dual_creative")   # 北交所
+
+
 def row(market, symbol, ratio):
     return dict(market=market, symbol=symbol, rps_total=1, annual_dimensions={},
                 quarterly_dimensions={}, eps_ratio_5y=ratio)
@@ -80,6 +90,15 @@ def test_scope_combines_with_other_conditions_as_and():
     assert star["total_matched"] == 1 and star["rows"][0]["symbol"] == "688981"
 
 
+def test_dual_creative_scope_unions_both_boards_without_overlap():
+    result = call(stock_scope=["dual_creative"])
+    assert [r["symbol"] for r in result["rows"]] == ["688981", "300760"]
+    assert result["total_universe"] == 2
+    star = call(stock_scope=["star"])["total_universe"]
+    chinext = call(stock_scope=["chinext"])["total_universe"]
+    assert result["total_universe"] == star + chinext
+
+
 def test_main_board_excludes_star_and_chinext_but_keeps_bj_out():
     result = call(stock_scope=["main_board"])
     assert [r["symbol"] for r in result["rows"]] == ["600519"]
@@ -98,7 +117,8 @@ def test_page_wires_the_scope_group_first():
 
     assert '<select name="stock_scope">' in html
     for value, label in (("all", "全部"), ("csi300", "沪深300"), ("main_board", "沪深主板"),
-                         ("chinext", "创业板"), ("star", "科创板")):
+                         ("chinext", "创业板"), ("star", "科创板"),
+                         ("dual_creative", "双创（科创+创业）")):
         assert f'<option value="{value}">{label}</option>' in html
     assert "<span>01</span>股票范围" in html
     # 其余分组顺次后移
