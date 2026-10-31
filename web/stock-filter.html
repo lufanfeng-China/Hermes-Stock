@@ -115,6 +115,10 @@
           </div></fieldset>
           <fieldset class="filter-group is-collapsed" data-filter-group="market"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>02</span>基础行情</button></legend><div class="range-grid">
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
+            <label class="filter-field">股价五年分位（%）<div class="range-pair"><input name="price_percentile_5y_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="price_percentile_5y_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
+            <p class="filter-note">前复权近五个自然年收盘价经验分位，含当日；越低表示处于自身历史较低位置。启用本条件时，不足五年或缺数据的股票不计入；留空则不限。</p>
+            <label class="filter-field">股价收益比（%）<div class="range-pair"><input name="eps_ratio_5y_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="eps_ratio_5y_max" type="number" step="0.1" placeholder="最大"></div></label>
+            <p class="filter-note">最近五个完整年度「基本每股收益」加总 ÷ 当前股价，单位 %。上市不足五年按已有完整年度年化：4 年 ×1.25、3 年 ×5/3、2 年 ×2.5、1 年 ×5；负值表示五年累计亏损。留空则不限。</p>
             <label class="filter-field">PE-TTM<div class="range-pair"><input name="pe_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="pe_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">PS-TTM<div class="range-pair"><input name="ps_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="ps_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">总市值（亿）<div class="range-pair"><input name="total_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="total_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
@@ -164,14 +168,14 @@
         </form>
       </aside>
       <section class="filter-results-panel" aria-labelledby="filter-results-title">
-        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm">PE-TTM（降序）</option></select></div></div>
+        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm">PE-TTM（降序）</option><option value="eps_ratio_5y">股价收益比（降序）</option></select></div></div>
         <div id="status" class="filter-status">正在加载全市场筛选快照…</div>
-        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th>PE / PS（TTM）</th><th class="num">RPS Total</th><th>相对大盘强弱</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th>触发红旗数量（当季）</th><th>日 / 周 / 月趋势</th><th>金叉</th></tr></thead><tbody id="results"></tbody></table></div>
+        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th>PE / PS（TTM）</th><th class="num">RPS Total</th><th>相对大盘强弱</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th>触发红旗数量（当季）</th><th class="num">股价收益比</th></tr></thead><tbody id="results"></tbody></table></div>
         <div id="pagination" class="pagination"></div>
       </section>
     </div>
   </main>
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
-  <script src="/stock-filter.js?v=20261023-market-relative-strength-v5"></script>
+  <script src="/stock-filter.js?v=20261030-price-percentile-5y-v6"></script>
 </body>
 </html>

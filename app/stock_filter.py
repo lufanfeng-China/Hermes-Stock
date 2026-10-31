@@ -15,12 +15,14 @@ import sys
 import pandas as pd
 
 from app.stock_filter_history_progress import read_progress
+from app.stock_filter_market_snapshot import PRICE_PERCENTILE_FIELDS
+import math
 
 ROOT = Path(__file__).resolve().parent.parent
 FINAL = ROOT / "data" / "derived" / "datasets" / "final"
 HISTORICAL_FUNDAMENTALS = FINAL / "stock_filter_fundamental_history"
 PAGE_SIZE = 50
-SORT_FIELDS = {"rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
+SORT_FIELDS = {"eps_ratio_5y", "rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
 
 
 def _num(value: Any) -> float | None:
@@ -210,8 +212,12 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "total_market_cap": _num(valuation.get("total_market_cap")),
             "free_float_market_cap": _num(valuation.get("free_float_market_cap")),
             "pe_ttm": _num(valuation.get("pe_ttm")), "ps_ttm": _num(valuation.get("ps_ttm")),
+            **{key: qfq.get(key) for key in PRICE_PERCENTILE_FIELDS},
             "return_1d": qfq.get("return_1d"), "return_5d": qfq.get("return_5d"), "return_20d": qfq.get("return_20d"),
             "turnover_5_sum": qfq.get("turnover_5_sum"), "turnover_5_avg": qfq.get("turnover_5_avg"), "qfq_as_of": qfq.get("qfq_as_of"),
+            "eps_ratio_5y": _num(qfq.get("eps_ratio_5y")), "eps_ratio_5y_years": qfq.get("eps_ratio_5y_years"),
+            "eps_ratio_5y_factor": qfq.get("eps_ratio_5y_factor"), "eps_ratio_5y_eps_sum": qfq.get("eps_ratio_5y_eps_sum"),
+            "eps_ratio_5y_price": qfq.get("eps_ratio_5y_price"),
             "blowup_break_volume_price_ok": qfq.get("blowup_break_volume_price_ok"), "blowup_break_va": qfq.get("blowup_break_va"),
             "blowup_break_vol_ratios": qfq.get("blowup_break_vol_ratios") or [], "blowup_break_return_5d": qfq.get("blowup_break_return_5d"),
             "rps_20": _num(r.get("rps_20")), "rps_50": _num(r.get("rps_50")),
@@ -255,7 +261,7 @@ def _historical_universe(as_of_date: str) -> tuple[list[dict[str, Any]], str]:
     """
     path = HISTORICAL_FUNDAMENTALS / f"{as_of_date}.json"
     payload = _read_json(path)
-    if not payload or payload.get("as_of_date") != as_of_date or payload.get("schema_version") != "stock-filter-fundamental-history-v2":
+    if not payload or payload.get("as_of_date") != as_of_date or payload.get("schema_version") != "stock-filter-fundamental-history-v3":
         # Build only the requested trading date and cache it permanently.  A lock
         # prevents concurrent browser requests from launching duplicate scans.
         lock = HISTORICAL_FUNDAMENTALS / f"{as_of_date}.building"
@@ -307,7 +313,19 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
-        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "mrs_score", "excess_return_5_pp", "excess_return_20_pp", "excess_return_50_pp", "excess_return_120_pp", "excess_return_250_pp", "down_market_win_rate_20", "down_market_total_excess_pp_20", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total")}
+        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "mrs_score", "excess_return_5_pp", "excess_return_20_pp", "excess_return_50_pp", "excess_return_120_pp", "excess_return_250_pp", "down_market_win_rate_20", "down_market_total_excess_pp_20", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total", "eps_ratio_5y")}
+        percentile_bounds = []
+        for suffix in ("min", "max"):
+            raw = (params.get(f"price_percentile_5y_{suffix}") or [""])[0]
+            text = str(raw or "").strip()
+            value = float(text) if text else None
+            if value is not None and (not math.isfinite(value) or not 0 <= value <= 100):
+                raise ValueError("price_percentile_5y bounds must be finite numbers in 0..100")
+            percentile_bounds.append(value)
+        lo, hi = percentile_bounds
+        if lo is not None and hi is not None and lo > hi:
+            raise ValueError("price_percentile_5y_min must not exceed price_percentile_5y_max")
+        ranges["price_percentile_5y"] = (lo, hi)
         annual_dimension_ranges = {name: _range(params, f"annual_{name}") for name in ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")}
         quarterly_dimension_ranges = {name: _range(params, f"quarterly_{name}") for name in ("growth", "profitability", "cash", "working_capital", "reinvestment", "financial_risk")}
     except ValueError as exc:

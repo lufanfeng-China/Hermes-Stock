@@ -1,8 +1,13 @@
 """Compact, per-symbol QFQ metrics used by the all-market stock filter."""
 from __future__ import annotations
 
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Callable
+
 import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _num(value: Any) -> float | None:
@@ -116,12 +121,99 @@ def _blowup_break_metrics(group: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int], Any] | None = None) -> dict[str, Any]:
+PRICE_PERCENTILE_FIELDS = (
+    "price_percentile_5y", "price_basis", "price_percentile_5y_as_of",
+    "price_percentile_5y_window_start", "price_percentile_5y_window_end",
+    "price_percentile_5y_sample_count", "price_percentile_5y_first_valid_date",
+)
+
+# 股价收益比 = 最近 5 个完整年度「基本每股收益」加总 ÷ 当前股价（%）。
+# 上市不足五年的公司按已有完整年度年化到五年口径，系数见 EPS_ANNUALISATION：
+#   4 年 ×1.25、3 年 ×5/3、2 年 ×2.5、1 年 ×5
+EPS_YEARS = ("2021A", "2022A", "2023A", "2024A", "2025A")
+EPS_ANNUALISATION = {5: 1.0, 4: 1.25, 3: 5 / 3, 2: 2.5, 1: 5.0}
+FINANCIAL_TS_DIR = PROJECT_ROOT / "data" / "derived" / "financial_ts" / "by_quarter"
+EPS_RATIO_FIELDS = ("eps_ratio_5y", "eps_ratio_5y_years", "eps_ratio_5y_factor",
+                    "eps_ratio_5y_eps_sum", "eps_ratio_5y_price")
+
+
+@lru_cache(maxsize=2)
+def load_annual_eps(years: tuple[str, ...] = EPS_YEARS,
+                    directory: Path | None = None) -> dict[str, dict[str, Any]]:
+    """Sum basic EPS over the last five complete fiscal years, per symbol.
+
+    Returns {symbol: {"sum": float, "years": int}}; symbols missing every year are
+    omitted. Missing year files are skipped rather than failing the whole build.
+    """
+    base = Path(directory) if directory is not None else FINANCIAL_TS_DIR
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for year in years:
+        path = base / f"{year}.parquet"
+        if not path.is_file():
+            continue
+        frame = pd.read_parquet(path, columns=["基本每股收益"])
+        series = pd.to_numeric(frame["基本每股收益"], errors="coerce").dropna()
+        for code, value in series.items():
+            key = str(code).zfill(6)
+            totals[key] = totals.get(key, 0.0) + float(value)
+            counts[key] = counts.get(key, 0) + 1
+    return {code: {"sum": round(totals[code], 6), "years": counts[code]} for code in totals}
+
+
+def _eps_ratio_fields(eps_info: dict[str, Any] | None, price: float | None) -> dict[str, Any]:
+    """Annualise the EPS sum to five years and divide by the current price (in %)."""
+    result = dict.fromkeys(EPS_RATIO_FIELDS)
+    if not eps_info or price is None or price <= 0:
+        return result
+    years = int(eps_info.get("years") or 0)
+    factor = EPS_ANNUALISATION.get(min(years, 5))
+    if not factor:
+        return result
+    eps_sum = float(eps_info.get("sum") or 0.0)
+    result.update({
+        "eps_ratio_5y": round(eps_sum * factor / price * 100, 2),
+        "eps_ratio_5y_years": years,
+        "eps_ratio_5y_factor": round(factor, 4),
+        "eps_ratio_5y_eps_sum": round(eps_sum, 4),
+        "eps_ratio_5y_price": round(price, 2),
+    })
+    return result
+
+
+def _price_percentile_5y(group: pd.DataFrame) -> dict[str, Any]:
+    """Inclusive five-calendar-year empirical rank; never use raw-price fallback."""
+    import numpy as np
+
+    closes = pd.to_numeric(group["close"], errors="coerce")
+    valid = closes[(closes > 0) & np.isfinite(closes) & closes.index.notna()]
+    result = dict.fromkeys(PRICE_PERCENTILE_FIELDS)
+    result.update(price_basis="tdx_export_qfq", price_percentile_5y_sample_count=0)
+    if valid.empty:
+        return result
+    as_of = valid.index[-1]
+    cutoff = as_of - pd.DateOffset(years=5)
+    window = valid.loc[(valid.index >= cutoff) & (valid.index <= as_of)]
+    result.update({
+        "price_percentile_5y_as_of": str(as_of.date()),
+        "price_percentile_5y_window_start": str(cutoff.date()),
+        "price_percentile_5y_window_end": str(as_of.date()),
+        "price_percentile_5y_first_valid_date": str(valid.index[0].date()),
+        "price_percentile_5y_sample_count": len(window),
+    })
+    if valid.index[0] <= cutoff and len(window) >= 60:
+        result["price_percentile_5y"] = round(float((window <= valid.iloc[-1]).sum()) / len(window) * 100, 1)
+    return result
+
+
+def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int], Any] | None = None,
+                         annual_eps: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """Convert QFQ daily bars to a small current-per-symbol snapshot."""
     required = {"date", "market", "symbol", "open", "close", "volume", "free_float_shares"}
     missing = required.difference(frame.columns)
     if missing:
         raise ValueError(f"missing columns: {sorted(missing)}")
+    eps_map = annual_eps if annual_eps is not None else load_annual_eps()
     rows = frame.copy()
     rows["date"] = pd.to_datetime(rows["date"])
     rows["market"] = rows["market"].astype(str).str.lower()
@@ -140,6 +232,8 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
                                 "trend_daily": daily_trend, "trend_daily_label": _trend_label(daily_trend),
                                 "short_trend": short_trend, "short_trend_label": _trend_label(short_trend)}
         item.update(_blowup_break_metrics(group))
+        item.update(_price_percentile_5y(group))
+        item.update(_eps_ratio_fields(eps_map.get(symbol), close[-1] if close else None))
         for days in (1, 5, 20):
             item[f"return_{days}d"] = round((close[-1] / close[-1-days] - 1) * 100, 4) if len(close) > days and close[-1-days] else None
         shares = _num(group["free_float_shares"].iloc[-1]) if len(group) else None
@@ -158,4 +252,4 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
         metrics[f"{market}:{symbol}"] = item
         if on_progress is not None and (completed == total_groups or completed % 50 == 0):
             on_progress(completed, total_groups)
-    return {"schema_version": "stock-filter-market-metrics-v1", "stocks": len(metrics), "metrics": metrics}
+    return {"schema_version": "stock-filter-market-metrics-v2", "stocks": len(metrics), "metrics": metrics}
