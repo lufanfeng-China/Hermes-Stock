@@ -113,7 +113,10 @@ def attach_temperature_streaks(current_rows: list[dict[str, Any]], history_newes
                 row["temperature_trend"] = "cooling"
             else:
                 row["temperature_trend"] = "flat"
-        row["temperature_trend_label"] = TREND_LABELS[row["temperature_trend"]]
+        # 两种“未知”要分开说：今天没数据 ≠ 昨天没数据
+        row["temperature_trend_label"] = (
+            "数据不足" if current is None else ("无前值" if previous is None else TREND_LABELS[row["temperature_trend"]])
+        )
 
 
 def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10, as_of: pd.Timestamp | None = None, include_members: bool = True) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:

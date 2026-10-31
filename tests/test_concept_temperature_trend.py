@@ -25,7 +25,7 @@ def test_cooling_warming_and_flat_are_labelled():
     assert (current[1]["temperature_previous"], current[1]["temperature_change"], current[1]["temperature_trend"]) == (2, 1, "warming")
     assert (current[2]["temperature_previous"], current[2]["temperature_change"], current[2]["temperature_trend"]) == (3, 0, "flat")
     assert current[3]["temperature_trend"] == "unknown"
-    assert [row["temperature_trend_label"] for row in current] == ["退坡", "升温", "持平", "无前值"]
+    assert [row["temperature_trend_label"] for row in current] == ["退坡", "升温", "持平", "数据不足"]
 
 
 def test_missing_previous_day_looks_back_but_reports_the_gap():
@@ -42,6 +42,7 @@ def test_lookback_is_bounded():
     attach_temperature_streaks(current, history([3], [None], [None], [None], [None], [None], [1]))
     assert current[0]["temperature_previous"] is None
     assert current[0]["temperature_trend"] == "unknown"
+    assert current[0]["temperature_trend_label"] == "无前值"
     assert current[0]["temperature_previous_gap_days"] is None
 
 
