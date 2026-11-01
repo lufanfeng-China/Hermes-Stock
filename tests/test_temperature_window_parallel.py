@@ -67,3 +67,19 @@ def test_jobs_defaults_to_a_bounded_number():
     expected = max(1, min(5, multiprocessing.cpu_count() // 2, 5))
     assert 1 <= expected <= 5
     assert builder.build_windows.__doc__
+
+
+def test_heat_history_is_capped_at_sixty_trading_days(built):
+    builder = _builder()
+    serial, _ = built
+    assert builder.HEAT_TREND_DAYS == 60
+    for window in ("3", "10"):
+        points = next(iter(serial[window]["heat_history"].values()))
+        assert len(points) <= 60, f"窗口 {window} 的热度序列有 {len(points)} 个交易日"
+
+
+def test_page_copy_no_longer_promises_half_a_year():
+    html = (ROOT / "web" / "concept-temperature.html").read_text(encoding="utf-8")
+    js = (ROOT / "web" / "concept-temperature.js").read_text(encoding="utf-8")
+    assert "过去半年" not in html and "过去半年" not in js
+    assert "最近 60 个交易日" in js

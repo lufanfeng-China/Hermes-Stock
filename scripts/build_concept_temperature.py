@@ -26,7 +26,11 @@ INDUSTRY_MAPPING_PATH = PROJECT_ROOT / 'data/derived/datasets/final/snapshot_sto
 FINAL_DIR = PROJECT_ROOT / 'data/derived/datasets/final'
 WINDOWS = (3, 5, 10, 20, 60)
 STREAK_LOOKBACK = 20
-HEAT_TREND_DAYS = 126
+# 热度分趋势的回溯交易日数。每个交易日都要跑一次全量温度计算，这一项直接决定
+# 单窗口的成本：126 天 → 60 天后，每窗口的日重算次数从 147 降到 81（含 20 天连续
+# 天数与当日），两条温度链的日更耗时约从 23 分钟降到 13-14 分钟。
+# 代价：热度趋势图从半年变成约 3 个月。
+HEAT_TREND_DAYS = 60
 
 # 概念与二级行业共用同一套算法，只有成分来源、最小成员数和输出文件不同。
 # 行业是全覆盖划分且存在 3 只成员的小行业，故 min_members 取 3；概念重叠、小概念多，沿用 10。

@@ -87,7 +87,7 @@
       return;
     }
     conceptsEl.innerHTML = visible.map(function (row) {
-      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td>' + tempTrend(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td><button type="button" class="heat-score-btn" data-trend-code="' + esc(row.concept_code) + '" title="查看过去半年热度分趋势">' + Number(row.heat_score).toFixed(1) + '</button></td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + streak(row) + '</td><td>' + row.member_count + '</td></tr>';
+      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td>' + tempTrend(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td><button type="button" class="heat-score-btn" data-trend-code="' + esc(row.concept_code) + '" title="查看最近 60 个交易日热度分趋势">' + Number(row.heat_score).toFixed(1) + '</button></td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + streak(row) + '</td><td>' + row.member_count + '</td></tr>';
     }).join('');
     conceptsEl.querySelectorAll('.concept-row').forEach(function (row) {
       row.addEventListener('click', function () {
@@ -137,13 +137,13 @@
   async function openHeatTrend(code) {
     var row = conceptRows.find(function (item) { return item.concept_code === code; });
     trendTitle.textContent = (row ? row.concept_name : '') + ' · 热度分趋势';
-    trendMeta.textContent = '加载 ' + windowEl.value + ' 日窗口的过去半年热度分…'; trendTooltip.textContent = '';
+    trendMeta.textContent = '加载 ' + windowEl.value + ' 日窗口最近 60 个交易日的热度分…'; trendTooltip.textContent = '';
     chartEl.replaceChildren(); dialogEl.showModal();
     try {
       var response = await fetch('/api/concept-temperature/trend?scope=' + encodeURIComponent(scope) + '&window=' + encodeURIComponent(windowEl.value) + '&concept_code=' + encodeURIComponent(code));
       var data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || '趋势加载失败');
       trendTitle.textContent = data.concept.concept_name + ' · 热度分趋势';
-      trendMeta.textContent = '过去半年 · ' + data.window + ' 日窗口 · 前复权口径 · ' + data.points.length + ' 个交易日';
+      trendMeta.textContent = '最近 ' + data.points.length + ' 个交易日 · ' + data.window + ' 日窗口 · 前复权口径';
       renderHeatChart(data.points);
     } catch (error) { trendMeta.textContent = '加载失败：' + error.message; }
   }
