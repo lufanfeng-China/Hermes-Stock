@@ -75,8 +75,19 @@ def _build_units(commands: list[tuple[str, list[str]]]) -> list[list[tuple[str, 
     return units
 
 
+TEMPERATURE_TASKS = {'build_concept_temperature', 'build_industry_temperature'}
+# 两个温度构建同时跑时，每个只开 2 个窗口进程：单进程峰值约 1.75 GB，
+# 4 个进程 ≈ 5 GB（其中大部分是 fork 后各自涨上来的私有页），7.9 GB 的机器才留得住余量。
+TEMPERATURE_JOBS_WHEN_PARALLEL = 2
+
+
 def _run_parallel_unit(unit: list[tuple[str, list[str]]], progress_callback=None) -> list[dict[str, object]]:
     """并行执行一个单元里的所有任务，逐个记录结果；单个失败不影响同组其他任务。"""
+    unit = [
+        (name, command + ['--jobs', str(TEMPERATURE_JOBS_WHEN_PARALLEL)]
+         if name in TEMPERATURE_TASKS and '--jobs' not in command else command)
+        for name, command in unit
+    ]
     names = [name for name, _ in unit]
     task_states = dict(DATA_UPDATE_JOB_STATE.get('task_states') or {})
     started = _format_timestamp(time.time())

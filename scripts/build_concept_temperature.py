@@ -121,6 +121,36 @@ def _window_worker(window, mapping, frames, as_of, min_members, out_path):
     print(f'窗口 {window} 完成（{time.monotonic() - started:.1f}s，进程 {os.getpid()}）', flush=True)
 
 
+def _available_memory_mb() -> int | None:
+    try:
+        with open('/proc/meminfo', encoding='utf-8') as handle:
+            for line in handle:
+                if line.startswith('MemAvailable:'):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        return None
+    return None
+
+
+def frames_memory_mb(frames) -> int:
+    """frames 的常驻估算（MB）。fork 后的子进程会各自涨到相近量级，
+    CPython 的引用计数会不断写脏共享页，所以不能假设写时复制等于免费。"""
+    try:
+        return int(sum(frame.memory_usage(deep=False).sum() for frame in frames.values()) // (1024 * 1024))
+    except Exception:
+        return 0
+
+
+def default_jobs(window_count: int, frames_mb: int) -> int:
+    """按可用内存决定窗口并发数：每个子进程 ≈ frames_mb + 250MB 余量。"""
+    available = _available_memory_mb()
+    if available is None:
+        return 1
+    per_worker = max(300, frames_mb + 250)
+    by_memory = (available - 600) // per_worker if available > 600 else 0
+    return max(1, min(window_count, multiprocessing.cpu_count() // 2, by_memory, 5))
+
+
 def build_windows(target_windows, mapping, frames, as_of, min_members, jobs=1):
     """按窗口并行计算；jobs<=1 或只有一个窗口时走原来的串行路径。
 
@@ -190,7 +220,8 @@ def main() -> None:
         raise RuntimeError('No QFQ frames could be loaded')
     as_of = max(frame.index.max() for frame in frames.values())
     frames = {symbol: frame for symbol, frame in frames.items() if frame.index.max() == as_of}
-    jobs = args.jobs if args.jobs > 0 else max(1, min(len(target_windows), multiprocessing.cpu_count() // 2, 5))
+    jobs = args.jobs if args.jobs > 0 else default_jobs(len(target_windows), frames_memory_mb(frames))
+    print(f'可用内存 {_available_memory_mb()} MB，frames {frames_memory_mb(frames)} MB → 窗口并发 {jobs}', flush=True)
     windows = build_windows(target_windows, mapping, frames, as_of, min_members, jobs=jobs)
     payload = {
         'dataset_name': config['dataset_name'],
