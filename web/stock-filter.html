@@ -99,19 +99,18 @@
       <aside class="filter-sidebar" aria-label="筛选条件">
         <div class="filter-sidebar-head"><h3>筛选条件</h3><button class="reset-button" type="reset" form="filter-form">重置</button></div>
         <form id="filter-form" class="filter-form">
-          <section class="preset-block" aria-label="历史基本面选股"><div class="preset-block-head"><span>历史基本面选股</span><span>公告日 point-in-time</span></div><label class="filter-field">信号日期<input name="as_of_date" type="date"></label><p class="filter-note">财报只采用该日及以前已公告版本，PE/PS 使用当日原始收盘价；选择预设时会保留信号日期。</p></section>
+          <section class="preset-block" aria-label="历史基本面选股"><div class="preset-block-head"><span>历史基本面选股</span></div><label class="filter-field">信号日期<input name="as_of_date" type="date"></label></section>
           <section class="preset-block" aria-labelledby="preset-title">
-            <div class="preset-block-head"><span id="preset-title">预设条件</span><span>一键筛选</span></div>
-            <button class="preset-option" type="button" data-preset="financial_reversal" data-tip="财报反转｜需同时满足 8 条：①五年总分 ≤55；②当季总分 ≥70，且比五年高 25 分以上；③五年评分为五年完整年报口径（five_year）；④五年与当季数据覆盖度均 ≥85%；⑤营业收入同比 >0；⑥扣非净利润同比 >0；⑦TTM 自由现金流利润率 ≥0；⑧盈利状态为稳定或改善，且当季无「高/严重」级红旗。"><span class="preset-name">财报反转</span><span class="preset-tags">标准反转 · 质量确认</span></button>
-            <button class="preset-option" type="button" data-preset="blowup_break" data-tip="爆量突破｜需同时满足 3 条：①最近 5 个交易日成交量都超过参照均量（V6–V10 五日均量）的 3 倍（阳线）或 2 倍（阴线）；②近 5 日涨幅严格介于 +5% 与 +20% 之间；③日线趋势与短线趋势都属于「强多头 / 多头 / 修复中」。"><span class="preset-name">爆量突破</span><span class="preset-tags">5日连续放量 · 趋势确认</span></button>
+            <div class="preset-block-head"><span id="preset-title">预设条件</span></div>
+            <button class="preset-option" type="button" data-preset="financial_reversal" data-tip="财报反转｜需同时满足 8 条：①五年总分 ≤55；②当季总分 ≥70，且比五年高 25 分以上；③五年评分为五年完整年报口径（five_year）；④五年与当季数据覆盖度均 ≥85%；⑤营业收入同比 >0；⑥扣非净利润同比 >0；⑦TTM 自由现金流利润率 ≥0；⑧盈利状态为稳定或改善，且当季无「高/严重」级红旗。"><span class="preset-name">财报反转</span></button>
+            <button class="preset-option" type="button" data-preset="blowup_break" data-tip="爆量突破｜需同时满足 3 条：①最近 5 个交易日成交量都超过参照均量（V6–V10 五日均量）的 3 倍（阳线）或 2 倍（阴线）；②近 5 日涨幅严格介于 +5% 与 +20% 之间；③日线趋势与短线趋势都属于「强多头 / 多头 / 修复中」。"><span class="preset-name">爆量突破</span></button>
             <button class="preset-option" type="button" data-preset="trend_template" data-tip="趋势模版｜沿用 Trend Template 前 7 条（第 8 条相对强度评级本次不纳入），需全部满足：①收盘价在 150 日线之上；②150 日线在 200 日线之上；③200 日线较 20 个交易日（约 1 个月）前上升；④50 日线同时在 150、200 日线之上；⑤收盘价在 50 日线之上；⑥收盘价比 52 周（250 个交易日）低点高至少 30%；⑦收盘价距 52 周高点不超过 25%。注：本筛选库只含收盘价，52 周高低点按收盘价最高/最低计；上市不足 250 个交易日的股票无法判定，会被排除。">
               <strong>趋势模版</strong>
-              <span>7 条趋势条件 · 全部满足</span>
             </button>
             <input type="hidden" name="preset" value="">
           </section>
           <fieldset class="filter-group" data-filter-group="scope"><legend><button class="filter-group-toggle" type="button" aria-expanded="true"><span>01</span>股票范围</button></legend><div class="range-grid">
-            <label class="filter-field">范围<select name="stock_scope"><option value="all">全部</option><option value="csi300">沪深300</option><option value="main_board">沪深主板</option><option value="chinext">创业板</option><option value="star">科创板</option><option value="dual_creative">双创（科创+创业）</option></select></label>
+            <label class="filter-field"><select name="stock_scope" aria-label="范围"><option value="all">全部</option><option value="csi300">沪深300</option><option value="main_board">沪深主板</option><option value="chinext">创业板</option><option value="star">科创板</option><option value="dual_creative">双创（科创+创业）</option></select></label>
           </fieldset>
           <fieldset class="filter-group is-collapsed" data-filter-group="rps"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>02</span>RPS 强度</button></legend><div class="range-grid">
             <label class="filter-field">RPS20<div class="range-pair"><input name="rps_20_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_20_max" type="number" min="0" max="100" placeholder="最大"></div></label>

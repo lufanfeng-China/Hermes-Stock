@@ -115,7 +115,8 @@ def test_page_wires_the_scope_group_first():
     html = (ROOT / "web" / "stock-filter.html").read_text(encoding="utf-8")
     js = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
 
-    assert '<select name="stock_scope">' in html
+    # 可见的「范围」二字已按需求去掉，改用 aria-label 保留无障碍名称
+    assert '<select name="stock_scope" aria-label="范围">' in html
     for value, label in (("all", "全部"), ("csi300", "沪深300"), ("main_board", "沪深主板"),
                          ("chinext", "创业板"), ("star", "科创板"),
                          ("dual_creative", "双创（科创+创业）")):
