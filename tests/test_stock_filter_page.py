@@ -14,8 +14,8 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertIn('class="stock-filter-workbench"', html)
         self.assertIn('class="filter-sidebar"', html)
         self.assertIn('class="filter-results-panel"', html)
-        self.assertEqual(len(re.findall(r"<fieldset[^>]+data-filter-group=", html)), 6)
-        for label in ("RPS 强度", "基础行情", "财务健康", "趋势过滤", "MACD / 均线金叉", "相对大盘强弱"):
+        self.assertEqual(len(re.findall(r"<fieldset[^>]+data-filter-group=", html)), 7)
+        for label in ("股票范围", "RPS 强度", "基础行情", "财务健康", "趋势过滤", "MACD / 均线金叉", "相对大盘强弱"):
             self.assertIn(label, html)
         for removed in ("年度派生财报指标", "特定日期内涨跌幅", "N日换手率", "PB / 1/5/20日涨跌幅"):
             self.assertNotIn(removed, html)
@@ -60,12 +60,14 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertIn('input[type="number"]::-webkit-inner-spin-button', html)
         self.assertIn('-webkit-appearance:none;', html)
 
-    def test_all_six_filter_groups_are_collapsed_by_default_and_toggleable(self):
+    def test_filter_groups_collapse_empty_except_the_scope_group(self):
         html = PAGE.read_text(encoding="utf-8")
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
 
+        # 7 组：01 股票范围默认展开（入口条件），其余折叠
+        self.assertEqual(html.count('class="filter-group-toggle"'), 7)
         self.assertEqual(len(re.findall(r'<fieldset class="filter-group is-collapsed" data-filter-group=', html)), 6)
-        self.assertEqual(html.count('class="filter-group-toggle"'), 6)
+        self.assertIn('<fieldset class="filter-group" data-filter-group="scope">', html)
         self.assertIn("filter-group-toggle", script)
         self.assertIn("classList.toggle('is-collapsed'", script)
 
