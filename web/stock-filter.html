@@ -141,7 +141,7 @@
           <fieldset class="filter-group is-collapsed" data-filter-group="market"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>03</span>基础行情</button></legend><div class="range-grid">
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">股价五年分位（%）<div class="range-pair"><input name="price_percentile_5y_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="price_percentile_5y_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
-            <p class="filter-note">前复权近五个自然年收盘价经验分位，含当日；越低表示处于自身历史较低位置。启用本条件时，不足五年或缺数据的股票不计入；留空则不限。</p>
+            <p class="filter-note">前复权收盘价经验分位，含当日；越低表示处于自身历史较低位置。上市满五年按近五个自然年计算，不足五年按上市以来全部历史计算（结果里标「上市以来」）；有效历史不足 60 个交易日的股票不计入，留空则不限。</p>
             <label class="filter-field">股价收益比（%）<div class="range-pair"><input name="eps_ratio_5y_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="eps_ratio_5y_max" type="number" step="0.1" placeholder="最大"></div></label>
             <p class="filter-note">最近五个完整年度「基本每股收益」加总 ÷ 当前股价，单位 %。上市不足五年按已有完整年度年化：4 年 ×1.25、3 年 ×5/3、2 年 ×2.5、1 年 ×5；负值表示五年累计亏损。留空则不限。</p>
             <label class="filter-field">PE-TTM<div class="range-pair"><input name="pe_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="pe_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
@@ -227,7 +227,7 @@
   </dialog>
   </main>
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
-  <script src="/stock-filter.js?v=20261101-perstock-quarter"></script>
+  <script src="/stock-filter.js?v=20261101-percentile-basis"></script>
   <script src="/stock-filter-distribution.js?v=20261101"></script>
 <div class="filter-tip" id="filter-tip" role="tooltip" aria-hidden="true"></div></body>
 </html>

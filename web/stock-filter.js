@@ -83,8 +83,17 @@
   function priceCell(row) {
     var raw = row.price_percentile_5y;
     var valid = raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw));
-    var title = valid ? '前复权近五个自然年收盘价经验分位：历史收盘价≤当前收盘价的比例；截至 ' + (row.price_percentile_5y_as_of || row.qfq_as_of || '—') : '不足五年或前复权数据不足，不作为五年分位';
-    return fixed(row.price, 2) + '<span class="subvalue" title="' + esc(title) + '">五年分位 ' + (valid ? fixed(raw, 1) + '%' : '—') + '</span>';
+    var sinceListing = row.price_percentile_5y_basis === 'since_listing';
+    var basisText = sinceListing
+      ? '上市不足五年，改用上市以来全部历史（自 ' + (row.price_percentile_5y_window_start || '—') + ' 起 ' +
+        (row.price_percentile_5y_sample_count || 0) + ' 个交易日）'
+      : '近五个自然年窗口';
+    var title = valid
+      ? '前复权收盘价经验分位：历史收盘价≤当前收盘价的比例；' + basisText + '；截至 ' +
+        (row.price_percentile_5y_as_of || row.qfq_as_of || '—')
+      : '有效历史不足 60 个交易日，无法计算分位';
+    var label = '五年分位 ' + (valid ? fixed(raw, 1) + '%' : '—') + (valid && sinceListing ? '（上市以来）' : '');
+    return fixed(row.price, 2) + '<span class="subvalue" title="' + esc(title) + '">' + label + '</span>';
   }
 
   function valuationCell(row) {

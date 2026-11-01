@@ -213,7 +213,12 @@ PRICE_PERCENTILE_FIELDS = (
     "price_percentile_5y", "price_basis", "price_percentile_5y_as_of",
     "price_percentile_5y_window_start", "price_percentile_5y_window_end",
     "price_percentile_5y_sample_count", "price_percentile_5y_first_valid_date",
+    # five_year = 完整五年窗口；since_listing = 上市不足五年，按上市以来全部历史
+    "price_percentile_5y_basis",
 )
+
+# 分位至少要有 60 个交易日样本，否则样本太小、分位没有意义。
+PRICE_PERCENTILE_MIN_SAMPLES = 60
 
 # 股价收益比 = 最近 5 个完整年度「基本每股收益」加总 ÷ 当前股价（%）。
 # 上市不足五年的公司按已有完整年度年化到五年口径，系数见 EPS_ANNUALISATION：
@@ -270,7 +275,12 @@ def _eps_ratio_fields(eps_info: dict[str, Any] | None, price: float | None) -> d
 
 
 def _price_percentile_5y(group: pd.DataFrame) -> dict[str, Any]:
-    """Inclusive five-calendar-year empirical rank; never use raw-price fallback."""
+    """Empirical price rank; five years when available, listing history otherwise.
+
+    Never falls back to raw prices.  A stock listed three years ago still gets a
+    percentile — computed over everything it has traded — because refusing to score
+    it told the page nothing while hiding a third of the market.
+    """
     import numpy as np
 
     closes = pd.to_numeric(group["close"], errors="coerce")
@@ -281,15 +291,24 @@ def _price_percentile_5y(group: pd.DataFrame) -> dict[str, Any]:
         return result
     as_of = valid.index[-1]
     cutoff = as_of - pd.DateOffset(years=5)
-    window = valid.loc[(valid.index >= cutoff) & (valid.index <= as_of)]
+    five_year = valid.loc[(valid.index >= cutoff) & (valid.index <= as_of)]
+    has_full_history = bool(valid.index[0] <= cutoff)
+
+    if has_full_history and len(five_year) >= PRICE_PERCENTILE_MIN_SAMPLES:
+        window, basis, window_start = five_year, "five_year", str(cutoff.date())
+    else:
+        # 上市不足五年：用上市以来全部历史，并标明口径，避免被当成五年分位比较。
+        window, basis, window_start = valid, "since_listing", str(valid.index[0].date())
+
     result.update({
         "price_percentile_5y_as_of": str(as_of.date()),
-        "price_percentile_5y_window_start": str(cutoff.date()),
+        "price_percentile_5y_window_start": window_start,
         "price_percentile_5y_window_end": str(as_of.date()),
         "price_percentile_5y_first_valid_date": str(valid.index[0].date()),
-        "price_percentile_5y_sample_count": len(window),
+        "price_percentile_5y_sample_count": int(len(window)),
+        "price_percentile_5y_basis": basis,
     })
-    if valid.index[0] <= cutoff and len(window) >= 60:
+    if len(window) >= PRICE_PERCENTILE_MIN_SAMPLES:
         result["price_percentile_5y"] = round(float((window <= valid.iloc[-1]).sum()) / len(window) * 100, 1)
     return result
 
