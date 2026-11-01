@@ -9,9 +9,13 @@ def _temperature_tasks():
     return [("build_concept_temperature", ["true"]), ("build_industry_temperature", ["true"])]
 
 
+GROUP = (("build_concept_temperature", "build_industry_temperature"),)
+
+
 def test_low_memory_fallback_is_announced_in_the_job_output():
     appended: list[str] = []
-    with patch.object(runner, "_available_memory_mb", return_value=1200), \
+    with patch.object(runner, "PARALLEL_GROUPS", GROUP), \
+         patch.object(runner, "_available_memory_mb", return_value=1200), \
          patch.object(runner, "_append_data_update_job_output", side_effect=appended.append), \
          patch.object(runner, "_data_update_commands", return_value=_temperature_tasks()), \
          patch.object(runner, "_run_data_update_command") as run_command:
@@ -26,7 +30,8 @@ def test_low_memory_fallback_is_announced_in_the_job_output():
 
 def test_enough_memory_does_not_announce_a_fallback():
     appended: list[str] = []
-    with patch.object(runner, "_available_memory_mb", return_value=7000), \
+    with patch.object(runner, "PARALLEL_GROUPS", GROUP), \
+         patch.object(runner, "_available_memory_mb", return_value=7000), \
          patch.object(runner, "_append_data_update_job_output", side_effect=appended.append), \
          patch.object(runner, "_data_update_commands", return_value=[("only_task", ["true"])]), \
          patch.object(runner, "_run_data_update_command") as run_command:

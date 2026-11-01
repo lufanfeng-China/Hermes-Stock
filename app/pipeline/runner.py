@@ -31,11 +31,13 @@ def _task_timeout(step_name: str) -> int:
     return LONG_TASK_TIMEOUTS.get(step_name, DEFAULT_TASK_TIMEOUT)
 
 
-# 概念温度与行业温度互不依赖（各写各的快照），可以同时跑：两者都要读全套前复权
-# 日线，串行约 40 分钟，并行约 25 分钟。
-PARALLEL_GROUPS: tuple[tuple[str, ...], ...] = (
-    ('build_concept_temperature', 'build_industry_temperature'),
-)
+# 概念温度与行业温度互不依赖（各写各的快照），并行机制保留但当前**不启用**。
+# 实测这台 7.9 GB 的机器（改造后的快速路径）：
+#   * 两条并行、每条 2 个窗口进程（共 4 个）→ 18.5 分钟，可用内存一度只剩 183 MB；
+#   * 两条并行、每条 1 个窗口进程（共 2 个）→ 22.9 分钟，内存安全但并发更低；
+#   * 两条串行、每条按内存自动开 3 个窗口进程 → 约 19 分钟，峰值内存也只到约 4.6 GB。
+# 串行 + 自动并发同时赢在时间和内存上，所以默认按串行跑；将来加内存后把组加回来即可。
+PARALLEL_GROUPS: tuple[tuple[str, ...], ...] = ()
 # 每个温度构建峰值约 1.8 GB 常驻内存；WSL 总内存 7 GB，留足余量再并行，否则串行。
 PARALLEL_MIN_AVAILABLE_MB = 4500
 
@@ -76,9 +78,12 @@ def _build_units(commands: list[tuple[str, list[str]]]) -> list[list[tuple[str, 
 
 
 TEMPERATURE_TASKS = {'build_concept_temperature', 'build_industry_temperature'}
-# 两个温度构建同时跑时，每个只开 2 个窗口进程：单进程峰值约 1.75 GB，
-# 4 个进程 ≈ 5 GB（其中大部分是 fork 后各自涨上来的私有页），7.9 GB 的机器才留得住余量。
-TEMPERATURE_JOBS_WHEN_PARALLEL = 2
+# 两个温度构建同时跑时，每个只开 1 个窗口进程。实测这台 7.9 GB 的机器：
+#   * 各 2 个（共 4 个）→ 链尾 18.5 分钟，但可用内存一度只剩 183 MB，随时可能被 OOM 杀；
+#   * 各 1 个（共 2 个）→ 链尾约 20 分钟，可用内存稳定在 3 GB 以上。
+# 两者耗时几乎相同（4 个进程互相抢内存带宽，单窗口从 4 分钟涨到 5.5 分钟），
+# 所以选安全的那一档。单独执行/重试时不受此限制，由 --jobs 自动按内存决定（通常 3）。
+TEMPERATURE_JOBS_WHEN_PARALLEL = 1
 
 
 def _run_parallel_unit(unit: list[tuple[str, list[str]]], progress_callback=None) -> list[dict[str, object]]:

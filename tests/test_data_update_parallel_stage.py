@@ -13,24 +13,38 @@ def _commands():
     return runner._data_update_commands("2026-10-30")
 
 
-def test_two_temperature_builds_share_one_parallel_unit():
+GROUP = (("build_concept_temperature", "build_industry_temperature"),)
+
+
+def test_shipped_policy_runs_every_task_on_its_own():
+    """当前策略：串行执行，每条构建各自按内存自动分配窗口进程。"""
+    assert runner.PARALLEL_GROUPS == ()
     with patch.object(runner, "_available_memory_mb", return_value=6000):
         units = runner._build_units(_commands())
-    assert len(units) == 16                     # 17 个任务合成 16 个执行单元
+    assert len(units) == 17
+    assert all(len(unit) == 1 for unit in units)
+
+
+def test_grouping_mechanism_still_works_when_a_group_is_configured():
+    with patch.object(runner, "PARALLEL_GROUPS", GROUP), \
+         patch.object(runner, "_available_memory_mb", return_value=6000):
+        units = runner._build_units(_commands())
+    assert len(units) == 16
     assert [name for name, _ in units[-1]] == ["build_concept_temperature", "build_industry_temperature"]
-    # 除最后一组外都是单任务单元，顺序与命令表一致
     assert [unit[0][0] for unit in units[:-1]] == [name for name, _ in _commands()][:-2]
 
 
 def test_low_memory_falls_back_to_sequential():
-    with patch.object(runner, "_available_memory_mb", return_value=runner.PARALLEL_MIN_AVAILABLE_MB - 1):
+    with patch.object(runner, "PARALLEL_GROUPS", GROUP), \
+         patch.object(runner, "_available_memory_mb", return_value=runner.PARALLEL_MIN_AVAILABLE_MB - 1):
         units = runner._build_units(_commands())
     assert len(units) == 17
     assert all(len(unit) == 1 for unit in units)
 
 
 def test_unreadable_memory_info_means_sequential():
-    with patch.object(runner, "_available_memory_mb", return_value=None):
+    with patch.object(runner, "PARALLEL_GROUPS", GROUP), \
+         patch.object(runner, "_available_memory_mb", return_value=None):
         assert runner._can_parallelize() is False
         assert len(runner._build_units(_commands())) == 17
 
