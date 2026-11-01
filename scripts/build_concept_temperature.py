@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.concept_temperature import (attach_temperature_streaks, build_temperature_rows,
-                                     fill_member_names, parse_tdx_concept_mapping)
+                                     fill_member_names, parse_tdx_concept_mapping, prepare_series)
 from app.config import TDX_QFQ_EXPORT_DIR
 from app.tdx.qfq_kline import load_tdx_qfq_daily
 
@@ -72,7 +72,7 @@ def load_industry_mapping() -> list[dict[str, str]]:
     return mapping
 
 
-def add_streaks(mapping, frames, window, concepts, as_of, min_members):
+def add_streaks(mapping, frames, window, concepts, as_of, min_members, prepared=None):
     """Measure each current temperature's uninterrupted trading-day run backward."""
     current_levels = {row['concept_code']: row['temperature'] for row in concepts if row['temperature'] is not None}
     unresolved = set(current_levels)
@@ -83,7 +83,8 @@ def add_streaks(mapping, frames, window, concepts, as_of, min_members):
         if date == as_of:
             levels = {row['concept_code']: row['temperature'] for row in concepts}
         else:
-            daily_rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members, as_of=date, include_members=False)
+            daily_rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
+                                                    as_of=date, include_members=False, prepared=prepared)
             levels = {row['concept_code']: row['temperature'] for row in daily_rows}
         history.append(levels)
         unresolved = {code for code in unresolved if levels.get(code) == current_levels[code]}
@@ -94,29 +95,31 @@ def add_streaks(mapping, frames, window, concepts, as_of, min_members):
         row['temperature_streak_capped'] = row['concept_code'] in unresolved
 
 
-def build_heat_history(mapping, frames, window, as_of, min_members):
+def build_heat_history(mapping, frames, window, as_of, min_members, prepared=None):
     """Return six-month heat-score series for every concept at the selected window."""
     dates = sorted({date for frame in frames.values() for date in frame.index if date <= as_of})[-HEAT_TREND_DAYS:]
     history = {}
     for date in dates:
-        rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members, as_of=date, include_members=False)
+        rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
+                                          as_of=date, include_members=False, prepared=prepared)
         for row in rows:
             history.setdefault(row['concept_code'], []).append({'date': date.strftime('%Y-%m-%d'), 'heat_score': row['heat_score']})
     return history
 
 
-def _window_payload(window, mapping, frames, as_of, min_members):
+def _window_payload(window, mapping, frames, as_of, min_members, prepared=None):
     """单窗口完整产物：当日温度 + 连续天数 + 热度序列。"""
-    concepts, members = build_temperature_rows(mapping, frames, window=window, min_members=min_members)
-    add_streaks(mapping, frames, window, concepts, as_of, min_members)
-    heat_history = build_heat_history(mapping, frames, window, as_of, min_members)
+    concepts, members = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
+                                               prepared=prepared)
+    add_streaks(mapping, frames, window, concepts, as_of, min_members, prepared=prepared)
+    heat_history = build_heat_history(mapping, frames, window, as_of, min_members, prepared=prepared)
     return {'concepts': concepts, 'members': members, 'heat_history': heat_history}
 
 
-def _window_worker(window, mapping, frames, as_of, min_members, out_path):
+def _window_worker(window, mapping, frames, as_of, min_members, out_path, prepared=None):
     """fork 子进程：算完一个窗口后写 JSON，避免把大对象 pickle 回父进程。"""
     started = time.monotonic()
-    payload = _window_payload(window, mapping, frames, as_of, min_members)
+    payload = _window_payload(window, mapping, frames, as_of, min_members, prepared=prepared)
     Path(out_path).write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f'窗口 {window} 完成（{time.monotonic() - started:.1f}s，进程 {os.getpid()}）', flush=True)
 
@@ -151,7 +154,7 @@ def default_jobs(window_count: int, frames_mb: int) -> int:
     return max(1, min(window_count, multiprocessing.cpu_count() // 2, by_memory, 5))
 
 
-def build_windows(target_windows, mapping, frames, as_of, min_members, jobs=1):
+def build_windows(target_windows, mapping, frames, as_of, min_members, jobs=1, prepared=None):
     """按窗口并行计算；jobs<=1 或只有一个窗口时走原来的串行路径。
 
     采用 fork + 独立进程：frames 在 fork 时被继承（写时复制），不需要 pickle
@@ -162,7 +165,7 @@ def build_windows(target_windows, mapping, frames, as_of, min_members, jobs=1):
         built = {}
         for window in windows:
             started = time.monotonic()
-            built[str(window)] = _window_payload(window, mapping, frames, as_of, min_members)
+            built[str(window)] = _window_payload(window, mapping, frames, as_of, min_members, prepared=prepared)
             print(f'窗口 {window} 完成（{time.monotonic() - started:.1f}s，串行）', flush=True)
         return built
 
@@ -178,7 +181,7 @@ def build_windows(target_windows, mapping, frames, as_of, min_members, jobs=1):
                 window, out_path = pending.pop(0)
                 process = context.Process(
                     target=_window_worker,
-                    args=(window, mapping, frames, as_of, min_members, str(out_path)),
+                    args=(window, mapping, frames, as_of, min_members, str(out_path), prepared),
                 )
                 process.start()
                 running.append((window, process, out_path))
@@ -232,9 +235,10 @@ def main() -> None:
         raise RuntimeError('No QFQ frames could be loaded')
     as_of = max(frame.index.max() for frame in frames.values())
     frames = {symbol: frame for symbol, frame in frames.items() if frame.index.max() == as_of}
+    prepared = prepare_series(frames)
     jobs = args.jobs if args.jobs > 0 else default_jobs(len(target_windows), frames_memory_mb(frames))
     print(f'可用内存 {_available_memory_mb()} MB，frames {frames_memory_mb(frames)} MB → 窗口并发 {jobs}', flush=True)
-    windows = build_windows(target_windows, mapping, frames, as_of, min_members, jobs=jobs)
+    windows = build_windows(target_windows, mapping, frames, as_of, min_members, jobs=jobs, prepared=prepared)
     payload = {
         'dataset_name': config['dataset_name'],
         'scope': args.scope,

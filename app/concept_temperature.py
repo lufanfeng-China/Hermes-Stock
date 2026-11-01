@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from bisect import bisect_right
 from statistics import median
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -49,6 +51,71 @@ def _return_and_volume(frame: pd.DataFrame, window: int) -> tuple[float, float, 
         base = float(volume.iloc[-25:-5].mean())
         volume_ratio = latest / base if base > 0 else 1.0
     return return_pct, float(close.iloc[-1]), volume_ratio
+
+
+def prepare_series(frames: dict[str, pd.DataFrame]) -> dict[str, dict[str, Any]]:
+    """把每只股票的日线压成 numpy 数组，避免逐日裁剪 DataFrame。
+
+    只对「收盘价无缺失」的股票建快路径；含缺失的股票留给调用方走原慢路径，
+    以保证与旧实现逐位一致。
+    """
+    prepared: dict[str, dict[str, Any]] = {}
+    for symbol, frame in frames.items():
+        if frame is None or "close" not in frame:
+            continue
+        closes = pd.to_numeric(frame["close"], errors="coerce")
+        if closes.isna().any():
+            continue
+        volumes = pd.to_numeric(frame["volume"], errors="coerce") if "volume" in frame else None
+        volume_array = volumes.to_numpy(dtype=float) if volumes is not None else None
+        prepared[symbol] = {
+            "dates": frame.index.values.astype("datetime64[ns]").view("int64"),
+            "close": closes.to_numpy(dtype=float),
+            "volume": volume_array,
+            # 旧实现按「截至当时的有效成交量条数」判断，这里用累计计数复现同一口径
+            "volume_valid_upto": (np.cumsum(~np.isnan(volume_array)).astype(np.int64)
+                                  if volume_array is not None else None),
+        }
+    return prepared
+
+
+def metric_from_series(prepared: dict[str, dict[str, Any]], symbol: str,
+                       as_of_ns: int, window: int) -> tuple[float, float, float] | None:
+    """等价于把 frame 裁到 as_of 后调用 _return_and_volume。"""
+    entry = prepared.get(symbol)
+    if entry is None:
+        return None
+    dates = entry["dates"]
+    position = int(np.searchsorted(dates, as_of_ns))
+    if position >= len(dates) or int(dates[position]) != as_of_ns:
+        return None
+    required = max(window + 1, 25)
+    if position + 1 < required:
+        return None
+    close = entry["close"]
+    base_close = close[position - window]
+    if not base_close > 0:
+        return None
+    return_pct = (close[position] / base_close - 1.0) * 100.0
+    volume = entry["volume"]
+    valid_upto = entry["volume_valid_upto"]
+    if volume is None or valid_upto is None or int(valid_upto[position]) < 25:
+        volume_ratio = 1.0
+    else:
+        # 与 pandas 的 mean() 一致：跳过缺失值
+        latest = float(np.nanmean(volume[position - 4:position + 1]))
+        base = float(np.nanmean(volume[position - 24:position - 4]))
+        volume_ratio = latest / base if base > 0 else 1.0
+    return return_pct, float(close[position]), volume_ratio
+
+
+def percentile_of(values: list[float], targets: list[float]) -> list[float]:
+    """与 _percentile 同义（≤ target 的占比），但排序后二分，O(n log n)。"""
+    if not values:
+        return [0.0 for _ in targets]
+    ordered = sorted(values)
+    size = len(ordered)
+    return [bisect_right(ordered, target) / size for target in targets]
 
 
 def _temperature(score_percentile: float, median_return: float, breadth: float, excess: float, strong: float, active: float, valid_count: int, min_members: int) -> tuple[int | None, str]:
@@ -147,8 +214,12 @@ def fill_member_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["stock_name"] = names.get(symbol, symbol)
     return rows
 
-def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10, as_of: pd.Timestamp | None = None, include_members: bool = True) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    """Build concept heat rows at ``as_of`` (or current frame end) from QFQ bars."""
+def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10, as_of: pd.Timestamp | None = None, include_members: bool = True, prepared: dict[str, dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """Build concept heat rows at ``as_of`` (or current frame end) from QFQ bars.
+
+    ``prepared`` 是 prepare_series() 的产物：给了它就不裁剪 DataFrame、不重复调
+    pandas，指标逐位等价（含缺失收盘价的股票仍走原路径）。
+    """
     if as_of is not None:
         frames = {
             symbol: clipped
@@ -157,7 +228,14 @@ def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.D
         }
 
     groups: dict[str, list[dict[str, str]]] = defaultdict(list)
-    metrics = {symbol: _return_and_volume(frame, window) for symbol, frame in frames.items()}
+    if prepared:
+        as_of_ns = pd.Timestamp(as_of if as_of is not None else max(frame.index.max() for frame in frames.values())).value
+        metrics = {symbol: metric_from_series(prepared, symbol, as_of_ns, window) for symbol in frames}
+        for symbol, frame in frames.items():
+            if metrics.get(symbol) is None and symbol not in prepared:
+                metrics[symbol] = _return_and_volume(frame, window)
+    else:
+        metrics = {symbol: _return_and_volume(frame, window) for symbol, frame in frames.items()}
     all_member_returns: list[float] = []
     for entry in mapping:
         metric = metrics.get(entry["symbol"])
@@ -183,15 +261,16 @@ def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.D
         active = sum(row["volume_ratio_5d_20d"] > 1.20 for row in members) / len(members) * 100
         drafts.append({"concept_code": concept_code, "concept_name": members[0]["concept_name"], "member_count": len(members), "median_return_pct": med, "breadth_pct": breadth, "excess_return_pct": med - market_median, "strong_stock_pct": strong, "active_volume_pct": active})
 
-    for draft in drafts:
-        scores = []
-        for key in ("median_return_pct", "breadth_pct", "excess_return_pct", "strong_stock_pct", "active_volume_pct"):
-            values = [float(row[key]) for row in drafts]
-            scores.append(_percentile(values, float(draft[key])))
+    metric_keys = ("median_return_pct", "breadth_pct", "excess_return_pct", "strong_stock_pct", "active_volume_pct")
+    percentiles = {key: percentile_of([float(row[key]) for row in drafts], [float(row[key]) for row in drafts])
+                   for key in metric_keys}
+    for index, draft in enumerate(drafts):
+        scores = [percentiles[key][index] for key in metric_keys]
         draft["heat_score"] = round((scores[0] * 30 + scores[1] * 25 + scores[2] * 20 + scores[3] * 15 + scores[4] * 10), 1)
     score_values = [row["heat_score"] for row in drafts]
-    for row in drafts:
-        temp, label = _temperature(_percentile(score_values, row["heat_score"]), row["median_return_pct"], row["breadth_pct"], row["excess_return_pct"], row["strong_stock_pct"], row["active_volume_pct"], row["member_count"], min_members)
+    score_percentiles = percentile_of(score_values, score_values)
+    for index, row in enumerate(drafts):
+        temp, label = _temperature(score_percentiles[index], row["median_return_pct"], row["breadth_pct"], row["excess_return_pct"], row["strong_stock_pct"], row["active_volume_pct"], row["member_count"], min_members)
         row.update({"temperature": temp, "temperature_label": label, "window": window})
         for field in ("median_return_pct", "breadth_pct", "excess_return_pct", "strong_stock_pct", "active_volume_pct"):
             row[field] = round(float(row[field]), 2)
