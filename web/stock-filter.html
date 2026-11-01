@@ -87,7 +87,7 @@
     .hidden { display:none; }
     @media (max-width:1050px) { .stock-filter-workbench { grid-template-columns:290px minmax(0,1fr); } .trend-grid { grid-template-columns:1fr; } }
     @media (max-width:780px) { .stock-filter-page { padding:14px; } .stock-filter-intro { display:block; } .stock-filter-workbench { grid-template-columns:1fr; } .filter-sidebar { position:static; } .results-toolbar { align-items:flex-start; flex-direction:column; } .results-controls { width:100%; } .sort-select { flex:1; } }
-  .filter-tip{position:fixed;max-width:420px;padding:10px 12px;white-space:pre-line;border-radius:10px;background:#000;color:#fff;font:400 12px/1.6 var(--font-sans, sans-serif);letter-spacing:0;z-index:9999;pointer-events:none;will-change:transform;transform:translateZ(0);isolation:isolate;box-shadow:0 14px 34px rgba(0,0,0,.28);opacity:0;transition:opacity .12s}.filter-tip[data-open="1"]{opacity:1}</style>
+  .filter-tip{position:fixed;max-width:420px;padding:10px 12px;white-space:pre-line;border-radius:10px;background:#000;color:#fff;font:400 12px/1.6 var(--font-sans, sans-serif);letter-spacing:0;z-index:9999;pointer-events:none;will-change:transform;transform:translateZ(0);isolation:isolate;box-shadow:0 14px 34px rgba(0,0,0,.28);opacity:0;transition:opacity .12s}.filter-tip[data-open="1"]{opacity:1}.dist-link{height:30px;padding:0 12px;border:1px solid var(--sf-line-strong);border-radius:8px;background:var(--sf-input);color:var(--sf-text);font:500 12px/1 var(--font-sans,sans-serif);cursor:pointer;letter-spacing:.02em;margin-right:10px}.dist-link:hover{border-color:var(--sf-accent);color:var(--sf-accent)}.dist-dialog{border:1px solid var(--sf-line-strong);border-radius:16px;background:var(--sf-panel);color:var(--sf-text);padding:0;width:min(980px,94vw);max-width:min(980px,94vw);max-height:92vh}.dist-dialog::backdrop{background:rgba(0,0,0,.62)}.dist-shell{padding:20px 22px 18px;display:flex;flex-direction:column;gap:14px;max-height:88vh;overflow-y:auto}.dist-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.dist-top h2{margin:0;font:600 17px/1.3 var(--font-sans,sans-serif);letter-spacing:.02em}.dist-meta{margin:4px 0 0;color:var(--sf-muted);font:400 12px/1.5 var(--font-sans,sans-serif)}.dist-close{height:30px;padding:0 12px;border:1px solid var(--sf-line);border-radius:8px;background:transparent;color:var(--sf-muted);font:500 12px/1 var(--font-sans,sans-serif);cursor:pointer}.dist-close:hover{color:var(--sf-text);border-color:var(--sf-line-strong)}.dist-def{margin:0;padding:10px 12px;border-left:2px solid var(--sf-accent);background:rgba(255,255,255,.03);color:var(--sf-muted);font:400 12px/1.7 var(--font-sans,sans-serif)}.dist-block h3{margin:0 0 6px;font:500 12px/1.4 var(--font-sans,sans-serif);color:var(--sf-muted);letter-spacing:.04em}.dist-chart{width:100%;height:auto;display:block;border:1px solid var(--sf-line);border-radius:10px;background:var(--sf-bg)}.dist-table{width:100%;border-collapse:collapse;font:400 12px/1.5 var(--font-sans,sans-serif)}.dist-table th,.dist-table td{padding:7px 8px;border-bottom:1px solid var(--sf-line);text-align:right;white-space:nowrap}.dist-table th{color:var(--sf-muted);font-weight:500}.dist-table td:first-child,.dist-table th:first-child{text-align:left}.dist-table tbody tr:hover{background:rgba(255,255,255,.04)}.dist-foot{margin:0;color:var(--sf-muted);font:400 11px/1.7 var(--font-sans,sans-serif)}</style>
 </head>
 <body>
   <header class="topbar"><div><p class="eyebrow">STOCK FILTER</p><h1>股票筛选</h1></div><div class="topbar-actions" id="global-nav"></div></header>
@@ -193,14 +193,41 @@
         </form>
       </aside>
       <section class="filter-results-panel" aria-labelledby="filter-results-title">
-        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm">PE-TTM（降序）</option><option value="eps_ratio_5y">股价收益比（降序）</option></select></div></div>
+        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><button class="dist-link" type="button" id="open-eps-distribution">板块股价收益比分布</button><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm">PE-TTM（降序）</option><option value="eps_ratio_5y">股价收益比（降序）</option></select></div></div>
         <div id="status" class="filter-status">正在加载全市场筛选快照…</div>
         <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th>PE / PS（TTM）</th><th class="num">RPS Total</th><th>相对大盘强弱</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th>触发红旗数量（当季）</th><th class="num">股价收益比</th></tr></thead><tbody id="results"></tbody></table></div>
         <div id="pagination" class="pagination"></div>
       </section>
     </div>
+
+  <dialog class="dist-dialog" id="eps-distribution-dialog">
+    <div class="dist-shell">
+      <div class="dist-top">
+        <div><h2 id="dist-title">板块股价收益比分布</h2><p class="dist-meta" id="dist-meta">加载中…</p></div>
+        <button type="button" class="dist-close" id="dist-close">关闭</button>
+      </div>
+      <p class="dist-def" id="dist-definition"></p>
+      <div class="dist-block">
+        <h3>箱线图：Q1–Q3 箱体、中位线、P10–P90 触须</h3>
+        <svg class="dist-chart" id="box-chart" role="img" aria-label="各板块股价收益比箱线图"></svg>
+      </div>
+      <div class="dist-block">
+        <h3>分箱占比：每个板块内部的分布结构</h3>
+        <svg class="dist-chart" id="bin-chart" role="img" aria-label="各板块股价收益比分箱占比柱状图"></svg>
+      </div>
+      <div class="dist-block">
+        <h3>统计明细</h3>
+        <table class="dist-table"><thead><tr>
+          <th>板块</th><th>有效</th><th>缺失</th><th>中位数</th><th>Q1</th><th>Q3</th>
+          <th>折算 PE</th><th>负值占比</th><th>收益比 ≥30%</th>
+        </tr></thead><tbody id="dist-rows"></tbody></table>
+      </div>
+      <p class="dist-foot">负值＝五年累计亏损，不能当作低估值；折算 PE = 5 ÷ 中位收益比，是把「五年加总」摊成单年市盈率的等价值，不是真实 PE-TTM。</p>
+    </div>
+  </dialog>
   </main>
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
-  <script src="/stock-filter.js?v=20261030-price-percentile-5y-v6"></script>
+  <script src="/stock-filter.js?v=20261101-board-distribution"></script>
+  <script src="/stock-filter-distribution.js?v=20261101"></script>
 <div class="filter-tip" id="filter-tip" role="tooltip" aria-hidden="true"></div></body>
 </html>

@@ -616,6 +616,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-filter":
             self.handle_stock_filter(parsed.query)
             return
+        if parsed.path == "/api/stock-filter-distribution":
+            self.handle_stock_filter_distribution()
+            return
         if parsed.path == "/api/market-relative-strength":
             self.handle_market_relative_strength(parsed.query)
             return
@@ -2032,6 +2035,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         from app.stock_filter import filter_response
         result = filter_response(parse_qs(query))
         self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_stock_filter_distribution(self) -> None:
+        """Board-level distribution of the five-year price-to-earnings ratio."""
+        from app.stock_filter_distribution import eps_ratio_distribution
+        result = eps_ratio_distribution()
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.SERVICE_UNAVAILABLE, result)
 
     def handle_market_relative_strength(self, query: str) -> None:
         from app.market_relative_strength import stock_response
