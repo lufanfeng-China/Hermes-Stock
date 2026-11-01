@@ -185,6 +185,14 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
                     if states.get(name, {}).get('status') == 'failed'
                     or (name not in GOOD_STOCK_TASKS and not good_stock_failed)]
     financial_failed = False
+    planned_groups = [group for group in PARALLEL_GROUPS
+                      if all(member in dict(commands) for member in group)]
+    if planned_groups and not _can_parallelize():
+        available = _available_memory_mb()
+        _append_data_update_job_output(
+            f"内存余量不足（可用 {available if available is not None else '未知'} MB，"
+            f"并行门槛 {PARALLEL_MIN_AVAILABLE_MB} MB），温度构建改为串行执行\n"
+        )
     for unit in _build_units(commands):
         if len(unit) > 1:
             steps.extend(_run_parallel_unit(unit, progress_callback=progress_callback))
