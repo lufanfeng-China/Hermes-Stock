@@ -112,8 +112,10 @@ def handle_concept_temperature_members(query: str) -> dict:
         concept = next((row for row in section['concepts'] if row['concept_code'] == concept_code), None)
         if not concept:
             return {'ok': False, 'status': HTTPStatus.NOT_FOUND, 'error': 'concept not found'}
+        from app.concept_temperature import fill_member_names
+
         return {'ok': True, 'scope': scope, 'as_of_date': data['as_of_date'], 'window': int(window),
                 'price_basis': data['price_basis'], 'concept': concept,
-                'stocks': section['members'].get(concept_code, [])}
+                'stocks': fill_member_names(section['members'].get(concept_code, []))}
     except Exception as exc:
         return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}

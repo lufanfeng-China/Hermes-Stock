@@ -122,6 +122,31 @@ def attach_temperature_streaks(current_rows: list[dict[str, Any]], history_newes
             row["temperature_trend_label"] = TREND_LABELS[row["temperature_trend"]]
 
 
+
+def _stock_name_map() -> dict[str, str]:
+    """symbol → 股票名称。行业映射快照里 stock_name 为空，用它兜底。"""
+    try:
+        from app.search.index import _stock_name_lookup
+    except Exception:
+        return {}
+    try:
+        lookup = _stock_name_lookup()
+    except Exception:
+        return {}
+    return {str(symbol): str(name) for (_market, symbol), name in lookup.items() if name}
+
+
+def fill_member_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """给成分股行补上缺失的名称（原地修改并返回）。"""
+    missing = [row for row in rows if not str(row.get("stock_name") or "").strip()]
+    if not missing:
+        return rows
+    names = _stock_name_map()
+    for row in missing:
+        symbol = str(row.get("symbol") or "").strip().zfill(6)
+        row["stock_name"] = names.get(symbol, symbol)
+    return rows
+
 def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.DataFrame], window: int = 10, min_members: int = 10, as_of: pd.Timestamp | None = None, include_members: bool = True) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
     """Build concept heat rows at ``as_of`` (or current frame end) from QFQ bars."""
     if as_of is not None:

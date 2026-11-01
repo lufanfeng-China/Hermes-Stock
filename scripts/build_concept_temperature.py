@@ -11,7 +11,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.concept_temperature import attach_temperature_streaks, build_temperature_rows, parse_tdx_concept_mapping
+from app.concept_temperature import (attach_temperature_streaks, build_temperature_rows,
+                                     fill_member_names, parse_tdx_concept_mapping)
 from app.config import TDX_QFQ_EXPORT_DIR
 from app.tdx.qfq_kline import load_tdx_qfq_daily
 
@@ -61,6 +62,8 @@ def load_industry_mapping() -> list[dict[str, str]]:
         seen.add(key)
         mapping.append({'concept_code': code, 'concept_name': name, 'symbol': symbol,
                         'stock_name': str(row.get('stock_name') or '').strip()})
+    # 源快照没有名称，补上，否则成分股清单的「名称」列会是空的
+    fill_member_names(mapping)
     return mapping
 
 

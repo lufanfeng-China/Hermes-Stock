@@ -101,3 +101,35 @@ def test_page_has_a_scope_switch_and_sends_it_everywhere():
     assert "scope= ' + encodeURIComponent(scope)" in js.replace("scope=' +", "scope= ' +")
     assert js.count("encodeURIComponent(scope)") >= 3      # 列表 / 成分 / 趋势
     assert "function applyScope()" in js
+
+
+def test_fill_member_names_covers_blank_names():
+    from app.concept_temperature import fill_member_names
+
+    rows = [{"symbol": "600928", "stock_name": ""},
+            {"symbol": "000554", "stock_name": "   "},
+            {"symbol": "600519", "stock_name": "贵州茅台"}]
+    filled = fill_member_names(rows)
+    assert filled[0]["stock_name"] == "西安银行"
+    assert filled[1]["stock_name"] == "泰山石油"
+    assert filled[2]["stock_name"] == "贵州茅台"      # 已有名称不被覆盖
+
+
+def test_industry_mapping_carries_names_so_future_builds_are_complete():
+    rows = _builder().load_industry_mapping()
+    blank = [row for row in rows if not row["stock_name"].strip()]
+    assert not blank, f"行业映射仍有 {len(blank)} 行没有名称，例如 {blank[0]}"
+
+
+def test_members_api_returns_names_for_industry_scope():
+    from app.api.concept_temperature import handle_concept_temperature_members
+
+    payload = {"unit_label": "二级行业", "as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq",
+               "min_members": 3,
+               "windows": {"10": {"concepts": [{"concept_code": "X5001", "concept_name": "全国性银行"}],
+                                  "members": {"X5001": [{"symbol": "600928", "stock_name": "",
+                                                         "return_pct": 1.0, "latest_close": 3.9,
+                                                         "volume_ratio_5d_20d": 2.1}]}}}}
+    with patch("app.api.concept_temperature._load", return_value=payload):
+        result = handle_concept_temperature_members("scope=industry&window=10&concept_code=X5001")
+    assert result["stocks"][0]["stock_name"] == "西安银行"
