@@ -80,11 +80,6 @@
     return '<span class="' + klass + '" title="' + esc(title) + '">' + sign + fixed(value, 2) + '%</span>';
   }
 
-  function redFlagCell(row) {
-    var value = Number(row.quarterly_triggered_red_flag_count);
-    return Number.isInteger(value) && value >= 0 ? '<span class="red-flag-count" title="最新当季监测已触发的红旗规则数量">' + value + '</span>' : '—';
-  }
-
   function priceCell(row) {
     var raw = row.price_percentile_5y;
     var valid = raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw));
@@ -108,7 +103,7 @@
 
   function renderRows(data) {
     if (!(data.rows || []).length) {
-      results.innerHTML = '<tr><td colspan="11" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
+      results.innerHTML = '<tr><td colspan="10" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
       return;
     }
     results.innerHTML = data.rows.map(function (row) {
@@ -123,7 +118,6 @@
         '<td>' + healthCell(row.annual_total, row.annual_period) + '</td>' +
         '<td>' + healthCell(row.quarterly_total, row.quarterly_period) + '</td>' +
         '<td class="num">' + reportReleaseReturnCell(row) + '</td>' +
-        '<td>' + redFlagCell(row) + '</td>' +
         '<td class="num">' + epsRatioCell(row) + '</td>' +
       '</tr>';
     }).join('');
@@ -162,7 +156,7 @@
     var percent = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
     var stage = progress && progress.stage || '正在准备历史快照';
     status.textContent = '正在生成历史快照：' + stage + '（' + percent + '%），将自动重试。';
-    results.innerHTML = '<tr><td colspan="11" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
+    results.innerHTML = '<tr><td colspan="10" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
     pages.innerHTML = '';
     if (historicalRetryTimer) window.clearTimeout(historicalRetryTimer);
     historicalRetryTimer = window.setTimeout(function () {
@@ -179,7 +173,7 @@
     currentPage = page || 1;
     status.classList.remove('error');
     status.textContent = '正在按全市场条件筛选…';
-    results.innerHTML = '<tr><td colspan="11" class="empty-state">正在加载筛选结果…</td></tr>';
+    results.innerHTML = '<tr><td colspan="10" class="empty-state">正在加载筛选结果…</td></tr>';
     pages.innerHTML = '';
     try {
       var response = await fetch('/api/stock-filter?' + requestParams(currentPage).toString());
@@ -194,7 +188,7 @@
       matchCount.textContent = '—';
       status.classList.add('error');
       status.textContent = error.message;
-      results.innerHTML = '<tr><td colspan="11" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
+      results.innerHTML = '<tr><td colspan="10" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
     }
   }
 

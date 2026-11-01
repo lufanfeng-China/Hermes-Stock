@@ -119,13 +119,15 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertIn("asOfDate.value = preservedSignalDate", script)
         self.assertNotIn("option.disabled = historical", script)
 
-    def test_result_table_displays_report_release_return_and_quarterly_red_flag_count_from_api_rows(self):
+    def test_result_table_displays_report_release_return_without_the_red_flag_count(self):
         html = PAGE.read_text(encoding="utf-8")
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
         self.assertIn("财报涨跌", html)
-        self.assertIn("触发红旗数量（当季）", html)
         self.assertIn("report_release_return_pct", script)
-        self.assertIn("quarterly_triggered_red_flag_count", script)
+        # 红旗数量列已按需求从结果清单移除；数据仍由接口返回，只是不再展示
+        self.assertNotIn("触发红旗数量（当季）", html)
+        self.assertNotIn("redFlagCell", script)
+        self.assertNotIn('colspan="11"', script)
 
 
 if __name__ == "__main__":
