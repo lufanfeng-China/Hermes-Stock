@@ -95,4 +95,5 @@ def test_filter_note_and_column_are_wired():
     assert "<th>日 / 周 / 月趋势</th>" not in html
     assert "<th>金叉</th>" not in html
     assert "trend_daily_label" not in js and "golden_cross_label" not in js
-    assert 'colspan="11"' in js and 'colspan="12"' not in js
+    # 结果表列数随红旗数量列一起调整为 10
+    assert 'colspan="10"' in js and 'colspan="11"' not in js and 'colspan="12"' not in js
