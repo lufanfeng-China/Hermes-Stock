@@ -40,3 +40,20 @@ def test_tooltip_binding_covers_preset_buttons():
     assert "querySelectorAll('[data-tip]')" in JS
     assert "DOMContentLoaded" in JS          # 气泡元素在脚本之后
     assert ".filter-tip{" in HTML and "data-open" in HTML
+
+
+def test_every_preset_tip_is_written_one_condition_per_line():
+    import re
+    for preset in ("financial_reversal", "blowup_break", "trend_template"):
+        tip = re.search(r'data-preset="%s"[^>]*data-tip="([^"]+)"' % preset, HTML).group(1)
+        lines = tip.split("\n")
+        assert len(lines) >= 4, f"{preset} 说明只有 {len(lines)} 行，没有分行"
+        # 标题行 + 逐条编号
+        assert lines[0].startswith(("财报反转", "爆量突破", "趋势模版")), lines[0]
+        numbered = [line for line in lines if line[:2] in ("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.")]
+        assert len(numbered) >= 3, f"{preset} 的编号条目只有 {len(numbered)} 条"
+
+
+def test_tooltip_keeps_line_breaks():
+    assert "white-space:pre-line" in HTML
+    assert 'id="filter-tip"' in HTML
