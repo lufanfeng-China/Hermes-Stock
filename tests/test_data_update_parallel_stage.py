@@ -16,7 +16,7 @@ def _commands():
 def test_two_temperature_builds_share_one_parallel_unit():
     with patch.object(runner, "_available_memory_mb", return_value=6000):
         units = runner._build_units(_commands())
-    assert len(units) == 15                     # 16 个任务合成 15 个执行单元
+    assert len(units) == 16                     # 17 个任务合成 16 个执行单元
     assert [name for name, _ in units[-1]] == ["build_concept_temperature", "build_industry_temperature"]
     # 除最后一组外都是单任务单元，顺序与命令表一致
     assert [unit[0][0] for unit in units[:-1]] == [name for name, _ in _commands()][:-2]
@@ -25,14 +25,14 @@ def test_two_temperature_builds_share_one_parallel_unit():
 def test_low_memory_falls_back_to_sequential():
     with patch.object(runner, "_available_memory_mb", return_value=runner.PARALLEL_MIN_AVAILABLE_MB - 1):
         units = runner._build_units(_commands())
-    assert len(units) == 16
+    assert len(units) == 17
     assert all(len(unit) == 1 for unit in units)
 
 
 def test_unreadable_memory_info_means_sequential():
     with patch.object(runner, "_available_memory_mb", return_value=None):
         assert runner._can_parallelize() is False
-        assert len(runner._build_units(_commands())) == 16
+        assert len(runner._build_units(_commands())) == 17
 
 
 def _fake_run(delays, returncodes=None):

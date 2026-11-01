@@ -51,3 +51,22 @@ def test_plan_catalog_and_command_table_stay_identical():
     planned = [task["id"] for task in DATA_UPDATE_TASK_PLAN]
     assert planned == commands, "计划页与命令表的任务或顺序不一致"
     assert "build_market_relative_strength" in planned
+
+
+def test_industry_membership_refresh_runs_before_every_industry_consumer():
+    from app.pipeline.commands import _data_update_commands
+
+    names = [name for name, _ in _data_update_commands(trading_day="2026-10-30")]
+    assert "refresh_industry_membership" in names
+    refresh = names.index("refresh_industry_membership")
+    for consumer in ("build_stock_filter_qfq_daily", "build_industry_metric_snapshot",
+                     "build_industry_relative_valuation_snapshot", "build_industry_temperature"):
+        assert refresh < names.index(consumer), f"{consumer} 在行业刷新之前"
+
+
+def test_industry_membership_refresh_receives_the_trading_day():
+    from app.pipeline.commands import _data_update_commands
+
+    command = dict(_data_update_commands(trading_day="2026-10-30"))["refresh_industry_membership"]
+    assert command[1].endswith("parse_industry_dataset.py")
+    assert command[-2:] == ["--trading-day", "2026-10-30"]

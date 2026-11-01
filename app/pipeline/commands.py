@@ -115,6 +115,13 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         # builds 1-minute/15-minute artifacts for a single symbol, while current
         # production indicators are daily-bar and financial-data based.
         ('sync_tdx_qfq_exports', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/sync_tdx_qfq_exports.py')]),
+        # 行业归属（通达信 tdxhy.cfg → 申万二级行业）必须早于行业温度、行业指标与
+        # 筛选页行业列，否则这些产物会用上一次的行业划分。解析只要几秒。
+        (
+            'refresh_industry_membership',
+            [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/parse_industry_dataset.py')]
+            + (['--trading-day', trading_day] if trading_day else []),
+        ),
         ('build_stock_filter_qfq_daily', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_qfq_daily.py')]),
         # Derived once during data maintenance so /api/stock-filter never groups 12M daily rows.
         ('build_stock_filter_market_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_market_snapshot.py')]),

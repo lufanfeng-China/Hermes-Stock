@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing
+import os
+import shutil
+import tempfile
+import time
 import json
 import sys
 from datetime import datetime, timezone
@@ -100,12 +105,73 @@ def build_heat_history(mapping, frames, window, as_of, min_members):
     return history
 
 
+def _window_payload(window, mapping, frames, as_of, min_members):
+    """单窗口完整产物：当日温度 + 连续天数 + 热度序列。"""
+    concepts, members = build_temperature_rows(mapping, frames, window=window, min_members=min_members)
+    add_streaks(mapping, frames, window, concepts, as_of, min_members)
+    heat_history = build_heat_history(mapping, frames, window, as_of, min_members)
+    return {'concepts': concepts, 'members': members, 'heat_history': heat_history}
+
+
+def _window_worker(window, mapping, frames, as_of, min_members, out_path):
+    """fork 子进程：算完一个窗口后写 JSON，避免把大对象 pickle 回父进程。"""
+    started = time.monotonic()
+    payload = _window_payload(window, mapping, frames, as_of, min_members)
+    Path(out_path).write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    print(f'窗口 {window} 完成（{time.monotonic() - started:.1f}s，进程 {os.getpid()}）', flush=True)
+
+
+def build_windows(target_windows, mapping, frames, as_of, min_members, jobs=1):
+    """按窗口并行计算；jobs<=1 或只有一个窗口时走原来的串行路径。
+
+    采用 fork + 独立进程：frames 在 fork 时被继承（写时复制），不需要 pickle
+    5,500 个 DataFrame；每个子进程把该窗口的产物写成临时 JSON，父进程再合并。
+    """
+    windows = sorted(target_windows)
+    if jobs <= 1 or len(windows) == 1:
+        built = {}
+        for window in windows:
+            started = time.monotonic()
+            built[str(window)] = _window_payload(window, mapping, frames, as_of, min_members)
+            print(f'窗口 {window} 完成（{time.monotonic() - started:.1f}s，串行）', flush=True)
+        return built
+
+    context = multiprocessing.get_context('fork')
+    workdir = Path(tempfile.mkdtemp(prefix='hermes-temp-window-'))
+    processes = []
+    try:
+        for window in windows:
+            out_path = workdir / f'window-{window}.json'
+            process = context.Process(
+                target=_window_worker,
+                args=(window, mapping, frames, as_of, min_members, str(out_path)),
+            )
+            process.start()
+            processes.append((window, process, out_path))
+        for window, process, _out_path in processes:
+            process.join()
+        failed = [window for window, process, _out in processes if process.exitcode != 0]
+        if failed:
+            raise RuntimeError(f'窗口构建失败：{failed}（退出码非 0）')
+        built = {}
+        for window, _process, out_path in processes:
+            built[str(window)] = json.loads(out_path.read_text(encoding='utf-8'))
+        return built
+    finally:
+        for _window, process, _out in processes:
+            if process.is_alive():
+                process.terminate()
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--window', type=int, choices=WINDOWS, help='build only one window, for parallel builds')
     parser.add_argument('--output', type=Path, help='write to an alternate JSON output path')
     parser.add_argument('--scope', choices=sorted(SCOPES), default='concept', help='concept (default) or industry')
     parser.add_argument('--min-members', type=int, help='override the per-scope minimum member count')
+    parser.add_argument('--jobs', type=int, default=0,
+                        help='并行窗口数（0=按 CPU 自动，1=串行）；仅有 --window 时无意义')
     args = parser.parse_args()
     config = SCOPES[args.scope]
     min_members = args.min_members or config['min_members']
@@ -124,12 +190,8 @@ def main() -> None:
         raise RuntimeError('No QFQ frames could be loaded')
     as_of = max(frame.index.max() for frame in frames.values())
     frames = {symbol: frame for symbol, frame in frames.items() if frame.index.max() == as_of}
-    windows = {}
-    for window in target_windows:
-        concepts, members = build_temperature_rows(mapping, frames, window=window, min_members=min_members)
-        add_streaks(mapping, frames, window, concepts, as_of, min_members)
-        heat_history = build_heat_history(mapping, frames, window, as_of, min_members)
-        windows[str(window)] = {'concepts': concepts, 'members': members, 'heat_history': heat_history}
+    jobs = args.jobs if args.jobs > 0 else max(1, min(len(target_windows), multiprocessing.cpu_count() // 2, 5))
+    windows = build_windows(target_windows, mapping, frames, as_of, min_members, jobs=jobs)
     payload = {
         'dataset_name': config['dataset_name'],
         'scope': args.scope,
@@ -151,7 +213,7 @@ def main() -> None:
     output_path = args.output or config['out_path']
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-    print(json.dumps({'path': str(output_path), 'as_of_date': payload['as_of_date'], 'windows': sorted(windows), 'concepts': sum(len(section['concepts']) for section in windows.values()), 'stocks': len(frames)}, ensure_ascii=False))
+    print(json.dumps({'path': str(output_path), 'as_of_date': payload['as_of_date'], 'windows': sorted(windows), 'concepts': sum(len(section['concepts']) for section in windows.values()), 'stocks': len(frames), 'jobs': jobs}, ensure_ascii=False))
 
 
 if __name__ == '__main__':

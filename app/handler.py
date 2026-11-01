@@ -545,7 +545,8 @@ def _compute_returns(rows: list, current_period: str) -> None:
 
 DATA_UPDATE_TASK_PLAN: list[dict[str, str]] = [
             {'id': 'sync_tdx_qfq_exports', 'name': '接入并核验前复权日K线', 'desc': '读取通达信 T0002/export 前复权日线，写入覆盖范围审计清单；不改写通达信源文件'},
-            {'id': 'build_stock_filter_qfq_daily', 'name': '重建股票筛选前复权日线', 'desc': '从本地通达信前复权导出重建 OHLCV 日线，供量价预设与行情快照使用'},
+            {'id': 'refresh_industry_membership', 'name': '刷新行业归属（申万二级）', 'desc': '解析通达信 tdxhy.cfg/tdxzs3.cfg，重建行业归属快照与当前表；行业温度、行业指标与筛选页行业列都依赖它，单次数秒，可单独执行/重试'},
+        {'id': 'build_stock_filter_qfq_daily', 'name': '重建股票筛选前复权日线', 'desc': '从本地通达信前复权导出重建 OHLCV 日线，供量价预设与行情快照使用'},
             {'id': 'build_stock_filter_market_snapshot', 'name': '构建股票筛选行情快照', 'desc': '将前复权日线预计算为每股收益、换手率、量价信号与周/月趋势，避免筛选页启动时重算全量日线'},
             {'id': 'build_market_relative_strength', 'name': '重建相对大盘强弱（MRS）', 'desc': '全A每日等权基准，按 4:3:2:1 加权 20/40/60/120 日相对强弱与抗跌度；此前只在命令表执行、计划页缺失，现补齐为可见可单独重试'},
             {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
