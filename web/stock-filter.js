@@ -198,6 +198,49 @@
     }
   }
 
+
+  function bindPresetTooltips() {
+    var tip = document.getElementById('filter-tip');
+    if (!tip || tip.dataset.bound === '1') return;
+    tip.dataset.bound = '1';
+    function show(target) {
+      var text = target.getAttribute('data-tip');
+      if (!text) return;
+      tip.textContent = text;
+      tip.setAttribute('data-open', '1');
+      tip.setAttribute('aria-hidden', 'false');
+      var rect = target.getBoundingClientRect();
+      var width = tip.offsetWidth, height = tip.offsetHeight;
+      // 筛选项在左侧窄栏里，气泡优先贴右侧，避免盖住按钮本身
+      var left = rect.right + 12;
+      var top = rect.top;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.min(Math.max(8, rect.left + rect.width / 2 - width / 2), window.innerWidth - width - 8);
+        top = rect.bottom + 10;
+        if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 10);
+      }
+      top = Math.min(Math.max(8, top), Math.max(8, window.innerHeight - height - 8));
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    }
+    function hide() {
+      tip.removeAttribute('data-open');
+      tip.setAttribute('aria-hidden', 'true');
+    }
+    document.querySelectorAll('[data-tip]').forEach(function (target) {
+      target.addEventListener('mouseenter', function () { show(target); });
+      target.addEventListener('focus', function () { show(target); });
+      target.addEventListener('mouseleave', hide);
+      target.addEventListener('blur', hide);
+      target.addEventListener('click', hide);
+    });
+    window.addEventListener('scroll', hide, true);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindPresetTooltips);
+  } else {
+    bindPresetTooltips();
+  }
   form.addEventListener('submit', function (event) { event.preventDefault(); run(1); });
   form.addEventListener('reset', function () { window.setTimeout(function () { setPreset(presetInput.value); updateHistoricalMode(); run(1); }, 0); });
   document.getElementById('reset-top').addEventListener('click', function () { form.reset(); });
