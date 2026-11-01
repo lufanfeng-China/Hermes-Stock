@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Build the strict annual/quarterly financial snapshot for /stock-filter.
 
-Uses a single annual anchor (2025A) and a single quarterly anchor (2026Q2), so
-all filterable stocks are comparable.  It never uses percentile financial snapshots.
+The annual track keeps one anchor (2025A) so yearly scores stay comparable, but the
+quarterly track is per stock: every company reports against its own latest disclosed
+period (2026Q3 when published, otherwise 2026Q2 / 2026Q1 / 2025Q3 ...).  Choosing a
+single global quarter made every stock show the same period and silently hid freshly
+published results.  It never uses percentile financial snapshots.
 """
 from __future__ import annotations
 
@@ -26,10 +29,14 @@ from app.stock_filter_snapshot import build_strict_financial_record
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE = ROOT / "data" / "derived" / "financial_ts" / "by_quarter"
-OUT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__2026Q2.json"
-# Include the prior comparable quarter so every TTM peer metric can disclose a
-# same-basis year-on-year value; 2024Q2 is not used by annual health scoring.
-PERIODS = ("2021A", "2022A", "2023A", "2024A", "2024Q2", "2025A", "2025Q2", "2026Q2")
+OUT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__latest_quarter.json"
+LEGACY_OUT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__2026Q2.json"
+# Quarterly frames are deliberately consecutive: each one needs its own year-ago
+# frame for the same-basis year-on-year comparison (2026Q3 vs 2025Q3, 2026Q2 vs
+# 2025Q2).  A stock simply skips the frames it never filed.
+ANNUAL_PERIODS = ("2021A", "2022A", "2023A", "2024A", "2025A")
+QUARTERLY_PERIODS = ("2024Q2", "2025Q2", "2025Q3", "2026Q1", "2026Q2", "2026Q3")
+PERIODS = ANNUAL_PERIODS + QUARTERLY_PERIODS
 
 
 class _Materializer:
@@ -86,16 +93,21 @@ def _report(period: str, row: pd.Series) -> dict:
 
 def build_snapshot() -> dict:
     frames, markets, industries = _read_periods(), _market_map(), _industry_map()
-    codes = set.intersection(*(set(frame.index) for frame in frames.values()))
+    # Membership only requires the five annual frames: a stock that skipped an
+    # earlier quarter still belongs in the pool, its quarterly track just starts
+    # from the newest period it actually filed.
+    codes = set.intersection(*(set(frames[period].index) for period in ANNUAL_PERIODS))
     stocks = {}
     for n, symbol in enumerate(sorted(codes), 1):
         market = markets.get(symbol)
         if not market:
             continue
-        reports = [_report(period, frames[period].loc[symbol]) for period in PERIODS]
+        reports = [_report(period, frames[period].loc[symbol])
+                   for period in PERIODS if symbol in frames[period].index]
         industry_l1, industry_l2 = industries.get((market, symbol), (None, None))
         record = build_strict_financial_record(
-            reports, industry_level_1=industry_l1, annual_anchor="2025A", quarterly_anchor="2026Q2",
+            reports, industry_level_1=industry_l1, annual_anchor="2025A",
+            quarterly_anchor=QUARTERLY_PERIODS[-1],
         )
         # Persist raw, period-labelled peer cells once at snapshot build time.  The
         # click-path API will only map industry members and read these cells.
@@ -109,7 +121,20 @@ def build_snapshot() -> dict:
         stocks[f"{market}:{symbol}"] = record
         if n % 500 == 0:
             print(f"[{n}/{len(codes)}]", flush=True)
-    return {"schema_version": "stock-filter-strict-financial-v1", "annual_anchor": "2025A", "quarterly_anchor": "2026Q2", "periods_loaded": list(PERIODS), "stocks": stocks}
+    periods_used = {}
+    for record in stocks.values():
+        period = ((record.get("quarterly") or {}).get("period")
+                  or (record.get("quarterly") or {}).get("anchor_period") or "unavailable")
+        periods_used[period] = periods_used.get(period, 0) + 1
+    return {
+        "schema_version": "stock-filter-strict-financial-v2",
+        "annual_anchor": "2025A",
+        "quarterly_mode": "per_stock_latest",
+        "quarterly_newest_period": QUARTERLY_PERIODS[-1],
+        "quarterly_periods_used": dict(sorted(periods_used.items())),
+        "periods_loaded": list(PERIODS),
+        "stocks": stocks,
+    }
 
 
 def main() -> None:
@@ -122,7 +147,10 @@ def main() -> None:
         json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
         temp = Path(handle.name)
     os.replace(temp, args.output)
-    print(json.dumps({"output": str(args.output), "stocks": len(payload["stocks"]), "annual_anchor": "2025A", "quarterly_anchor": "2026Q2"}, ensure_ascii=False))
+    print(json.dumps({"output": str(args.output), "stocks": len(payload["stocks"]),
+                      "annual_anchor": payload["annual_anchor"],
+                      "quarterly_mode": payload["quarterly_mode"],
+                      "quarterly_periods_used": payload["quarterly_periods_used"]}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

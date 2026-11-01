@@ -163,7 +163,7 @@
               <label class="filter-field">再投资效率（10）<div class="range-pair"><input name="annual_reinvestment_min" type="number" min="0" max="10" placeholder="最小"><b>—</b><input name="annual_reinvestment_max" type="number" min="0" max="10" placeholder="最大"></div></label>
               <label class="filter-field">财务风险（15）<div class="range-pair"><input name="annual_financial_risk_min" type="number" min="0" max="15" placeholder="最小"><b>—</b><input name="annual_financial_risk_max" type="number" min="0" max="15" placeholder="最大"></div></label>
             </div>
-            <div class="financial-section-title">当季财报评分</div><div class="range-grid">
+            <div class="financial-section-title">当季财报评分</div><p class="filter-note">每只股票取自己最近一期已披露季报：出过三季报就用三季报，没有则往前找二季报、一季报；结果清单「当季健康」下方标注的就是该股实际使用的报告期。</p><div class="range-grid">
               <label class="filter-field">当季总分<div class="range-pair"><input name="quarterly_total_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="quarterly_total_max" type="number" min="0" max="100" placeholder="最大"></div></label>
               <label class="filter-field">核心增长质量（20）<div class="range-pair"><input name="quarterly_growth_min" type="number" min="0" max="20" placeholder="最小"><b>—</b><input name="quarterly_growth_max" type="number" min="0" max="20" placeholder="最大"></div></label>
               <label class="filter-field">盈利能力（20）<div class="range-pair"><input name="quarterly_profitability_min" type="number" min="0" max="20" placeholder="最小"><b>—</b><input name="quarterly_profitability_max" type="number" min="0" max="20" placeholder="最大"></div></label>
@@ -227,7 +227,7 @@
   </dialog>
   </main>
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
-  <script src="/stock-filter.js?v=20261101-board-distribution"></script>
+  <script src="/stock-filter.js?v=20261101-perstock-quarter"></script>
   <script src="/stock-filter-distribution.js?v=20261101"></script>
 <div class="filter-tip" id="filter-tip" role="tooltip" aria-hidden="true"></div></body>
 </html>

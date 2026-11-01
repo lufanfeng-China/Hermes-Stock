@@ -99,7 +99,10 @@ def build_strict_financial_record(
             "reason": annual_reason,
         },
         "quarterly": {
-            "anchor_period": quarterly_anchor,
+            # Per-stock latest disclosed quarter: a company that already filed 2026Q3
+            # must not be shown (or scored) as 2026Q2 just because others were slower.
+            "anchor_period": monitor.get("latest_period") or quarterly_anchor,
+            "anchor_period_global": quarterly_anchor,
             "period": monitor.get("latest_period"),
             "score": _number(realtime.get("score")),
             "coverage_weight": _number(realtime.get("coverage_weight")),

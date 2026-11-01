@@ -127,6 +127,10 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ('build_stock_filter_market_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_market_snapshot.py')]),
         ('build_market_relative_strength', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_market_relative_strength.py')]),
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
+        # 股票筛选页的当季健康直接读这份快照。它必须紧跟财报仓库更新重建，否则
+        # 新披露的季报永远进不了页面（曾经整整一季停在 2026Q2）。每只股票各自
+        # 取最近一期已披露季报，季报缺失不影响是否入库。
+        ('build_strict_financial_health_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_strict_financial_health_snapshot.py')]),
         ('build_financial_health_peer_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_health_peer_snapshot.py')]),
         ('build_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_snapshot_from_warehouse.py'), 'latest']),
         # Snapshot-only source for stock-analysis industry peer dialogs.  It is

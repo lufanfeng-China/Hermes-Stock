@@ -550,7 +550,7 @@ DATA_UPDATE_TASK_PLAN: list[dict[str, str]] = [
             {'id': 'build_stock_filter_market_snapshot', 'name': '构建股票筛选行情快照', 'desc': '将前复权日线预计算为每股收益、换手率、量价信号与周/月趋势，避免筛选页启动时重算全量日线'},
             {'id': 'build_market_relative_strength', 'name': '重建相对大盘强弱（MRS）', 'desc': '全A每日等权基准，按 4:3:2:1 加权 20/40/60/120 日相对强弱与抗跌度；此前只在命令表执行、计划页缺失，现补齐为可见可单独重试'},
             {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
-            {'id': 'build_financial_health_peer_snapshot', 'name': '增量更新行业财务健康度快照', 'desc': '只重算本次新增或修订财报涉及的股票；失败可独立重试且不阻断技术数据更新'},
+            {'id': 'build_strict_financial_health_snapshot', 'name': '重建股票筛选季报快照', 'desc': '每只股票取自己最近一期已披露季报（三季报优先，缺失则往前找），供当季健康展示与筛选'}, {'id': 'build_financial_health_peer_snapshot', 'name': '增量更新行业财务健康度快照', 'desc': '只重算本次新增或修订财报涉及的股票；失败可独立重试且不阻断技术数据更新'},
             {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
             {'id': 'build_industry_metric_snapshot', 'name': '构建行业财务指标同业快照', 'desc': '发布二级行业同业指标分区快照；失败不阻断 RPS/MACD 技术数据更新'},
             {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},

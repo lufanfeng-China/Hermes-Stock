@@ -176,6 +176,16 @@ def classify_timeframe_trend(closes: list[float]) -> str | None:
     return "neutral"
 
 
+def _read_strict_financial_snapshot() -> dict:
+    """Latest strict snapshot, with a fallback to the fixed-quarter file name."""
+    for name in ("strict_financial_health_snapshot_2025A__latest_quarter.json",
+                 "strict_financial_health_snapshot_2025A__2026Q2.json"):
+        payload = _read_json(FINAL / name)
+        if payload.get("stocks"):
+            return payload.get("stocks", {})
+    return {}
+
+
 def _read_json(path: Path) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -238,7 +248,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
 
     tech_raw = _read_json(FINAL / "dataset_technical_eval.json")
     tech_rows = tech_raw.get("stocks", {}) if isinstance(tech_raw, dict) else {}
-    strict_financial = _read_json(FINAL / "strict_financial_health_snapshot_2025A__2026Q2.json").get("stocks", {})
+    strict_financial = _read_strict_financial_snapshot()
     rps_path = FINAL / "dataset_stock_rps_history.parquet"
     rps: dict[tuple[str, str], dict[str, Any]] = {}
     data_date = str(tech_raw.get("data_date") or "")
@@ -312,7 +322,9 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "report_release_return_pct": _num(release_performance.get("return_pct")),
             "report_release_entry_trading_day": release_performance.get("entry_trading_day"),
             "report_release_latest_close_as_of": release_performance.get("current_price_as_of"),
-            "annual_period": a.get("anchor_period"), "quarterly_period": q.get("anchor_period"),
+            "annual_period": a.get("anchor_period"),
+            # 展示该股实际的最近报告期，而不是全局锚点
+            "quarterly_period": q.get("period") or q.get("anchor_period"),
             "trend_daily": tech.get("trend"), "trend_daily_label": tech.get("trend_label"),
             "trend_weekly": qfq.get("trend_weekly"), "trend_weekly_label": qfq.get("trend_weekly_label"),
             "trend_monthly": qfq.get("trend_monthly"), "trend_monthly_label": qfq.get("trend_monthly_label"),
