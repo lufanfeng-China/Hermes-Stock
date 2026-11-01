@@ -31,6 +31,96 @@ def _task_timeout(step_name: str) -> int:
     return LONG_TASK_TIMEOUTS.get(step_name, DEFAULT_TASK_TIMEOUT)
 
 
+# 概念温度与行业温度互不依赖（各写各的快照），可以同时跑：两者都要读全套前复权
+# 日线，串行约 40 分钟，并行约 25 分钟。
+PARALLEL_GROUPS: tuple[tuple[str, ...], ...] = (
+    ('build_concept_temperature', 'build_industry_temperature'),
+)
+# 每个温度构建峰值约 1.8 GB 常驻内存；WSL 总内存 7 GB，留足余量再并行，否则串行。
+PARALLEL_MIN_AVAILABLE_MB = 4500
+
+
+def _available_memory_mb() -> int | None:
+    """MemAvailable（MB）；读不到就返回 None，调用方按串行处理。"""
+    try:
+        with open('/proc/meminfo', encoding='utf-8') as handle:
+            for line in handle:
+                if line.startswith('MemAvailable:'):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        return None
+    return None
+
+
+def _can_parallelize() -> bool:
+    available = _available_memory_mb()
+    return available is not None and available >= PARALLEL_MIN_AVAILABLE_MB
+
+
+def _build_units(commands: list[tuple[str, list[str]]]) -> list[list[tuple[str, list[str]]]]:
+    """把命令序列切成执行单元：同组任务合成一个并行单元，其余单任务各成一个单元。"""
+    available = dict(commands)
+    units: list[list[tuple[str, list[str]]]] = []
+    consumed: set[str] = set()
+    for name, command in commands:
+        if name in consumed:
+            continue
+        group = next((group for group in PARALLEL_GROUPS if name in group), None)
+        if (group and name == group[0] and all(member in available for member in group)
+                and _can_parallelize()):
+            units.append([(member, available[member]) for member in group])
+            consumed.update(group)
+        else:
+            units.append([(name, command)])
+    return units
+
+
+def _run_parallel_unit(unit: list[tuple[str, list[str]]], progress_callback=None) -> list[dict[str, object]]:
+    """并行执行一个单元里的所有任务，逐个记录结果；单个失败不影响同组其他任务。"""
+    names = [name for name, _ in unit]
+    task_states = dict(DATA_UPDATE_JOB_STATE.get('task_states') or {})
+    started = _format_timestamp(time.time())
+    for name in names:
+        task_states[name] = {'status': 'running', 'started_at': started}
+    _update_data_update_job_state(
+        task_states=task_states,
+        current_step=' + '.join(names),
+        current_industry=None,
+        progress_index=None,
+        progress_total=None,
+        current_progress_text=f"并行执行：{' / '.join(names)}",
+        last_line="",
+    )
+
+    results: dict[str, object] = {}
+
+    def _worker(step_name: str, command: list[str]) -> None:
+        try:
+            results[step_name] = _run_data_update_command(step_name, command, progress_callback=progress_callback)
+        except (subprocess.SubprocessError, OSError) as exc:   # 含 TimeoutExpired
+            results[step_name] = exc
+
+    threads = [threading.Thread(target=_worker, args=(name, command), daemon=True) for name, command in unit]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    steps: list[dict[str, object]] = []
+    for name, _command in unit:
+        outcome = results.get(name)
+        if isinstance(outcome, BaseException):
+            step = {'name': name, 'ok': False, 'returncode': None, 'stdout_tail': '',
+                    'stderr_tail': str(outcome), 'parallel': True}
+        else:
+            step = {'name': name, 'ok': outcome.returncode == 0, 'returncode': outcome.returncode,
+                    'stdout_tail': _tail_lines(outcome.stdout), 'stderr_tail': _tail_lines(outcome.stderr),
+                    'parallel': True}
+        steps.append(step)
+        _record_step_result(step)
+    return steps
+
+
 def _run_data_update_command(
     step_name: str,
     command: list[str],
@@ -95,7 +185,11 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
                     if states.get(name, {}).get('status') == 'failed'
                     or (name not in GOOD_STOCK_TASKS and not good_stock_failed)]
     financial_failed = False
-    for step_name, command in commands:
+    for unit in _build_units(commands):
+        if len(unit) > 1:
+            steps.extend(_run_parallel_unit(unit, progress_callback=progress_callback))
+            continue
+        step_name, command = unit[0]
         if step_name == 'build_good_stock_undervaluation_current' and financial_failed:
             step = {'name': step_name, 'ok': False, 'returncode': None,
                     'stderr_tail': '好股专用财报构建失败；保留旧诊断快照，修复后重试', 'stdout_tail': '', 'skipped': True}

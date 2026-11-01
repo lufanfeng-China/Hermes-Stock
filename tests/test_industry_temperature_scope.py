@@ -25,11 +25,17 @@ def test_scopes_carry_their_own_output_and_min_members():
 
 
 def test_industry_mapping_is_isomorphic_to_the_concept_mapping():
+    import json
+
     builder = _builder()
     rows = builder.load_industry_mapping()
     assert rows, "行业映射为空"
     assert {"concept_code", "concept_name", "symbol", "stock_name"} <= set(rows[0])
-    assert len({row["concept_code"] for row in rows}) == 127
+    # 不写死行业个数：以当前行业映射快照为准（会随通达信行业分类更新而变化）
+    snapshot = json.loads((ROOT / "data" / "derived" / "datasets" / "final"
+                           / "snapshot_stock_industry_membership.json").read_text(encoding="utf-8"))
+    expected = {row["industry_level_2_code"] for row in snapshot}
+    assert {row["concept_code"] for row in rows} == expected
     # 每只股票在二级行业里只能出现一次（全覆盖划分）
     symbols = [row["symbol"] for row in rows]
     assert len(symbols) == len(set(symbols))
