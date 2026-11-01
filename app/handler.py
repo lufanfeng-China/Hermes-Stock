@@ -543,6 +543,25 @@ def _compute_returns(rows: list, current_period: str) -> None:
         row["return_pct"] = pct
 
 
+DATA_UPDATE_TASK_PLAN: list[dict[str, str]] = [
+            {'id': 'sync_tdx_qfq_exports', 'name': '接入并核验前复权日K线', 'desc': '读取通达信 T0002/export 前复权日线，写入覆盖范围审计清单；不改写通达信源文件'},
+            {'id': 'build_stock_filter_qfq_daily', 'name': '重建股票筛选前复权日线', 'desc': '从本地通达信前复权导出重建 OHLCV 日线，供量价预设与行情快照使用'},
+            {'id': 'build_stock_filter_market_snapshot', 'name': '构建股票筛选行情快照', 'desc': '将前复权日线预计算为每股收益、换手率、量价信号与周/月趋势，避免筛选页启动时重算全量日线'},
+            {'id': 'build_market_relative_strength', 'name': '重建相对大盘强弱（MRS）', 'desc': '全A每日等权基准，按 4:3:2:1 加权 20/40/60/120 日相对强弱与抗跌度；此前只在命令表执行、计划页缺失，现补齐为可见可单独重试'},
+            {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
+            {'id': 'build_financial_health_peer_snapshot', 'name': '增量更新行业财务健康度快照', 'desc': '只重算本次新增或修订财报涉及的股票；失败可独立重试且不阻断技术数据更新'},
+            {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
+            {'id': 'build_industry_metric_snapshot', 'name': '构建行业财务指标同业快照', 'desc': '发布二级行业同业指标分区快照；失败不阻断 RPS/MACD 技术数据更新'},
+            {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
+            {'id': 'build_good_stock_financial_snapshot', 'name': '构建好股低估专用财报快照', 'desc': '使用本地财报时序库，逐股最新已披露季度 + 年度五年；不替换严格同周期排名文件，可独立执行/重试'},
+            {'id': 'build_good_stock_undervaluation_current', 'name': '构建好股低估诊断快照', 'desc': '依赖本地前复权行情、好股专用财报、行业估值；独立原子发布，失败保留旧版且不阻断技术更新'},
+            {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
+            {'id': 'rebuild_stage_history', 'name': '重建阶段历史（A/B/C/D）', 'desc': '按前复权日线逐 bar 判定 A/B/C/D 四阶段并原子发布全市场历史库；含陈旧源阻断、抽样对拍与原子落盘，可独立执行/重试'},
+            {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
+            {'id': 'build_concept_temperature', 'name': '构建概念温度快照', 'desc': '读通达信概念板块 + 前复权日线，逐窗口(3/5/10/20/60)算概念温度、连续天数与热度序列；单次 10-40 分钟，排在流水线末尾，独立执行/重试，不阻断其他任务'},
+            {'id': 'build_industry_temperature', 'name': '构建二级行业温度快照', 'desc': '与概念温度同一算法，成分改用申万二级行业（127 个、每股唯一归属，最小成员数 3）；单次 15-25 分钟，排在概念温度之后，独立执行/重试，不阻断其他任务'},
+]
+
 class StockDashboardHandler(BaseHTTPRequestHandler):
     server_version = "StockDashboard/0.1"
 
@@ -2353,22 +2372,7 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         # archive_daily intentionally is not a workbench task: it produces a
         # legacy 1m/15m archive for one symbol and is not an input to current
         # financial, RPS, MACD, valuation, screening, or analysis indicators.
-        tasks = [
-            {'id': 'sync_tdx_qfq_exports', 'name': '接入并核验前复权日K线', 'desc': '读取通达信 T0002/export 前复权日线，写入覆盖范围审计清单；不改写通达信源文件'},
-            {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
-            {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
-            {'id': 'build_stock_filter_qfq_daily', 'name': '重建股票筛选前复权日线', 'desc': '从本地通达信前复权导出重建 OHLCV 日线，供量价预设与行情快照使用'},
-            {'id': 'build_stock_filter_market_snapshot', 'name': '构建股票筛选行情快照', 'desc': '将前复权日线预计算为每股收益、换手率、量价信号与周/月趋势，避免筛选页启动时重算全量日线'},
-            {'id': 'build_financial_health_peer_snapshot', 'name': '增量更新行业财务健康度快照', 'desc': '只重算本次新增或修订财报涉及的股票；失败可独立重试且不阻断技术数据更新'},
-            {'id': 'build_industry_metric_snapshot', 'name': '构建行业财务指标同业快照', 'desc': '发布二级行业同业指标分区快照；失败不阻断 RPS/MACD 技术数据更新'},
-            {'id': 'build_industry_relative_valuation_snapshot', 'name': '构建行业估值快照', 'desc': '逐行业计算 PE/PS 经验分位，覆盖 127 个二级行业'},
-            {'id': 'build_good_stock_financial_snapshot', 'name': '构建好股低估专用财报快照', 'desc': '使用本地财报时序库，逐股最新已披露季度 + 年度五年；不替换严格同周期排名文件，可独立执行/重试'},
-            {'id': 'build_good_stock_undervaluation_current', 'name': '构建好股低估诊断快照', 'desc': '依赖本地前复权行情、好股专用财报、行业估值；独立原子发布，失败保留旧版且不阻断技术更新'},
-            {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
-            {'id': 'rebuild_stage_history', 'name': '重建阶段历史（A/B/C/D）', 'desc': '按前复权日线逐 bar 判定 A/B/C/D 四阶段并原子发布全市场历史库；含陈旧源阻断、抽样对拍与原子落盘，可独立执行/重试'},
-            {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
-            {'id': 'build_concept_temperature', 'name': '构建概念温度快照', 'desc': '读通达信概念板块 + 前复权日线，逐窗口(3/5/10/20/60)算概念温度、连续天数与热度序列；单次 10-40 分钟，排在流水线末尾，独立执行/重试，不阻断其他任务'},
-        ]
+        tasks = [dict(task) for task in DATA_UPDATE_TASK_PLAN]
 
         # Determine which tasks are completed (based on current data freshness)
         peer_snapshot = status.get('industry_metric_snapshot')

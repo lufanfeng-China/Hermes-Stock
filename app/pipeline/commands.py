@@ -108,6 +108,7 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_regime_history.py')]),
             # 慢且只写自己的快照：失败时最需要“只重跑它”，不能退回整链重来。
             ('build_concept_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py')]),
+            ('build_industry_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py'), '--scope', 'industry']),
         ]
     commands: list[tuple[str, list[str]]] = [
         # The workbench deliberately excludes archive_daily: that legacy archive
@@ -146,6 +147,9 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         # dataset_concept_temperature_current.json，没有任何后续任务读它，
         # 失败不影响前面每一步，可单独重跑。
         ('build_concept_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py')]),
+        # 行业温度与概念温度同一算法、不同成分来源（申万二级行业）。同样排在末尾,
+        # 产物只被行业榜单读取,失败不影响前面每一步,可单独重跑。
+        ('build_industry_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py'), '--scope', 'industry']),
         # Optional: Kronos AI prediction (CPU ~10s/stock, 5000 stocks ~14 hours)
         # Uncomment to enable daily AI prediction rebuild:
         # (

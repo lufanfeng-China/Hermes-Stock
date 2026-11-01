@@ -164,6 +164,7 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
                 "build_good_stock_undervaluation_current",
                 "rebuild_stage_history",
                 "build_concept_temperature",
+                "build_industry_temperature",
             ],
             [name for name, _ in commands],
         )

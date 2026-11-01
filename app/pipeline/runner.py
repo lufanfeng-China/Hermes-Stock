@@ -18,18 +18,32 @@ from app.data.rps_history import _load_rps_history_dataset, _load_rps_trading_da
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 
+# 默认单任务超时 30 分钟。温度类构建要读 5,400 只前复权日线并回溯 146 个交易日,
+# 实测 17-25 分钟,余量不足以覆盖机器变慢或映射扩张,因此单独放宽到 60 分钟。
+DEFAULT_TASK_TIMEOUT = 1800
+LONG_TASK_TIMEOUTS = {
+    'build_concept_temperature': 3600,
+    'build_industry_temperature': 3600,
+}
+
+
+def _task_timeout(step_name: str) -> int:
+    return LONG_TASK_TIMEOUTS.get(step_name, DEFAULT_TASK_TIMEOUT)
+
+
 def _run_data_update_command(
     step_name: str,
     command: list[str],
     progress_callback=None,
 ) -> SimpleNamespace:
+    timeout = _task_timeout(step_name)
     if progress_callback is None:
         return subprocess.run(
             command,
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
-            timeout=1800,
+            timeout=timeout,
         )
     process = subprocess.Popen(
         command,
@@ -47,7 +61,7 @@ def _run_data_update_command(
             stdout_lines.append(line)
             progress_callback(step_name, line.rstrip('\n'))
         stderr_text = process.stderr.read() if process.stderr is not None else ""
-        returncode = process.wait(timeout=1800)
+        returncode = process.wait(timeout=timeout)
     except Exception:
         process.kill()
         raise
