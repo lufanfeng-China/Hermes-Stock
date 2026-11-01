@@ -15,7 +15,7 @@ import sys
 import pandas as pd
 
 from app.stock_filter_history_progress import read_progress
-from app.stock_filter_market_snapshot import PRICE_PERCENTILE_FIELDS
+from app.stock_filter_market_snapshot import PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
 import math
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -138,6 +138,15 @@ def matches_financial_reversal(row: dict[str, Any]) -> bool:
     if str(row.get("quarterly_profitability_status") or "") not in {"stable", "improving"}:
         return False
     return row.get("quarterly_high_or_critical_alert") is False
+
+
+def matches_trend_template(row: dict[str, Any]) -> bool:
+    """Return whether the row satisfies the 7-leg Trend Template.
+
+    The 8th leg of the published template (relative strength rating >= 70) is
+    deliberately not part of this preset.
+    """
+    return bool(row.get("trend_template_ok"))
 
 
 def matches_blowup_break(row: dict[str, Any]) -> bool:
@@ -286,6 +295,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "eps_ratio_5y_price": qfq.get("eps_ratio_5y_price"),
             "blowup_break_volume_price_ok": qfq.get("blowup_break_volume_price_ok"), "blowup_break_va": qfq.get("blowup_break_va"),
             "blowup_break_vol_ratios": qfq.get("blowup_break_vol_ratios") or [], "blowup_break_return_5d": qfq.get("blowup_break_return_5d"),
+            **{key: qfq.get(key) for key in TREND_TEMPLATE_FIELDS},
             "rps_20": _num(r.get("rps_20")), "rps_50": _num(r.get("rps_50")),
             "rps_120": _num(r.get("rps_120")), "rps_250": _num(r.get("rps_250")), "rps_total": round(total, 2),
             "mrs_score": _num(relative.get("mrs_score")), "mrs_label": relative.get("mrs_label"), "relative_strength_state": relative.get("relative_strength_state"), "relative_strength_state_label": relative.get("relative_strength_state_label"),
@@ -370,7 +380,7 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         sort = (params.get("sort") or ["rps_total"])[0]
         if sort not in SORT_FIELDS: raise ValueError("unsupported sort")
         preset = (params.get("preset") or [""])[0].strip()
-        if preset not in {"", "financial_reversal", "blowup_break"}: raise ValueError("unsupported preset")
+        if preset not in {"", "financial_reversal", "blowup_break", "trend_template"}: raise ValueError("unsupported preset")
         as_of_date = (params.get("as_of_date") or [""])[0].strip()
         if as_of_date:
             datetime.strptime(as_of_date, "%Y-%m-%d")
@@ -408,6 +418,13 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if code == "historical_snapshot_building" and as_of_date:
             error["progress"] = read_progress(HISTORICAL_FUNDAMENTALS, as_of_date)
         return {"ok": False, "error": error}
+    if preset == "trend_template" and rows and all(
+            row.get("trend_template_status") is None for row in rows):
+        # 老的历史快照没有趋势模版字段；不能静默返回空池
+        return {"ok": False, "error": {
+            "code": "trend_template_unavailable",
+            "message": "该日期的历史快照未包含趋势模版指标，请先重建该日期的历史基本面快照",
+        }}
     daily_trends = _selected(params, "trend_daily") or _selected(params, "trend")
     weekly_trends = _selected(params, "trend_weekly")
     monthly_trends = _selected(params, "trend_monthly")
@@ -421,6 +438,7 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if market and row["market"] != market: continue
         if preset == "financial_reversal" and not matches_financial_reversal(row): continue
         if preset == "blowup_break" and not matches_blowup_break(row): continue
+        if preset == "trend_template" and not matches_trend_template(row): continue
         is_niche_leader = bool(str(row.get("niche_leader") or "").strip())
         if niche_leader == "yes" and not is_niche_leader: continue
         if niche_leader == "no" and is_niche_leader: continue

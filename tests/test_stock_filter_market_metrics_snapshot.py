@@ -20,9 +20,10 @@ class StockFilterMarketMetricsSnapshotTest(unittest.TestCase):
 
         payload = build_market_metrics(frame)
 
-        # v2 增加股价收益比字段（eps_ratio_5y 及其口径明细），故版本号随之上抬
-        self.assertEqual(payload["schema_version"], "stock-filter-market-metrics-v2")
+        # v2 增加股价收益比字段；v3 增加趋势模版（Trend Template）七条腿
+        self.assertEqual(payload["schema_version"], "stock-filter-market-metrics-v3")
         self.assertIn("eps_ratio_5y", payload["metrics"]["sh:600001"])
+        self.assertIn("trend_template_ok", payload["metrics"]["sh:600001"])
         self.assertEqual(payload["stocks"], 2)
         self.assertEqual(payload["metrics"]["sh:600001"]["return_1d"], round((34 / 33 - 1) * 100, 4))
         self.assertEqual(payload["metrics"]["sh:600001"]["turnover_5_sum"], 5.0)

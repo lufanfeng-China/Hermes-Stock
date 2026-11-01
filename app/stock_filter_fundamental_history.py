@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 import pandas as pd
+from app.stock_filter_market_snapshot import PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
 
 
 def _number(value: Any) -> float | None:
@@ -162,9 +163,11 @@ def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dic
             'blowup_break_volume_price_ok': bool(market_metrics.get('blowup_break_volume_price_ok')),
             'blowup_break_va': market_metrics.get('blowup_break_va'), 'blowup_break_vol_ratios': market_metrics.get('blowup_break_vol_ratios') or [],
             'blowup_break_return_5d': market_metrics.get('blowup_break_return_5d'), 'qfq_as_of': market_metrics.get('qfq_as_of'),
+            **{key: market_metrics.get(key) for key in PRICE_PERCENTILE_FIELDS},
+            **{key: market_metrics.get(key) for key in TREND_TEMPLATE_FIELDS},
             **valuation,
         }
-    return {'schema_version': 'stock-filter-fundamental-history-v2', 'as_of_date': as_of_date,
+    return {'schema_version': 'stock-filter-fundamental-history-v3', 'as_of_date': as_of_date,
             'financial_information_cutoff': as_of_date,
             'revision_policy': 'conservative_current_warehouse_version',
             'valuation_price_basis': 'raw_unadjusted_close', 'stocks': stocks}

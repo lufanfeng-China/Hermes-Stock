@@ -92,6 +92,94 @@ def _short_trend(closes: list[float]) -> str | None:
     return "neutral"
 
 
+# 趋势模版（Trend Template）口径。第 8 条「相对强度评级 ≥70」本次不纳入。
+TREND_TEMPLATE_MA_FAST = 50          # 50 日线
+TREND_TEMPLATE_MA_MID = 150          # 150 日线
+TREND_TEMPLATE_MA_SLOW = 200         # 200 日线
+TREND_TEMPLATE_RISE_LOOKBACK = 20    # 「至少上升 1 个月」按 20 个交易日计
+TREND_TEMPLATE_RANGE_BARS = 250      # 52 周按 250 个交易日计
+TREND_TEMPLATE_MIN_BARS = 250        # 同时需要 MA200 与 52 周区间
+TREND_TEMPLATE_OFF_LOW_PCT = 30.0    # 比 52 周低点高至少 30%
+TREND_TEMPLATE_NEAR_HIGH_PCT = 25.0  # 距 52 周高点 25% 以内
+
+
+TREND_TEMPLATE_FIELDS = (
+    "trend_template_ok",
+    "trend_template_status",
+    "trend_template_bars",
+    "trend_template_price_basis",
+    "trend_template_ma50",
+    "trend_template_ma150",
+    "trend_template_ma200",
+    "trend_template_ma200_20d_ago",
+    "trend_template_high_52w",
+    "trend_template_low_52w",
+    "trend_template_off_low_pct",
+    "trend_template_from_high_pct",
+    "trend_template_legs",
+)
+
+
+def _trend_template_metrics(group: pd.DataFrame) -> dict[str, Any]:
+    """Trend Template 的 7 条腿（不含第 8 条相对强度）。
+
+    本地筛选库里只有收盘价，没有最高/最低价，因此「52 周高低点」按收盘价的
+    最高/最低计，与用最高/最低价的严格口径可能有细微差异。
+    """
+    closes = pd.to_numeric(group["close"], errors="coerce").dropna().tolist()
+    bars = len(closes)
+    base = {
+        "trend_template_ok": False,
+        "trend_template_status": "insufficient_history" if bars < TREND_TEMPLATE_MIN_BARS else "evaluated",
+        "trend_template_bars": bars,
+        "trend_template_price_basis": "close_only",
+        "trend_template_ma50": None,
+        "trend_template_ma150": None,
+        "trend_template_ma200": None,
+        "trend_template_ma200_20d_ago": None,
+        "trend_template_high_52w": None,
+        "trend_template_low_52w": None,
+        "trend_template_off_low_pct": None,
+        "trend_template_from_high_pct": None,
+        "trend_template_legs": {},
+    }
+    if bars < TREND_TEMPLATE_MIN_BARS:
+        return base
+
+    close = closes[-1]
+    ma_fast = sum(closes[-TREND_TEMPLATE_MA_FAST:]) / TREND_TEMPLATE_MA_FAST
+    ma_mid = sum(closes[-TREND_TEMPLATE_MA_MID:]) / TREND_TEMPLATE_MA_MID
+    ma_slow = sum(closes[-TREND_TEMPLATE_MA_SLOW:]) / TREND_TEMPLATE_MA_SLOW
+    slow_series = [sum(closes[index - TREND_TEMPLATE_MA_SLOW + 1:index + 1]) / TREND_TEMPLATE_MA_SLOW
+                   for index in range(TREND_TEMPLATE_MA_SLOW - 1, bars)]
+    slow_prev = slow_series[-1 - TREND_TEMPLATE_RISE_LOOKBACK] if len(slow_series) > TREND_TEMPLATE_RISE_LOOKBACK else None
+    window = closes[-TREND_TEMPLATE_RANGE_BARS:]
+    high_52w, low_52w = max(window), min(window)
+
+    legs = {
+        "above_ma150": close > ma_mid,                     # 1 股价在 150 日线之上
+        "ma150_above_ma200": ma_mid > ma_slow,              # 2 150 日线在 200 日线之上
+        "ma200_rising_1m": slow_prev is not None and ma_slow > slow_prev,  # 3 200 日线至少上升 1 个月
+        "ma50_above_150_200": ma_fast > ma_mid and ma_fast > ma_slow,      # 4 50 日线在 150、200 日线之上
+        "above_ma50": close > ma_fast,                     # 5 股价在 50 日线之上
+        "off_52w_low_30pct": low_52w > 0 and (close / low_52w - 1) * 100 >= TREND_TEMPLATE_OFF_LOW_PCT,  # 6
+        "within_25pct_of_52w_high": high_52w > 0 and (high_52w - close) / high_52w * 100 <= TREND_TEMPLATE_NEAR_HIGH_PCT,  # 7
+    }
+    base.update({
+        "trend_template_ok": all(legs.values()),
+        "trend_template_ma50": round(ma_fast, 4),
+        "trend_template_ma150": round(ma_mid, 4),
+        "trend_template_ma200": round(ma_slow, 4),
+        "trend_template_ma200_20d_ago": round(slow_prev, 4) if slow_prev is not None else None,
+        "trend_template_high_52w": round(high_52w, 4),
+        "trend_template_low_52w": round(low_52w, 4),
+        "trend_template_off_low_pct": round((close / low_52w - 1) * 100, 2) if low_52w > 0 else None,
+        "trend_template_from_high_pct": round((close / high_52w - 1) * 100, 2) if high_52w > 0 else None,
+        "trend_template_legs": legs,
+    })
+    return base
+
+
 def _blowup_break_metrics(group: pd.DataFrame) -> dict[str, Any]:
     """Compute the historical ``爆量突破`` volume/price legs from QFQ OHLCV.
 
@@ -232,6 +320,7 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
                                 "trend_daily": daily_trend, "trend_daily_label": _trend_label(daily_trend),
                                 "short_trend": short_trend, "short_trend_label": _trend_label(short_trend)}
         item.update(_blowup_break_metrics(group))
+        item.update(_trend_template_metrics(group))
         item.update(_price_percentile_5y(group))
         item.update(_eps_ratio_fields(eps_map.get(symbol), close[-1] if close else None))
         for days in (1, 5, 20):
@@ -252,4 +341,4 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
         metrics[f"{market}:{symbol}"] = item
         if on_progress is not None and (completed == total_groups or completed % 50 == 0):
             on_progress(completed, total_groups)
-    return {"schema_version": "stock-filter-market-metrics-v2", "stocks": len(metrics), "metrics": metrics}
+    return {"schema_version": "stock-filter-market-metrics-v3", "stocks": len(metrics), "metrics": metrics}
