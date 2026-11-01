@@ -146,8 +146,8 @@ def default_jobs(window_count: int, frames_mb: int) -> int:
     available = _available_memory_mb()
     if available is None:
         return 1
-    per_worker = max(300, frames_mb + 250)
-    by_memory = (available - 600) // per_worker if available > 600 else 0
+    per_worker = max(900, frames_mb + 500)      # 实测：frames 690 MB → 每进程约 1.2 GB
+    by_memory = (available - 1200) // per_worker if available > 1200 else 0
     return max(1, min(window_count, multiprocessing.cpu_count() // 2, by_memory, 5))
 
 
@@ -168,27 +168,39 @@ def build_windows(target_windows, mapping, frames, as_of, min_members, jobs=1):
 
     context = multiprocessing.get_context('fork')
     workdir = Path(tempfile.mkdtemp(prefix='hermes-temp-window-'))
-    processes = []
+    pending = [(window, workdir / f'window-{window}.json') for window in windows]
+    running: list[tuple[int, object, Path]] = []
+    finished: list[tuple[int, Path]] = []
+    failed: list[int] = []
     try:
-        for window in windows:
-            out_path = workdir / f'window-{window}.json'
-            process = context.Process(
-                target=_window_worker,
-                args=(window, mapping, frames, as_of, min_members, str(out_path)),
-            )
-            process.start()
-            processes.append((window, process, out_path))
-        for window, process, _out_path in processes:
-            process.join()
-        failed = [window for window, process, _out in processes if process.exitcode != 0]
+        while pending or running:
+            while pending and len(running) < jobs:
+                window, out_path = pending.pop(0)
+                process = context.Process(
+                    target=_window_worker,
+                    args=(window, mapping, frames, as_of, min_members, str(out_path)),
+                )
+                process.start()
+                running.append((window, process, out_path))
+            time.sleep(0.5)
+            for entry in list(running):
+                window, process, out_path = entry
+                if process.is_alive():
+                    continue
+                process.join()
+                running.remove(entry)
+                if process.exitcode == 0:
+                    finished.append((window, out_path))
+                else:
+                    failed.append(window)
         if failed:
-            raise RuntimeError(f'窗口构建失败：{failed}（退出码非 0）')
+            raise RuntimeError(f'窗口构建失败：{sorted(failed)}（退出码非 0）')
         built = {}
-        for window, _process, out_path in processes:
+        for window, out_path in finished:
             built[str(window)] = json.loads(out_path.read_text(encoding='utf-8'))
         return built
     finally:
-        for _window, process, _out in processes:
+        for _window, process, _out in running:
             if process.is_alive():
                 process.terminate()
         shutil.rmtree(workdir, ignore_errors=True)
