@@ -7,13 +7,44 @@
   <title>股票筛选</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
+    .swing-filter-field select[multiple] { height:auto; max-height:240px; overflow:auto; margin-top:5px; }
+    .swing-filter-field option { padding:5px 4px; white-space:normal; }
+    .swing-filter-field { margin-top:9px; }
+    .swing-cell { min-width:220px; max-width:330px; white-space:normal!important; overflow-wrap:anywhere; }
+    .swing-cell strong { display:block; font-size:12px; font-weight:700; }
+    .swing-cell small { display:block; color:var(--sf-muted); margin-top:4px; line-height:1.4; }
+    .swing-chart-link { display:block; width:100%; padding:0; border:0; background:none; color:inherit; text-align:left; font:inherit; cursor:pointer; }
+    .swing-chart-link:hover strong { color:var(--sf-accent); text-decoration:underline; text-underline-offset:3px; }
+    .swing-chart-link:focus-visible { outline:2px solid var(--sf-accent); outline-offset:3px; border-radius:3px; }
+    .swing-chart-dialog { margin:auto; width:min(1180px,calc(100vw - 24px)); max-height:calc(100vh - 24px); box-sizing:border-box; overflow:auto; border:1px solid var(--sf-line-strong); border-radius:12px; background:#0c181f; color:var(--sf-text); padding:16px; }
+    .swing-chart-dialog::backdrop { background:rgba(0,0,0,.78); }
+    .swing-chart-dialog h3 { margin:0 48px 8px 0; }
+    .swing-chart-dialog p { color:var(--sf-muted); font-size:12px; line-height:1.6; }
+    .swing-chart-close { float:right; border:1px solid var(--sf-line-strong); border-radius:7px; background:transparent; color:var(--sf-text); font:inherit; padding:5px 11px; cursor:pointer; }
+    .swing-chart-scroll { overflow-x:auto; background:#09141a; border:1px solid var(--sf-line); }
+    .swing-chart-scroll svg { display:block; height:440px; }
+    .swing-chart-dialog .swing-chart-scroll { overflow:hidden; }
+    .swing-chart-dialog #swing-chart-svg { width:100%; height:440px; min-height:440px; }
+    .swing-chart-dialog #swing-chart-macd { width:100%; height:176px; border-top:1px solid var(--sf-line); }
+    .price-trend-link { display:inline-block; padding:1px 3px; border:0; background:transparent; color:inherit; font:inherit; font-weight:700; cursor:pointer; border-radius:4px; }
+    .price-trend-link:hover { color:var(--sf-accent); text-decoration:underline; text-underline-offset:3px; }
+    .price-trend-link:focus-visible { outline:2px solid var(--sf-accent); }
+    .price-trend-dialog { width:min(1160px,calc(100vw - 24px)); }
+    .price-trend-dialog .price-trend-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:9px 0; }
+    .price-trend-controls button { border:1px solid var(--sf-line-strong); border-radius:5px; padding:4px 9px; background:#132521; color:var(--sf-text); cursor:pointer; }
+    .price-trend-controls button.is-active { border-color:var(--sf-accent); color:var(--sf-accent); }
+    .price-trend-dialog svg { display:block; width:100%; background:#0d1117; }
+    #price-trend-svg { height:min(480px,55vh); min-height:320px; }
+    #price-trend-macd { height:176px; border-top:1px solid var(--sf-line); }
+    @media (max-height:700px) { #price-trend-svg { height:260px; min-height:0; } #price-trend-macd { height:130px; } }
+    .price-trend-chart-area { border:1px solid var(--sf-line); overflow:hidden; }
     :root { --sf-bg:#091111; --sf-panel:#0e1c1b; --sf-panel-2:#122522; --sf-line:rgba(151,204,190,.17); --sf-line-strong:rgba(151,204,190,.3); --sf-text:#edf5ef; --sf-muted:#91a9a2; --sf-accent:#b7e36b; --sf-accent-ink:#15220b; --sf-input:#0a1715; --sf-positive:#ff7e72; --sf-negative:#62d6a1; }
     body { background:radial-gradient(circle at 80% -18%,rgba(183,227,107,.11),transparent 32rem),var(--sf-bg); color:var(--sf-text); }
     .stock-filter-page { max-width:1660px; margin:0 auto; padding:24px; }
     .stock-filter-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin:12px 0 20px; }
     .stock-filter-intro h2 { margin:0; font-size:26px; letter-spacing:-.035em; }
     .stock-filter-intro p { max-width:560px; color:var(--sf-muted); margin:7px 0 0; font-size:13px; line-height:1.6; }
-    .stock-filter-workbench { display:grid; grid-template-columns:340px minmax(0,1fr); align-items:start; gap:16px; }
+    .stock-filter-workbench { display:grid; grid-template-columns:280px minmax(0,1fr); align-items:start; gap:16px; }
     .filter-sidebar, .filter-results-panel { position: relative; z-index: 0; border:1px solid var(--sf-line); border-radius:14px; background:linear-gradient(145deg,rgba(20,37,34,.96),rgba(11,25,23,.96)); box-shadow:0 20px 48px rgba(0,0,0,.16); }
     .filter-sidebar { padding:14px; position:sticky; top:14px; }
     .filter-sidebar-head, .results-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -45,6 +76,8 @@
     .filter-group input, .filter-group select, .sort-select { box-sizing:border-box; width:100%; border:1px solid rgba(151,204,190,.2); background:var(--sf-input); color:var(--sf-text); border-radius:7px; min-height:30px; padding:5px 7px; font:inherit; font-size:12px; outline:none; }
     .filter-group input:focus, .filter-group select:focus, .sort-select:focus { border-color:var(--sf-accent); box-shadow:0 0 0 3px rgba(183,227,107,.1); }
     .filter-group input::placeholder { color:#59716a; }
+    .filter-group input[type="checkbox"] { width:auto; min-height:auto; accent-color:var(--sf-accent); }
+    .swing-entry-toggle { display:flex; align-items:center; gap:7px; margin:10px 0 6px; }
     .filter-group input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
     .filter-group input[type="number"]::-webkit-inner-spin-button, .filter-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
     .trend-grid { display:grid; grid-template-columns:1fr; gap:7px; }
@@ -69,6 +102,8 @@
     .filter-table { width:100%; min-width:1160px; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
     .filter-table th { background:rgba(2,10,9,.24); color:#91a9a2; font-weight:600; text-align:left; white-space:nowrap; padding:11px 13px; }
     .filter-table td { border-top:1px solid rgba(151,204,190,.1); padding:12px 13px; white-space:nowrap; color:#d9e6e0; }
+    .filter-table th:last-child, .filter-table td.swing-cell { min-width:250px; max-width:330px; white-space:normal; overflow-wrap:anywhere; }
+    .filter-table th:nth-last-child(2), .filter-table td:nth-last-child(2) { min-width:160px; max-width:230px; white-space:normal; overflow-wrap:anywhere; }
     .filter-table tbody tr { transition:background .18s ease; }
     .filter-table tbody tr:hover { background:rgba(183,227,107,.055); }
     .filter-table .num { text-align:right; }
@@ -85,7 +120,7 @@
     .page-button:disabled { opacity:.38; cursor:not-allowed; }
     .page-meta { margin-right:auto; color:var(--sf-muted); font-size:11px; }
     .hidden { display:none; }
-    @media (max-width:1050px) { .stock-filter-workbench { grid-template-columns:290px minmax(0,1fr); } .trend-grid { grid-template-columns:1fr; } }
+    @media (max-width:1050px) { .stock-filter-workbench { grid-template-columns:250px minmax(0,1fr); } .trend-grid { grid-template-columns:1fr; } }
     @media (max-width:780px) { .stock-filter-page { padding:14px; } .stock-filter-intro { display:block; } .stock-filter-workbench { grid-template-columns:1fr; } .filter-sidebar { position:static; } .results-toolbar { align-items:flex-start; flex-direction:column; } .results-controls { width:100%; } .sort-select { flex:1; } }
   .filter-tip{position:fixed;max-width:420px;padding:10px 12px;white-space:pre-line;border-radius:10px;background:#000;color:#fff;font:400 12px/1.6 var(--font-sans, sans-serif);letter-spacing:0;z-index:9999;pointer-events:none;will-change:transform;transform:translateZ(0);isolation:isolate;box-shadow:0 14px 34px rgba(0,0,0,.28);opacity:0;transition:opacity .12s}.filter-tip[data-open="1"]{opacity:1}.dist-link{height:30px;padding:0 12px;border:1px solid var(--sf-line-strong);border-radius:8px;background:var(--sf-input);color:var(--sf-text);font:500 12px/1 var(--font-sans,sans-serif);cursor:pointer;letter-spacing:.02em;margin-right:10px}.dist-link:hover{border-color:var(--sf-accent);color:var(--sf-accent)}.dist-dialog{border:1px solid var(--sf-line-strong);border-radius:16px;background:var(--sf-panel);color:var(--sf-text);padding:0;width:min(980px,94vw);max-width:min(980px,94vw);max-height:92vh}.dist-dialog::backdrop{background:rgba(0,0,0,.62)}.dist-shell{padding:20px 22px 18px;display:flex;flex-direction:column;gap:14px;max-height:88vh;overflow-y:auto}.dist-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.dist-top h2{margin:0;font:600 17px/1.3 var(--font-sans,sans-serif);letter-spacing:.02em}.dist-meta{margin:4px 0 0;color:var(--sf-muted);font:400 12px/1.5 var(--font-sans,sans-serif)}.dist-close{height:30px;padding:0 12px;border:1px solid var(--sf-line);border-radius:8px;background:transparent;color:var(--sf-muted);font:500 12px/1 var(--font-sans,sans-serif);cursor:pointer}.dist-close:hover{color:var(--sf-text);border-color:var(--sf-line-strong)}.dist-def{margin:0;padding:10px 12px;border-left:2px solid var(--sf-accent);background:rgba(255,255,255,.03);color:var(--sf-muted);font:400 12px/1.7 var(--font-sans,sans-serif)}.dist-block h3{margin:0 0 6px;font:500 12px/1.4 var(--font-sans,sans-serif);color:var(--sf-muted);letter-spacing:.04em}.dist-chart{width:100%;height:auto;display:block;border:1px solid var(--sf-line);border-radius:10px;background:var(--sf-bg)}.dist-table{width:100%;border-collapse:collapse;font:400 12px/1.5 var(--font-sans,sans-serif)}.dist-table th,.dist-table td{padding:7px 8px;border-bottom:1px solid var(--sf-line);text-align:right;white-space:nowrap}.dist-table th{color:var(--sf-muted);font-weight:500}.dist-table td:first-child,.dist-table th:first-child{text-align:left}.dist-table tbody tr:hover{background:rgba(255,255,255,.04)}.dist-foot{margin:0;color:var(--sf-muted);font:400 11px/1.7 var(--font-sans,sans-serif)}</style>
 </head>
@@ -141,10 +176,9 @@
           <fieldset class="filter-group is-collapsed" data-filter-group="market"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>03</span>基础行情</button></legend><div class="range-grid">
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">股价五年分位（%）<div class="range-pair"><input name="price_percentile_5y_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="price_percentile_5y_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
-            <p class="filter-note">前复权收盘价经验分位，含当日；越低表示处于自身历史较低位置。上市满五年按近五个自然年计算，不足五年按上市以来全部历史计算（结果里标「上市以来」）；有效历史不足 60 个交易日的股票不计入，留空则不限。</p>
             <label class="filter-field">股价收益比（%）<div class="range-pair"><input name="eps_ratio_5y_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="eps_ratio_5y_max" type="number" step="0.1" placeholder="最大"></div></label>
-            <p class="filter-note">最近五个完整年度「基本每股收益」加总 ÷ 当前股价，单位 %。上市不足五年按已有完整年度年化：4 年 ×1.25、3 年 ×5/3、2 年 ×2.5、1 年 ×5；负值表示五年累计亏损。留空则不限。</p>
             <label class="filter-field">PE-TTM<div class="range-pair"><input name="pe_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="pe_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
+            <label class="filter-field">PE-TTM 五年分位（%）<div class="range-pair"><input name="pe_percentile_5y_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="pe_percentile_5y_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
             <label class="filter-field">PS-TTM<div class="range-pair"><input name="ps_ttm_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="ps_ttm_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">总市值（亿）<div class="range-pair"><input name="total_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="total_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">流通市值（亿）<div class="range-pair"><input name="free_float_market_cap_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="free_float_market_cap_max" type="number" step="0.01" placeholder="最大"></div></label>
@@ -189,13 +223,30 @@
             <label class="filter-field">抗跌跑赢率（%）<div class="range-pair"><input name="down_market_win_rate_20_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="down_market_win_rate_20_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
             <label class="filter-field" title="最近20个交易日中，仅将大盘下跌日的（个股单日收益−大盘单日收益）逐日相加；单位为百分点（pp），可为负值。">抗跌超额总数（pp）<div class="range-pair"><input name="down_market_total_excess_pp_20_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="down_market_total_excess_pp_20_max" type="number" step="0.1" placeholder="最大"></div></label>
           </div></fieldset>
+          <fieldset class="filter-group is-collapsed" data-filter-group="wyckoff"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>08</span>威科夫量价事件</button></legend>
+            <p class="filter-note">通达信前复权有效日线；仅提供三类偏多事件观察标签，不是交易建议。只选状态/日期时默认查询全部三类；状态未选时默认候选或已确认，不含已失效。类型内多选为“或”，状态内多选为“或”，组间取交集。日期留空不设事件过期日；历史信号日期只读取当日可知状态。快照缺失/过期则阻断筛选。</p><div class="range-grid">
+              <label class="filter-field">事件类型<select name="wyckoff_type" multiple size="3"><option value="Spring">Spring（下探收回）</option><option value="SOS">SOS（向上突破）</option><option value="LPS">LPS（向上突破后回踩）</option></select></label>
+              <label class="filter-field">截至当日状态<select name="wyckoff_status" multiple size="2"><option value="candidate">候选</option><option value="confirmed">已确认</option></select></label>
+              <label class="filter-field">事件发生日起<input name="wyckoff_since" type="date" title="只筛选该日期起发生的事件；留空不设期限，不改变事件本身状态"></label>
+            </div>
+          </fieldset>
+          <fieldset class="filter-group is-collapsed" data-filter-group="swing"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>09</span>波峰波谷 v5</button></legend>
+            <p class="filter-note">仅提供偏多结构观察选项；同一条件内取或，状态/倾向/星级与其它筛选项之间取交集。未选不启用对应条件；缺失/过期/证据不足不能当作偏多。仅表示结构观察，不构成投资建议。</p>
+            <label class="filter-field swing-filter-field">结构状态（Ctrl/⌘ 多选）<select name="swing_state" multiple size="8">
+              <optgroup label="偏多"><option value="上涨突破">上涨突破</option><option value="高点上移型上行">高点上移型上行</option><option value="低点抬升型上行">低点抬升型上行</option><option value="收敛／突破上行">收敛／突破上行</option><option value="上涨回撤">上涨回撤</option><option value="较高波谷已确认（待突破）">较高波谷已确认（待突破）</option><option value="原正统下行／突破最近峰（反转候选）">原正统下行／突破最近峰（反转候选）</option><option value="原高点降低型下行形状／突破最近峰（反转候选）">原高点降低型下行形状／突破最近峰（反转候选）</option></optgroup>
+            </select></label>
+            <label class="filter-field swing-entry-toggle"><input type="checkbox" name="swing_entry_only" value="1">仅筛选刚进入所选结构状态</label>
+            <label class="filter-field">连续保持不超过（有效交易日）<select name="swing_entry_days" aria-label="刚进入状态最多有效交易日"><option value="1" selected>1 日（刚进入）</option><option value="2">2 日</option><option value="3">3 日</option><option value="4">4 日</option><option value="5">5 日</option></select></label>
+            <label class="filter-field swing-filter-field">结构倾向（多选）<select name="swing_tendency" multiple size="2"><option value="bull">偏多</option></select></label>
+            <label class="filter-field swing-filter-field">星级类别（多选）<select name="swing_star" multiple size="3"><optgroup label="偏多"><option value="bull:1">★ 1星</option><option value="bull:2">★★ 2星</option><option value="bull:3">★★★ 3星</option></optgroup></select></label>
+          </fieldset>
           <button class="filter-submit" type="submit">⌕ 开始筛选</button>
         </form>
       </aside>
       <section class="filter-results-panel" aria-labelledby="filter-results-title">
-        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><button class="dist-link" type="button" id="open-eps-distribution">板块股价收益比分布</button><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm">PE-TTM（降序）</option><option value="eps_ratio_5y">股价收益比（降序）</option></select></div></div>
+        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><button class="dist-link" type="button" id="open-eps-distribution">板块股价收益比分布</button><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm" data-order="asc">PE-TTM（升序）</option><option value="pe_percentile_5y" data-order="asc">PE五年分位（升序）</option><option value="eps_ratio_5y">股价收益比（降序）</option></select></div></div>
         <div id="status" class="filter-status">正在加载全市场筛选快照…</div>
-        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th>PE / PS（TTM）</th><th class="num">RPS Total</th><th>相对大盘强弱</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th class="num">股价收益比</th></tr></thead><tbody id="results"></tbody></table></div>
+        <div class="result-wrap"><table class="filter-table"><thead><tr><th>股票</th><th>行业</th><th class="num">现价</th><th>PE / PS（TTM）</th><th>相对大盘强弱</th><th>五年健康</th><th>当季健康</th><th class="num">财报涨跌</th><th class="num">股价收益比</th><th title="仅启用威科夫筛选时读取同日完整快照并展示匹配事件；未启用时显示未查询，不代表无事件">威科夫事件</th><th>波峰波谷结构</th></tr></thead><tbody id="results"></tbody></table></div>
         <div id="pagination" class="pagination"></div>
       </section>
     </div>
@@ -225,9 +276,13 @@
       <p class="dist-foot">负值＝五年累计亏损，不能当作低估值；折算 PE = 5 ÷ 中位收益比，是把「五年加总」摊成单年市盈率的等价值，不是真实 PE-TTM。</p>
     </div>
   </dialog>
+  <dialog id="swing-chart-dialog" class="swing-chart-dialog" aria-labelledby="swing-chart-title"><button type="button" class="swing-chart-close" aria-label="关闭波峰波谷K线图">关闭 ×</button><h3 id="swing-chart-title">波峰波谷 · 前复权K线与峰谷证据</h3><p id="swing-chart-meta" role="status">正在加载同日快照证据…</p><div class="price-trend-controls" aria-label="图表区间"><button type="button" data-swing-window="20">20日</button><button type="button" data-swing-window="60">60日</button><button type="button" data-swing-window="120">120日</button><button type="button" data-swing-window="250">250日</button><button type="button" data-swing-window="-1">全部</button></div><div class="swing-chart-scroll price-trend-chart-area"><svg id="swing-chart-svg" role="img" aria-label="前复权K线、均线、成交量、RPS及已确认峰谷、候选点"></svg><svg id="swing-chart-macd" role="img" aria-label="MACD DIF DEA及柱状图"></svg></div><p>峰/谷按发生日标记，确认日见标记说明；最近3个确认点突出显示。仅在箱体检验通过时绘制箱体边界。K线、量、MACD来自同日通达信前复权有效日线；RPS缺失日期不补值。滚轮缩放、拖动平移；非实时行情或交易建议。</p></dialog>
+  <dialog id="price-trend-dialog" class="swing-chart-dialog price-trend-dialog" aria-labelledby="price-trend-title"><button type="button" class="swing-chart-close price-trend-close" aria-label="关闭股价趋势图">关闭 ×</button><h3 id="price-trend-title">股价趋势 · 前复权日线</h3><p id="price-trend-status" role="status">等待加载筛选日期的证据…</p><div class="price-trend-controls" aria-label="图表区间"><button type="button" data-trend-window="20">20日</button><button type="button" data-trend-window="60">60日</button><button type="button" data-trend-window="120">120日</button><button type="button" data-trend-window="250">250日</button></div><div class="price-trend-chart-area"><svg id="price-trend-svg" role="img" aria-label="前复权K线、成交量及RPS走势"></svg><svg id="price-trend-macd" role="img" aria-label="MACD DIF DEA及柱状图"></svg></div><p>表格现价为筛选日原始收盘价；图中K线、MA、成交量及MACD来自通达信前复权有效日线，RPS为全市场截面排名。缺少同日源时不回退原始价；RPS缺失日期不插值。可在上方K线区域滚轮缩放、拖动平移；非实时行情。</p></dialog>
   </main>
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
-  <script src="/stock-filter.js?v=20261101-percentile-basis"></script>
+  <script src="/swing-chart.js?v=20261111-screener-overlay-v2"></script>
+  <script src="/price-trend-chart.js?v=20261111-a"></script>
+  <script src="/stock-filter.js?v=20261111-swing-kline-v2"></script>
   <script src="/stock-filter-distribution.js?v=20261101"></script>
 <div class="filter-tip" id="filter-tip" role="tooltip" aria-hidden="true"></div></body>
 </html>

@@ -32,6 +32,9 @@ const DEFAULTS = {
   labelColor: '#aaaacc',
 };
 
+const klineClipNamespace = Math.random().toString(36).slice(2);
+let nextKlineClipId = 0;
+
 export class KlineChart {
   /**
    * @param {SVGElement} svg
@@ -84,7 +87,7 @@ export class KlineChart {
     const ns = 'http://www.w3.org/2000/svg';
     const defs = document.createElementNS(ns, 'defs');
     // Clip path for plot area
-    this.clipId = 'kc-clip';
+    this.clipId = `kc-clip-${klineClipNamespace}-${++nextKlineClipId}`;
     const clip = document.createElementNS(ns, 'clipPath');
     clip.setAttribute('id', this.clipId);
     this.clipRect = document.createElementNS(ns, 'rect');
@@ -405,7 +408,10 @@ export class KlineChart {
   }
 
   _renderRps() {
-    if (!this.rpsHistory || !this.rpsHistory.length) return;
+    if (!this.rpsHistory || !this.rpsHistory.length) {
+      for (const line of [this.rpsLine20, this.rpsLine50, this.rpsLine120, this.rpsLine250]) line.setAttribute('d', '');
+      return;
+    }
     const d = this._getPlotDims();
     const barW = this._barWidth();
     const spacing = this.cfg.candleSpacing;
@@ -427,7 +433,12 @@ export class KlineChart {
         valid.push({ localI, x, y });
       }
       if (valid.length === 0) return [];
-
+      // In evidence mode an absent cross-sectional rank stays absent; the other
+      // charts retain their existing interpolation behavior by default.
+      if (this.cfg.interpolateRps === false) {
+        const byIndex = new Map(valid.map((point) => [point.localI, point]));
+        return Array.from({ length: this.visible.visibleWindow }, (_, i) => byIndex.get(i) || null);
+      }
       // Second pass: output one entry per localI, using linear interpolation for gaps
       const out = [];
       for (let localI = 0; localI < this.visible.visibleWindow; localI++) {
@@ -764,6 +775,9 @@ export class KlineChart {
     // RPS axis labels
     if (this.rpsHistory && this.rpsHistory.length) {
       this._renderRpsAxisLabels(d);
+    } else if (this._rpsAxisLabels) {
+      for (const label of this._rpsAxisLabels) label.remove();
+      this._rpsAxisLabels = [];
     }
   }
 
