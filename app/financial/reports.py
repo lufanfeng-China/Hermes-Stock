@@ -421,16 +421,21 @@ def _materialize_financial_report(search_index, seed: dict[str, object]) -> dict
     # TDX exposes ``营业收入`` as a period-only value in some reports (notably Q4),
     # while ``其中：营业收入`` is the cumulative statutory line comparable across years.
     getter = getattr(matched_row, "get", lambda _key: None)
-    revenue = search_index._pick(getter("其中：营业收入"))
+    revenue_cumulative = search_index._pick(getter("其中：营业收入"))
+    revenue = revenue_cumulative
     if revenue is None:
         revenue = search_index._pick(getter("营业收入"))
     capex = search_index._pick(getter("购建固定资产、无形资产和其他长期资产支付的现金"))
     ocf = search_index._pick(getter("经营活动产生的现金流量净额"))
     metrics = {
         "revenue": revenue,
+        # Only the statutory cumulative line is safe for standalone-quarter subtraction.
+        "revenue_cumulative_verified": revenue_cumulative,
         "profit": search_index._pick(getter("净利润")),
         "net_profit": search_index._pick(getter("归属于母公司所有者的净利润")),
         "ex_net_profit": search_index._pick(getter("扣除非经常性损益后的净利润")),
+        # Raw cumulative basic EPS (yuan/share); a preview chart derives stand-alone quarters.
+        "basic_eps_cumulative": search_index._pick(getter("基本每股收益")),
         "gross_margin": search_index._pick(getter("销售毛利率(%)(非金融类指标)")),
         "net_margin": search_index._pick(getter("销售净利率(%)")),
         "roe_ex": derived.get("roe_ex"),

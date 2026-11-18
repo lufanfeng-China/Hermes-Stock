@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Any
 
 import pandas as pd
-from app.stock_filter_market_snapshot import PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
+from app.stock_filter_market_snapshot import BASIC_MARKET_FIELDS, PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
+from app.stock_filter_turnover_snapshot import FIELDS as TURNOVER_PERCENTILE_FIELDS
 
 
 def _number(value: Any) -> float | None:
@@ -99,7 +100,7 @@ def _materialize_reports(rows: dict[str, pd.Series]) -> list[dict[str, Any]]:
     return reports
 
 
-def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dict[str, pd.DataFrame], raw_close_by_symbol: dict[str, float], market_by_symbol: dict[str, str], industry_by_key: dict[tuple[str, str], tuple[str | None, str | None]], market_metrics_by_key: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dict[str, pd.DataFrame], raw_close_by_symbol: dict[str, float], market_by_symbol: dict[str, str], industry_by_key: dict[tuple[str, str], tuple[str | None, str | None]], market_metrics_by_key: dict[str, dict[str, Any]] | None = None, pe_by_key: dict[str, dict[str, Any]] | None = None, turnover_by_key: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """Build a per-stock historical fundamental snapshot for one trading day."""
     available: dict[str, dict[str, pd.Series]] = {}
     for period, frame in period_frames.items():
@@ -111,6 +112,8 @@ def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dic
                 available.setdefault(symbol, {})[period] = row
     stocks: dict[str, dict[str, Any]] = {}
     market_metrics_by_key = market_metrics_by_key or {}
+    pe_by_key = pe_by_key or {}
+    turnover_by_key = turnover_by_key or {}
     for symbol, rows in available.items():
         market = market_by_symbol.get(symbol)
         if not market:
@@ -163,11 +166,15 @@ def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dic
             'blowup_break_volume_price_ok': bool(market_metrics.get('blowup_break_volume_price_ok')),
             'blowup_break_va': market_metrics.get('blowup_break_va'), 'blowup_break_vol_ratios': market_metrics.get('blowup_break_vol_ratios') or [],
             'blowup_break_return_5d': market_metrics.get('blowup_break_return_5d'), 'qfq_as_of': market_metrics.get('qfq_as_of'),
+            'return_1d': market_metrics.get('return_1d'),
+            **{key: market_metrics.get(key) for key in BASIC_MARKET_FIELDS},
             **{key: market_metrics.get(key) for key in PRICE_PERCENTILE_FIELDS},
+            **{field: turnover_by_key.get(key, {}).get(field) for field in TURNOVER_PERCENTILE_FIELDS},
             **{key: market_metrics.get(key) for key in TREND_TEMPLATE_FIELDS},
+            **pe_by_key.get(key, {}),
             **valuation,
         }
-    return {'schema_version': 'stock-filter-fundamental-history-v3', 'as_of_date': as_of_date,
+    return {'schema_version': 'stock-filter-fundamental-history-v7', 'as_of_date': as_of_date,
             'financial_information_cutoff': as_of_date,
             'revision_policy': 'conservative_current_warehouse_version',
             'valuation_price_basis': 'raw_unadjusted_close', 'stocks': stocks}

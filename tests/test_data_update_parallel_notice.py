@@ -2,7 +2,13 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from app.pipeline import runner
+
+
+@pytest.fixture(autouse=True)
+def _no_duration_history_from_mock_commands(monkeypatch):
+    monkeypatch.setattr(runner, 'record_success_duration', lambda *args, **kwargs: None)
 
 
 def _temperature_tasks():

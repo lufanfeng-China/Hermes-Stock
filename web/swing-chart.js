@@ -23,6 +23,63 @@
       (boxFirst==null || boxFirst==='区间震荡' || boxFirst==='passed' || boxFirst?.box_test==='passed') &&
       [o.box_lower,o.box_upper].every(v=>v!=null && Number.isFinite(Number(v)));
   }
+  // Refuse annotations without exact QFQ bar dates and matching frozen evidence.
+  function pressureEvidence(data) {
+    const p=data?.observation?.pressure_line, bars=data?.bars;
+    if (!p || data.price_basis!=='tdx_export_qfq' || !Array.isArray(bars) || !bars.length ||
+        data.as_of_date!==p.as_of || data.observation.last_bar_date!==p.as_of ||
+        bars[bars.length-1].date!==p.as_of || !['triggered','sustained'].includes(p.status) ||
+        !Array.isArray(p.peaks) || p.peaks.length!==3 || !p.lines) return null;
+    const indices=p.peaks.map(point=>bars.findIndex(bar=>bar.date===point.date));
+    const trigger=bars.findIndex(bar=>bar.date===p.trigger_date);
+    const finite=v=>v!==null && v!==undefined && v!=='' && Number.isFinite(Number(v));
+    const close=(a,b)=>finite(a) && finite(b) && Math.abs(Number(a)-Number(b))<=.02;
+    if (trigger<0 || indices.some(i=>i<0) || !(indices[0]<indices[1] && indices[1]<indices[2] && indices[2]<trigger) ||
+        p.peaks.some((point,i)=>!point.confirmed || point.confirmed<point.date || point.confirmed>p.trigger_date || !close(point.high,bars[indices[i]].high)) ||
+        !close(p.trigger_close,bars[trigger].close) || !close(p.latest_close,bars[bars.length-1].close) ||
+        !finite(p.key_price) || Number(p.key_price)<=0 ||
+        !['AB','AC','BC'].every(key=>finite(p.lines[key]))) return null;
+    return {p,indices,trigger};
+  }
+  function pressureMarkup(data, byDate, x, y, inPrice) {
+    const proof=pressureEvidence(data);
+    if (!proof) return '';
+    const {p}=proof, labels=['A','B','C'];
+    let html=p.peaks.map((point,i)=>{
+      const px=byDate.get(point.date), py=y(Number(point.high));
+      return px===undefined || !inPrice(py)?'':`<g data-pressure-peak="${labels[i]}"><circle cx="${x(px)}" cy="${py}" r="6" fill="#f9d493" stroke="#111" stroke-width="2"/><title>压力线${labels[i]}峰 发生 ${escapeHtml(point.date)} · ${swingNumber(point.high)}；确认于 ${escapeHtml(point.confirmed)}</title></g>`;
+    }).join('');
+    const triggerX=byDate.get(p.trigger_date);
+    const cX=byDate.get(p.peaks[2].date), cY=y(Number(p.peaks[2].high));
+    if (cX!==undefined && triggerX!==undefined && inPrice(cY))
+      html+=`<g data-pressure-c-peak="${escapeHtml(p.peaks[2].high)}"><line x1="${x(cX)}" x2="${x(triggerX)}" y1="${cY}" y2="${cY}" stroke="#9cc9ff" stroke-width="1.5" stroke-dasharray="3 4"/><title>最近已确认C峰 ${swingNumber(p.peaks[2].high)} · 发生 ${escapeHtml(p.peaks[2].date)}；触发日尚未越峰</title></g>`;
+    for (const [name,a] of [['AB',0],['AC',0],['BC',1]]) {
+      const startX=byDate.get(p.peaks[a].date), startY=y(Number(p.peaks[a].high));
+      const endY=y(Number(p.lines[name]));
+      if (startX===undefined || triggerX===undefined || !inPrice(startY) || !inPrice(endY)) continue;
+      html+=`<g data-pressure-line="${name}"><line x1="${x(startX)}" y1="${startY}" x2="${x(triggerX)}" y2="${endY}" stroke="#f9d493" stroke-width="1.5" stroke-dasharray="5 3"/><title>压力线 ${name}：${escapeHtml(p.peaks[a].date)} → 触发 ${escapeHtml(p.trigger_date)}；触发日冻结线位 ${swingNumber(p.lines[name])}；基于有效前复权K线</title></g>`;
+    }
+    const confirmedIndex=data.bars.findIndex(bar=>bar.date===p.c_confirmed);
+    if (confirmedIndex>=proof.indices[2] && confirmedIndex<proof.trigger) {
+      // Project onto actual valid K-line positions, never elapsed calendar days.
+      const levels=[];
+      for (let i=confirmedIndex; i<=proof.trigger; i++) {
+        const lineAt=(a,b)=>Number(p.peaks[a].high)+(Number(p.peaks[b].high)-Number(p.peaks[a].high))*(i-proof.indices[a])/(proof.indices[b]-proof.indices[a]);
+        const key=Math.max(lineAt(0,1),lineAt(0,2),lineAt(1,2));
+        const px=byDate.get(data.bars[i].date), py=y(key);
+        if (px!==undefined && key>0 && inPrice(py)) levels.push(`${x(px)},${py}`);
+      }
+      // If the reconstructed trigger level differs from the frozen publication,
+      // omit this derived curve rather than drawing contradictory evidence.
+      const last=Math.max(...[[0,1],[0,2],[1,2]].map(([a,b])=>Number(p.peaks[a].high)+(Number(p.peaks[b].high)-Number(p.peaks[a].high))*(proof.trigger-proof.indices[a])/(proof.indices[b]-proof.indices[a])));
+      if (levels.length>=2 && Math.abs(last-Number(p.key_price))<=.02)
+        html+=`<g data-pressure-key-path="1"><polyline points="${levels.join(' ')}" fill="none" stroke="#ffae73" stroke-width="2" stroke-dasharray="2 3"/><title>C峰确认日第0根起，每根有效K线上的AB/AC/BC最高关键价；仅至触发日 ${escapeHtml(p.trigger_date)}</title></g>`;
+    }
+    const triggerY=y(Number(p.trigger_close)), keyY=y(Number(p.key_price));
+    if (triggerX!==undefined && inPrice(triggerY)) html+=`<g data-pressure-trigger="${escapeHtml(p.trigger_date)}"><circle cx="${x(triggerX)}" cy="${triggerY}" r="7" fill="none" stroke="#f9d493" stroke-width="2"/><title>压力线早期观察 触发 ${escapeHtml(p.trigger_date)} 收盘 ${swingNumber(p.trigger_close)}，并非反转确认</title></g>`;
+    if (triggerX!==undefined && inPrice(keyY)) html+=`<g data-pressure-key="${escapeHtml(p.key_price)}"><line x1="${x(triggerX)}" x2="${x(triggerX)+30}" y1="${keyY}" y2="${keyY}" stroke="#ffae73" stroke-width="2"/><title>触发日冻结关键价 ${swingNumber(p.key_price)} · ${escapeHtml(p.trigger_date)}</title></g>`;
+    return html;
+  }
   // Overlay uses the *same* pixel scale, fractional candle slot, and visible window as KlineChart.
   function overlayMarkup(data, chart) {
     const o = data.observation || {}, d = chart._getPlotDims(), visible = chart._visibleBars ? chart._visibleBars() : chart.bars.slice(chart.visible.windowStart,chart.visible.windowEnd);
@@ -53,6 +110,11 @@
       const i=index.get(p.date),y=chart._priceToY(Number(p.price));
       return i===undefined || p.price==null || !inPrice(y)?'':`<g data-swing-mark="candidate" data-date="${escapeHtml(p.date)}"><circle cx="${x(i)}" cy="${y}" r="8" fill="none" stroke="#bbaaff" stroke-width="2" stroke-dasharray="3 2"/><title>未确认候选${p.kind} ${escapeHtml(p.date)} · ${swingNumber(p.price)}；尚需 ${Number(p.waiting_bars)||0} 根K线</title></g>`;
     }).join('');
+    // The Kline instance must be showing these exact audited bars, not a stale stock.
+    if (data?.bars?.length === chart.bars?.length && data.bars.every((bar,i)=>
+        bar.date===chart.bars[i].trading_day && ['open','high','low','close','volume'].every(key=>Number(bar[key])===Number(chart.bars[i][key])))) {
+      html += pressureMarkup(data,index,x,y=>chart._priceToY(y),inPrice);
+    }
     return html;
   }
   function renderOverlay(data, chart) {
@@ -66,8 +128,9 @@
   }
   function render(data, svg, meta) {
     const o = data.observation || {};
-    const bars = (Array.isArray(data.bars) ? data.bars : []).filter(bar => bar.date && ['open','high','low','close'].every(key => bar[key] != null && Number.isFinite(Number(bar[key])) && Number(bar[key]) > 0));
-    if (!bars.length) { svg.innerHTML = ''; meta.textContent = '未返回真实前复权 OHLC 日线，无法绘图。'; return; }
+    let bars;
+    try { bars=chartEvidence(data,[]).bars; }
+    catch (_) { svg.innerHTML = ''; meta.textContent = '未返回可核验的同日前复权 OHLC 日线，无法绘图。'; return; }
     const W = Math.max(950, bars.length * 11 + 105), H = 440, left = 48, right = W - 60;
     const prices = bars.flatMap(bar => [Number(bar.high), Number(bar.low)]);
     const min = Math.min(...prices), max = Math.max(...prices), pad = Math.max((max-min)*.06,.01);
@@ -95,7 +158,8 @@
       if (i === undefined || !Number.isFinite(Number(point.price))) return '';
       return `<g data-swing-box-check="fourth"><rect x="${x(i)-10}" y="${y(point.price)-10}" width="20" height="20" fill="none" stroke="#8bd8ff" stroke-width="2"/><title>第四组检验点 ${escapeHtml(point.date)} ${swingNumber(point.price)}，前三组边界 ${swingNumber(o.box_lower)}～${swingNumber(o.box_upper)}</title></g>`;
     }).join('') : '';
-    svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',String(W)); svg.innerHTML=grid+boundary+candles+marks+boxCheckMarks+candidates;
+    const pressure=pressureMarkup(data,byDate,x,y,py=>Number.isFinite(py) && py>=45 && py<=340);
+    svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',String(W)); svg.innerHTML=grid+boundary+candles+marks+boxCheckMarks+candidates+pressure;
     const basis = data.price_basis === 'tdx_export_qfq' ? '通达信前复权' : (data.price_basis || '前复权');
     const boxWidth = Number.isFinite(Number(box.box_width_pct)) ? `｜前三组边界宽度 ${Number(box.box_width_pct).toFixed(1)}%，结构检验不等于窄幅整理或交易区间` : '';
     meta.textContent=`${data.symbol || '—'} ${data.name || ''}｜${basis}｜截至 ${data.as_of_date || '—'}｜前复权OHLC ${bars.length}根｜实心峰谷=已确认，虚线圈=候选；${boundary?'v5箱体检验通过：前三组边界/第四组核验':'当前无通过检验的v5箱体'}${boundary?boxWidth:''}`;

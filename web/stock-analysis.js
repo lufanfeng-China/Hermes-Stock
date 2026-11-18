@@ -12,7 +12,7 @@
 
   const FINANCIAL_CACHE_TTL_MS = 5 * 60 * 1000;
   const MAX_FINANCIAL_CACHE_ENTRIES = 24;
-  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, industryHealthPeers: null, industryHealthPeerView: 'annual', industryHealthPeerSort: { key: 'score', direction: -1 }, industryMetricPeers: null, industryMetricCode: null, industryMetricPeerTrigger: null, industryMetricPeerSort: { key: 'current_value', direction: -1 }, stockProfile: null, stageTimeline: null, selected: null, suggestions: [], recent: [] };
+  const state = { timer: null, requestId: 0, financialRequestId: 0, financialAbortController: null, financialCache: new Map(), financialPayload: null, healthComparison: null, industryValuation: null, industryValuationPeers: [], industryPeerSort: { key: 'valuation_percentile', direction: 1 }, industryHealthPeers: null, industryHealthPeerView: 'annual', industryHealthPeerSort: { key: 'score', direction: -1 }, industryMetricPeers: null, industryMetricCode: null, industryMetricPeerTrigger: null, industryMetricPeerSort: { key: 'current_value', direction: -1 }, stockProfile: null, selected: null, suggestions: [], recent: [] };
 
   const normalize = (row) => ({
     market: String(row?.market || '').trim().toLowerCase(),
@@ -910,6 +910,9 @@
     const marketValue = (v) => n(v) === null ? '—' : n(v).toFixed(1);
     const ratioPct = (numerator, denominator) => n(numerator) === null || n(denominator) === null || n(denominator) === 0
       ? null : n(numerator) / n(denominator) * 100;
+    const pricePercentileTitle = (p) => p?.price_percentile == null
+      ? '前复权五年分位不可用（缺前复权导出或证据不足）；不回退未复权原始价'
+      : `前复权（${p.price_basis || 'tdx_export_qfq'}）收盘价经验分位；${p.window_start}～${p.window_end}；有效${p.sample_count}日；${p.scope === 'since_listing' ? '上市以来（不足五年）' : '五年窗口'}；来源${p.percentile_source === 'published_qfq_snapshot' ? '已发布同日快照' : '前复权导出重算'}`;
     const annual = [...reports].filter((r) => String(r?.period || '').endsWith('A')).sort((a,b) => String(a.period).localeCompare(String(b.period)));
     const revenue = (r) => n(r?.metrics?.revenue);
     const growth = (years) => { const end = annual.at(-1), start = annual.at(-(years + 1)); const a = revenue(end), b = revenue(start); return a !== null && b !== null && a > 0 && b > 0 ? ((a / b) ** (1 / years) - 1) * 100 : null; };
@@ -932,7 +935,7 @@
       { label: '净利率（TTM）', value: pct(ttm.net_margin), status: operatingMetricStatus('net_margin', ttm.net_margin, { peerPercentile: peerPercentile('net_margin') }) },
       { label: 'RPS20', value: text(rps.rps_20), kind: 'rps', status: rpsMetricStatus(rps.rps_20) },
       { label: 'RPS50', value: text(rps.rps_50), kind: 'rps', status: rpsMetricStatus(rps.rps_50) },
-      { label: '股价五年分位', value: pct(pricePercentile?.price_percentile), status: valuationMetricStatus('price_percentile', pricePercentile?.price_percentile) },
+      { label: '股价五年分位', value: pct(pricePercentile?.price_percentile), status: valuationMetricStatus('price_percentile', pricePercentile?.price_percentile), title: pricePercentileTitle(pricePercentile) },
       { label: 'PE 5年分位', value: pct(pePercentile), status: valuationMetricStatus('pe_percentile', pePercentile) },
       { label: '流通市值（亿）', value: marketValue(valuation?.free_float_market_cap) },
       { label: '扣非 ROE（TTM）', value: pct(ttm.roe_ex), status: operatingMetricStatus('roe_ex', ttm.roe_ex) },
@@ -943,10 +946,11 @@
       { label: 'RPS250', value: text(rps.rps_250), kind: 'rps', status: rpsMetricStatus(rps.rps_250) },
     ];
     period.textContent = `${valuation?.industry_level_2_name || '—'}｜${annual.at(-1)?.period || '年报覆盖不足'}｜RPS 最新截面`;
-    grid.innerHTML = cards.map(({ label, value, kind, status }) => {
+    grid.innerHTML = cards.map(({ label, value, kind, status, title }) => {
       const state = status?.state || ''; const statusLabel = status?.label || '';
       const ariaLabel = statusLabel ? `${label}：${value}；${statusLabel}` : `${label}：${value}`;
-      return `<article class="basic-market-card ${state}" aria-label="${escapeHtml(ariaLabel)}"${kind === 'pe' ? ' data-stock-pe-history role="button" tabindex="0" title="查看 PE-TTM 历史走势"' : ''}${kind === 'kline' ? ' data-stock-kline-history role="button" tabindex="0" title="查看历史K线图"' : ''}><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span>${statusLabel ? `<em class="basic-market-status">${escapeHtml(statusLabel)}</em>` : ''}</article>`;
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+      return `<article class="basic-market-card ${state}" aria-label="${escapeHtml(ariaLabel)}"${kind === 'pe' ? ' data-stock-pe-history role="button" tabindex="0" title="查看 PE-TTM 历史走势"' : ''}${kind === 'kline' ? ' data-stock-kline-history role="button" tabindex="0" title="查看历史K线图"' : ''}${titleAttr}><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span>${statusLabel ? `<em class="basic-market-status">${escapeHtml(statusLabel)}</em>` : ''}</article>`;
     }).join('');
   }
 
@@ -977,90 +981,217 @@
     }
   }
 
-  function renderStage(payload) {
-    const grid = document.getElementById('basic-market-grid');
-    if (!grid) return;
-    const regime = payload?.ok ? payload : null;
-    if (!regime) return;
-    const tone = { A: 'neutral', B: 'watch', C: 'strong', D: 'risk' }[regime.stage] || 'neutral';
-    const basis = '阶段判定基于前复权日线最近 60 根：MA20 定位置、5/60 日均量线定性质、60 根最高最低与中轨定边界；6 项正向 + 2 项扣分';
-    const items = regime.items || {};
-    const itemText = Object.entries(items)
-      .map(([key, hit]) => `${hit ? '●' : '○'} ${key}`)
-      .join('　');
-    const penalties = Object.entries(regime.penalties || {})
-      .filter(([, hit]) => hit)
-      .map(([key]) => key);
-    const penaltyText = penalties.length ? `扣分：${penalties.join('、')}` : '无扣分项';
-    const card = document.createElement('article');
-    card.className = `basic-market-card stage-${regime.stage} ${tone}`;
-    card.style.cssText = 'grid-column:1 / -1;height:auto;min-height:56px';
-    card.title = `${basis}\n${itemText}\n${penaltyText}`;
-    card.setAttribute('aria-label', `当前阶段：${regime.stage_label}，得分 ${regime.score}。${regime.reason || ''}`);
-    card.innerHTML = `<strong>当前阶段（${escapeHtml(regime.stage)}）</strong>`
-      + `<span>${escapeHtml(regime.stage_label)}｜量能得分 ${Number(regime.score)}</span>`
-      + `<em class="basic-market-status">${escapeHtml(regime.detail || regime.reason || '')}　${escapeHtml(penaltyText)}</em>`;
-    grid.prepend(card);
+  function renderWyckoffEqualVolume(metric) {
+    const reasons = {
+      insufficient_history: '有效日线不足80根（近20根 + 事前至少60根），证据不足。',
+      benchmark_unavailable: '缺少本地上证指数日线，无法扣除大盘日内变化；不回退未校正涨幅。',
+      benchmark_missing_sessions: '上证指数缺少股票对照日期的日线，证据不足。',
+      benchmark_invalid_prices: '上证指数存在无效开盘价或收盘价，证据不足。',
+      insufficient_matched_volume_days: '相近成交量的有效对照日不足10天，证据不足。',
+      missing_ohlcv: '前复权量价字段不完整，证据不足。',
+    };
+    const fmt = (value, digits = 2) => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
+    const signed = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value) > 0 ? '+' : ''}${fmt(value)} pp`;
+    const available = metric?.status === 'available';
+    const rows = Array.isArray(metric?.daily_evidence) ? metric.daily_evidence : [];
+    const basis = `前复权日内涨幅（收盘/开盘−1）减上证指数同日日内涨幅；近${fmt(metric?.recent_days, 0)}根有效日线，对比此前${fmt(metric?.reference_days, 0)}根中成交量与目标日相差不超过${fmt((metric?.matched_volume_tolerance ?? 0) * 100, 0)}%的历史日。每个目标日取对照超额涨幅中位数，再取逐日差值中位数。`;
+    const detail = rows.length ? `<details><summary>查看${rows.length}个观察日的逐日同量对照</summary><div class="wyckoff-equal-volume-table-wrap"><table class="wyckoff-equal-volume-table"><thead><tr><th>日期</th><th>量（导出原单位）</th><th>个股日内涨幅</th><th>上证日内涨幅</th><th>同量历史日数</th><th>历史超额中位</th><th>当日差值</th></tr></thead><tbody>${rows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(row => `<tr><td>${escapeHtml(row.date || '—')}</td><td>${fmt(row.volume, 0)}</td><td>${fmt(row.stock_intraday_pct)}%</td><td>${fmt(row.benchmark_intraday_pct)}%</td><td>${fmt(row.reference_count, 0)}</td><td>${row.reference_excess_median_pct == null ? '—' : `${fmt(row.reference_excess_median_pct)}%`}</td><td>${escapeHtml(signed(row.excess_response_pct))}</td></tr>`).join('')}</tbody></table></div></details>` : '';
+    return `<section id="wyckoff-equal-volume" class="wyckoff-equal-volume" aria-label="同量价格响应"><h4>同量价格响应（描述性证据）</h4>`
+      + (available ? `<p>相对同量历史日的超额日内响应差：<strong>${escapeHtml(signed(metric.median_excess_response_pct))}</strong>｜有效观察日 <strong>${fmt(metric.paired_days, 0)} / ${fmt(metric.observed_days, 0)}</strong>｜配对次数（对照日可重复）：<strong>${fmt(metric.pair_count, 0)}</strong>｜差值为正的观察日占比：<strong>${fmt(metric.positive_pair_fraction * 100, 0)}%</strong></p><p>观察期 ${escapeHtml(metric.recent_from_date || '—')}～${escapeHtml(metric.as_of_date || '—')}；历史对照 ${escapeHtml(metric.reference_from_date || '—')}～${escapeHtml(metric.reference_through_date || '—')}。</p>` : `<p>证据不足：${escapeHtml(reasons[metric?.reason] || '本次未取得可比较的同量响应。')}｜可配对观察日 ${fmt(metric?.paired_days, 0)} / ${fmt(metric?.observed_days, 0)}</p>`)
+      + `<small>${escapeHtml(basis)}正差值只表示该批日期的相对响应更强，不等于股价必涨；不判定吸筹或派发阶段，不作为交易信号。</small>${detail}</section>`;
   }
 
-  function stageSegmentDetail(payload, segment) {
-    const row = (payload.rows || []).find((item) => item.trading_day === segment.end) || {};
-    const evidence = row.evidence || {};
-    const pct = (value) => (Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(1)}%` : '—');
-    const hits = Object.entries(row.items || {}).filter(([, hit]) => hit).map(([key]) => key);
-    const penalties = Object.entries(row.penalties || {}).filter(([, hit]) => hit).map(([key]) => key);
-    return `${segment.stage_label}（${segment.stage}）：${segment.start} → ${segment.end}（${segment.trading_days} 个交易日）`
-      + `；段末得分 ${Number.isFinite(Number(row.score)) ? Number(row.score) : '—'}`
-      + `（${hits.length ? hits.join('、') : '无正向项'}${penalties.length ? '；扣分：' + penalties.join('、') : ''}）`
-      + `；箱体 ${Number(evidence.box_low ?? 0).toFixed(2)}~${Number(evidence.box_high ?? 0).toFixed(2)}`
-      + `、箱体位置 ${pct(evidence.box_position)}、MA20 ${Number(evidence.ma20 ?? 0).toFixed(2)}`
-      + `、量能线 5/60 ${Number(evidence.vol_ma5 ?? 0).toFixed(0)}/${Number(evidence.vol_ma60 ?? 0).toFixed(0)}`
-      + `、近15日抛售日 ${Number(evidence.sell_days_15 ?? 0)} 次`;
-  }
-
-  function renderStageTimeline(payload) {
-    const target = document.getElementById('stage-timeline');
-    const period = document.getElementById('stage-timeline-period');
+  function renderWyckoffObservation(payload) {
+    const target = document.getElementById('wyckoff-observation');
+    const period = document.getElementById('wyckoff-period');
     if (!target) return;
-    state.stageTimeline = payload?.ok ? payload : null;
     if (!payload?.ok) {
       target.className = 'analysis-metric-status';
-      target.textContent = '阶段历史暂不可用（历史库未构建或缺少该股数据）。';
-      if (period) period.textContent = '阶段历史不可用';
+      target.textContent = payload?.reason || payload?.error?.message || '前复权数据不足，无法识别区间与事件。';
+      if (period) period.textContent = '无可用观察';
       return;
     }
-    const segments = payload.segments || [];
-    if (!segments.length) {
-      target.className = 'analysis-metric-status';
-      target.textContent = '窗口内没有阶段记录。';
-      return;
-    }
-    const pieces = segments.map((segment, index) => {
-      const classes = ['stage-timeline-piece', `stage-${segment.stage}`];
-      if (index === segments.length - 1) classes.push('is-current');
-      const label = `${segment.stage_label}（${segment.stage}） ${segment.start}→${segment.end}（${segment.trading_days} 天）`;
-      return `<button type="button" class="${classes.join(' ')}" role="listitem" data-stage-segment="${index}"`
-        + ` style="flex-grow:${Number(segment.trading_days) || 1}"`
-        + ` title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></button>`;
-    }).join('');
-    const current = payload.current || {};
-    const longest = payload.longest || {};
+    const box = payload.box || {};
+    const events = (payload.events || []).slice(-12).reverse();
+    const labels = { Spring: 'Spring 下破收回', UT: 'UT 上冲回落', SOS: 'SOS 向上突破', SOW: 'SOW 向下跌破', LPS: 'LPS 回踩候选', LPSY: 'LPSY 反抽候选' };
+    const statuses = { candidate: '候选', confirmed: '条件确认', invalidated: '失效' };
+    const directions = { Spring: 'up', SOS: 'up', LPS: 'up', UT: 'down', SOW: 'down', LPSY: 'down' };
+    const directionLabel = event => {
+      const label = directions[event.type] === 'up' ? '↑ 形态偏上' : directions[event.type] === 'down' ? '↓ 形态偏下' : '方向待核';
+      return event.status === 'invalidated' ? `${label.replace('形态', '原形态')}（已失效）` : label;
+    };
+    const number = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '—';
+    const evidence = event => {
+      const e = event.evidence || {};
+      return `事前箱体 ${number(e.box_lower)} ~ ${number(e.box_upper)}（截至 ${e.box_through_date || '—'}）｜边界 ${number(e.boundary)}｜高/低/收 ${number(e.high)}/${number(e.low)}/${number(e.close)}｜量 ${number(e.volume)}，前20根量中位 ${number(e.prior_volume_median_20)}，量比 ${number(e.volume_ratio_20)}`;
+    };
+    const summary = box.lower != null && box.upper != null
+      ? `当前参考区间 ${number(box.lower)} ~ ${number(box.upper)}（前复权）；确认仅表示后续收盘强于事件当日、未反穿冻结边界，不代表主力意图。`
+      : '当前暂无可靠区间；下方仅展示可审计的已观察事件。';
     target.className = '';
-    target.innerHTML = `<div class="stage-timeline-band" role="list" aria-label="近 ${Number(payload.window_bars) || Number(payload.bars)} 个交易日阶段色带">${pieces}</div>`
-      + '<div class="stage-timeline-summary">'
-      + `<span>当前 <strong>${escapeHtml(current.stage_label || '—')}</strong>（已 ${Number(current.trading_days) || 0} 个交易日）</span>`
-      + `<span>最长 <strong>${escapeHtml(longest.stage_label || '—')}</strong>（${Number(longest.trading_days) || 0} 天）</span>`
-      + `<span>窗口 ${escapeHtml(payload.window_start)} ~ ${escapeHtml(payload.as_of)}（${Number(payload.bars) || 0} 根）</span>`
-      + `<span>共 ${segments.length} 段</span>`
-      + '</div>'
-      + '<div class="stage-timeline-legend" aria-label="阶段颜色图例">'
-      + '<span class="legend-A"><i></i>A 底部构筑/下跌中继</span>'
-      + '<span class="legend-B"><i></i>B 突破启动确认</span>'
-      + '<span class="legend-C"><i></i>C 主升推进</span>'
-      + '<span class="legend-D"><i></i>D 高位派发</span>'
-      + '</div>'
-      + '<div class="stage-timeline-detail" id="stage-timeline-detail">点任一色块查看该段细节；色带宽度按停留交易日数分配。</div>';
-    if (period) period.textContent = `${payload.as_of}｜近 ${Number(payload.window_bars) || Number(payload.bars)} 个交易日｜前复权日线`;
+    target.innerHTML = `<p class="basic-market-note">${escapeHtml(summary)}${payload.freshness === 'unverified' ? '｜参考交易日不可用，新鲜度未核验。' : ''}</p>`
+      + renderWyckoffEqualVolume(payload.equal_volume_response)
+      + (events.length ? `<ol class="wyckoff-event-list">${events.map(event => { const direction = directions[event.type] || 'unknown'; return `<li class="wyckoff-event" data-direction="${escapeHtml(direction)}" data-status="${escapeHtml(event.status || '')}"><strong>${escapeHtml(labels[event.type] || event.type || '事件')}</strong><span>${escapeHtml(event.date)}</span><span class="wyckoff-direction">${escapeHtml(directionLabel(event))}</span><span class="wyckoff-status" data-status="${escapeHtml(event.status || '')}">${escapeHtml(statuses[event.status] || event.status || '待核')}</span>${event.confirmation_date ? `<span class="wyckoff-confirmed-date">${event.status === 'invalidated' ? '曾确认于' : '确认于'} ${escapeHtml(event.confirmation_date)}</span>` : ''}<button type="button" class="wyckoff-event-chart-trigger" data-wyckoff-event-date="${escapeHtml(event.date)}" data-wyckoff-event-type="${escapeHtml(event.type)}" aria-label="查看 ${escapeHtml(event.type)} ${escapeHtml(event.date)} 的前复权K线证据">看K线证据</button><small>${escapeHtml(evidence(event))}${event.invalidated_by ? '｜失效：' + escapeHtml(`${event.invalidated_by?.date || '—'} 收盘 ${number(event.invalidated_by?.close)} 反穿冻结边界`) : ''}</small></li>`; }).join('')}</ol>` : '<p class="analysis-metric-status">观察窗口内无符合当前规则的事件；不等于不存在吸筹或派发。</p>');
+    if (period) period.textContent = `${payload.as_of_date || '—'}｜通达信前复权日线｜${events.length} 个近期事件${payload.freshness === 'unverified' ? '｜新鲜度待核' : ''}`;
+  }
+
+
+  let wyckoffChartRequestId = 0;
+  let swingAbortController = null;
+  let swingRequestId = 0;
+  let swingPayload = null;
+  function swingNumber(value) { return value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toFixed(2); }
+  function swingPoints(points, kind) {
+    const rows = Array.isArray(points) ? points.slice(-10).reverse() : [];
+    return `<div><strong>${kind === 'peak' ? '确认波峰' : '确认波谷'}（最近 ${rows.length} / 10）</strong><ol>${rows.map((point, index) => `<li class="swing-point${index < 3 ? ' recent' : ''}">${escapeHtml(point.date || '—')} · ${swingNumber(kind === 'peak' ? point.high : point.low)}<small>确认于 ${escapeHtml(point.confirmed || '—')}${index < 3 ? ' · 最近判定点' : ''}</small></li>`).join('') || '<li class="swing-point">暂无确认点</li>'}</ol></div>`;
+  }
+  function renderSwingStructure(payload) {
+    const target = document.getElementById('swing-structure');
+    const period = document.getElementById('swing-structure-period');
+    if (!target) return;
+    const data = payload?.data;
+    const o = data?.observation;
+    if (!payload?.ok || !o) {
+      target.className = 'analysis-metric-status'; target.textContent = `波峰波谷不可用：${payload?.error?.message || '数据未返回'}`;
+      if (period) period.textContent = '未知 / 数据不可用';
+      return;
+    }
+    const unknown = o.status !== 'ok' || !o.state || o.state === '证据不足' || o.tendency === 'unknown';
+    const status = unknown ? (o.status === 'stale_qfq' ? '过期' : o.status === 'missing_qfq' ? '前复权日线缺失' : '未知／证据不足') : '有效';
+    const tendency = {bull:'偏多',bear:'偏空',neutral:'中性',caution:'谨慎',unknown:'未知'};
+    const stars = unknown ? '未知' : (o.tendency === 'neutral' ? '—' : String(o.stars || '—').slice(0, 5));
+    const underlying = o.tendency === 'caution' && o.underlying_rating
+      ? `主结构基础评级 ${tendency[o.underlying_rating.tendency] || '未知'} · ${o.underlying_rating.star_count ?? '—'} 星（暂缓）` : '';
+    const risk = o.new_low_risk;
+    const riskText = risk ? `未确认新低风险 · 谨慎观察：${risk.date || '—'} 低点 ${swingNumber(risk.low)}；最近确认波谷 ${risk.confirmed_valley_date || '—'} / ${swingNumber(risk.confirmed_valley_low)}；候选低点后已等待 ${risk.waiting_bars ?? '—'} 根有效K线；触发日${risk.break_day_close_below_confirmed_valley ? '收盘低于确认波谷' : '收盘未低于确认波谷'}；当前${risk.close_below_confirmed_valley ? '收盘低于确认波谷' : '收盘未低于确认波谷'}。未确认新低不改变已确认主结构。` : '';
+    const pressure = o.pressure_line;
+    const pressureText = pressure ? `下降压力线 · 早期观察（不改变主结构或星级） · ${pressure.status === 'sustained' ? '持续观察' : '刚触发'}；触发 ${pressure.trigger_date || '—'} 收盘 ${swingNumber(pressure.trigger_close)}；冻结关键价 ${swingNumber(pressure.key_price)}；触发日线位 AB ${swingNumber(pressure.lines?.AB)} / AC ${swingNumber(pressure.lines?.AC)} / BC ${swingNumber(pressure.lines?.BC)}；30根有效K线窗口第 ${pressure.trigger_age ?? '—'} 根；触发后5日延续 ${pressure.days_above_after_trigger ?? '—'}/5；最新收盘 ${swingNumber(pressure.latest_close)}；形态 ${pressure.shape === 'orthodox_down' ? '标准下降' : '弱下降'}。` : '';
+    const basis = data.price_basis === 'tdx_export_qfq' ? '通达信前复权' : (data.price_basis || '前复权');
+    const relative = {above_peak:'收盘高于最近确认峰',below_valley:'收盘低于最近确认谷',inside_pair:'收盘位于最近确认峰谷之间'};
+    const live = data.source_type === 'live_qfq';
+    const position = `${live ? '该股数据日' : '快照日'}收盘 ${swingNumber(o.close)}；最近确认峰 ${swingNumber(o.latest_peak?.high)} / 谷 ${swingNumber(o.latest_valley?.low)}；${relative[o.relative_to_last_pair] || '相对位置待核'}`;
+    const snapshotLabel = live ? '当前可得结构 · 单股即时计算' : (data.snapshot_lagged ? '最近已发布结构 · 历史快照' : '已发布结构');
+    const lagNotice = live ? `｜按该股本地最新有效前复权日线计算（${data.as_of_date}），不要求全市场快照同日；全市场源标记 ${data.source_as_of_date || '未知'}。` :
+      (data.snapshot_lagged ? `｜最近完整快照截至 ${data.as_of_date}，前复权源最新 ${data.source_as_of_date}；不是最新交易日的结构判断。` : '');
+    const chartNotice = data.chart_unavailable_reason || '未返回真实前复权 OHLC K线，不绘制图表。';
+    const duration = !unknown ? data.state_duration : null;
+    const durationText = duration
+      ? (duration.start_confirmed ? `自 ${duration.start_date} 进入 · ${duration.trading_days} 个连续有效交易日`
+        : `自可用历史起至少持续 ${duration.trading_days} 个连续有效交易日（${duration.start_date} 起）`)
+      : '不可核验';
+    const previousText = duration?.start_confirmed
+      ? `${duration.previous_date || '—'}：${duration.previous_state || '未知'} → ${duration.start_date}：${o.state}`
+      : (duration ? '已追至可用历史起点，上一状态未知。' : (data.duration_unavailable_reason || '证据不足，无法确定进入日期。'));
+    target.className = '';
+    target.innerHTML = `<div class="swing-summary"><div><small>${escapeHtml(snapshotLabel)} · ${escapeHtml(status)}</small><strong>${escapeHtml(unknown ? '未知' : o.state)}</strong></div><div><small>结构倾向 / 星级</small><strong>${escapeHtml(unknown ? '未知' : tendency[o.tendency] || '未知')} · ${escapeHtml(stars)}</strong></div><div><small>该股结构对应交易日</small><strong>${escapeHtml(o.last_bar_date || '—')}</strong></div><div><small>收盘与最近确认峰谷</small><strong>${escapeHtml(position)}</strong></div>${underlying ? `<div><small>被暂缓的主结构基础评级</small><strong>${escapeHtml(underlying)}</strong></div>` : ''}${riskText ? `<div class="swing-duration"><small>独立观察 · 尚未确认的风险</small><strong>${escapeHtml(riskText)}</strong></div>` : ''}${pressureText ? `<div class="swing-duration"><small>独立观察 · 压力线</small><strong>${escapeHtml(pressureText)}</strong></div>` : ''}<div class="swing-duration"><small>当前状态持续（截至该股结构交易日）</small><strong>${escapeHtml(durationText)}</strong></div><div class="swing-duration"><small>上一状态与切换</small><strong>${escapeHtml(previousText)}</strong></div></div><p class="basic-market-note">${escapeHtml(o.reason || '暂无可核验原因')}｜规则 ${escapeHtml(data.rule_version || '—')}｜${live ? '数据日' : '快照'} ${escapeHtml(data.as_of_date || '—')}${escapeHtml(lagNotice)}</p><div class="swing-points">${swingPoints(o.last_10_peaks, 'peak')}${swingPoints(o.last_10_valleys, 'valley')}</div><button type="button" class="swing-chart-trigger" ${Array.isArray(data.bars) && data.bars.length ? '' : 'disabled'}>查看前复权K线与峰谷证据</button>${!Array.isArray(data.bars) || !data.bars.length ? `<p class="basic-market-note">${escapeHtml(chartNotice)}</p>` : ''}`;
+    if (period) period.textContent = `${live ? '本地最新有效前复权 ' : (data.snapshot_lagged ? '最近快照 ' : '')}${data.as_of_date || '—'}｜${basis}｜${status}${data.snapshot_lagged ? `｜源最新 ${data.source_as_of_date || '未知'} · 非实时` : ''}`;
+  }
+  function renderSwingChart(data) {
+    const svg = document.getElementById('swing-chart-svg');
+    const meta = document.getElementById('swing-chart-meta');
+    if (typeof SwingChart === 'undefined') {
+      svg.replaceChildren();
+      if (meta) meta.textContent = 'K线组件未加载（swing-chart.js 缺失），无法绘制；这是前端资源问题，不是数据问题。';
+      return false;
+    }
+    SwingChart.render(data, svg, meta);
+    return true;
+  }
+  async function loadSwingStructure(stock) {
+    swingAbortController?.abort();
+    const controller=new AbortController(), id=++swingRequestId;
+    swingAbortController=controller; swingPayload=null;
+    document.getElementById('swing-structure').textContent='正在加载波峰波谷前复权证据…';
+    document.getElementById('swing-structure-period').textContent='加载中';
+    try {
+      const response=await fetch(`/api/swing-structure?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`,{signal:controller.signal});
+      const payload=await response.json();
+      if(controller.signal.aborted || id!==swingRequestId || identity(state.selected)!==identity(stock))return;
+      swingPayload=response.ok&&payload.ok?payload:null;
+      renderSwingStructure(response.ok?payload:{ok:false,error:payload.error || {message:`HTTP ${response.status}`}});
+    } catch(error) { if(!controller.signal.aborted && id===swingRequestId)renderSwingStructure({ok:false,error:{message:error.message||'加载失败'}}); }
+  }
+  let wyckoffChartTrigger = null;
+  function renderWyckoffEventChart(payload, event) {
+    const svg = document.getElementById('wyckoff-event-chart-svg');
+    const scroll = svg.parentElement;
+    const rows = payload.chart_bars || [];
+    if (!rows.length || rows.every(bar => bar.trading_day !== event.date)) throw Error('事件日期不在前复权K线窗口中');
+    const edge = event.evidence || {};
+    const lower = Number(edge.box_lower), upper = Number(edge.box_upper), boundary = Number(edge.boundary);
+    if (![lower, upper, boundary].every(Number.isFinite)) throw Error('缺少事件发生时冻结的箱体边界');
+    const W = Math.max(960, rows.length * 10 + 130), H = 420, left = 62, right = W - 76;
+    const px = index => left + index * 10 + 5;
+    const prices = rows.flatMap(bar => [Number(bar.high), Number(bar.low)]).concat([lower, upper]);
+    const low = Math.min(...prices), high = Math.max(...prices), pad = Math.max((high - low) * .08, .01);
+    const top = high + pad, bottom = low - pad;
+    const py = price => 78 + (top - Number(price)) * 227 / (top - bottom);
+    const volumes = rows.map(bar => Number(bar.volume));
+    const vmax = Math.max(...volumes, 1);
+    const fmt = value => Number(value).toFixed(2);
+    const edges = [
+      ['lower', lower, '冻结下沿', '#62b8ff'],
+      ['upper', upper, '冻结上沿', '#62b8ff'],
+      ['boundary', boundary, '失效边界', '#ffc36f'],
+      ['confirm_close', Number(edge.close), '事件日收盘比较价', '#c8a6ff'],
+    ];
+    const grid = Array.from({ length: 5 }, (_, i) => {
+      const price = bottom + (top - bottom) * i / 4, y = py(price);
+      return `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" stroke="#293a43"/><text x="${right + 6}" y="${y + 4}" fill="#adc5d0" font-size="11">${fmt(price)}</text>`;
+    }).join('');
+    const bands = edges.map(([name, price, label, color]) => `<g data-wyckoff-edge="${name}"><line x1="${left}" y1="${py(price)}" x2="${right}" y2="${py(price)}" stroke="${color}" stroke-width="${name === 'boundary' ? 2 : 1}" stroke-dasharray="${name === 'boundary' ? '7 4' : '3 5'}"/><title>${label} ${fmt(price)}（事件日已冻结）</title></g>`).join('');
+    const candles = rows.map((bar, i) => {
+      const x = px(i), up = Number(bar.close) >= Number(bar.open), color = up ? '#ed8c83' : '#73dfc4';
+      const bodyTop = Math.min(py(bar.open), py(bar.close));
+      const bodyHeight = Math.max(1.5, Math.abs(py(bar.open) - py(bar.close)));
+      const volumeHeight = Math.max(1, Number(bar.volume) / vmax * 48);
+      const tick = (i % Math.max(1, Math.ceil(rows.length / 10)) === 0 || i === rows.length - 1)
+        ? `<text x="${x}" y="407" text-anchor="middle" fill="#adc5d0" font-size="10">${escapeHtml(bar.trading_day.slice(5))}</text>` : '';
+      return `<g class="wyckoff-candle" data-trading-day="${escapeHtml(bar.trading_day)}"><line x1="${x}" y1="${py(bar.high)}" x2="${x}" y2="${py(bar.low)}" stroke="${color}"/><rect x="${x - 3.5}" y="${bodyTop}" width="7" height="${bodyHeight}" fill="${color}"/><rect x="${x - 3}" y="${385 - volumeHeight}" width="6" height="${volumeHeight}" fill="${color}" opacity=".65"/><title>${escapeHtml(bar.trading_day)} 开 ${fmt(bar.open)} 高 ${fmt(bar.high)} 低 ${fmt(bar.low)} 收 ${fmt(bar.close)} 量 ${Number(bar.volume).toFixed(0)}</title>${tick}</g>`;
+    }).join('');
+    const marks = [
+      ['event', event.date, '事件', '#ffc36f', 17],
+      ['confirmed', event.confirmation_date, '条件确认', '#73dfc4', 33],
+      ['invalidated', event.invalidated_by?.date, '失效', '#f39a94', 49],
+    ].filter(([, date]) => date).map(([kind, date, label, color, y]) => {
+      const i = rows.findIndex(bar => bar.trading_day === date);
+      if (i < 0) return '';
+      const x = px(i), close = rows[i].close;
+      return `<g data-wyckoff-mark="${kind}" data-trading-day="${escapeHtml(date)}"><line x1="${x}" y1="64" x2="${x}" y2="390" stroke="${color}" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="${x}" cy="${py(close)}" r="5" fill="${color}" stroke="#09141a" stroke-width="2"/><text x="${x + 4}" y="${y}" fill="${color}" font-size="12" font-weight="700">${label} ${escapeHtml(date)}</text><title>${label} ${escapeHtml(date)} 收盘 ${fmt(close)}</title></g>`;
+    }).join('');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', String(W));
+    svg.setAttribute('height', String(H));
+    svg.innerHTML = `${grid}${bands}${candles}${marks}<text x="${left}" y="340" fill="#adc5d0" font-size="11">成交量（导出原单位）</text>`;
+    document.getElementById('wyckoff-event-chart-meta').textContent = `${payload.symbol}｜${event.type} ${event.date}｜${event.status === 'invalidated' ? '已失效' : event.status === 'confirmed' ? '条件确认' : '候选'}｜前复权日线截至 ${payload.as_of_date}${payload.freshness === 'unverified' ? '（参考交易日未核验）' : ''}`;
+    document.getElementById('wyckoff-event-chart-legend').innerHTML = `<span>冻结箱体 <b>${fmt(lower)} ~ ${fmt(upper)}</b>（截至 ${escapeHtml(edge.box_through_date || '—')}）</span><span>失效边界 <b>${fmt(boundary)}</b></span><span>条件确认比较价 <b>${fmt(edge.close)}</b>（后续收盘须沿形态方向严格越过）</span>${event.confirmation_date ? `<span>${event.status === 'invalidated' ? '曾确认于' : '确认于'} ${escapeHtml(event.confirmation_date)}</span>` : ''}${event.invalidated_by ? `<span>失效于 ${escapeHtml(event.invalidated_by.date)}，收盘 <b>${fmt(event.invalidated_by.close)}</b></span>` : ''}`;
+    scroll.scrollLeft = Math.max(0, px(rows.findIndex(bar => bar.trading_day === event.date)) - 240);
+  }
+
+  async function showWyckoffEventChart(trigger) {
+    const dialog = document.getElementById('wyckoff-event-chart-dialog');
+    const stock = state.selected;
+    if (!dialog || !stock || !trigger) return;
+    const requestId = ++wyckoffChartRequestId;
+    wyckoffChartTrigger = trigger;
+    const date = trigger.dataset.wyckoffEventDate, type = trigger.dataset.wyckoffEventType;
+    document.getElementById('wyckoff-event-chart-title').textContent = `${stock.symbol}｜${type} ${date} K线证据`;
+    document.getElementById('wyckoff-event-chart-meta').textContent = '加载同一前复权导出中的事件窗口…';
+    document.getElementById('wyckoff-event-chart-svg').innerHTML = '';
+    document.getElementById('wyckoff-event-chart-legend').textContent = '';
+    if (!dialog.open) dialog.showModal();
+    try {
+      const params = new URLSearchParams({ market: stock.market, symbol: stock.symbol, chart_event_date: date, chart_event_type: type });
+      const response = await fetch(`/api/wyckoff-observation?${params}`);
+      const payload = await response.json();
+      if (requestId !== wyckoffChartRequestId || !dialog.open || state.selected?.symbol !== stock.symbol || state.selected?.market !== stock.market) return;
+      if (!response.ok || !payload.ok || payload.price_basis !== 'tdx_export_qfq') throw Error(payload.reason || payload.error?.message || '前复权事件数据不可用');
+      const actual = (payload.events || []).find(event => event.date === date && event.type === type);
+      if (!actual || !payload.chart_bars?.length) throw Error('事件或其前复权K线窗口不可用');
+      renderWyckoffEventChart(payload, actual);
+    } catch (error) {
+      if (requestId === wyckoffChartRequestId && dialog.open) document.getElementById('wyckoff-event-chart-meta').textContent = `无法展示事件图：${error.message || '未知错误'}`;
+    }
   }
 
   function showMarketAntiFallDetail(rows) {
@@ -1082,8 +1213,8 @@
   let stockKlineChart = null;
   async function showStockKlineHistory() {
     const d=document.getElementById('stock-kline-dialog'), svg=document.getElementById('stock-kline-svg'), title=document.getElementById('stock-kline-title'), status=document.getElementById('stock-kline-status'), s=state.selected?.symbol;
-    if(!d||!svg||!s)return; d.showModal(); title.textContent=`${s}｜历史K线图`; status.textContent='加载前复权日线、成交量、均线和 RPS…';
-    try { const [a,b]=await Promise.all([fetch(`/api/stock-kline?symbol=${encodeURIComponent(s)}&limit=300`),fetch(`/api/stock-rps-history?symbol=${encodeURIComponent(s)}`)]); const [k,r]=await Promise.all([a.json(),b.json()]); if(!k.ok)throw Error('数据不可用'); const {KlineChart}=await import('./kline-chart.js?v=20260604-ma'); if(!stockKlineChart)stockKlineChart=new KlineChart(svg,{marginRight:20}); stockKlineChart.load(k.bars||[],r.history||[],250); title.textContent=`${s} ${k.bars?.[0]?.name||''}｜历史K线图`; status.textContent=`前复权日线｜${k.bars?.length||0} 个交易日｜含 MA10/20/30/60 与 RPS`; } catch(e) { status.textContent=`K线加载失败：${e.message||'未知错误'}`; }
+    if(!d||!svg||!s)return; d.showModal(); title.textContent=`${s}｜历史K线图`; status.textContent='加载原始价日线、成交量、均线和 RPS…';
+    try { const [a,b]=await Promise.all([fetch(`/api/stock-kline?symbol=${encodeURIComponent(s)}&limit=300`),fetch(`/api/stock-rps-history?symbol=${encodeURIComponent(s)}`)]); const [k,r]=await Promise.all([a.json(),b.json()]); if(!k.ok)throw Error('数据不可用'); const {KlineChart}=await import('./kline-chart.js?v=20260604-ma'); if(!stockKlineChart)stockKlineChart=new KlineChart(svg,{marginRight:20}); stockKlineChart.load(k.bars||[],r.history||[],250); title.textContent=`${s} ${k.bars?.[0]?.name||''}｜历史K线图`; status.textContent=`原始价日线｜${k.bars?.length||0} 个交易日｜含 MA10/20/30/60 与 RPS（RPS 独立口径）`; } catch(e) { status.textContent=`K线加载失败：${e.message||'未知错误'}`; }
   }
 
   async function showStockPeHistory() {
@@ -1472,8 +1603,12 @@
     const chartIds = [...METRIC_CHARTS.map(([id]) => id), 'revenue-growth-chart'];
     const basicMarket = document.getElementById('basic-market-grid');
     if (basicMarket) { basicMarket.innerHTML = '<div class="analysis-metric-status">加载基础行情…</div>'; document.getElementById('basic-market-period').textContent = '加载中'; }
-    const stageTimelineTarget = document.getElementById('stage-timeline');
-    if (stageTimelineTarget) { stageTimelineTarget.className = 'analysis-metric-status'; stageTimelineTarget.textContent = '加载阶段历史…'; }
+    const wyckoffTarget = document.getElementById('wyckoff-observation');
+    if (wyckoffTarget) { wyckoffTarget.className = 'analysis-metric-status'; wyckoffTarget.textContent = '加载威科夫量价事件…'; }
+    fetch(`/api/wyckoff-observation?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
+      .then(response => response.json())
+      .then(wyckoff => { if (financialRequestId === state.financialRequestId) renderWyckoffObservation(wyckoff); })
+      .catch(error => { if (error.name !== 'AbortError' && financialRequestId === state.financialRequestId) renderWyckoffObservation({ ok: false, error: { message: '观察接口暂不可用' } }); });
     renderCompositeFinancialHealth(null);
     renderFinancialReversalBadge(null);
     state.reportReleasePriceTrend = null;
@@ -1513,12 +1648,6 @@
         fetch(`/api/stock-pe-history?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
           .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
           .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
-        fetch(`/api/regime-classify?symbol=${encodeURIComponent(stock.symbol)}`, { signal: controller.signal })
-          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
-          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
-        fetch(`/api/regime-history-series?symbol=${encodeURIComponent(stock.symbol)}&bars=60`, { signal: controller.signal })
-          .then(async (response) => { const body = await response.json(); return response.ok && body.ok ? body : null; })
-          .catch((error) => error.name === 'AbortError' ? Promise.reject(error) : null),
       ]);
       const payload = cacheIsFresh
         ? cached.payload
@@ -1528,14 +1657,12 @@
           putFinancialCache(cacheKey, body);
           return body;
         });
-      const [valuation, relativeStrength, profile, pricePercentile, peHistory, stage, stageSeries] = await supplementaryRequests;
+      const [valuation, relativeStrength, profile, pricePercentile, peHistory] = await supplementaryRequests;
       if (financialRequestId !== state.financialRequestId) return;
       state.financialPayload = payload;
       state.stockProfile = profile;
       renderNicheLeaderBadge(profile);
       renderBasicMarket(valuation, payload.reports, profile, pricePercentile, peHistory, payload.quarterly_monitor, payload.industry_financial_position);
-      renderStage(stage);
-      renderStageTimeline(stageSeries);
       renderMarketRelativeStrength(relativeStrength);
       renderCompositeFinancialHealth(payload.composite_financial_health);
       renderFinancialReversalBadge(payload.financial_reversal);
@@ -1569,6 +1696,8 @@
   function apply(row) {
     const stock = normalize(row);
     if (!stock.market || !stock.symbol) return;
+    document.getElementById('wyckoff-event-chart-dialog')?.close();
+    document.getElementById('swing-chart-dialog')?.close();
     state.selected = stock;
     input.value = selectedLabel(stock);
     saveRecent(stock);
@@ -1576,6 +1705,7 @@
     const params = new URLSearchParams({ market: stock.market, symbol: stock.symbol, name: stock.stock_name });
     history.replaceState(null, '', `${location.pathname}?${params}`);
     loadAnnualFinancials(stock);
+    loadSwingStructure(stock);
     window.dispatchEvent(new CustomEvent('stock-analysis:select', { detail: stock }));
   }
 
@@ -1590,7 +1720,12 @@
   }
 
   input.addEventListener('input', (event) => {
-    if (state.selected && event.target.value !== selectedLabel(state.selected)) state.selected = null;
+    if (state.selected && event.target.value !== selectedLabel(state.selected)) {
+      state.selected = null;
+      swingAbortController?.abort(); ++swingRequestId; swingPayload = null;
+      document.getElementById('swing-chart-dialog')?.close();
+      document.getElementById('swing-structure').textContent = '选择股票后加载。';
+    }
     clearTimeout(state.timer);
     state.timer = setTimeout(() => loadSuggestions(event.target.value), SEARCH_DEBOUNCE_MS);
   });
@@ -1623,15 +1758,40 @@
     const heading = card.querySelector('.analysis-metric-heading h2');
     if (metric && heading) heading.innerHTML = `<button type="button" class="metric-lineage-trigger" data-metric-lineage="${metric}" title="查看指标口径与数据血缘">${heading.textContent}</button>`;
   });
+  const swingDialog = document.getElementById('swing-chart-dialog');
+  document.getElementById('swing-structure')?.addEventListener('click', event => {
+    if (!event.target.closest('.swing-chart-trigger')) return;
+    if (swingDialog && !swingDialog.open) swingDialog.showModal();
+    if (!swingPayload?.data) {
+      const meta = document.getElementById('swing-chart-meta');
+      if (meta) meta.textContent = '波峰波谷K线数据尚未就绪，请重新选择该股票后再试。';
+      return;
+    }
+    renderSwingChart(swingPayload.data);
+    const chartScroll = swingDialog?.querySelector('.swing-chart-scroll');
+    if (chartScroll) chartScroll.scrollLeft = chartScroll.scrollWidth;
+  });
+  swingDialog?.querySelector('.swing-chart-close')?.addEventListener('click', () => swingDialog.close());
+  swingDialog?.addEventListener('click', event => { if (event.target === swingDialog) swingDialog.close(); });
+  const wyckoffGuideLink = document.getElementById('wyckoff-pattern-guide-link');
+  const wyckoffGuideDialog = document.getElementById('wyckoff-pattern-guide-dialog');
+  wyckoffGuideLink?.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (wyckoffGuideDialog && !wyckoffGuideDialog.open) wyckoffGuideDialog.showModal();
+  });
+  wyckoffGuideDialog?.querySelector('.wyckoff-guide-close')?.addEventListener('click', () => wyckoffGuideDialog.close());
+  wyckoffGuideDialog?.addEventListener('click', (event) => { if (event.target === wyckoffGuideDialog) wyckoffGuideDialog.close(); });
+  wyckoffGuideDialog?.addEventListener('close', () => wyckoffGuideLink.focus());
+  document.getElementById('wyckoff-observation')?.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-wyckoff-event-date]');
+    if (trigger) showWyckoffEventChart(trigger);
+  });
+  const wyckoffEventChartDialog = document.getElementById('wyckoff-event-chart-dialog');
+  wyckoffEventChartDialog?.querySelector('.wyckoff-event-chart-close')?.addEventListener('click', () => wyckoffEventChartDialog.close());
+  wyckoffEventChartDialog?.addEventListener('click', (event) => { if (event.target === wyckoffEventChartDialog) wyckoffEventChartDialog.close(); });
+  wyckoffEventChartDialog?.addEventListener('close', () => { ++wyckoffChartRequestId; if (wyckoffChartTrigger?.isConnected) wyckoffChartTrigger.focus(); wyckoffChartTrigger = null; });
   document.addEventListener('click', (event) => { const trigger = event.target.closest('[data-metric-lineage]'); if (trigger) showMetricLineage(trigger.dataset.metricLineage); });
   document.addEventListener('click', (event) => { if (event.target.closest('[data-stock-kline-history]')) showStockKlineHistory(); });
-  document.addEventListener('click', (event) => {
-    const piece = event.target.closest('[data-stage-segment]');
-    if (!piece || !state.stageTimeline) return;
-    const segment = (state.stageTimeline.segments || [])[Number(piece.dataset.stageSegment)];
-    const detail = document.getElementById('stage-timeline-detail');
-    if (segment && detail) detail.textContent = stageSegmentDetail(state.stageTimeline, segment);
-  });
   document.addEventListener('keydown', (event) => { if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-stock-kline-history]')) { event.preventDefault(); showStockKlineHistory(); } });
   const stockKlineDialog=document.getElementById('stock-kline-dialog'); stockKlineDialog?.querySelector('.stock-kline-close')?.addEventListener('click',()=>stockKlineDialog.close()); stockKlineDialog?.addEventListener('click',(event)=>{if(event.target===stockKlineDialog)stockKlineDialog.close();});
   document.addEventListener('click', (event) => { if (event.target.closest('[data-report-release-price-trend]')) showReportReleasePriceTrend(); });
@@ -1693,5 +1853,6 @@
     state.selected = stock;
     input.value = selectedLabel(stock);
     loadAnnualFinancials(stock);
+    loadSwingStructure(stock);
   }
 })();

@@ -61,6 +61,44 @@ class MarketRelativeStrengthTests(unittest.TestCase):
         self.assertEqual("low_level_strengthening", classify_relative_strength_state(40, 0.1))
         self.assertEqual("trend_aligned", classify_relative_strength_state(82, 1.0))
 
+    def test_reloads_published_snapshot_after_rebuild_without_restart(self) -> None:
+        """A daily rebuild must be visible to a running server (no restart)."""
+        import json
+        import tempfile
+        import time
+        from pathlib import Path
+        from unittest import mock
+
+        import app.market_relative_strength as module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = Path(tmp) / "market_relative_strength_current.json"
+
+            def publish(as_of: str) -> None:
+                snapshot.write_text(json.dumps({"as_of_date": as_of, "stocks": {"sh:600519": {"symbol": "600519"}}}), encoding="utf-8")
+                # Guarantee a distinct mtime even on coarse-grained filesystems.
+                stamp = time.time() + (1 if as_of.endswith("17") else 0)
+                import os
+                os.utime(snapshot, (stamp, stamp))
+
+            with mock.patch.object(module, "CURRENT_SNAPSHOT", snapshot):
+                publish("2026-11-16")
+                self.assertEqual("2026-11-16", module.load_current_snapshot()["as_of_date"])
+                # Cached read: same file identity keeps the cached payload.
+                self.assertEqual("2026-11-16", module.load_current_snapshot()["as_of_date"])
+                publish("2026-11-17")
+                self.assertEqual("2026-11-17", module.load_current_snapshot()["as_of_date"])
+                self.assertEqual("2026-11-17", module.stock_response("SH", "600519")["as_of_date"])
+
+    def test_missing_snapshot_returns_empty_mapping(self) -> None:
+        from pathlib import Path
+        from unittest import mock
+
+        import app.market_relative_strength as module
+
+        with mock.patch.object(module, "CURRENT_SNAPSHOT", Path("/nonexistent/mrs.json")):
+            self.assertEqual({}, module.load_current_snapshot())
+
 
 if __name__ == "__main__":
     unittest.main()

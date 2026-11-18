@@ -7,12 +7,18 @@
   var pages = document.getElementById('pagination');
   var matchCount = document.getElementById('match-count');
   var sort = document.getElementById('sort');
+  var addToWatchlist = document.getElementById('add-to-watchlist');
+  var watchlistSelectedCount = document.getElementById('watchlist-selected-count');
+  var watchlistFeedback = document.getElementById('watchlist-feedback');
+  var selectedStocks = new Map();
+  var addingToWatchlist = false;
   var presetInput = form.elements.preset;
   var asOfDate = form.elements.as_of_date;
   var presetOptions = Array.prototype.slice.call(document.querySelectorAll('[data-preset]'));
   var currentPage = 1;
+  var runSequence = 0;
   var historicalRetryTimer = null;
-  var multi = { trend_daily: true, trend_weekly: true, trend_monthly: true, macd_cross: true, golden_cross: true, wyckoff_type: true, wyckoff_status: true, swing_state: true, swing_tendency: true, swing_star: true };
+  var multi = { trend_daily: true, trend_weekly: true, trend_monthly: true, macd_cross: true, golden_cross: true, ma_alignment: true, wyckoff_type: true, wyckoff_status: true, swing_state: true, swing_tendency: true, swing_star: true, swing_observation: true };
 
   function esc(value) {
     var node = document.createElement('span');
@@ -24,16 +30,38 @@
     var number = Number(value);
     return Number.isFinite(number) ? number.toFixed(digits == null ? 1 : digits) : '—';
   }
+  function basicMarketTitle(row) {
+    var items = [
+      ['当日涨跌', row.return_1d, '%'], ['量比', row.volume_ratio_5, '倍'],
+      ['距MA5', row.ma5_distance_pct, '%'], ['距MA10', row.ma10_distance_pct, '%'],
+      ['距MA20', row.ma20_distance_pct, '%']
+    ];
+    return '前复权截至' + (row.qfq_as_of || '未知') + '｜' + items.map(function (item) {
+      return item[0] + ' ' + (item[1] == null ? '—' : fixed(item[1], 2) + item[2]);
+    }).join(' · ');
+  }
 
   function selectedValues(field) {
     return Array.prototype.slice.call(field && field.selectedOptions || []).map(function (option) { return option.value; });
   }
 
   function setPreset(value) {
-    presetInput.value = value || '';
+    var selected = new Set((value || '').split(',').filter(Boolean));
+    presetInput.value = presetOptions.filter(function (option) {
+      return selected.has(option.dataset.preset);
+    }).map(function (option) { return option.dataset.preset; }).join(',');
     presetOptions.forEach(function (option) {
-      option.classList.toggle('is-active', option.dataset.preset === presetInput.value);
+      var active = selected.has(option.dataset.preset);
+      option.classList.toggle('is-active', active);
+      option.setAttribute('aria-pressed', String(active));
     });
+  }
+
+  function togglePreset(value) {
+    var selected = new Set((presetInput.value || '').split(',').filter(Boolean));
+    if (selected.has(value)) selected.delete(value);
+    else selected.add(value);
+    setPreset(Array.from(selected).join(','));
   }
 
   function requestParams(page) {
@@ -124,6 +152,74 @@
       '<span class="subvalue">PS ' + fixed(row.ps_ttm, 2) + '</span>';
   }
 
+  function turnoverCell(row, day) {
+    var value = row.turnover_percentile_1y;
+    var samples = Number(row.turnover_percentile_1y_sample_count);
+    var valid = value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) &&
+      Number(value) >= 0 && Number(value) <= 100 && Number.isFinite(samples) && samples >= 120;
+    var source = row.turnover_percentile_1y_current_shares_source === 'report_proxy'
+      ? '已公告财报代理值（非已核实的逐日实际股本）'
+      : row.turnover_percentile_1y_current_shares_source === 'gbbq_verified' ? '已核实变动日的股本' : '未知';
+    var reason = {stale_bar: '当日有效日线缺失', missing_current_shares: '当时无已公告的有效股本', missing_valid_bars: '近一年无有效日线', insufficient_history: '近一年有效7日截尾均值样本不足120日'};
+    var evidence = valid
+      ? '单股截至当日近一年每日7日截尾均值换手率经验分位（已上市流通A股；不高于当日7日截尾均值的有效样本数／有效样本数）；单独记录的当日换手率（非分位计算值） ' +
+        (row.turnover_percentile_1y_current_turnover == null ? '未知' : fixed(row.turnover_percentile_1y_current_turnover, 2) + '%') +
+        ' · 有效样本 ' + (row.turnover_percentile_1y_sample_count == null ? '未知' : row.turnover_percentile_1y_sample_count) + ' 日' +
+        ' · 窗口自 ' + (row.turnover_percentile_1y_window_start || '未知') +
+        ' · 截至 ' + (row.turnover_percentile_1y_as_of || '未知') +
+        ' · 当日流通股本来源 ' + source +
+        ' · 财报 ' + (row.turnover_percentile_1y_report_period || '未知') + '，公告 ' + (row.turnover_percentile_1y_report_announce || '未知') +
+        ' · 历史财报代理 ' + (row.turnover_percentile_1y_report_fallback_count == null ? '未知' : row.turnover_percentile_1y_report_fallback_count) + ' 日' +
+        '；财报仓保留修订版，历史数值不是严格原始披露版本'
+      : '换手分位未知：' + (samples > 0 && samples < 120 ? reason.insufficient_history :
+        (reason[row.turnover_percentile_1y_status] || row.turnover_percentile_1y_status || '数据缺失'));
+    if (!valid || !day || !row.market || !row.symbol || (row.turnover_percentile_1y_as_of && row.turnover_percentile_1y_as_of !== day)) {
+      var display = valid ? fixed(value, 1) + '%' : (row.turnover_percentile_1y_status === 'insufficient_history' || (samples > 0 && samples < 120) ? '样本不足' : '—');
+      return '<span class="subvalue" title="' + esc(evidence) + '">' + display + '</span>';
+    }
+    return '<button type="button" class="turnover-trend-link" data-turnover-trend="1" data-market="' + esc(row.market) +
+      '" data-symbol="' + esc(row.symbol) + '" data-date="' + esc(day) + '" data-name="' + esc(row.stock_name || '') +
+      '" aria-label="查看' + esc(row.stock_name || row.symbol) + '截至' + esc(day) + '的7日截尾均值换手历史分位趋势" title="' + esc(evidence) + '">' + fixed(value, 1) + '%</button>';
+  }
+
+  function turnoverTrendChart(rows, day) {
+    var end = Date.parse(day + 'T00:00:00Z');
+    if (!Number.isFinite(end)) return '';
+    var startDate = new Date(end);
+    startDate.setUTCFullYear(startDate.getUTCFullYear() - 1);
+    var start = startDate.getTime();
+    var lower = startDate.toISOString().slice(0, 10);
+    var x = function (time) { return 56 + 734 * (time - start) / (end - start); };
+    var y = function (value) { return 260 - 224 * value / 100; };
+    var points = (rows || []).filter(function (row) {
+      return row && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && row.date >= lower && row.date <= day &&
+        Number.isFinite(Date.parse(row.date + 'T00:00:00Z'));
+    }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+    var parts = ['<title>每日7日截尾均值换手率历史分位</title><desc>横轴日期，纵轴0到100%；缺失值不连线</desc>'];
+    [0, 25, 50, 75, 100].forEach(function (tick) {
+      parts.push('<line x1="56" x2="790" y1="' + y(tick) + '" y2="' + y(tick) + '" stroke="#35504a" stroke-opacity=".5"/>');
+      parts.push('<text x="47" y="' + (y(tick) + 4) + '" fill="#a9bcb5" text-anchor="end" font-size="12">' + tick + '%</text>');
+    });
+    parts.push('<text x="56" y="288" fill="#a9bcb5" font-size="12">' + lower + '</text>');
+    parts.push('<text x="790" y="288" fill="#a9bcb5" font-size="12" text-anchor="end">' + day + '</text>');
+    var segment = [];
+    function flush() {
+      if (segment.length > 1) parts.push('<path d="' + segment.join(' ') + '" fill="none" stroke="#b7e36b" stroke-width="2"/>');
+      segment = [];
+    }
+    points.forEach(function (row, index) {
+      var value = row.percentile;
+      if (value == null || value === '' || !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 100 ||
+          !Number.isFinite(Number(row.sample_count)) || Number(row.sample_count) < 120) { flush(); return; }
+      var time = Date.parse(row.date + 'T00:00:00Z');
+      var px = x(time).toFixed(2), py = y(Number(value)).toFixed(2);
+      segment.push((segment.length ? 'L' : 'M') + px + ',' + py);
+      parts.push('<circle data-turnover-point="' + index + '" tabindex="0" role="img" aria-label="' + row.date + ' 换手分位 ' + Number(value).toFixed(1) + '%" cx="' + px + '" cy="' + py + '" r="3" fill="#b7e36b"/>');
+    });
+    flush();
+    return parts.join('');
+  }
+
   function epsRatioCell(row) {
     var value = row.eps_ratio_5y;
     if (value === null || value === undefined || !isFinite(Number(value))) return '—';
@@ -134,36 +230,25 @@
     return '<span class="' + cls + '" title="5年累计EPS ' + (row.eps_ratio_5y_eps_sum === null || row.eps_ratio_5y_eps_sum === undefined ? '—' : Number(row.eps_ratio_5y_eps_sum).toFixed(3)) + ' 元 · 年化系数 ' + (row.eps_ratio_5y_factor || 1) + ' · 股价 ' + (row.eps_ratio_5y_price || '—') + '">' + text + '</span>' + note;
   }
 
-  function wyckoffCell(row, snapshotLoaded) {
-    var event = row.wyckoff_signal;
-    if (!event) return snapshotLoaded ? '无符合条件事件' : '未查询';
-    var evidence = event.evidence || {};
-    var statusLabels = {candidate: '候选', confirmed: '已确认', invalidated: '已失效'};
-    function evidenceNumber(value, digits) {
-      return value == null || value === '' ? '—' : fixed(value, digits);
-    }
-    var title = '前复权有效日线 · 冻结边界 ' + evidenceNumber(evidence.boundary, 3) +
-      ' · 事前20根成交量中位数比 ' + evidenceNumber(evidence.volume_ratio_20, 2) +
-      (event.confirmation_date ? ' · 确认 ' + event.confirmation_date : '') +
-      (event.invalidated_by && event.invalidated_by.date ? ' · 失效 ' + event.invalidated_by.date : '');
-    return '<span title="' + esc(title) + '">' + esc(event.type) + ' · ' + esc(statusLabels[event.status] || event.status) +
-      '</span><span class="subvalue">发生 ' + esc(event.date) + '</span>';
-  }
-
-  function swingCell(row, snapshot) {
+  function swingCell(row, snapshot, historical) {
     var swing = row.swing_structure;
     if (!swing) return '<span class="swing-cell">—<small>未提供该日期结构证据</small></span>';
     var unknown = swing.status !== 'ok' || !swing.state || swing.state === '证据不足' || swing.tendency === 'unknown';
     var statusLabel = swing.status === 'stale_qfq' ? '前复权日线过期' : swing.status === 'missing_qfq' ? '前复权日线缺失' : swing.status === 'out_of_current_tnf' ? '当前TNF研究清单不覆盖' : '证据不足';
-    var tendency = {bull:'偏多',bear:'偏空',neutral:'中性'};
+    var tendency = {bull:'偏多',bear:'偏空',neutral:'中性',caution:'谨慎'};
     var rating = unknown ? '未知 · ' + statusLabel : (tendency[swing.tendency] || '未知') + ' · ' + (swing.tendency === 'neutral' ? '—' : String(swing.stars || '—').slice(0,5));
-    var content = '<strong>' + esc(unknown ? '未知' : swing.state) + ' · ' + esc(rating) + '</strong>' +
+    var risk = swing.new_low_risk;
+    var baseline = swing.tendency === 'caution' && swing.underlying_rating
+      ? '<small>主结构基础评级 ' + esc(tendency[swing.underlying_rating.tendency] || '未知') + ' · ' + esc(swing.underlying_rating.star_count) + ' 星（暂缓）</small>' : '';
+    var riskText = risk ? '<small>未确认新低风险 · 谨慎观察：' + esc(risk.date) + ' 低点 ' + esc(risk.low == null ? '—' : fixed(risk.low, 2)) + '；最近确认波谷 ' + esc(risk.confirmed_valley_date) + ' / ' + esc(risk.confirmed_valley_low == null ? '—' : fixed(risk.confirmed_valley_low, 2)) + '；候选低点后已等待 ' + esc(risk.waiting_bars) + ' 根有效K线；触发日' + (risk.break_day_close_below_confirmed_valley ? '收盘低于确认波谷' : '收盘未低于确认波谷') + '；当前' + (risk.close_below_confirmed_valley ? '收盘低于确认波谷' : '收盘未低于确认波谷') + '</small>' : '';
+    var pressure = swing.pressure_line;
+    var content = '<strong>' + esc(unknown ? '未知' : swing.state) + ' · ' + esc(rating) + '</strong>' + baseline + riskText +
       (swing.state_run && swing.state_run.start_confirmed
         ? '<small class="subvalue">进入 ' + esc(swing.state_run.start_date) + ' · 连续 ' + esc(swing.state_run.trading_days) + ' 个有效交易日 · 上一状态 ' + esc(swing.state_run.previous_state) + '</small>'
         : '');
     var day = snapshot && snapshot.as_of_date;
     if (unknown || !day || swing.as_of !== day || swing.last_bar_date !== day) return '<span class="swing-cell">' + content + '</span>';
-    return '<button type="button" class="swing-chart-link" data-swing-chart="1" data-market="' + esc(row.market) + '" data-symbol="' + esc(row.symbol) + '" data-date="' + esc(day) + '" data-state="' + esc(swing.state) + '" data-source="' + esc(swing.source_sha256 || '') + '"' + (snapshot.rule_version ? ' data-rule="' + esc(snapshot.rule_version) + '"' : '') + ' aria-label="查看' + esc(row.stock_name) + '截至' + esc(day) + '的前复权K线与峰谷证据" title="查看同日快照的前复权K线与峰谷证据">' + content + '</button>';
+    return '<button type="button" class="swing-chart-link" data-swing-chart="1" data-market="' + esc(row.market) + '" data-symbol="' + esc(row.symbol) + '" data-name="' + esc(row.stock_name || '') + '" data-historical="' + (historical ? '1' : '0') + '" data-date="' + esc(day) + '" data-state="' + esc(swing.state) + '" data-source="' + esc(swing.source_sha256 || '') + '"' + (pressure ? ' data-pressure-trigger-date="' + esc(pressure.trigger_date) + '" data-pressure-key="' + esc(pressure.key_price) + '"' : '') + (snapshot.rule_version ? ' data-rule="' + esc(snapshot.rule_version) + '"' : '') + ' aria-label="查看' + esc(row.stock_name) + '的前复权K线与峰谷证据（表格截至' + esc(day) + '）" title="' + (historical ? '查看指定历史日的同日结构证据' : '查看单股当前最新前复权结构；可能与表格快照日不同') + '">' + content + '</button>';
   }
 
   var priceTrendDialog = document.getElementById('price-trend-dialog');
@@ -251,6 +336,99 @@
     priceTrendController = null; priceTrendTrigger = null;
   });
 
+  var turnoverTrendDialog = document.getElementById('turnover-trend-dialog');
+  var turnoverTrendSvg = document.getElementById('turnover-trend-svg');
+  var turnoverTrendStatus = document.getElementById('turnover-trend-status');
+  var turnoverTrendPlot = turnoverTrendDialog.querySelector('.turnover-trend-plot');
+  var turnoverTrendTooltip = document.getElementById('turnover-trend-tooltip');
+  var turnoverTrendController = null;
+  var turnoverTrendTrigger = null;
+  var turnoverTrendRows = [];
+  function turnoverTrendHover(point) {
+    if (!point) { turnoverTrendTooltip.hidden = true; return; }
+    var row = turnoverTrendRows[Number(point.dataset.turnoverPoint)];
+    if (!row) return;
+    turnoverTrendTooltip.textContent = row.date + ' · 历史分位 ' + fixed(row.percentile, 1) + '%\n' +
+      '7日截尾均值 ' + (row.trimmed_average_pct == null ? '未知' : fixed(row.trimmed_average_pct, 2) + '%') +
+      ' · 有效样本 ' + (row.sample_count == null ? '未知' : row.sample_count) + ' 日';
+    turnoverTrendTooltip.hidden = false;
+    var plotWidth = turnoverTrendPlot.clientWidth;
+    turnoverTrendTooltip.style.left = Math.max(4, Math.min(plotWidth - turnoverTrendTooltip.offsetWidth - 4,
+      Number(point.getAttribute('cx')) * plotWidth / 820 - turnoverTrendTooltip.offsetWidth / 2)) + 'px';
+    turnoverTrendTooltip.style.top = Math.max(4, Number(point.getAttribute('cy')) * turnoverTrendSvg.clientHeight / 300 - 68) + 'px';
+  }
+  async function showTurnoverTrend(trigger) {
+    if (turnoverTrendController) turnoverTrendController.abort();
+    var controller = new AbortController();
+    turnoverTrendController = controller;
+    turnoverTrendTrigger = trigger;
+    turnoverTrendRows = [];
+    turnoverTrendPlot.hidden = true;
+    turnoverTrendTooltip.hidden = true;
+    turnoverTrendSvg.innerHTML = '';
+    document.getElementById('turnover-trend-title').textContent =
+      (trigger.dataset.name || trigger.dataset.symbol) + ' ' + trigger.dataset.symbol + ' · 7日截尾均值换手历史分位';
+    turnoverTrendStatus.textContent = '正在加载截至 ' + trigger.dataset.date + ' 的近一年历史分位…';
+    if (!turnoverTrendDialog.open) turnoverTrendDialog.showModal();
+    var query = new URLSearchParams({market: trigger.dataset.market, symbol: trigger.dataset.symbol, as_of_date: trigger.dataset.date});
+    try {
+      var response = await fetch('/api/stock-filter-turnover-trend?' + query.toString(), {signal: controller.signal});
+      var payload = await response.json().catch(function () { throw new Error('换手历史分位接口未就绪或返回非JSON，请检查服务'); });
+      if (controller.signal.aborted || !turnoverTrendDialog.open) return;
+      if (!response.ok || !payload.ok) throw new Error(payload.error && (payload.error.message || payload.error) || '换手历史分位接口不可用');
+      if (payload.as_of_date !== trigger.dataset.date || !Array.isArray(payload.rows)) throw new Error('趋势日期与筛选日期不一致或返回数据无效，拒绝绘制');
+      var svg = turnoverTrendChart(payload.rows, trigger.dataset.date);
+      if (!svg) throw new Error('筛选日期无效，无法绘制');
+      turnoverTrendRows = payload.rows.filter(function (row) {
+        var lower = new Date(trigger.dataset.date + 'T00:00:00Z');
+        lower.setUTCFullYear(lower.getUTCFullYear() - 1);
+        return row && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && row.date >= lower.toISOString().slice(0, 10) &&
+          row.date <= trigger.dataset.date && Number.isFinite(Date.parse(row.date + 'T00:00:00Z'));
+      }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+      turnoverTrendSvg.innerHTML = svg;
+      if (!turnoverTrendSvg.querySelector('[data-turnover-point]')) {
+        turnoverTrendStatus.textContent = '该筛选日前一年暂无满足至少120个有效样本的历史分位；缺失日不补值。';
+        return;
+      }
+      turnoverTrendPlot.hidden = false;
+      turnoverTrendStatus.textContent = '筛选日 ' + trigger.dataset.date + ' · 近一年历史分位 · ' +
+        turnoverTrendSvg.querySelectorAll('[data-turnover-point]').length + ' 个有效交易日（缺失日不插值）';
+    } catch (error) {
+      if (controller.signal.aborted || !turnoverTrendDialog.open) return;
+      turnoverTrendPlot.hidden = true;
+      turnoverTrendStatus.textContent = '无法绘制换手历史分位：' + (error.message || '未知错误');
+    }
+  }
+  results.addEventListener('click', function (event) {
+    var trigger = event.target.closest('[data-turnover-trend]');
+    if (trigger && results.contains(trigger)) showTurnoverTrend(trigger);
+  });
+  turnoverTrendSvg.addEventListener('pointermove', function (event) {
+    var rect = turnoverTrendSvg.getBoundingClientRect();
+    var px = (event.clientX - rect.left) * 820 / rect.width;
+    if (px < 56 || px > 790) { turnoverTrendHover(null); return; }
+    var points = Array.prototype.slice.call(turnoverTrendSvg.querySelectorAll('[data-turnover-point]'));
+    var nearest = points.reduce(function (best, point) {
+      return !best || Math.abs(Number(point.getAttribute('cx')) - px) < Math.abs(Number(best.getAttribute('cx')) - px) ? point : best;
+    }, null);
+    turnoverTrendHover(nearest && Math.abs(Number(nearest.getAttribute('cx')) - px) <= 12 ? nearest : null);
+  });
+  turnoverTrendSvg.addEventListener('pointerleave', function () { turnoverTrendHover(null); });
+  turnoverTrendSvg.addEventListener('focusin', function (event) {
+    var point = event.target.closest('[data-turnover-point]');
+    if (point) turnoverTrendHover(point);
+  });
+  turnoverTrendSvg.addEventListener('focusout', function () { turnoverTrendHover(null); });
+  turnoverTrendDialog.querySelector('.turnover-trend-close').addEventListener('click', function () { turnoverTrendDialog.close(); });
+  turnoverTrendDialog.addEventListener('click', function (event) { if (event.target === turnoverTrendDialog) turnoverTrendDialog.close(); });
+  turnoverTrendDialog.addEventListener('close', function () {
+    if (turnoverTrendDialog.open) return;
+    if (turnoverTrendController) turnoverTrendController.abort();
+    if (turnoverTrendTrigger && turnoverTrendTrigger.isConnected) turnoverTrendTrigger.focus();
+    turnoverTrendController = null; turnoverTrendTrigger = null;
+    turnoverTrendRows = [];
+  });
+
   var swingChartDialog = document.getElementById('swing-chart-dialog');
   var swingChartSvg = document.getElementById('swing-chart-svg');
   var swingChartMacd = document.getElementById('swing-chart-macd');
@@ -281,9 +459,10 @@
     swingChartTrigger = trigger;
     swingChartData = null; swingChartBars = null;
     swingChartDialog.querySelector('.swing-chart-scroll').hidden = true;
-    swingChartMeta.textContent = trigger.dataset.symbol + '｜正在加载截至 ' + trigger.dataset.date + ' 的前复权峰谷、成交量、MACD、RPS证据…';
+    swingChartMeta.textContent = trigger.dataset.symbol + (trigger.dataset.historical === '1' ? '｜正在加载历史日 ' + trigger.dataset.date : '｜正在计算单股当前最新有效前复权结构（表格截至 ' + trigger.dataset.date + '）') + ' 的峰谷、成交量、MACD、RPS证据…';
     if (!swingChartDialog.open) swingChartDialog.showModal();
-    var query = new URLSearchParams({market: trigger.dataset.market, symbol: trigger.dataset.symbol, as_of_date: trigger.dataset.date});
+    var query = new URLSearchParams({market: trigger.dataset.market, symbol: trigger.dataset.symbol});
+    if (trigger.dataset.historical === '1') query.set('as_of_date', trigger.dataset.date);
     try {
       var responses = await Promise.all([
         fetch('/api/swing-structure?' + query.toString(), {signal: controller.signal}),
@@ -296,12 +475,18 @@
       if (!responses[0].ok || !payload.ok) throw new Error(payload.error && payload.error.message || '同日结构证据无法读取');
       var data = payload.data || {};
       var observation = data.observation || {};
-      if (data.as_of_date !== trigger.dataset.date || observation.last_bar_date !== trigger.dataset.date ||
-          observation.state !== trigger.dataset.state || observation.status !== 'ok' ||
-          (trigger.dataset.source && observation.source_sha256 !== trigger.dataset.source) ||
-          (trigger.dataset.rule && data.rule_version !== trigger.dataset.rule) ||
-          data.price_basis !== 'tdx_export_qfq') {
-        throw new Error('详情与筛选结果的日期、前复权源或结构版本不一致，拒绝绘制。');
+      var historicalSwing = trigger.dataset.historical === '1';
+      if (data.market !== trigger.dataset.market || data.symbol !== trigger.dataset.symbol ||
+          !data.as_of_date || observation.last_bar_date !== data.as_of_date ||
+          observation.status !== 'ok' || data.price_basis !== 'tdx_export_qfq' ||
+          (historicalSwing && (data.as_of_date !== trigger.dataset.date ||
+            observation.state !== trigger.dataset.state ||
+            (trigger.dataset.source && observation.source_sha256 !== trigger.dataset.source) ||
+            (trigger.dataset.pressureTriggerDate && (observation.pressure_line?.trigger_date !== trigger.dataset.pressureTriggerDate ||
+              String(observation.pressure_line?.key_price) !== trigger.dataset.pressureKey)) ||
+            (trigger.dataset.rule && data.rule_version !== trigger.dataset.rule))) ||
+          (!historicalSwing && (data.source_type !== 'live_qfq' || !observation.source_sha256))) {
+        throw new Error('详情前复权源、证券代码或结构证据不一致，拒绝绘制。');
       }
       var rpsOk = responses[1].ok && rps.ok && rps.symbol === trigger.dataset.symbol;
       var evidence = SwingChart.chartEvidence(data, rpsOk ? rps.history : []);
@@ -318,7 +503,9 @@
       swingChartDialog.querySelectorAll('[data-swing-window]').forEach(function (button) {
         button.classList.toggle('is-active', Number(button.dataset.swingWindow) === 120);
       });
-      swingChartMeta.textContent = trigger.dataset.symbol + ' ' + (data.name || '') + '｜结构 ' + observation.state + '｜通达信前复权 ' + data.as_of_date +
+      swingChartMeta.textContent = trigger.dataset.symbol + ' ' + (data.name || trigger.dataset.name || '') +
+        (historicalSwing ? '｜历史筛选与结构同日 ' + data.as_of_date : '｜表格结构截至 ' + trigger.dataset.date + '（已发布快照）｜单股当前前复权截至 ' + data.as_of_date + '（本地即时计算；可能与表格状态不同）') +
+        '｜结构 ' + (observation.state || '证据不足') +
         '｜有效日线 ' + evidence.bars.length + ' 根｜实心峰谷=确认，虚线圈=候选' +
         (SwingChart.verifiedBox(observation) ? '｜箱体检验通过：前三组边界／第四组核验' : '｜当前无通过检验的箱体') + '｜RPS' +
         (evidence.rpsAsOf ? '截至 ' + evidence.rpsAsOf + (evidence.rpsAsOf === data.as_of_date ? '' : '（当日缺失，不补值）') : '不可用（未绘制）') +
@@ -327,7 +514,7 @@
       if (controller.signal.aborted || !swingChartDialog.open) return;
       swingChartDialog.querySelector('.swing-chart-scroll').hidden = true;
       swingChartData = null; swingChartBars = null;
-      swingChartMeta.textContent = '无法绘制同日证据：' + (error.message || '未知错误');
+      swingChartMeta.textContent = (trigger.dataset.historical === '1' ? '无法绘制历史同日证据：' : '无法绘制单股当前前复权结构：') + (error.message || '未知错误');
     }
   }
   results.addEventListener('click', function (event) {
@@ -345,25 +532,79 @@
     if (swingChartTrigger && swingChartTrigger.isConnected) swingChartTrigger.focus();
     swingChartController = null; swingChartTrigger = null;
   });
+  function updateWatchlistSelection() {
+    watchlistSelectedCount.textContent = '已选 ' + selectedStocks.size + ' 只';
+    addToWatchlist.disabled = addingToWatchlist || selectedStocks.size === 0;
+  }
+  function clearWatchlistSelection() {
+    selectedStocks.clear();
+    results.querySelectorAll('[data-stock-select]').forEach(function (input) { input.checked = false; });
+    watchlistFeedback.textContent = '';
+    watchlistFeedback.classList.remove('error');
+    updateWatchlistSelection();
+  }
+  results.addEventListener('change', function (event) {
+    var input = event.target;
+    if (!input.matches('[data-stock-select]')) return;
+    var stock = {market: input.dataset.market, symbol: input.dataset.symbol};
+    var key = stock.market + ':' + stock.symbol;
+    if (input.checked) selectedStocks.set(key, stock);
+    else selectedStocks.delete(key);
+    watchlistFeedback.textContent = '';
+    watchlistFeedback.classList.remove('error');
+    updateWatchlistSelection();
+  });
+  addToWatchlist.addEventListener('click', async function () {
+    if (addingToWatchlist || !selectedStocks.size) return;
+    var stocks = Array.from(selectedStocks.values());
+    addingToWatchlist = true;
+    updateWatchlistSelection();
+    watchlistFeedback.textContent = '正在加入自选…';
+    watchlistFeedback.classList.remove('error');
+    try {
+      var response = await fetch('/api/watchlist/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({stocks: stocks})
+      });
+      var data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error && (data.error.message || data.error) || '自选股服务未返回有效结果');
+      stocks.forEach(function (stock) { selectedStocks.delete(stock.market + ':' + stock.symbol); });
+      results.querySelectorAll('[data-stock-select]').forEach(function (input) {
+        input.checked = selectedStocks.has(input.dataset.market + ':' + input.dataset.symbol);
+      });
+      watchlistFeedback.textContent = '已加入自选 ' + data.added + ' 只，已存在 ' + data.skipped + ' 只。' + (asOfDate.value ? '历史筛选结果按当前时间加入自选。' : '');
+    } catch (error) {
+      watchlistFeedback.classList.add('error');
+      watchlistFeedback.textContent = '加入自选失败：' + (error.message || '请重试');
+    } finally {
+      addingToWatchlist = false;
+      updateWatchlistSelection();
+    }
+  });
   function renderRows(data) {
     if (!(data.rows || []).length) {
-      results.innerHTML = '<tr><td colspan="11" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
+      results.innerHTML = '<tr><td colspan="12" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
       return;
     }
     results.innerHTML = data.rows.map(function (row) {
       var href = '/stock-analysis.html?market=' + encodeURIComponent(row.market) + '&symbol=' + encodeURIComponent(row.symbol) + '&name=' + encodeURIComponent(row.stock_name || '');
+      var market = esc(row.market).replace(/"/g, '&quot;');
+      var symbol = esc(row.symbol).replace(/"/g, '&quot;');
+      var checked = selectedStocks.has(row.market + ':' + row.symbol) ? ' checked' : '';
       return '<tr>' +
+        '<td class="select-cell"><input type="checkbox" data-stock-select data-market="' + market + '" data-symbol="' + symbol + '" aria-label="选择 ' + market + ':' + symbol + '"' + checked + '></td>' +
         '<td><a class="stock-link" href="' + href + '">' + esc(row.stock_name) + '</a><span class="stock-code">' + esc(row.market) + ':' + esc(row.symbol) + '</span></td>' +
         '<td>' + esc(row.industry) + '</td>' +
-        '<td class="num">' + priceCell(row, data.data_as_of) + '</td>' +
+        '<td class="num" title="' + esc(basicMarketTitle(row)).replace(/"/g, '&quot;') + '">' + priceCell(row, data.data_as_of) + '</td>' +
         '<td>' + valuationCell(row) + '</td>' +
+        '<td class="num">' + turnoverCell(row, data.data_as_of) + '</td>' +
         '<td>' + relativeStrengthCell(row) + '</td>' +
         '<td>' + healthCell(row.annual_total, row.annual_period) + '</td>' +
         '<td>' + healthCell(row.quarterly_total, row.quarterly_period) + '</td>' +
         '<td class="num">' + reportReleaseReturnCell(row) + '</td>' +
         '<td class="num">' + epsRatioCell(row) + '</td>' +
-        '<td>' + wyckoffCell(row, Boolean(data.wyckoff_snapshot)) + '</td>' +
-        '<td class="swing-cell">' + swingCell(row, data.swing_snapshot || {as_of_date: data.data_as_of}) + '</td>' +
+        '<td class="swing-cell">' + swingCell(row, data.swing_snapshot || {as_of_date: data.data_as_of}, data.is_historical) + '</td>' +
       '</tr>';
     }).join('');
   }
@@ -413,7 +654,7 @@
     var percent = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
     var stage = progress && progress.stage || '正在准备历史快照';
     status.textContent = '正在生成历史快照：' + stage + '（' + percent + '%），将自动重试。';
-    results.innerHTML = '<tr><td colspan="11" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '%" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
+    results.innerHTML = '<tr><td colspan="12" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '%" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
     pages.innerHTML = '';
     if (historicalRetryTimer) window.clearTimeout(historicalRetryTimer);
     historicalRetryTimer = window.setTimeout(function () {
@@ -423,7 +664,9 @@
   }
 
   async function run(page) {
+    var requestId = ++runSequence;
     if (priceTrendDialog.open) priceTrendDialog.close();
+    if (turnoverTrendDialog.open) turnoverTrendDialog.close();
     if (swingChartDialog.open) swingChartDialog.close();
     if (historicalRetryTimer) {
       window.clearTimeout(historicalRetryTimer);
@@ -432,11 +675,12 @@
     currentPage = page || 1;
     status.classList.remove('error');
     status.textContent = '正在按全市场条件筛选…';
-    results.innerHTML = '<tr><td colspan="11" class="empty-state">正在加载筛选结果…</td></tr>';
+    results.innerHTML = '<tr><td colspan="12" class="empty-state">正在加载筛选结果…</td></tr>';
     pages.innerHTML = '';
     try {
       var response = await fetch('/api/stock-filter?' + requestParams(currentPage).toString());
       var data = await response.json();
+      if (requestId !== runSequence) return;
       if (data.error && data.error.code === 'historical_snapshot_building') {
         scheduleHistoricalSnapshotRetry(currentPage, data.error.message || '快照构建中', data.error.progress);
         return;
@@ -444,10 +688,11 @@
       if (!response.ok || !data.ok) throw new Error(data.error && data.error.message || '筛选服务未返回有效结果');
       render(data);
     } catch (error) {
+      if (requestId !== runSequence) return;
       matchCount.textContent = '—';
       status.classList.add('error');
       status.textContent = error.message;
-      results.innerHTML = '<tr><td colspan="11" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
+      results.innerHTML = '<tr><td colspan="12" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
     }
   }
 
@@ -494,9 +739,10 @@
   } else {
     bindPresetTooltips();
   }
-  form.addEventListener('submit', function (event) { event.preventDefault(); run(1); });
-  form.addEventListener('reset', function () { window.setTimeout(function () { setPreset(presetInput.value); updateHistoricalMode(); run(1); }, 0); });
-  document.getElementById('reset-top').addEventListener('click', function () { form.reset(); });
+  form.addEventListener('input', clearWatchlistSelection);
+  form.addEventListener('change', clearWatchlistSelection);
+  form.addEventListener('submit', function (event) { event.preventDefault(); clearWatchlistSelection(); run(1); });
+  form.addEventListener('reset', function () { clearWatchlistSelection(); window.setTimeout(function () { setPreset(''); updateHistoricalMode(); run(1); }, 0); });
   Array.prototype.slice.call(document.querySelectorAll('.filter-group-toggle')).forEach(function (button) {
     button.addEventListener('click', function () {
       var group = button.closest('fieldset');
@@ -506,25 +752,21 @@
   });
   presetOptions.forEach(function (option) {
     option.addEventListener('click', function () {
-      // Presets clear other controls but signal date is the user's historical
-      // context and must survive the reset.
-      var preservedSignalDate = asOfDate.value;
-      form.reset();
-      asOfDate.value = preservedSignalDate;
-      setPreset(option.dataset.preset);
-      updateHistoricalMode();
+      togglePreset(option.dataset.preset);
+      clearWatchlistSelection();
+      run(1);
     });
   });
   function updateHistoricalMode() {
     var historical = Boolean(asOfDate.value);
-    var unsupported = ['rps_20_min', 'rps_20_max', 'rps_50_min', 'rps_50_max', 'rps_120_min', 'rps_120_max', 'rps_250_min', 'rps_250_max', 'rps_total_min', 'rps_total_max', 'total_market_cap_min', 'total_market_cap_max', 'free_float_market_cap_min', 'free_float_market_cap_max', 'niche_leader', 'trend_daily', 'trend_weekly', 'trend_monthly', 'macd_cross', 'golden_cross'];
+    var unsupported = ['rps_20_min', 'rps_20_max', 'rps_50_min', 'rps_50_max', 'rps_120_min', 'rps_120_max', 'rps_250_min', 'rps_250_max', 'rps_total_min', 'rps_total_max', 'total_market_cap_min', 'free_float_market_cap_min', 'free_float_market_cap_max', 'niche_leader', 'trend_daily', 'trend_weekly', 'trend_monthly', 'macd_cross', 'golden_cross', 'ma_alignment'];
     unsupported.forEach(function (name) {
       var field = form.elements[name];
       if (field) field.disabled = historical;
     });
   }
 
-  sort.addEventListener('change', function () { run(1); });
+  sort.addEventListener('change', function () { clearWatchlistSelection(); run(1); });
   asOfDate.addEventListener('change', function () {
     updateHistoricalMode();
     // Date is sent as as_of_date by requestParams; the server rejects a missing

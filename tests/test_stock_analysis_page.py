@@ -6,6 +6,27 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class StockAnalysisPageTests(unittest.TestCase):
+    def test_deep_link_loads_swing_structure_as_well_as_financials(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        startup = js.split('const params = new URLSearchParams(location.search);')[-1]
+        self.assertIn('if (market && symbol)', startup)
+        self.assertIn('loadAnnualFinancials(stock);', startup)
+        self.assertIn('loadSwingStructure(stock);', startup)
+
+    def test_swing_chart_trigger_has_its_renderer_loaded_before_the_page_script(self):
+        """Regression: the trigger was dead because swing-chart.js was never included."""
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertRegex(html, r'<script src="/swing-chart\.js\?v=[^"]+"></script>')
+        self.assertLess(html.index("swing-chart.js"), html.index("stock-analysis.js"),
+                        "swing-chart.js must load before stock-analysis.js")
+        # A missing renderer must surface a message and open the dialog, never fail silently.
+        self.assertIn("typeof SwingChart === 'undefined'", js)
+        self.assertIn("K线组件未加载", js)
+        trigger = js.split("document.getElementById('swing-structure')?.addEventListener('click'")[-1][:700]
+        self.assertIn("swingDialog.showModal()", trigger)
+        self.assertIn("波峰波谷K线数据尚未就绪", trigger)
+
     def test_antifall_card_opens_auditable_down_market_day_dialog(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
@@ -726,61 +747,109 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("industryMetricDialog?.addEventListener('close', () => { state.industryMetricPeerTrigger?.focus(); state.industryMetricPeerTrigger = null; });", js)
         self.assertRegex(html, r'<script src="stock-analysis\.js\?v=[^"]+"></script>')
 
-    def test_current_stage_card_is_wired_to_stage_classify_api_with_auditable_basis(self):
-        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-
-        # fetch wiring: the stage request must be part of the supplementary batch
-        self.assertIn('fetch(`/api/regime-classify?symbol=${encodeURIComponent(stock.symbol)}`', js)
-        self.assertIn('return response.ok && body.ok ? body : null;', js)
-        self.assertIn('renderStage(stage);', js)
-
-        # renderer: prepends one full-width card and shows region + stage + detail
-        self.assertIn('function renderStage(payload)', js)
-        self.assertIn('当前阶段', js)
-        self.assertIn('escapeHtml(regime.stage_label)', js)
-        self.assertIn('escapeHtml(regime.detail || regime.reason || \'\')', js)
-        self.assertIn('grid.prepend(card)', js)
-
-        # stage -> colour class mapping used by the card
-        self.assertIn("{ A: 'neutral', B: 'watch', C: 'strong', D: 'risk' }", js)
-
-        # price basis must stay disclosed: stage is derived from TDX QFQ daily bars
-        self.assertIn('阶段判定基于前复权日线', js)
-
-    def test_stage_timeline_section_is_wired_to_the_history_api(self):
-        """个股页的阶段时间轴必须真的读历史库接口，而不是只看当日一个状态。"""
+    def test_general_kline_labels_raw_separately_from_qfq_event_chart(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('点击现价后加载原始价日线', html)
+        self.assertIn('加载原始价日线、成交量', js)
+        self.assertIn('原始价日线｜${k.bars?.length||0}', js)
+        self.assertIn('前复权日线截至 ${payload.as_of_date}', js)
 
-        self.assertIn('id="stage-timeline-section"', html)
-        self.assertIn('id="stage-timeline"', html)
-        self.assertIn(".stage-timeline-band", html, "色带样式必须存在")
-        self.assertIn("前复权日线", html)
-
-        self.assertIn('/api/regime-history-series?symbol=', js)
-        self.assertIn('&bars=60', js, "页面时间轴必须按 60 个交易日取数")
-        self.assertIn('最近 60 个交易日', html)
-        self.assertIn('function renderStageTimeline(payload)', js)
-        self.assertIn('renderStageTimeline(stageSeries);', js)
-        self.assertIn('data-stage-segment=', js)
-        self.assertIn('`stage-${segment.stage}`', js)
-        self.assertIn('class="stage-timeline-detail"', js)
-        # A/B/C/D 各自一种颜色（不是旧的 region-tone 映射），并带图例
-        self.assertIn("`stage-${segment.stage}`", js)
-        self.assertNotIn("is-event", js)
-        for code in "ABCD":
-            self.assertIn(f".stage-timeline-piece.stage-{code}", html, f"阶段 {code} 必须有独立颜色")
-        self.assertIn("stage-timeline-legend", js)
-        self.assertIn("stage-timeline-legend", html)
-
-    def test_current_stage_card_shows_regime_score_and_items(self):
-        """阶段卡必须显示 A/B/C/D 阶段、量能得分与 6 项正向条目，缺一不可审计。"""
+    def test_wyckoff_event_opens_qfq_candlestick_evidence_dialog(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="wyckoff-event-chart-dialog"', html)
+        self.assertIn('id="wyckoff-event-chart-svg"', html)
+        self.assertIn('data-wyckoff-event-date=', js)
+        self.assertIn('chart_event_date: date', js)
+        self.assertIn('chart_event_type: type', js)
+        self.assertIn('function renderWyckoffEventChart', js)
+        for marker in ("['event', event.date", "['confirmed', event.confirmation_date", "['invalidated', event.invalidated_by?.date"):
+            self.assertIn(marker, js)
+        self.assertIn('data-wyckoff-mark=', js)
+        chart = js[js.index('function renderWyckoffEventChart'):js.index('function showMarketAntiFallDetail')]
+        self.assertIn("['confirm_close', Number(edge.close), '事件日收盘比较价'", chart)
+        self.assertIn('条件确认比较价', chart)
+        self.assertIn('data-wyckoff-edge=', js)
+        self.assertIn("event.status === 'invalidated' ? '曾确认于' : '确认于'", chart)
+        self.assertNotIn('event.confirmation_date ? `<span>曾确认于', chart)
+        self.assertNotIn('/api/stock-kline?', js[js.index('function showWyckoffEventChart'):js.index('function showMarketAntiFallDetail')])
+        self.assertIn("document.getElementById('wyckoff-event-chart-dialog')?.close()", js[js.index('function apply(row)'):js.index('function chooseFromInput()')])
 
-        self.assertIn("regime.items", js)
-        self.assertIn("regime.penalties", js)
-        self.assertIn("量能得分", js)
-        self.assertIn("{ A: 'neutral', B: 'watch', C: 'strong', D: 'risk' }", js)
+    def test_wyckoff_guide_link_opens_accessible_dialog_with_all_six_patterns(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="wyckoff-pattern-guide-link"', html)
+        self.assertIn('id="wyckoff-pattern-guide-dialog"', html)
+        self.assertIn('aria-labelledby="wyckoff-pattern-guide-title"', html)
+        self.assertIn('偏好形态（结构偏上）', html)
+        self.assertIn('偏坏形态（结构偏下）', html)
+        for name in ('Spring', 'SOS', 'LPS', 'UT', 'SOW', 'LPSY'):
+            self.assertIn(f'data-wyckoff-pattern="{name}"', html)
+        for phrase in ('前40～60根', '10%分位', '90%分位', '冻结边界', '首次回踩', '首次反抽', '量比', '不代表未来股价涨跌'):
+            self.assertIn(phrase, html)
+        self.assertIn('wyckoffGuideDialog.showModal()', js)
+        self.assertIn('wyckoffGuideDialog.close()', js)
+        self.assertIn('wyckoffGuideLink.focus()', js)
+
+    def test_wyckoff_direction_and_lifecycle_are_separate_visual_channels(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        for event_type, direction in [('Spring', 'up'), ('SOS', 'up'), ('LPS', 'up'), ('UT', 'down'), ('SOW', 'down'), ('LPSY', 'down')]:
+            self.assertIn(f"{event_type}: '{direction}'", js)
+        self.assertIn('data-direction="${escapeHtml(direction)}"', js)
+        self.assertIn('原形态', js)
+        self.assertIn('wyckoff-direction', js)
+        self.assertIn('wyckoff-status', js)
+        self.assertIn('.wyckoff-event[data-direction="up"]', html)
+        self.assertIn('.wyckoff-event[data-direction="down"]', html)
+        self.assertNotIn('.wyckoff-event[data-status="invalidated"] { border-color:', html)
+        self.assertIn('形态方向', html)
+
+    def test_wyckoff_invalidated_history_separates_prior_confirmation_date(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('曾确认于', js)
+        self.assertIn('wyckoff-confirmed-date', js)
+        self.assertIn('.wyckoff-confirmed-date', html)
+
+    def test_wyckoff_equal_volume_evidence_is_visible_but_never_a_phase(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('同量价格响应', html)
+        self.assertIn('payload.equal_volume_response', js)
+        self.assertIn('id="wyckoff-equal-volume"', js)
+        self.assertIn('paired_days', js)
+        self.assertNotIn('matched_reference_dates', js)
+        self.assertIn('benchmark_missing_sessions', js)
+        self.assertIn('不判定吸筹或派发阶段', js)
+
+    def test_wyckoff_equal_volume_detail_is_newest_first_without_reference_date_column(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        detail = js[js.index('function renderWyckoffEqualVolume'):js.index('function renderWyckoffObservation')]
+        self.assertIn('rows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map', detail)
+        self.assertIn('<th>当日差值</th></tr>', detail)
+        self.assertNotIn('<th>对照日期</th>', detail)
+        self.assertNotIn('wyckoff-reference-dates', html)
+        self.assertRegex(html, r'stock-analysis\.js\?v=20\d{6}-[a-z0-9-]+')
+
+    def test_wyckoff_events_are_wired_to_qfq_observation_api(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="wyckoff-observation"', html)
+        self.assertIn('前复权日线', html)
+        self.assertIn('fetch(`/api/wyckoff-observation?market=${encodeURIComponent(stock.market)}&symbol=${encodeURIComponent(stock.symbol)}`', js)
+        self.assertIn('renderWyckoffObservation(wyckoff);', js)
+        self.assertIn('if (financialRequestId === state.financialRequestId)', js)
+        self.assertIn('escapeHtml(event.date)', js)
+        self.assertIn('escapeHtml(statuses[event.status]', js)
+        self.assertIn('volume_ratio_20', js)
+        self.assertIn('event.invalidated_by?.date', js)
+        self.assertIn('freshness === \'unverified\'', js)
+        self.assertNotIn('renderStage(', js)
+        self.assertNotIn('/api/regime-classify', js)
+        self.assertNotIn('/api/regime-history-series', js)
 
 
 if __name__ == '__main__':

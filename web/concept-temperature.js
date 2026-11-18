@@ -46,11 +46,16 @@
     return String(row.temperature_streak_days) + (row.temperature_streak_capped ? '+' : '') + '天';
   }
   function tempTrend(row) {
-    if (row.temperature_trend === 'unknown' || row.temperature_previous == null) return '<span class="trend-flat">—</span>';
-    var arrow = row.temperature_trend === 'warming' ? '↑' : '↓';
-    var cls = row.temperature_trend === 'warming' ? 'positive' : 'negative';
-    return '<span class="' + cls + '" title="前温 ' + row.temperature_previous + '，当前 ' + row.temperature + '">' +
-      row.temperature_previous + ' → ' + row.temperature + ' ' + arrow + ' ' + esc(row.temperature_trend_label) + '</span>';
+    var label = '<span class="trend-flat">查看趋势</span>';
+    if (row.temperature_trend !== 'unknown' && row.temperature_previous != null) {
+      var arrow = row.temperature_trend === 'warming' ? '↑' : '↓';
+      var cls = row.temperature_trend === 'warming' ? 'positive' : 'negative';
+      label = '<span class="' + cls + '">' + row.temperature_previous + ' → ' + row.temperature + ' ' +
+        arrow + ' ' + esc(row.temperature_trend_label) + '</span>';
+    }
+    return '<button type="button" class="temperature-trend-btn" data-temperature-trend-code="' +
+      esc(row.concept_code) + '" title="查看最近60个交易日历史温度档位" aria-label="查看' +
+      esc(row.concept_name) + '的历史温度趋势">' + label + '</button>';
   }
   function renderSummary(data) {
     var rows = data.concepts || [];
@@ -82,12 +87,12 @@
     var start = (currentPage - 1) * PAGE_SIZE;
     var visible = conceptRows.slice(start, start + PAGE_SIZE);
     if (!visible.length) {
-      conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">没有符合该温度的概念</td></tr>';
+      conceptsEl.innerHTML = '<tr><td colspan="10" class="empty">没有符合该温度的概念</td></tr>';
       pagerEl.innerHTML = '';
       return;
     }
     conceptsEl.innerHTML = visible.map(function (row) {
-      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td>' + tempTrend(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td><button type="button" class="heat-score-btn" data-trend-code="' + esc(row.concept_code) + '" title="查看最近 60 个交易日热度分趋势">' + Number(row.heat_score).toFixed(1) + '</button></td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + streak(row) + '</td><td>' + row.member_count + '</td></tr>';
+      return '<tr class="concept-row ' + (selected === row.concept_code ? 'selected' : '') + '" data-code="' + esc(row.concept_code) + '"><td>' + tempPill(row) + '</td><td>' + tempTrend(row) + '</td><td><strong>' + esc(row.concept_name) + '</strong></td><td><button type="button" class="heat-score-btn" data-trend-code="' + esc(row.concept_code) + '" title="查看最近 60 个交易日热度分趋势">' + Number(row.heat_score).toFixed(1) + '</button></td><td title="同窗口热度分的相对名次，不参与绝对档位">' + (row.heat_rank == null ? '—' : row.heat_rank) + '</td><td class="' + color(row.median_return_pct) + '">' + pct(row.median_return_pct) + '</td><td>' + Number(row.breadth_pct).toFixed(1) + '%</td><td class="' + color(row.excess_return_pct) + '">' + pct(row.excess_return_pct) + '</td><td>' + streak(row) + '</td><td>' + row.member_count + '</td></tr>';
     }).join('');
     conceptsEl.querySelectorAll('.concept-row').forEach(function (row) {
       row.addEventListener('click', function () {
@@ -96,10 +101,16 @@
         renderConceptPage();
       });
     });
+    conceptsEl.querySelectorAll('.temperature-trend-btn').forEach(function (button) {
+      button.addEventListener('click', function (event) {
+        event.stopPropagation();
+        openHeatTrend(button.dataset.temperatureTrendCode, 'temperature');
+      });
+    });
     conceptsEl.querySelectorAll('.heat-score-btn').forEach(function (button) {
       button.addEventListener('click', function (event) {
         event.stopPropagation();
-        openHeatTrend(button.dataset.trendCode);
+        openHeatTrend(button.dataset.trendCode, 'heat_score');
       });
     });
     renderPager();
@@ -109,46 +120,78 @@
     Object.keys(attrs || {}).forEach(function (key) { node.setAttribute(key, attrs[key]); });
     return node;
   }
-  function renderHeatChart(points) {
-    var width = Math.max(360, Math.floor(chartEl.getBoundingClientRect().width || 700));
-    var height = 330, ml = 40, mr = 16, mt = 18, mb = 34, plotW = width - ml - mr, plotH = height - mt - mb;
-    chartEl.replaceChildren(); chartEl.setAttribute('width', width); chartEl.setAttribute('height', height);
+  function renderHeatChart(points, metric) {
+    var levels = metric === 'temperature';
+    var width = Math.max(260, Math.floor(chartEl.getBoundingClientRect().width || 700));
+    var height = 330, ml = levels ? 58 : 40, mr = 16, mt = 18, mb = 34;
+    var plotW = width - ml - mr, plotH = height - mt - mb;
+    chartEl.replaceChildren(); chartEl.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    chartEl.setAttribute('aria-label', levels ? '历史温度档位阶梯图' : '热度分趋势图');
     var x = function (i) { return ml + (points.length < 2 ? plotW / 2 : i * plotW / (points.length - 1)); };
-    var y = function (value) { return mt + (100 - value) * plotH / 100; };
-    [0, 25, 50, 75, 100].forEach(function (value) {
-      chartEl.appendChild(svgNode('line', {x1:ml,y1:y(value),x2:width-mr,y2:y(value),stroke:'#d8ddd2','stroke-width':'1'}));
-      var label = svgNode('text', {x:ml-6,y:y(value)+4,'text-anchor':'end',fill:'#666','font-size':'10'}); label.textContent = value; chartEl.appendChild(label);
+    var y = function (value) { return mt + ((levels ? 5 : 100) - value) * plotH / (levels ? 5 : 100); };
+    var valid = function (point) { return levels ? Number.isInteger(point.temperature) && point.temperature >= 0 && point.temperature <= 5 :
+      point.heat_score != null && Number.isFinite(Number(point.heat_score)); };
+    var value = function (point) { return Number(levels ? point.temperature : point.heat_score); };
+    (levels ? [0,1,2,3,4,5] : [0,25,50,75,100]).forEach(function (tick) {
+      chartEl.appendChild(svgNode('line', {x1:ml,y1:y(tick),x2:width-mr,y2:y(tick),stroke:'#d8ddd2','stroke-width':'1'}));
+      var label = svgNode('text', {x:ml-6,y:y(tick)+4,'text-anchor':'end',fill:'#666','font-size':'10'});
+      label.textContent = levels ? tick + ' ' + ['冰点','偏冷','中性','升温','热门','极热'][tick] : tick;
+      chartEl.appendChild(label);
     });
     [0, Math.floor((points.length - 1) / 2), points.length - 1].filter(function (v, i, arr) { return arr.indexOf(v) === i; }).forEach(function (index) {
-      var label = svgNode('text', {x:x(index),y:height-10,'text-anchor':'middle',fill:'#666','font-size':'10'}); label.textContent = points[index].date.slice(5); chartEl.appendChild(label);
+      var label = svgNode('text', {x:x(index),y:height-10,'text-anchor':'middle',fill:'#666','font-size':'10'});
+      label.textContent = points[index].date.slice(5); chartEl.appendChild(label);
     });
-    var polyline = svgNode('polyline', {points:points.map(function (point, index) { return x(index) + ',' + y(point.heat_score); }).join(' '),fill:'none',stroke:'#176426','stroke-width':'2.4','stroke-linejoin':'round','stroke-linecap':'round'});
-    chartEl.appendChild(polyline);
-    var dot = svgNode('circle', {cx:x(points.length-1),cy:y(points[points.length-1].heat_score),r:'4',fill:'#176426'}); chartEl.appendChild(dot);
+    var path = '', previous = null;
+    points.forEach(function (point, index) {
+      if (!valid(point)) { previous = null; return; } // 缺失档位不能连接前后两天
+      if (previous === null) path += 'M' + x(index) + ',' + y(value(point));
+      else if (levels) path += 'H' + x(index) + 'V' + y(value(point));
+      else path += 'L' + x(index) + ',' + y(value(point));
+      previous = index;
+    });
+    chartEl.appendChild(svgNode('path', {d:path,fill:'none',stroke:'#176426','stroke-width':'2.4','stroke-linejoin':'round','stroke-linecap':'round'}));
+    var lastIndex = points.length - 1;
+    if (valid(points[lastIndex])) chartEl.appendChild(svgNode('circle', {cx:x(lastIndex),cy:y(value(points[lastIndex])),r:'4',fill:'#176426'}));
     var guide = svgNode('line', {stroke:'#000','stroke-width':'1','stroke-dasharray':'3 3',visibility:'hidden'}); chartEl.appendChild(guide);
     var hoverDot = svgNode('circle', {r:'4',fill:'#000',visibility:'hidden'}); chartEl.appendChild(hoverDot);
+    var hint = levels ? '将鼠标移到图线上查看日期与温度档位' : '将鼠标移到图线上查看日期与热度分';
+    trendTooltip.textContent = hint;
     chartEl.onpointermove = function (event) {
       var rect = chartEl.getBoundingClientRect();
-      var index = Math.max(0, Math.min(points.length - 1, Math.round((event.clientX - rect.left - ml) / plotW * (points.length - 1))));
-      var point = points[index]; guide.setAttribute('x1', x(index)); guide.setAttribute('x2', x(index)); guide.setAttribute('y1', mt); guide.setAttribute('y2', height-mb); guide.setAttribute('visibility','visible'); hoverDot.setAttribute('cx',x(index)); hoverDot.setAttribute('cy',y(point.heat_score)); hoverDot.setAttribute('visibility','visible'); trendTooltip.textContent = point.date + ' · 热度分 ' + Number(point.heat_score).toFixed(1);
+      var scaledX = (event.clientX - rect.left) * width / rect.width;
+      var index = Math.max(0, Math.min(lastIndex, Math.round((scaledX - ml) / plotW * lastIndex)));
+      var point = points[index];
+      guide.setAttribute('x1', x(index)); guide.setAttribute('x2', x(index));
+      guide.setAttribute('y1', mt); guide.setAttribute('y2', height-mb); guide.setAttribute('visibility','visible');
+      hoverDot.setAttribute('visibility', valid(point) ? 'visible' : 'hidden');
+      if (valid(point)) { hoverDot.setAttribute('cx',x(index)); hoverDot.setAttribute('cy',y(value(point))); }
+      trendTooltip.textContent = point.date + ' · ' + (valid(point) ? (levels ? '温度 ' + point.temperature + ' 档' : '热度分 ' + value(point).toFixed(1)) : '温度数据不足');
     };
-    chartEl.onpointerleave = function () { guide.setAttribute('visibility','hidden'); hoverDot.setAttribute('visibility','hidden'); trendTooltip.textContent = '将鼠标移到图线上查看日期与热度分'; };
+    chartEl.onpointerleave = function () { guide.setAttribute('visibility','hidden'); hoverDot.setAttribute('visibility','hidden'); trendTooltip.textContent = hint; };
   }
-  async function openHeatTrend(code) {
+  async function openHeatTrend(code, metric) {
+    var levels = metric === 'temperature';
     var row = conceptRows.find(function (item) { return item.concept_code === code; });
-    trendTitle.textContent = (row ? row.concept_name : '') + ' · 热度分趋势';
-    trendMeta.textContent = '加载 ' + windowEl.value + ' 日窗口最近 60 个交易日的热度分…'; trendTooltip.textContent = '';
+    var title = levels ? '历史温度档位' : '热度分趋势';
+    var requestedScope = scope, requestedWindow = windowEl.value;
+    trendTitle.textContent = (row ? row.concept_name : '') + ' · ' + title;
+    trendMeta.textContent = '加载 ' + requestedWindow + ' 日窗口最近 60 个交易日的' + title + '…';
+    trendTooltip.textContent = '';
     chartEl.replaceChildren(); dialogEl.showModal();
     try {
-      var response = await fetch('/api/concept-temperature/trend?scope=' + encodeURIComponent(scope) + '&window=' + encodeURIComponent(windowEl.value) + '&concept_code=' + encodeURIComponent(code));
+      var response = await fetch('/api/concept-temperature/trend?scope=' + encodeURIComponent(requestedScope) +
+        '&window=' + encodeURIComponent(requestedWindow) + '&concept_code=' + encodeURIComponent(code) + '&metric=' + encodeURIComponent(metric));
       var data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || '趋势加载失败');
-      trendTitle.textContent = data.concept.concept_name + ' · 热度分趋势';
-      trendMeta.textContent = '最近 ' + data.points.length + ' 个交易日 · ' + data.window + ' 日窗口 · 前复权口径';
-      renderHeatChart(data.points);
-    } catch (error) { trendMeta.textContent = '加载失败：' + error.message; }
+      if (!dialogEl.open || scope !== requestedScope || windowEl.value !== requestedWindow) return;
+      trendTitle.textContent = data.concept.concept_name + ' · ' + title;
+      trendMeta.textContent = '最近 ' + data.points.length + ' 条交易日记录 · 截至 ' + data.as_of_date + ' · ' +
+        data.window + ' 日窗口 · 前复权 · 当前成分回算历史（非历史时点成分）';
+      renderHeatChart(data.points, metric);
+    } catch (error) { if (dialogEl.open) trendMeta.textContent = '加载失败：' + error.message; }
   }
   async function loadConcepts() {
-    conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
+    conceptsEl.innerHTML = '<tr><td colspan="10" class="empty">加载中…</td></tr>';
     pagerEl.innerHTML = '';
     try {
       var url = '/api/concept-temperature?scope=' + encodeURIComponent(scope) + '&window=' + encodeURIComponent(windowEl.value) + (temp ? '&temperature=' + temp : '') + (trendFilter ? '&trend=' + encodeURIComponent(trendFilter) : '') + (minDaysEl && minDaysEl.value ? '&min_days=' + encodeURIComponent(minDaysEl.value) : '') + (maxDaysEl && maxDaysEl.value ? '&max_days=' + encodeURIComponent(maxDaysEl.value) : '');
@@ -162,7 +205,7 @@
       renderConceptPage();
     } catch (err) {
       conceptMeta.textContent = '加载失败：' + err.message;
-      conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">无法加载概念温度数据</td></tr>';
+      conceptsEl.innerHTML = '<tr><td colspan="10" class="empty">无法加载概念温度数据</td></tr>';
     }
   }
   async function loadMembers() {
@@ -237,7 +280,7 @@
     memberTitle.textContent = '成分股清单'; memberCount.textContent = '0';
     memberMeta.textContent = '点击上方查看';
     membersEl.innerHTML = '<tr><td colspan="5" class="empty">尚未选择' + (scope === 'industry' ? '行业' : '概念') + '</td></tr>';
-    conceptsEl.innerHTML = '<tr><td colspan="9" class="empty">加载中…</td></tr>';
+    conceptsEl.innerHTML = '<tr><td colspan="10" class="empty">加载中…</td></tr>';
     loadConcepts();
   }
   if (scopeEl) {

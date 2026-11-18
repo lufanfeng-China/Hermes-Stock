@@ -21,7 +21,7 @@ class StockFilterMarketMetricsSnapshotTest(unittest.TestCase):
         payload = build_market_metrics(frame)
 
         # v2 增加股价收益比字段；v3 增加趋势模版（Trend Template）七条腿
-        self.assertEqual(payload["schema_version"], "stock-filter-market-metrics-v3")
+        self.assertEqual(payload["schema_version"], "stock-filter-market-metrics-v4")
         self.assertIn("eps_ratio_5y", payload["metrics"]["sh:600001"])
         self.assertIn("trend_template_ok", payload["metrics"]["sh:600001"])
         self.assertEqual(payload["stocks"], 2)

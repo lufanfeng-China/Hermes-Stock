@@ -25,11 +25,8 @@ CONCEPT_MAPPING_PATH = Path('/mnt/c/new_tdx64/T0002/export/概念板块.txt')
 INDUSTRY_MAPPING_PATH = PROJECT_ROOT / 'data/derived/datasets/final/snapshot_stock_industry_membership.json'
 FINAL_DIR = PROJECT_ROOT / 'data/derived/datasets/final'
 WINDOWS = (3, 5, 10, 20, 60)
-STREAK_LOOKBACK = 20
-# 热度分趋势的回溯交易日数。每个交易日都要跑一次全量温度计算，这一项直接决定
-# 单窗口的成本：126 天 → 60 天后，每窗口的日重算次数从 147 降到 81（含 20 天连续
-# 天数与当日），两条温度链的日更耗时约从 23 分钟降到 13-14 分钟。
-# 代价：热度趋势图从半年变成约 3 个月。
+STREAK_LOOKBACK = 60
+# 热度分趋势与档位历史共用最近 60 个交易日的计算，避免重复读取全市场日线。
 HEAT_TREND_DAYS = 60
 
 # 概念与二级行业共用同一套算法，只有成分来源、最小成员数和输出文件不同。
@@ -76,20 +73,24 @@ def load_industry_mapping() -> list[dict[str, str]]:
     return mapping
 
 
-def add_streaks(mapping, frames, window, concepts, as_of, min_members, prepared=None):
+def add_streaks(mapping, frames, window, concepts, as_of, min_members, prepared=None, history_levels=None):
     """Measure each current temperature's uninterrupted trading-day run backward."""
     current_levels = {row['concept_code']: row['temperature'] for row in concepts if row['temperature'] is not None}
     unresolved = set(current_levels)
-    all_dates = sorted({date for frame in frames.values() for date in frame.index if date <= as_of})
-    dates = list(reversed(all_dates[-STREAK_LOOKBACK:]))
+    if history_levels is None:
+        all_dates = sorted({date for frame in frames.values() for date in frame.index if date <= as_of})
+        dates = list(reversed(all_dates[-STREAK_LOOKBACK:]))
+        history_levels = []
+        for date in dates:
+            if date == as_of:
+                levels = {row['concept_code']: row['temperature'] for row in concepts}
+            else:
+                daily_rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
+                                                        as_of=date, include_members=False, prepared=prepared)
+                levels = {row['concept_code']: row['temperature'] for row in daily_rows}
+            history_levels.append(levels)
     history = []
-    for date in dates:
-        if date == as_of:
-            levels = {row['concept_code']: row['temperature'] for row in concepts}
-        else:
-            daily_rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
-                                                    as_of=date, include_members=False, prepared=prepared)
-            levels = {row['concept_code']: row['temperature'] for row in daily_rows}
+    for levels in history_levels[:STREAK_LOOKBACK]:
         history.append(levels)
         unresolved = {code for code in unresolved if levels.get(code) == current_levels[code]}
         if not unresolved:
@@ -99,15 +100,26 @@ def add_streaks(mapping, frames, window, concepts, as_of, min_members, prepared=
         row['temperature_streak_capped'] = row['concept_code'] in unresolved
 
 
-def build_heat_history(mapping, frames, window, as_of, min_members, prepared=None):
-    """Return six-month heat-score series for every concept at the selected window."""
+def build_heat_history(mapping, frames, window, as_of, min_members, prepared=None, current_rows=None, with_levels=False):
+    """Return 60-day heat scores; optionally reuse each day's absolute levels for streaks."""
     dates = sorted({date for frame in frames.values() for date in frame.index if date <= as_of})[-HEAT_TREND_DAYS:]
     history = {}
+    levels_newest_first = []
     for date in dates:
-        rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
-                                          as_of=date, include_members=False, prepared=prepared)
+        if current_rows is not None and date == as_of:
+            rows = current_rows
+        else:
+            rows, _ = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
+                                              as_of=date, include_members=False, prepared=prepared)
+        levels_newest_first.append({row['concept_code']: row['temperature'] for row in rows})
         for row in rows:
-            history.setdefault(row['concept_code'], []).append({'date': date.strftime('%Y-%m-%d'), 'heat_score': row['heat_score']})
+            history.setdefault(row['concept_code'], []).append({
+                'date': date.strftime('%Y-%m-%d'),
+                'heat_score': row['heat_score'],
+                'temperature': row['temperature'],
+            })
+    if with_levels:
+        return history, list(reversed(levels_newest_first))
     return history
 
 
@@ -115,8 +127,10 @@ def _window_payload(window, mapping, frames, as_of, min_members, prepared=None):
     """单窗口完整产物：当日温度 + 连续天数 + 热度序列。"""
     concepts, members = build_temperature_rows(mapping, frames, window=window, min_members=min_members,
                                                prepared=prepared)
-    add_streaks(mapping, frames, window, concepts, as_of, min_members, prepared=prepared)
-    heat_history = build_heat_history(mapping, frames, window, as_of, min_members, prepared=prepared)
+    heat_history, history_levels = build_heat_history(mapping, frames, window, as_of, min_members,
+                                                       prepared=prepared, current_rows=concepts, with_levels=True)
+    add_streaks(mapping, frames, window, concepts, as_of, min_members, prepared=prepared,
+                history_levels=history_levels)
     return {'concepts': concepts, 'members': members, 'heat_history': heat_history}
 
 
@@ -250,6 +264,7 @@ def main() -> None:
         'generated_at': datetime.now(timezone.utc).isoformat(),
         'as_of_date': as_of.strftime('%Y-%m-%d'),
         'price_basis': 'tdx_export_qfq',
+        'temperature_basis': 'absolute_median_return_v1',
         'mapping_path': str(CONCEPT_MAPPING_PATH if args.scope == 'concept' else INDUSTRY_MAPPING_PATH),
         'mapping_encoding': 'gb18030' if args.scope == 'concept' else 'utf-8',
         'mapping_rows': len(mapping),

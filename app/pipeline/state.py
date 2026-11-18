@@ -68,6 +68,18 @@ def _format_timestamp(ts: float | None) -> str | None:
 
 def parse_data_update_progress_line(line: str) -> dict[str, object]:
     text = str(line or "").strip()
+    wyckoff = re.fullmatch(r"WYCKOFF_PROGRESS (\d+)/(\d+) success=(\d+) failed=(\d+)", text)
+    if wyckoff:
+        processed, total, success, failed = map(int, wyckoff.groups())
+        if 0 <= processed <= total and success + failed == processed:
+            return {
+                "last_line": text,
+                "progress_index": processed,
+                "progress_total": total,
+                "current_progress_text": (
+                    f"威科夫股票：已处理 {processed}/{total} 只，成功 {success} 只，失败 {failed} 只"
+                ),
+            }
     match = re.match(r"^\[(\d+)/(\d+)\]\s+(.+?)\s+(开始构建|完成|失败|跳过)", text)
     if not match:
         return {"last_line": text}

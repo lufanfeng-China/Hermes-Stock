@@ -12,8 +12,8 @@ test('shared renderer plots only matching real QFQ candles and confirmed/candida
   const payload = {
     symbol: '300017', name: '网宿科技', as_of_date: '2026-11-10', price_basis: 'tdx_export_qfq',
     bars: [
-      {date:'2026-11-07',open:9,high:10,low:8,close:9.5},
-      {date:'2026-11-10',open:10,high:11,low:9,close:10.5},
+      {date:'2026-11-07',open:9,high:10,low:8,close:9.5,volume:100},
+      {date:'2026-11-10',open:10,high:11,low:9,close:10.5,volume:100},
       {date:'2026-11-10',open:0,high:0,low:0,close:0},
     ],
     observation: { state:'上涨突破', last_10_peaks:[{date:'2026-11-07',high:10,confirmed:'2026-11-10'}],
@@ -21,6 +21,10 @@ test('shared renderer plots only matching real QFQ candles and confirmed/candida
       candidate_peaks:[{date:'2026-11-10',high:11,waiting_bars:3}], candidate_valleys:[] },
   };
   render(payload, svg, meta);
+  assert.equal(svg.innerHTML, '');
+  assert.match(meta.textContent, /无法绘图/);
+  // A zero-price placeholder is not audited OHLC evidence. Draw only after it is removed.
+  render({...payload, bars: payload.bars.slice(0, 2)}, svg, meta);
   assert.match(svg.innerHTML, /data-swing-bar="2026-11-10"/);
   assert.match(svg.innerHTML, /data-swing-mark="confirmed"/);
   assert.match(svg.innerHTML, /data-swing-mark="candidate"/);

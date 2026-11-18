@@ -8,21 +8,25 @@ from functools import lru_cache
 import json
 from pathlib import Path
 from typing import Any
-from datetime import datetime
+from datetime import date, datetime
 import subprocess
 import sys
 
 import pandas as pd
 
 from app.stock_filter_history_progress import read_progress
-from app.stock_filter_market_snapshot import PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
+from app.stock_filter_market_snapshot import BASIC_MARKET_FIELDS, PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
 import math
 
 ROOT = Path(__file__).resolve().parent.parent
 FINAL = ROOT / "data" / "derived" / "datasets" / "final"
 HISTORICAL_FUNDAMENTALS = FINAL / "stock_filter_fundamental_history"
+PE_PERCENTILE_SNAPSHOT = FINAL / "stock_filter_pe_percentile_current.json"
+TURNOVER_PERCENTILE_SNAPSHOT = FINAL / "stock_filter_turnover_percentile_current.json"
 PAGE_SIZE = 50
-SORT_FIELDS = {"eps_ratio_5y", "rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_pct", "turnover_sum"}
+BASIC_MARKET_FILTERS = ("return_1d", "volume_ratio_5", "ma5_distance_pct",
+                        "ma10_distance_pct", "ma20_distance_pct")
+SORT_FIELDS = {"eps_ratio_5y", "rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "pe_percentile_5y", "price_percentile_5y", "turnover_percentile_1y", "ps_ttm", "return_pct", "turnover_sum"}
 
 # 01 股票范围：先锁定股票池，再套用其它筛选条件。
 STOCK_SCOPE_LABELS = {
@@ -114,6 +118,11 @@ def _passes(value: Any, bounds: tuple[float | None, float | None]) -> bool:
     return number is not None and (lo is None or number >= lo) and (hi is None or number <= hi)
 
 
+def _read_pe_percentile_snapshot() -> dict[str, Any]:
+    """The publisher atomically replaces this file; never cache a missing version."""
+    return _read_json(PE_PERCENTILE_SNAPSHOT)
+
+
 def matches_financial_reversal(row: dict[str, Any]) -> bool:
     """Return whether a row meets the auditable standard financial-reversal preset.
 
@@ -191,6 +200,9 @@ def _read_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+
+def _read_turnover_snapshot() -> dict:
+    return _read_json(TURNOVER_PERCENTILE_SNAPSHOT)
 
 
 @lru_cache(maxsize=1)
@@ -299,6 +311,8 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "pe_ttm": _num(valuation.get("pe_ttm")), "ps_ttm": _num(valuation.get("ps_ttm")),
             **{key: qfq.get(key) for key in PRICE_PERCENTILE_FIELDS},
             "return_1d": qfq.get("return_1d"), "return_5d": qfq.get("return_5d"), "return_20d": qfq.get("return_20d"),
+            **{key: qfq.get(key) for key in BASIC_MARKET_FIELDS},
+            "ma_alignment": qfq.get("ma_alignment"), "ma_alignment_ma": qfq.get("ma_alignment_ma"),
             "turnover_5_sum": qfq.get("turnover_5_sum"), "turnover_5_avg": qfq.get("turnover_5_avg"), "qfq_as_of": qfq.get("qfq_as_of"),
             "eps_ratio_5y": _num(qfq.get("eps_ratio_5y")), "eps_ratio_5y_years": qfq.get("eps_ratio_5y_years"),
             "eps_ratio_5y_factor": qfq.get("eps_ratio_5y_factor"), "eps_ratio_5y_eps_sum": qfq.get("eps_ratio_5y_eps_sum"),
@@ -331,8 +345,13 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "trend": tech.get("trend"), "trend_label": tech.get("trend_label"),
             "short_trend": tech.get("short_trend"), "short_trend_label": tech.get("short_trend_label"),
             "momentum": tech.get("momentum"), "momentum_label": tech.get("momentum_label"),
-            "golden_cross": tech.get("golden_cross"), "golden_cross_label": tech.get("golden_cross_label"),
-            "macd_cross": tech.get("macd_cross"), "macd_cross_label": tech.get("macd_cross_label"),
+            "golden_cross": qfq.get("golden_cross"),
+            "golden_cross_as_of": qfq.get("qfq_as_of") if qfq.get("golden_cross") is not None else None,
+            "macd_cross": qfq.get("macd_cross"), "macd_cross_label": qfq.get("macd_cross_label"),
+            "macd_cross_as_of": qfq.get("qfq_as_of") if qfq.get("macd_cross") is not None else None,
+            "macd_cross_dif": qfq.get("macd_cross_dif"), "macd_cross_dea": qfq.get("macd_cross_dea"),
+            "macd_cross_prev_dif": qfq.get("macd_cross_prev_dif"),
+            "macd_cross_prev_dea": qfq.get("macd_cross_prev_dea"),
         })
     return rows, data_date
 
@@ -340,6 +359,105 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
 def _selected(params: dict[str, list[str]], key: str) -> set[str]:
     return {x.strip() for x in (params.get(key) or [""])[0].split(",") if x.strip()}
 
+WYCKOFF_TYPES = {"Spring", "UT", "SOS", "SOW", "LPS", "LPSY"}
+WYCKOFF_STATUSES = {"candidate", "confirmed", "invalidated"}
+from app.swing_presentation import STARS_BY_STATE, presentation as swing_presentation
+SWING_STATES = set(STARS_BY_STATE)
+SWING_SCHEMA = 'swing-structure-v8'
+SWING_RULE = 'swing-confirmed-5x5-pressure-line-ceiling-v8'
+WYCKOFF_SCHEMA = "wyckoff-signals-v1"
+WYCKOFF_RULE = "wyckoff-approved-20261103-v1"
+
+
+@lru_cache(maxsize=1)
+def _read_wyckoff_published(path: Path, file_identity: tuple[int, int, int]) -> dict[str, Any]:
+    # One decoded publication per process; atomic replace changes inode even if timestamp granularity is coarse.
+    return _read_json(path)
+
+
+def _wyckoff_snapshot(day: str, historical: bool) -> dict[str, Any]:
+    """Read only a complete, same-day QFQ publication of the approved rule."""
+    path = FINAL / "wyckoff_signals" / f"{day}.json" if historical else FINAL / "wyckoff_signals_current.json"
+    try:
+        stat = path.stat()
+        identity = (stat.st_ino, stat.st_mtime_ns, stat.st_size)
+    except FileNotFoundError:
+        identity = (-1, -1, -1)
+    payload = _read_wyckoff_published(path, identity)
+    if (payload.get("schema_version") != WYCKOFF_SCHEMA or
+            payload.get("rule_version") != WYCKOFF_RULE or
+            payload.get("price_basis") != "tdx_export_qfq" or
+            payload.get("completeness") != "complete" or
+            payload.get("as_of_date") != day or
+            not isinstance(payload.get("stocks"), dict)):
+        raise ValueError(f"威科夫 {day} 前复权全市场快照缺失、口径不一致或尚未完整发布；请先构建并核验该日期快照。")
+    return payload
+
+
+def _swing_snapshot(day: str, historical: bool, *, allow_lagged: bool = False) -> dict[str, Any]:
+    """Filters require same-day QFQ; single-stock display may use a prior publication."""
+    path = FINAL / 'swing_structure_v8' / f'{day}.json' if historical else FINAL / 'swing_structure_v8_current.json'
+    try:
+        stat = path.stat()
+        identity = (stat.st_ino, stat.st_mtime_ns, stat.st_size)
+    except FileNotFoundError:
+        identity = (-1, -1, -1)
+    payload = _read_wyckoff_published(path, identity)
+    published_day = payload.get('as_of_date')
+    try:
+        valid_day = isinstance(published_day, str) and date.fromisoformat(published_day).isoformat() == published_day
+    except ValueError:
+        valid_day = False
+    publication_date: str = published_day if isinstance(published_day, str) and valid_day else ''
+    if (payload.get('schema_version') != SWING_SCHEMA or payload.get('rule_version') != SWING_RULE
+        or payload.get('price_basis') != 'tdx_export_qfq'
+        or not valid_day or (publication_date > day if allow_lagged and not historical else publication_date != day)
+        or payload.get('completeness') != 'complete'
+        or not isinstance(payload.get('stocks'), dict)):
+        raise ValueError(f'波峰波谷 {day} 前复权全市场快照不可用、版本不符或未完整发布；不能返回空池。')
+    return payload
+
+
+def _expected_entry_status(source: dict) -> str | None:
+    if source.get('status') == 'ok' and source.get('state') in (None, '证据不足'):
+        return 'insufficient_state'
+    return source.get('status')
+
+
+def _swing_entry_snapshot(day: str, historical: bool, parent: dict) -> dict[str, Any]:
+    """Require same-day complete entry evidence for every parent swing security."""
+    path = FINAL / 'swing_state_runs_v5' / f'{day}.json' if historical else FINAL / 'swing_state_runs_v5_current.json'
+    try:
+        stat = path.stat()
+        identity = (stat.st_ino, stat.st_mtime_ns, stat.st_size)
+    except FileNotFoundError:
+        identity = (-1, -1, -1)
+    payload = _read_wyckoff_published(path, identity)
+    stocks = payload.get('stocks')
+    if (payload.get('schema_version') != 'swing-state-runs-v5'
+        or payload.get('rule_version') != SWING_RULE
+        or payload.get('price_basis') != 'tdx_export_qfq'
+        or payload.get('completeness') != 'complete'
+        or payload.get('as_of_date') != day
+        or payload.get('max_entry_days') != 5
+        or not isinstance(stocks, dict)
+        or stocks.keys() != parent['stocks'].keys()
+        or any(not isinstance(stocks[key], dict) or any(
+            stocks[key].get(field) != (_expected_entry_status(source) if field == 'status' else source.get(field))
+            for field in ('status', 'state', 'last_bar_date', 'source_sha256'))
+            for key, source in parent['stocks'].items())):
+        raise ValueError(f'波峰波谷状态时长 {day} 同日完整快照缺失、版本不符或与主快照不匹配；不能返回空池。')
+    return payload
+
+def _wyckoff_match(events: list[dict], types: set[str], statuses: set[str], since: str, day: str) -> dict | None:
+    """Latest matching observation known by day; no later lifecycle evidence."""
+    eligible = [event for event in events if isinstance(event, dict)
+                and isinstance(event.get("date"), str) and since <= event["date"] <= day
+                and (not types or event.get("type") in types)
+                and (not statuses or event.get("status") in statuses)
+                and (not event.get("confirmation_date") or event["confirmation_date"] <= day)
+                and (not (event.get("invalidated_by") or {}).get("date") or event["invalidated_by"]["date"] <= day)]
+    return max(eligible, key=lambda event: event["date"], default=None)
 
 def _historical_universe(as_of_date: str) -> tuple[list[dict[str, Any]], str]:
     """Load one immutable point-in-time fundamental snapshot.
@@ -349,7 +467,7 @@ def _historical_universe(as_of_date: str) -> tuple[list[dict[str, Any]], str]:
     """
     path = HISTORICAL_FUNDAMENTALS / f"{as_of_date}.json"
     payload = _read_json(path)
-    if not payload or payload.get("as_of_date") != as_of_date or payload.get("schema_version") != "stock-filter-fundamental-history-v3":
+    if not payload or payload.get("as_of_date") != as_of_date or payload.get("schema_version") != "stock-filter-fundamental-history-v7":
         # Build only the requested trading date and cache it permanently.  A lock
         # prevents concurrent browser requests from launching duplicate scans.
         lock = HISTORICAL_FUNDAMENTALS / f"{as_of_date}.building"
@@ -358,7 +476,7 @@ def _historical_universe(as_of_date: str) -> tuple[list[dict[str, Any]], str]:
             try:
                 lock.touch(exist_ok=False)
                 log = open(HISTORICAL_FUNDAMENTALS / f"{as_of_date}.log", "a", encoding="utf-8")
-                subprocess.Popen([sys.executable, str(ROOT / "scripts" / "build_stock_filter_fundamental_history.py"), "--trading-day", as_of_date], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                subprocess.Popen([sys.executable, str(ROOT / "scripts" / "build_stock_filter_fundamental_history.py"), "--trading-day", as_of_date, "--adopt-lock"], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             except FileExistsError:
                 pass
         raise ValueError(f"historical snapshot is building for {as_of_date}; retry after the build completes")
@@ -391,20 +509,54 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if page_size != PAGE_SIZE: raise ValueError("page_size is fixed at 50")
         sort = (params.get("sort") or ["rps_total"])[0]
         if sort not in SORT_FIELDS: raise ValueError("unsupported sort")
-        preset = (params.get("preset") or [""])[0].strip()
-        if preset not in {"", "financial_reversal", "blowup_break", "trend_template"}: raise ValueError("unsupported preset")
+        presets = {name.strip() for value in params.get("preset", []) for name in value.split(",") if name.strip()}
+        if presets - {"financial_reversal", "blowup_break", "trend_template", "turnover_high"}: raise ValueError("unsupported preset")
         as_of_date = (params.get("as_of_date") or [""])[0].strip()
         if as_of_date:
             datetime.strptime(as_of_date, "%Y-%m-%d")
+        ma_alignments = _selected(params, "ma_alignment")
+        if ma_alignments - {"5/10/20", "10/20/30", "10/30/60", "20/60/120"}:
+            raise ValueError("unsupported ma_alignment")
+        if as_of_date and ma_alignments:
+            raise ValueError("ma_alignment is not supported for historical dates")
         niche_leader = (params.get("niche_leader") or [""])[0].strip().lower()
         if niche_leader not in {"", "yes", "no"}: raise ValueError("niche_leader must be yes or no")
         stock_scope = (params.get("stock_scope") or [""])[0].strip().lower() or "all"
         if stock_scope not in STOCK_SCOPE_LABELS:
             raise ValueError("stock_scope must be one of " + ", ".join(STOCK_SCOPE_LABELS))
+        wyckoff_types = _selected(params, "wyckoff_type")
+        wyckoff_statuses = _selected(params, "wyckoff_status")
+        wyckoff_since = (params.get("wyckoff_since") or [""])[0].strip()
+        if wyckoff_types - WYCKOFF_TYPES or wyckoff_statuses - WYCKOFF_STATUSES:
+            raise ValueError("unsupported wyckoff type or status")
+        if wyckoff_since and datetime.strptime(wyckoff_since, "%Y-%m-%d").strftime("%Y-%m-%d") != wyckoff_since:
+            raise ValueError("invalid wyckoff_since")
+        swing_states = _selected(params, 'swing_state')
+        swing_tendencies = _selected(params, 'swing_tendency')
+        swing_stars = _selected(params, 'swing_star')
+        swing_observations = _selected(params, 'swing_observation')
+        entry_raw = (params.get('swing_entry_days') or [''])[0].strip()
+        if entry_raw and (not entry_raw.isascii() or not entry_raw.isdecimal()
+                          or int(entry_raw) not in range(1, 6) or not swing_states):
+            raise ValueError('swing_entry_days requires selected swing_state and integer 1..5')
+        entry_days = int(entry_raw) if entry_raw else None
+        if swing_states - SWING_STATES:
+            raise ValueError('unsupported swing_state')
+        if swing_tendencies - {'bull', 'bear', 'neutral', 'unknown'}:
+            raise ValueError('unsupported swing_tendency')
+        if swing_stars - {'bull:1','bull:2','bull:3','bear:1','bear:2','bear:3','neutral:0','unknown'}:
+            raise ValueError('unsupported swing_star')
+        if swing_observations - {'new_low_risk', 'pressure_line'}:
+            raise ValueError('unsupported swing_observation')
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
-        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "mrs_score", "excess_return_5_pp", "excess_return_20_pp", "excess_return_50_pp", "excess_return_120_pp", "excess_return_250_pp", "down_market_win_rate_20", "down_market_total_excess_pp_20", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total", "eps_ratio_5y")}
+        ranges = {k: _range(params, k) for k in ("rps_20", "rps_50", "rps_120", "rps_250", "rps_total", "mrs_score", "excess_return_5_pp", "excess_return_20_pp", "excess_return_50_pp", "excess_return_120_pp", "excess_return_250_pp", "down_market_win_rate_20", "down_market_total_excess_pp_20", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "ps_ttm", "return_1d", "return_5d", "return_20d", "volume_ratio_5", "ma5_distance_pct", "ma10_distance_pct", "ma20_distance_pct", "turnover_5_sum", "turnover_5_avg", "composite_total", "annual_total", "quarterly_total", "eps_ratio_5y")}
+        for key in BASIC_MARKET_FILTERS:
+            for suffix in ("min", "max"):
+                raw = str((params.get(f"{key}_{suffix}") or [""])[0] or "").strip()
+                if raw and (not math.isfinite(float(raw))):
+                    raise ValueError(f"{key}_{suffix} must be finite")
         percentile_bounds = []
         for suffix in ("min", "max"):
             raw = (params.get(f"price_percentile_5y_{suffix}") or [""])[0]
@@ -417,6 +569,26 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if lo is not None and hi is not None and lo > hi:
             raise ValueError("price_percentile_5y_min must not exceed price_percentile_5y_max")
         ranges["price_percentile_5y"] = (lo, hi)
+        turnover_bounds = []
+        for suffix in ("min", "max"):
+            text = str((params.get(f"turnover_percentile_1y_{suffix}") or [""])[0] or "").strip()
+            value = float(text) if text else None
+            if value is not None and (not math.isfinite(value) or not 0 <= value <= 100):
+                raise ValueError("turnover_percentile_1y bounds must be finite numbers in 0..100")
+            turnover_bounds.append(value)
+        if turnover_bounds[0] is not None and turnover_bounds[1] is not None and turnover_bounds[0] > turnover_bounds[1]:
+            raise ValueError("turnover_percentile_1y_min must not exceed turnover_percentile_1y_max")
+        ranges["turnover_percentile_1y"] = tuple(turnover_bounds)
+        pe_bounds = []
+        for suffix in ("min", "max"):
+            raw = (params.get(f"pe_percentile_5y_{suffix}") or [""])[0]
+            value = float(raw) if str(raw).strip() else None
+            if value is not None and (not math.isfinite(value) or not 0 <= value <= 100):
+                raise ValueError("pe_percentile_5y bounds must be finite numbers in 0..100")
+            pe_bounds.append(value)
+        if pe_bounds[0] is not None and pe_bounds[1] is not None and pe_bounds[0] > pe_bounds[1]:
+            raise ValueError("pe_percentile_5y_min must not exceed pe_percentile_5y_max")
+        ranges["pe_percentile_5y"] = tuple(pe_bounds)
         annual_dimension_ranges = {name: _range(params, f"annual_{name}") for name in ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")}
         quarterly_dimension_ranges = {name: _range(params, f"quarterly_{name}") for name in ("growth", "profitability", "cash", "working_capital", "reinvestment", "financial_risk")}
     except ValueError as exc:
@@ -430,7 +602,122 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if code == "historical_snapshot_building" and as_of_date:
             error["progress"] = read_progress(HISTORICAL_FUNDAMENTALS, as_of_date)
         return {"ok": False, "error": error}
-    if preset == "trend_template" and rows and all(
+    turnover_active = ranges["turnover_percentile_1y"] != (None, None) or sort == "turnover_percentile_1y" or "turnover_high" in presets
+    if as_of_date:
+        # Historical rows are immutable date-specific publications, never today's snapshot.
+        turnover_ready = bool(rows) and all(
+            row.get("turnover_percentile_1y_as_of") == data_date for row in rows)
+    else:
+        turnover_payload = _read_turnover_snapshot()
+        turnover_map = turnover_payload.get("stocks")
+        turnover_ready = (turnover_payload.get("schema_version") == "stock-filter-turnover-percentile-v2"
+                          and turnover_payload.get("as_of_date") == data_date
+                          and isinstance(turnover_map, dict)
+                          and all(f"{row['market']}:{row['symbol']}" in turnover_map for row in rows))
+        if turnover_ready:
+            rows = [{**row, **turnover_map[f"{row['market']}:{row['symbol']}"]} for row in rows]
+        else:
+            rows = [{**row, "turnover_percentile_1y": None,
+                     "turnover_percentile_1y_status": "stale_snapshot"} for row in rows]
+    if turnover_active and not turnover_ready:
+        return {"ok": False, "error": {"code": "turnover_percentile_unavailable",
+                                       "message": f"筛选日 {data_date} 换手率一年分位快照缺失、覆盖不完整或过期；请先构建同日快照"}}
+    turnover_crosses = None
+    if "turnover_high" in presets:
+        from app.stock_filter_turnover_cross import crossing_keys
+        turnover_crosses = crossing_keys(data_date, TURNOVER_PERCENTILE_SNAPSHOT.parent)
+        if turnover_crosses is None:
+            return {"ok": False, "error": {"code": "turnover_cross_unavailable",
+                "message": f"{data_date} 缺少完整逐日换手分位证据或此前30个交易日覆盖，请先发布可审计快照"}}
+        for row in rows:
+            evidence = turnover_crosses.get(f"{row['market']}:{row['symbol']}")
+            if evidence and _num(row.get('turnover_percentile_1y')) != evidence['percentile']:
+                return {"ok": False, "error": {"code": "turnover_cross_unavailable",
+                    "message": f"{data_date} 逐日换手证据与筛选日快照的分位不一致"}}
+    if sort == "price_percentile_5y" and rows and not any(
+        row.get("qfq_as_of") == data_date and _num(row.get("price_percentile_5y")) is not None
+        for row in rows
+    ):
+        return {"ok": False, "error": {"code": "price_percentile_unavailable",
+                                       "message": f"筛选日 {data_date} 无同日有效股价五年分位，不能排序"}}
+    basic_active = [key for key in BASIC_MARKET_FILTERS if ranges[key] != (None, None)]
+    if basic_active and rows and not any(
+        row.get("qfq_as_of") == data_date and all(row.get(key) is not None for key in basic_active) for row in rows
+    ):
+        return {"ok": False, "error": {"code": "market_metrics_unavailable",
+                                      "message": f"{data_date} 的前复权基础行情快照缺失或过期，请先重建同日快照"}}
+    if ma_alignments and rows and not any(
+        row.get("qfq_as_of") == data_date and isinstance(row.get("ma_alignment"), list)
+        for row in rows
+    ):
+        return {"ok": False, "error": {"code": "ma_alignment_unavailable",
+                                      "message": f"{data_date} 的前复权均线多头快照缺失或过期，请先构建同日行情快照"}}
+    pe_status = "ready" if as_of_date else "stale"
+    if as_of_date:
+        if (ranges["pe_percentile_5y"] != (None, None) or sort == "pe_percentile_5y") and any(
+            row.get("pe_percentile_5y") is not None and row.get("pe_percentile_5y_price_date") != data_date for row in rows
+        ):
+            return {"ok": False, "error": {"code": "pe_percentile_unavailable", "message": "历史PE分位的价格日期与所选筛选日不一致"}}
+    else:
+        pe_payload = _read_pe_percentile_snapshot()
+        pe_map = pe_payload.get("stocks") if isinstance(pe_payload, dict) else None
+        if (pe_payload.get("schema_version") == "stock-filter-pe-percentile-v1"
+                and pe_payload.get("as_of_date") == data_date and isinstance(pe_map, dict)
+                and all(f"{r['market']}:{r['symbol']}" in pe_map for r in rows)):
+            pe_status = "ready"
+            rows = [{**row, **pe_map.get(f"{row['market']}:{row['symbol']}", {})} for row in rows]
+        else:
+            if ranges["pe_percentile_5y"] != (None, None) or sort == "pe_percentile_5y":
+                return {"ok": False, "error": {"code": "pe_percentile_unavailable", "message": f"PE-TTM五年分位快照缺失、覆盖不完整或不在筛选日 {data_date}；请先完成对应交易日构建"}}
+            rows = [{**row, "pe_percentile_5y": None, "pe_percentile_5y_status": "stale_snapshot"} for row in rows]
+    if sort == "pe_percentile_5y" and (
+        not any(_num(row.get("pe_percentile_5y")) is not None for row in rows)
+        or any(_num(row.get("pe_percentile_5y")) is not None
+               and row.get("pe_percentile_5y_price_date") != data_date for row in rows)
+    ):
+        return {"ok": False, "error": {"code": "pe_percentile_unavailable",
+                                       "message": f"筛选日 {data_date} 无同日有效PE五年分位，不能排序"}}
+    wyckoff_snapshot = None
+    if wyckoff_types or wyckoff_statuses or wyckoff_since:
+        try:
+            wyckoff_snapshot = _wyckoff_snapshot(data_date, bool(as_of_date))
+        except ValueError as exc:
+            return {"ok": False, "error": {"code": "wyckoff_snapshot_unavailable", "message": str(exc)}}
+    if wyckoff_snapshot is not None:
+        stock_map = wyckoff_snapshot["stocks"]
+        missing_wyckoff = [f"{row['market']}:{row['symbol']}" for row in rows
+                           if not isinstance(stock_map.get(f"{row['market']}:{row['symbol']}"), dict)]
+        if missing_wyckoff:
+            return {"ok": False, "error": {"code": "wyckoff_snapshot_unavailable",
+                                         "message": f"威科夫快照缺少筛选池证券 {len(missing_wyckoff)} 只（例如 {missing_wyckoff[0]}），不能将缺口当作无信号。"}}
+    swing_snapshot = None
+    if swing_states or swing_tendencies or swing_stars or swing_observations or entry_days is not None:
+        try:
+            swing_snapshot = _swing_snapshot(data_date, bool(as_of_date))
+        except ValueError as exc:
+            return {'ok': False, 'error': {'code': 'swing_snapshot_unavailable', 'message': str(exc)}}
+        missing = [f"{row['market']}:{row['symbol']}" for row in rows
+                   if not isinstance(swing_snapshot['stocks'].get(f"{row['market']}:{row['symbol']}"), dict)]
+        if missing:
+            from app.swing_snapshot import discover_universe
+            current_tnf = {f'{market}:{code}' for market, code, _ in discover_universe()}
+            broken = [symbol for symbol in missing if symbol in current_tnf]
+            if broken:
+                return {'ok': False, 'error': {'code': 'swing_snapshot_unavailable',
+                    'message': f'波峰波谷完整快照缺少当前TNF证券 {len(broken)} 只（例如 {broken[0]}），不能当作无匹配。'}}
+            outside_swing_tnf = missing
+        else:
+            outside_swing_tnf = []
+    else:
+        outside_swing_tnf = []
+    entry_snapshot = None
+    if entry_days is not None:
+        assert swing_snapshot is not None
+        try:
+            entry_snapshot = _swing_entry_snapshot(data_date, bool(as_of_date), swing_snapshot)
+        except ValueError as exc:
+            return {'ok': False, 'error': {'code': 'swing_entry_snapshot_unavailable', 'message': str(exc)}}
+    if "trend_template" in presets and rows and all(
             row.get("trend_template_status") is None for row in rows):
         # 老的历史快照没有趋势模版字段；不能静默返回空池
         return {"ok": False, "error": {
@@ -441,16 +728,65 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     weekly_trends = _selected(params, "trend_weekly")
     monthly_trends = _selected(params, "trend_monthly")
     macds, crosses = _selected(params, "macd_cross"), _selected(params, "golden_cross")
+    if macds and as_of_date:
+        return {"ok": False, "error": {"code": "macd_cross_unavailable",
+                                      "message": "历史日期 MACD 金叉尚无同日有效前复权快照，不能使用旧技术标记"}}
+    if macds and rows and not any(
+        row.get("macd_cross_as_of") == data_date and row.get("qfq_as_of") == data_date
+        and isinstance(row.get("macd_cross"), str) for row in rows
+    ):
+        return {"ok": False, "error": {"code": "macd_cross_unavailable",
+                                      "message": f"{data_date} 前复权 MACD 金叉快照缺失或过期，请重建同日行情快照"}}
+    if crosses and as_of_date:
+        return {"ok": False, "error": {"code": "golden_cross_unavailable",
+                                      "message": "历史日期均线金叉尚无同日有效前复权快照，不能使用当前快照代替"}}
+    if crosses and rows and not any(
+        row.get("golden_cross_as_of") == data_date and row.get("qfq_as_of") == data_date
+        and isinstance(row.get("golden_cross"), str) for row in rows
+    ):
+        return {"ok": False, "error": {"code": "golden_cross_unavailable",
+                                      "message": f"{data_date} 前复权均线金叉快照缺失或过期，请重建同日行情快照"}}
     market = (params.get("market") or [""])[0].strip().lower()
     # 01 股票范围先锁定股票池，再套用其余条件。
     scoped_rows = [row for row in rows if matches_scope(row.get("market"), row.get("symbol"), stock_scope)]
+    lagged_wyckoff = []
+    if wyckoff_snapshot is not None:
+        lagged_wyckoff = [f"{row['market']}:{row['symbol']}" for row in scoped_rows
+                          if wyckoff_snapshot["stocks"][f"{row['market']}:{row['symbol']}"].get("last_bar_date") != data_date]
+    lagged_set = set(lagged_wyckoff)
+    lagged_swing = ([f"{row['market']}:{row['symbol']}" for row in scoped_rows
+                     if (swing_snapshot['stocks'].get(f"{row['market']}:{row['symbol']}") or {}).get('last_bar_date') not in (None, data_date)]
+                    if swing_snapshot is not None else [])
+    lagged_swing_set = set(lagged_swing)
     filtered = []
     excluded_missing = 0
+    excluded_entry = 0
     for row in scoped_rows:
+        if wyckoff_snapshot is not None and f"{row['market']}:{row['symbol']}" in lagged_set: continue
+        if basic_active and row.get("qfq_as_of") != data_date:
+            excluded_missing += 1
+            continue
+        if ma_alignments:
+            if row.get("qfq_as_of") != data_date or not isinstance(row.get("ma_alignment"), list):
+                excluded_missing += 1
+                continue
+            if not ma_alignments.intersection(row["ma_alignment"]): continue
+        if turnover_active and row.get("turnover_percentile_1y_as_of") != data_date:
+            excluded_missing += 1
+            continue
         if market and row["market"] != market: continue
-        if preset == "financial_reversal" and not matches_financial_reversal(row): continue
-        if preset == "blowup_break" and not matches_blowup_break(row): continue
-        if preset == "trend_template" and not matches_trend_template(row): continue
+        if "financial_reversal" in presets and not matches_financial_reversal(row): continue
+        if "blowup_break" in presets and not matches_blowup_break(row): continue
+        if "trend_template" in presets and not matches_trend_template(row): continue
+        if "turnover_high" in presets:
+            evidence = turnover_crosses.get(f"{row['market']}:{row['symbol']}")
+            if evidence is None: continue
+            gain_5d = _num(row.get('blowup_break_return_5d'))
+            if row.get('qfq_as_of') != data_date or gain_5d is None:
+                excluded_missing += 1
+                continue
+            if not 0 < gain_5d < 20: continue
+            row = {**row, 'turnover_first_cross_75_30d': evidence}
         is_niche_leader = bool(str(row.get("niche_leader") or "").strip())
         if niche_leader == "yes" and not is_niche_leader: continue
         if niche_leader == "no" and is_niche_leader: continue
@@ -462,16 +798,106 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if daily_trends and str(row.get("trend_daily") or "") not in daily_trends: continue
         if weekly_trends and str(row.get("trend_weekly") or "") not in weekly_trends: continue
         if monthly_trends and str(row.get("trend_monthly") or "") not in monthly_trends: continue
-        if macds and str(row.get("macd_cross") or "") not in macds: continue
-        if crosses and str(row.get("golden_cross") or "") not in crosses: continue
+        if macds:
+            if row.get("macd_cross_as_of") != data_date or row.get("qfq_as_of") != data_date:
+                excluded_missing += 1
+                continue
+            if row.get("macd_cross") not in macds: continue
+        if crosses:
+            if row.get("golden_cross_as_of") != data_date or row.get("qfq_as_of") != data_date:
+                excluded_missing += 1
+                continue
+            if not crosses.intersection(str(row.get("golden_cross") or "").split(",")): continue
+        if wyckoff_snapshot is not None:
+            stock = wyckoff_snapshot["stocks"].get(f"{row['market']}:{row['symbol']}") or {}
+            event = _wyckoff_match(stock.get("events") or [], wyckoff_types, wyckoff_statuses,
+                                   wyckoff_since, data_date)
+            if event is None: continue
+            # Only filtered rows receive event evidence; the source snapshot is never mutated.
+            row = {**row, "wyckoff_signal": event}
+        if swing_snapshot is not None:
+            stock = swing_snapshot['stocks'].get(f"{row['market']}:{row['symbol']}")
+            if stock is None:
+                stock = {'status':'out_of_current_tnf', 'state':None, 'last_bar_date':None,
+                         'reason':'筛选基础池含该证券，但当前TNF研究清单不覆盖；不推断峰谷状态'}
+            elif stock.get('last_bar_date') != data_date:
+                stock = {**stock, 'state': None, 'status': 'stale_qfq',
+                         'new_low_risk': None, 'pressure_line': None,
+                         'reason': f"前复权最新有效日 {stock.get('last_bar_date')} 与筛选日 {data_date} 不符"}
+            view = swing_presentation(stock)
+            star = (f"{view['tendency']}:{view['star_count']}" if view['star_count'] is not None
+                    else 'unknown' if view['tendency'] == 'unknown' else 'caution')
+            selected = (not (swing_states or swing_tendencies or swing_stars)
+                        or (stock.get('state') in swing_states and stock.get('status') == 'ok')
+                        or view['tendency'] in swing_tendencies or star in swing_stars)
+            if not selected or (swing_observations and not (
+                stock.get('status') == 'ok' and (
+                    ('new_low_risk' in swing_observations and stock.get('new_low_risk')) or
+                    ('pressure_line' in swing_observations and
+                     isinstance(stock.get('pressure_line'), dict) and
+                     stock['pressure_line'].get('status') in ('triggered', 'sustained')))
+            )):
+                continue
+            if entry_snapshot is not None:
+                # Entry is an AND gate on the explicitly selected complete state,
+                # never an OR escape via a tendency/star on a different state.
+                run = entry_snapshot['stocks'].get(f"{row['market']}:{row['symbol']}", {}).get('state_run')
+                if (stock.get('status') != 'ok' or stock.get('state') not in swing_states
+                    or not isinstance(run, dict) or run.get('state') != stock['state']
+                    or run.get('through_date') != data_date
+                    or run.get('start_confirmed') is not True
+                    or type(run.get('trading_days')) is not int
+                    or not 1 <= run['trading_days'] <= entry_days):
+                    excluded_entry += 1
+                    continue
+                stock = {**stock, 'state_run': run}
+            row = {**row, 'swing_structure': {**stock, **view}}
         filtered.append(row)
     reverse = (params.get("order") or ["desc"])[0].lower() != "asc"
-    filtered.sort(key=lambda row: (_num(row.get(sort)) is not None, _num(row.get(sort)) or -float("inf")), reverse=reverse)
+    def sort_key(row: dict[str, Any]) -> tuple[bool, float]:
+        number = (_num(row.get(sort)) if sort not in {"price_percentile_5y", "turnover_percentile_1y"}
+                  or row.get("qfq_as_of" if sort == "price_percentile_5y" else "turnover_percentile_1y_as_of") == data_date
+                  else None)
+        return number is None, (-number if reverse else number) if number is not None else 0.0
+    filtered.sort(key=sort_key)
     total = len(filtered); start = (page - 1) * PAGE_SIZE
+    page_rows = filtered[start:start + PAGE_SIZE]
+    if swing_snapshot is None:
+        # Optional display enrichment never changes the selected universe. Historical
+        # pages may show no state, but must never inherit the current publication.
+        try:
+            display_snapshot = _swing_snapshot(data_date, bool(as_of_date))
+        except (ValueError, FileNotFoundError):
+            display_snapshot = None
+        if display_snapshot is not None:
+            enriched = []
+            for row in page_rows:
+                stock = display_snapshot['stocks'].get(f"{row['market']}:{row['symbol']}")
+                if stock is not None:
+                    if stock.get('last_bar_date') != data_date:
+                        stock = {**stock, 'state': None, 'status': 'stale_qfq',
+                                 'new_low_risk': None, 'pressure_line': None, 'line_break_observation': None}
+                    row = {**row, 'swing_structure': {**stock, **swing_presentation(stock)}}
+                enriched.append(row)
+            page_rows = enriched
     return {"ok": True, "data_as_of": data_date, "effective_trade_date": data_date, "is_historical": bool(as_of_date),
+            "pe_percentile_snapshot": {"status": pe_status, "as_of_date": data_date if pe_status == "ready" else None},
             "stock_scope": stock_scope, "stock_scope_label": STOCK_SCOPE_LABELS[stock_scope],
             "total_universe": len(scoped_rows), "universe_total": len(rows), "total_matched": total,
             "page": page, "page_size": PAGE_SIZE, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE),
-            "rows": filtered[start:start + PAGE_SIZE], "excluded_missing": excluded_missing,
-            "capabilities": {"available": ["rps", "financial_health", "trend", "macd", "ma_golden_cross"],
+            "rows": page_rows, "excluded_missing": excluded_missing,
+            "wyckoff_snapshot": ({**{key: wyckoff_snapshot.get(key) for key in ("schema_version", "rule_version", "as_of_date", "price_basis", "completeness")},
+                                   "excluded_lagged": len(lagged_wyckoff), "lagged_symbols": lagged_wyckoff}
+                                 if wyckoff_snapshot is not None else None),
+            'swing_snapshot': ({**{key: swing_snapshot.get(key) for key in ('schema_version','rule_version','as_of_date','price_basis','completeness')},
+                                'excluded_lagged': len(lagged_swing), 'lagged_symbols': lagged_swing,
+                                'outside_current_tnf': len(outside_swing_tnf)}
+                               if swing_snapshot is not None else None),
+            'swing_entry_snapshot': ({'schema_version': entry_snapshot['schema_version'],
+                                     'as_of_date': entry_snapshot['as_of_date'],
+                                     'max_entry_days': entry_snapshot['max_entry_days'],
+                                     'coverage': entry_snapshot.get('coverage') or {},
+                                     'selected_days': entry_days, 'excluded_after_other_filters': excluded_entry}
+                                    if entry_snapshot is not None else None),
+            "capabilities": {"available": ["rps", "financial_health", "trend", "macd", "ma_golden_cross", "ma_alignment_qfq", "wyckoff_qfq_snapshot", "swing_structure_qfq_snapshot"],
                              "pending_snapshot": ["basic_market", "annual_derived"]}}

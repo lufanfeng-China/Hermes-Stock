@@ -72,11 +72,11 @@ def test_page_renders_the_previous_temperature_column():
     assert header and "升温" in header.group(1) and "退坡" in header.group(1)
     assert "function tempTrend(row)" in js and "tempTrend(row)" in js
     assert "row.temperature_previous" in js and "temperature_trend_label" in js
-    assert 'colspan="9"' in js and 'colspan="8"' not in js
+    assert 'colspan="10"' in js and 'colspan="9"' not in js
 
 
 def _fixture():
-    return {"as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq", "min_members": 10,
+    return {"as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq", "temperature_basis": "absolute_median_return_v1", "min_members": 10,
             "windows": {"10": {"concepts": [
                 {"concept_code": "A", "temperature": 3, "temperature_trend": "cooling", "temperature_previous": 4},
                 {"concept_code": "B", "temperature": 3, "temperature_trend": "warming", "temperature_previous": 2},
@@ -131,7 +131,7 @@ def test_page_has_trend_buttons_and_sends_the_param():
 
 
 def _streak_fixture():
-    return {"as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq", "min_members": 10,
+    return {"as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq", "temperature_basis": "absolute_median_return_v1", "min_members": 10,
             "windows": {"10": {"concepts": [
                 {"concept_code": "A", "temperature": 3, "temperature_streak_days": 1},
                 {"concept_code": "B", "temperature": 3, "temperature_streak_days": 7},

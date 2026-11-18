@@ -190,6 +190,23 @@
       overflow: hidden;
       min-height: 0;
     }
+    .wl-evidence-date { display:block; font-size:10px; color:var(--muted); margin-top:3px; }
+    .wl-evidence-btn { background:none; border:0; padding:0; color:var(--accent); cursor:pointer; font:inherit; }
+    .wl-evidence-btn:hover { text-decoration:underline; }
+    #watchlist-table td.wl-swing-cell { min-width:185px; white-space:normal; }
+    .wl-chart-dialog { width:min(1000px,94vw); max-width:94vw; max-height:90vh; overflow:auto;
+      border:1px solid rgba(124,224,195,.3); border-radius:12px; padding:20px; color:var(--text); background:#0b1922; }
+    .wl-chart-dialog::backdrop { background:rgba(0,0,0,.7); }
+    .wl-chart-dialog .wl-close { float:right; background:transparent; border:1px solid var(--muted); color:var(--text); cursor:pointer; padding:6px 12px; }
+    .wl-chart-dialog svg { display:block; width:100%; }
+    #turnover-trend-svg { height:auto; }
+    .turnover-trend-plot { position:relative; }
+    .turnover-trend-tooltip { position:absolute; background:#071018; border:1px solid var(--accent); padding:6px; white-space:pre-line; pointer-events:none; font-size:11px; z-index:2; }
+    #swing-chart-svg { height:520px; }
+    #swing-chart-macd { height:176px; }
+    .price-trend-controls { display:flex; gap:8px; margin:10px 0; }
+    .price-trend-controls button { cursor:pointer; background:transparent; color:var(--text); border:1px solid var(--muted); padding:5px 10px; }
+    .price-trend-controls button.is-active { color:var(--accent); border-color:var(--accent); }
   </style>
 </head>
 <body>
@@ -234,11 +251,10 @@
           <th class="num">最大损失</th>
           <th>加入日期</th>
           <th>行业</th>
-          <th>趋势</th>
-          <th>短期趋势</th>
-          <th>状态</th>
-          <th class="num">最终收益</th>
-          <th>综合结论</th>
+          <th class="num">PE分位</th>
+          <th class="num">换手分位</th>
+          <th>相对大盘强弱</th>
+          <th>波峰波谷结构</th>
           <th>操作</th>
         </tr></thead>
         <tbody></tbody>
@@ -255,8 +271,25 @@
       <svg id="kline-chart-svg-wl" class="kline-chart-svg" role="img" aria-label="K线趋势图"></svg>
     </div>
   </dialog>
+  <dialog id="turnover-trend-dialog" class="wl-chart-dialog" aria-labelledby="turnover-trend-title">
+    <button type="button" class="wl-close turnover-trend-close">关闭 ×</button>
+    <h2 id="turnover-trend-title">7日截尾均值换手历史分位</h2>
+    <p id="turnover-trend-status" role="status"></p>
+    <div class="turnover-trend-plot" hidden><svg id="turnover-trend-svg" viewBox="0 0 820 300" role="img" aria-label="截至表格日期近一年换手历史分位"></svg><div id="turnover-trend-tooltip" class="turnover-trend-tooltip" role="status" hidden></div></div>
+    <p>横轴日期，纵轴历史分位；缺失日不插值。悬停或聚焦数据点查看样本。</p>
+  </dialog>
+  <dialog id="swing-chart-dialog" class="wl-chart-dialog" aria-labelledby="swing-chart-title">
+    <button type="button" class="wl-close swing-chart-close">关闭 ×</button>
+    <h2 id="swing-chart-title">波峰波谷 · 前复权K线与峰谷证据</h2>
+    <p id="swing-chart-meta" role="status"></p>
+    <div class="price-trend-controls" aria-label="图表区间"><button type="button" data-swing-window="20">20日</button><button type="button" data-swing-window="60">60日</button><button type="button" data-swing-window="120">120日</button><button type="button" data-swing-window="250">250日</button><button type="button" data-swing-window="-1">全部</button></div>
+    <div class="swing-chart-scroll" hidden><svg id="swing-chart-svg" role="img" aria-label="前复权K线与峰谷"></svg><svg id="swing-chart-macd" role="img" aria-label="MACD走势"></svg></div>
+    <p>实心峰谷为确认，虚线圈为候选；前复权K线、量与MACD来自当前有效日线，RPS缺失不补值。非实时行情或交易建议。</p>
+  </dialog>
 </main>
 <script src="/nav.js"></script>
-<script type="module" src="/watchlist.js?v=20260613-wl2"></script>
+<script src="/swing-chart.js?v=20261116-wl1"></script>
+<script src="/price-trend-chart.js?v=20261116-wl1"></script>
+<script type="module" src="/watchlist.js?v=20261116-wl-columns-2"></script>
 </body>
 </html>

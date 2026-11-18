@@ -43,7 +43,7 @@ def test_industry_mapping_is_isomorphic_to_the_concept_mapping():
 
 def _fixture(scope_label="二级行业"):
     return {"scope": "industry", "unit_label": scope_label, "as_of_date": "2026-10-30",
-            "price_basis": "tdx_export_qfq", "min_members": 3,
+            "price_basis": "tdx_export_qfq", "temperature_basis": "absolute_median_return_v1", "min_members": 3,
             "windows": {"10": {"concepts": [{"concept_code": "X5001", "concept_name": "全国性银行",
                                             "temperature": 3, "temperature_trend": "cooling",
                                             "temperature_streak_days": 4}],
@@ -105,7 +105,8 @@ def test_page_has_a_scope_switch_and_sends_it_everywhere():
     assert 'id="scope"' in html and '<option value="industry">二级行业</option>' in html
     assert 'id="unit-header"' in html
     assert "scope= ' + encodeURIComponent(scope)" in js.replace("scope=' +", "scope= ' +")
-    assert js.count("encodeURIComponent(scope)") >= 3      # 列表 / 成分 / 趋势
+    assert js.count("encodeURIComponent(scope)") >= 2      # 列表 / 成分
+    assert "var requestedScope = scope" in js and "encodeURIComponent(requestedScope)" in js  # 趋势冻结点击时的口径
     assert "function applyScope()" in js
 
 
@@ -130,7 +131,7 @@ def test_industry_mapping_carries_names_so_future_builds_are_complete():
 def test_members_api_returns_names_for_industry_scope():
     from app.api.concept_temperature import handle_concept_temperature_members
 
-    payload = {"unit_label": "二级行业", "as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq",
+    payload = {"unit_label": "二级行业", "as_of_date": "2026-10-30", "price_basis": "tdx_export_qfq", "temperature_basis": "absolute_median_return_v1",
                "min_members": 3,
                "windows": {"10": {"concepts": [{"concept_code": "X5001", "concept_name": "全国性银行"}],
                                   "members": {"X5001": [{"symbol": "600928", "stock_name": "",

@@ -39,6 +39,7 @@ def build_relative_valuation_result(market: str, symbol: str) -> dict[str, objec
     primary_value = _to_float(stock.get(primary_metric)) if primary_metric else None
 
     primary_percentile = None
+    peer_sample_count = None
     valuation_band_label = None
     notes: list[str] = []
     risk_flags: list[str] = []
@@ -56,6 +57,7 @@ def build_relative_valuation_result(market: str, symbol: str) -> dict[str, objec
             classified.classification.value,
             classified.sub_classification.value if classified.sub_classification else None,
         )
+        peer_sample_count = len(sample)
         primary_percentile = compute_empirical_percentile(primary_value, sample)
         valuation_band_label = classify_percentile_band(primary_percentile)
         if should_warn_non_linear_high_percentile_risk(primary_percentile):
@@ -75,6 +77,7 @@ def build_relative_valuation_result(market: str, symbol: str) -> dict[str, objec
         "stock_name": stock.get("stock_name") or symbol,
         "industry_level_1_name": stock.get("industry_level_1_name"),
         "industry_level_2_name": industry_level_2_name,
+        "industry_valuation_as_of": industry_snapshot.get("trading_day"),
         "classification": classified.classification.value,
         "sub_classification": classified.sub_classification.value if classified.sub_classification else None,
         "is_new_listing": classified.is_new_listing,
@@ -101,6 +104,7 @@ def build_relative_valuation_result(market: str, symbol: str) -> dict[str, objec
         "primary_percentile_metric": primary_metric,
         "primary_percentile_value": primary_value,
         "primary_percentile": primary_percentile,
+        "peer_sample_count": peer_sample_count,
         "valuation_band_label": valuation_band_label,
         "notes": notes,
         "risk_flags": risk_flags,

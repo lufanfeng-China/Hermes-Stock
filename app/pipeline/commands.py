@@ -69,6 +69,7 @@ def clear_runtime_data_caches() -> None:
     module_names = [
         'app.search.index',
         'app.stock_filter',
+        'app.market_relative_strength',
         'app.relative_valuation.data_loader',
         'app.relative_valuation.history',
         'app.financial.reports',
@@ -105,10 +106,15 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
             ),
             ('build_good_stock_financial_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_financial_snapshot.py')]),
             ('build_good_stock_undervaluation_current', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_undervaluation_current.py')]),
-            ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_regime_history.py')]),
-            # 慢且只写自己的快照：失败时最需要“只重跑它”，不能退回整链重来。
+            ('build_stock_filter_pe_percentile_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_pe_percentile_snapshot.py')]),
+            ('build_stock_filter_turnover_percentile_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_turnover_percentile_snapshot.py')]),
+            ('build_stock_filter_fundamental_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_fundamental_history.py'), '--latest-trading-day']),
+            # 慢任务失败时只重跑自身；重试子集也保持与全量链一致的末尾顺序。
+            ('build_swing_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_swing_snapshot.py')]),
+            ('build_swing_state_runs', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_swing_state_runs.py')]),
             ('build_concept_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py')]),
             ('build_industry_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py'), '--scope', 'industry']),
+            ('build_wyckoff_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_wyckoff_snapshot.py')]),
         ]
     commands: list[tuple[str, list[str]]] = [
         # The workbench deliberately excludes archive_daily: that legacy archive
@@ -142,25 +148,34 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ('build_good_stock_undervaluation_current', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_good_stock_undervaluation_current.py')]),
         # Incrementally recompute from the last published RPS day through the current QFQ day.
         ('refresh_rps_daily', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/refresh_rps_daily.py')]),
-        # Full-market lifecycle-stage history (11 descriptive states).  Runs after
-        # the QFQ exports and the RPS day are refreshed because it derives every
-        # bar from those two sources, and refuses to build when the QFQ source is
-        # behind the RPS trading day.  Independently runnable and retryable: no
-        # other task reads its output at build time.
-        ('rebuild_stage_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_regime_history.py')]),
+        # 原始日线 + 最新已披露财报构建自身每日 PE 分位；QFQ/RPS 与原始价日期不一致时拒绝发布。
+        ('build_stock_filter_pe_percentile_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_pe_percentile_snapshot.py')]),
+        # 股本缺证时只使用交易日已公告财报；全市场换手率分位单独发布、失败不覆盖旧值。
+        ('build_stock_filter_turnover_percentile_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_turnover_percentile_snapshot.py')]),
+        # PIT 当日文件在财报、前复权行情及换手输入就绪后发布；脚本在启动时校验源日期，
+        # 已发布同版本日期则复用，不使用链首可能过期的 trading_day。
+        ('build_stock_filter_fundamental_history', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_fundamental_history.py'), '--latest-trading-day']),
         (
             'rebuild_macd_signals',
             [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_macd_signals.py'),
              '--tdxdir', TONGDAXIN_DIR],
         ),
+        # 已确认峰谷因果式v5独立快照；不更改旧生命周期分类器，筛选仅读同日完整发布。
+        ('build_swing_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_swing_snapshot.py')]),
+        # 同日v5结构状态的连续区间证据；从刚发布的完整波峰波谷快照取日期，
+        # 不得沿用链首日期；失败独立重试，不现场扫描筛选请求。
+        ('build_swing_state_runs', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_swing_state_runs.py')]),
         # 概念温度快照：读通达信 概念板块.txt + QFQ 日线，逐窗口(3/5/10/20/60)算温度、
-        # 连续天数与热度序列。单次 10-40 分钟，故排在整条流水线末尾：只写
+        # 连续天数与热度序列。单次 10-40 分钟，故排在流水线尾段：只写
         # dataset_concept_temperature_current.json，没有任何后续任务读它，
         # 失败不影响前面每一步，可单独重跑。
         ('build_concept_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py')]),
-        # 行业温度与概念温度同一算法、不同成分来源（申万二级行业）。同样排在末尾,
+        # 行业温度与概念温度同一算法、不同成分来源（申万二级行业）。同样排在尾段,
         # 产物只被行业榜单读取,失败不影响前面每一步,可单独重跑。
         ('build_industry_temperature', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_concept_temperature.py'), '--scope', 'industry']),
+        # 全市场前复权威科夫事件只写独立的版本化快照；完成其他产物后最后运行，
+        # 避免耗时扫描阻断上游；失败可单独重试。
+        ('build_wyckoff_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_wyckoff_snapshot.py')]),
         # Optional: Kronos AI prediction (CPU ~10s/stock, 5000 stocks ~14 hours)
         # Uncomment to enable daily AI prediction rebuild:
         # (

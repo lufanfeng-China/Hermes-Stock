@@ -82,6 +82,98 @@ class StockFilterContractTest(unittest.TestCase):
         self.assertEqual(result["effective_trade_date"], "2025-04-20")
         self.assertEqual(["000001"], [row["symbol"] for row in result["rows"]])
 
+    def test_pe_ttm_ascending_sorts_full_pool_and_puts_missing_values_last(self):
+        rows = [
+            {"market": "sz", "symbol": f"{i:06d}", "pe_ttm": value,
+             "annual_dimensions": {}, "quarterly_dimensions": {}}
+            for i, value in enumerate([None, 12.0, -4.0, 0.0, 3.0])
+        ]
+        with patch("app.stock_filter._universe", return_value=(rows, "2026-11-06")), \
+             patch("app.stock_filter._read_pe_percentile_snapshot", return_value={}):
+            result = filter_response({"sort": ["pe_ttm"], "order": ["asc"]})
+        self.assertTrue(result["ok"])
+        self.assertEqual(["000002", "000003", "000004", "000001", "000000"],
+                         [row["symbol"] for row in result["rows"]])
+
+    def test_existing_descending_sort_keeps_missing_values_last(self):
+        rows = [{"market": "sz", "symbol": f"{i:06d}", "rps_total": value,
+                 "annual_dimensions": {}, "quarterly_dimensions": {}}
+                for i, value in enumerate([None, 0.0, 20.0])]
+        with patch("app.stock_filter._universe", return_value=(rows, "2026-11-06")), \
+             patch("app.stock_filter._read_pe_percentile_snapshot", return_value={}):
+            result = filter_response({"sort": ["rps_total"], "order": ["desc"]})
+        self.assertTrue(result["ok"])
+        self.assertEqual(["000002", "000001", "000000"],
+                         [row["symbol"] for row in result["rows"]])
+
+    def test_price_five_year_percentile_ascending_sorts_before_pagination_and_stale_last(self):
+        day = "2026-11-06"
+        rows = [{"market": "sz", "symbol": f"{i:06d}", "annual_dimensions": {},
+                 "quarterly_dimensions": {}, "price_percentile_5y": float(52 - i),
+                 "qfq_as_of": day} for i in range(52)]
+        rows[1]["price_percentile_5y"] = 0.0
+        rows[50]["price_percentile_5y"] = None
+        rows[51].update(price_percentile_5y=-99.0, qfq_as_of="2026-11-05")
+        with patch("app.stock_filter._universe", return_value=(rows, day)), \
+             patch("app.stock_filter._read_pe_percentile_snapshot", return_value={}):
+            first = filter_response({"sort": ["price_percentile_5y"], "order": ["asc"]})
+            second = filter_response({"sort": ["price_percentile_5y"], "order": ["asc"], "page": ["2"]})
+        self.assertTrue(first["ok"])
+        self.assertEqual(52, first["total_matched"])
+        self.assertEqual("000001", first["rows"][0]["symbol"])
+        self.assertEqual(["000050", "000051"], [row["symbol"] for row in second["rows"]])
+
+    def test_price_five_year_percentile_historical_sort_uses_historical_values(self):
+        day = "2025-10-16"
+        rows = [{"market": "sz", "symbol": str(i).zfill(6), "annual_dimensions": {},
+                 "quarterly_dimensions": {}, "price_percentile_5y": value, "qfq_as_of": day}
+                for i, value in [(1, 85.0), (2, 15.0)]]
+        with patch("app.stock_filter._historical_universe", return_value=(rows, day)):
+            result = filter_response({"as_of_date": [day], "sort": ["price_percentile_5y"], "order": ["asc"]})
+        self.assertTrue(result["ok"])
+        self.assertEqual(["000002", "000001"], [row["symbol"] for row in result["rows"]])
+
+    def test_price_five_year_percentile_sort_rejects_all_missing_or_stale_data(self):
+        day = "2026-11-06"
+        rows = [{"market": "sz", "symbol": "000001", "annual_dimensions": {},
+                 "quarterly_dimensions": {}, "price_percentile_5y": 20.0, "qfq_as_of": "2026-11-05"}]
+        with patch("app.stock_filter._universe", return_value=(rows, day)), \
+             patch("app.stock_filter._read_pe_percentile_snapshot", return_value={}):
+            result = filter_response({"sort": ["price_percentile_5y"], "order": ["asc"]})
+        self.assertFalse(result["ok"])
+        self.assertEqual("price_percentile_unavailable", result["error"]["code"])
+
+    def test_pe_five_year_percentile_ascending_sorts_before_pagination_and_nulls_last(self):
+        day = "2026-11-06"
+        rows = [{"market": "sz", "symbol": f"{i:06d}", "annual_dimensions": {},
+                 "quarterly_dimensions": {}} for i in range(52)]
+        values: dict[int, float | None] = {i: float(100 - i) for i in range(52)}
+        values[1] = 0.0
+        values[51] = None
+        snapshot = {"schema_version": "stock-filter-pe-percentile-v1", "as_of_date": day,
+                    "stocks": {f"sz:{i:06d}": {"pe_percentile_5y": values[i],
+                                              "pe_percentile_5y_price_date": day}
+                               for i in range(52)}}
+        with patch("app.stock_filter._universe", return_value=(rows, day)), \
+             patch("app.stock_filter._read_pe_percentile_snapshot", return_value=snapshot):
+            first = filter_response({"sort": ["pe_percentile_5y"], "order": ["asc"]})
+            second = filter_response({"sort": ["pe_percentile_5y"], "order": ["asc"], "page": ["2"]})
+        self.assertTrue(first["ok"])
+        self.assertEqual("000001", first["rows"][0]["symbol"])
+        self.assertEqual(["000000", "000051"], [row["symbol"] for row in second["rows"]])
+
+    def test_pe_five_year_percentile_sort_rejects_stale_snapshot_and_historical_price_date(self):
+        day = "2026-11-06"
+        row = {"market": "sz", "symbol": "000001", "annual_dimensions": {}, "quarterly_dimensions": {},
+               "pe_percentile_5y": 12.0, "pe_percentile_5y_price_date": "2026-11-05"}
+        with patch("app.stock_filter._universe", return_value=([row], day)), \
+             patch("app.stock_filter._read_pe_percentile_snapshot", return_value={}):
+            current = filter_response({"sort": ["pe_percentile_5y"], "order": ["asc"]})
+        with patch("app.stock_filter._historical_universe", return_value=([row], day)):
+            historical = filter_response({"as_of_date": [day], "sort": ["pe_percentile_5y"], "order": ["asc"]})
+        self.assertEqual("pe_percentile_unavailable", current["error"]["code"])
+        self.assertEqual("pe_percentile_unavailable", historical["error"]["code"])
+
 
 if __name__ == "__main__":
     unittest.main()

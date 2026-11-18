@@ -118,20 +118,35 @@ def percentile_of(values: list[float], targets: list[float]) -> list[float]:
     return [bisect_right(ordered, target) / size for target in targets]
 
 
-def _temperature(score_percentile: float, median_return: float, breadth: float, excess: float, strong: float, active: float, valid_count: int, min_members: int) -> tuple[int | None, str]:
+# 行业/概念共用的绝对涨幅阈值，单位为前复权窗口中位涨幅百分比。
+TEMPERATURE_CUTS = {
+    3: (-5, -2, 1.5, 3),
+    5: (-7, -3, 2, 4.5),
+    10: (-12, -5, 3, 6),
+    20: (-18, -7, 4.5, 9),
+    60: (-30, -10, 8, 15),
+}
+
+
+def _temperature(window: int, median_return: float, breadth: float, excess: float,
+                 strong: float, active: float, valid_count: int,
+                 min_members: int) -> tuple[int | None, str]:
     if valid_count < min_members:
         return None, "数据不足"
-    if score_percentile <= .20 and median_return <= 0 and breadth < 35:
+    cold, weak, hot, extreme = TEMPERATURE_CUTS[window]
+    if median_return <= cold:
         return 0, "冰点"
-    if score_percentile <= .40:
+    if median_return <= weak:
         return 1, "偏冷"
-    if score_percentile <= .60:
+    if median_return <= 0:
         return 2, "中性偏弱"
-    if score_percentile <= .80 or median_return <= 0 or breadth < 55 or excess <= 0:
-        return 3, "升温"
-    if score_percentile >= .95 and median_return > 0 and breadth >= 75 and excess > 0 and strong >= 30 and active >= 20 and valid_count >= max(15, min_members):
+    if breadth < 50:
+        return 2, "分化上涨"
+    if median_return >= extreme and breadth >= 75 and excess > 0 and strong >= 30:
         return 5, "极热"
-    return 4, "热门"
+    if median_return >= hot and breadth >= 60 and excess > 0:
+        return 4, "热门"
+    return 3, "升温"
 
 
 TREND_LABELS = {"warming": "升温", "cooling": "退坡", "unknown": "无前值"}
@@ -268,10 +283,13 @@ def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.D
         scores = [percentiles[key][index] for key in metric_keys]
         draft["heat_score"] = round((scores[0] * 30 + scores[1] * 25 + scores[2] * 20 + scores[3] * 15 + scores[4] * 10), 1)
     score_values = [row["heat_score"] for row in drafts]
+    ordered_scores = sorted(score_values)
     score_percentiles = percentile_of(score_values, score_values)
     for index, row in enumerate(drafts):
-        temp, label = _temperature(score_percentiles[index], row["median_return_pct"], row["breadth_pct"], row["excess_return_pct"], row["strong_stock_pct"], row["active_volume_pct"], row["member_count"], min_members)
-        row.update({"temperature": temp, "temperature_label": label, "window": window})
+        temp, label = _temperature(window, row["median_return_pct"], row["breadth_pct"], row["excess_return_pct"], row["strong_stock_pct"], row["active_volume_pct"], row["member_count"], min_members)
+        row.update({"temperature": temp, "temperature_label": label, "window": window,
+                    "heat_percentile": score_percentiles[index],
+                    "heat_rank": len(ordered_scores) - bisect_right(ordered_scores, row["heat_score"]) + 1})
         for field in ("median_return_pct", "breadth_pct", "excess_return_pct", "strong_stock_pct", "active_volume_pct"):
             row[field] = round(float(row[field]), 2)
     drafts.sort(key=lambda row: (row["temperature"] is None, -(row["temperature"] if row["temperature"] is not None else -1), -row["heat_score"], row["concept_name"]))

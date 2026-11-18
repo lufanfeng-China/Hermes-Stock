@@ -4,6 +4,7 @@ import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 from app.pipeline.state import (
     DATA_UPDATE_LOCK, DATA_UPDATE_JOB_STATE, DATA_UPDATE_JOB_STATE_LOCK,
@@ -12,6 +13,7 @@ from app.pipeline.state import (
     DataUpdateStepError, _format_timestamp,
 )
 from app.pipeline.commands import _data_update_commands, _latest_trading_day_for_refresh, clear_runtime_data_caches
+from app.pipeline.task_eta import record_success_duration
 
 from app.data.rps_history import _load_rps_history_dataset, _load_rps_trading_days, _load_stock_rps_history_dataset
 
@@ -22,6 +24,10 @@ TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 # 实测 17-25 分钟,余量不足以覆盖机器变慢或映射扩张,因此单独放宽到 60 分钟。
 DEFAULT_TASK_TIMEOUT = 1800
 LONG_TASK_TIMEOUTS = {
+    'build_stock_filter_fundamental_history': 7200,  # 全市场PIT首次构建可能较慢，重跑直接复用
+    'build_wyckoff_snapshot': 7200,  # 全市场首轮全历史预热，日后增量通常更快
+    'build_swing_snapshot': 7200,  # 全市场前复权峰谷首轮扫描，按源哈希重用同日结果
+    'build_swing_state_runs': 7200,  # 全市场有效K线前缀重放（仅最近5个交易日）
     'build_concept_temperature': 3600,
     'build_industry_temperature': 3600,
 }
@@ -179,9 +185,14 @@ GOOD_STOCK_TASKS = {'build_good_stock_financial_snapshot', 'build_good_stock_und
 
 def _record_step_result(step):
     task_states = dict(DATA_UPDATE_JOB_STATE.get('task_states') or {})
+    previous = task_states.get(step['name'])
+    started_at = previous.get('started_at') if isinstance(previous, dict) else None
+    finished = _format_timestamp(time.time())
+    if step['ok']:
+        record_success_duration(step['name'], started_at, finished)
     task_states[step['name']] = {
         'status': 'done' if step['ok'] else 'failed',
-        'finished_at': _format_timestamp(time.time()),
+        'finished_at': finished,
         **({} if step['ok'] else {'error': step.get('stderr_tail') or step.get('stdout_tail') or '任务失败'}),
     }
     _update_data_update_job_state(task_states=task_states)
@@ -323,9 +334,13 @@ def _run_data_update_worker(retry_failed: bool = False, task_name: str | None = 
         else:
             result = run_full_data_update(progress_callback=_record_data_update_progress, retry_failed=retry_failed)
         status_payload = result.get('data_update_status') if isinstance(result, dict) else {}
-        task_states = dict(DATA_UPDATE_JOB_STATE.get('task_states') or {})
+        task_states: dict[str, object] = dict(cast(dict[str, object], DATA_UPDATE_JOB_STATE.get('task_states') or {}))
         if task_name:
-            task_states[task_name] = {'status': 'done', 'finished_at': _format_timestamp(time.time())}
+            finished = _format_timestamp(time.time())
+            previous = task_states.get(task_name)
+            started_at = previous.get('started_at') if isinstance(previous, dict) else None
+            record_success_duration(task_name, started_at, finished)
+            task_states[task_name] = {'status': 'done', 'finished_at': finished}
         else:
             for step in result.get('steps', []):
                 name = step.get('name')

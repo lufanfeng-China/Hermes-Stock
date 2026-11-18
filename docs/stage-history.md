@@ -1,9 +1,5 @@
-> **已归档（2026-10-30）**：本文描述的 13 状态生命周期模型已退役，现行模型见
-> `docs/regime-history.md`（A/B/C/D 四阶段）。文中提到的 `app/stage_classify_series.py`、
-> `app/stage_history_store.py`、`scripts/build_stage_history.py`、
-> `scripts/report_stage_history_stats.py`、`scripts/spotcheck_stage_samples.py`、
-> `scripts/export_stock_stage_timeline.py` 均已删除，`/api/stage-classify` 与
-> `/api/stage-history-series` 已下线。保留本文仅为记录演进过程与当时的闸门设计。
+> **已归档（2026-11-02）**：本文记录已退役的 13 状态模型；其后上线的 A/B/C/D 四阶段也已退役，其计算模块、历史构建脚本、两个接口和前端色带均已移除。现行个股页仅提供前复权量价的威科夫事件观察（不是逐日阶段分类）。
+> 本文所列旧文件、历史行数和方法只供追溯，不代表当前运行的数据与接口。
 
 # 生命周期阶段历史（stage_history）
 

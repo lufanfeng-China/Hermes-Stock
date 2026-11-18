@@ -9,6 +9,11 @@ import pytest
 from app.pipeline import runner
 
 
+@pytest.fixture(autouse=True)
+def _no_duration_history_from_simulated_parallel_runs(monkeypatch):
+    monkeypatch.setattr(runner, 'record_success_duration', lambda *args, **kwargs: None)
+
+
 def _commands():
     return runner._data_update_commands("2026-10-30")
 

@@ -27,6 +27,11 @@ def _load(scope: str = 'concept') -> dict:
     return json.loads(path.read_text(encoding='utf-8'))
 
 
+def _require_absolute(data: dict) -> None:
+    if data.get('temperature_basis') != 'absolute_median_return_v1':
+        raise ValueError('温度快照仍为旧排名口径，请按最新代码重建概念/行业温度数据')
+
+
 def _scope_of(params: dict[str, str]) -> tuple[str, dict | None]:
     scope = str(params.get('scope', 'concept')).strip().lower() or 'concept'
     if scope not in VALID_SCOPES:
@@ -58,7 +63,7 @@ def handle_concept_temperature(query: str) -> dict:
     if scope_error:
         return scope_error
     try:
-        data = _load(scope); section = data['windows'][window]
+        data = _load(scope); _require_absolute(data); section = data['windows'][window]
         concepts = section['concepts']
         if temperature_raw:
             concepts = [row for row in concepts if row.get('temperature') == int(temperature_raw)]
@@ -81,20 +86,26 @@ def handle_concept_temperature(query: str) -> dict:
 def handle_concept_temperature_trend(query: str) -> dict:
     params = {key: values[0] for key, values in parse_qs(query).items() if values}
     window = str(params.get('window', '10')); concept_code = str(params.get('concept_code', '')).strip()
+    metric = str(params.get('metric', 'heat_score')).strip()
     if window not in VALID_WINDOWS or not concept_code:
         return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'window and concept_code required'}
+    if metric not in {'heat_score', 'temperature'}:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'metric must be heat_score or temperature'}
     scope, scope_error = _scope_of(params)
     if scope_error:
         return scope_error
     try:
-        data = _load(scope); section = data['windows'][window]
+        data = _load(scope); _require_absolute(data); section = data['windows'][window]
         concept = next((row for row in section['concepts'] if row['concept_code'] == concept_code), None)
         if not concept:
             return {'ok': False, 'status': HTTPStatus.NOT_FOUND, 'error': 'concept not found'}
         points = section.get('heat_history', {}).get(concept_code)
         if not points:
             return {'ok': False, 'status': HTTPStatus.NOT_FOUND, 'error': '热度趋势数据尚未构建，请运行 build_concept_temperature.py'}
-        return {'ok': True, 'scope': scope, 'as_of_date': data['as_of_date'], 'window': int(window), 'concept': concept, 'points': points}
+        if metric == 'temperature' and any('temperature' not in point for point in points):
+            return {'ok': False, 'status': HTTPStatus.CONFLICT, 'error': '历史温度档位尚未构建，请重建概念/行业温度数据'}
+        return {'ok': True, 'scope': scope, 'as_of_date': data['as_of_date'], 'window': int(window),
+                'metric': metric, 'price_basis': data['price_basis'], 'concept': concept, 'points': points}
     except Exception as exc:
         return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}
 
@@ -108,7 +119,7 @@ def handle_concept_temperature_members(query: str) -> dict:
     if scope_error:
         return scope_error
     try:
-        data = _load(scope); section = data['windows'][window]
+        data = _load(scope); _require_absolute(data); section = data['windows'][window]
         concept = next((row for row in section['concepts'] if row['concept_code'] == concept_code), None)
         if not concept:
             return {'ok': False, 'status': HTTPStatus.NOT_FOUND, 'error': 'concept not found'}

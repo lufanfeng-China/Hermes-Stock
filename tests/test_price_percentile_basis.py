@@ -1,6 +1,9 @@
 """五年分位：满五年用五年窗口，不足五年用上市以来全部历史。"""
 import pandas as pd
 import pytest
+import json
+import subprocess
+from pathlib import Path
 
 from app.stock_filter_market_snapshot import PRICE_PERCENTILE_MIN_SAMPLES, _price_percentile_5y
 
@@ -59,5 +62,37 @@ def test_page_discloses_the_short_history_basis():
     html = (root / "web" / "stock-filter.html").read_text(encoding="utf-8")
     js = (root / "web" / "stock-filter.js").read_text(encoding="utf-8")
     assert "不足五年按上市以来全部历史计算" in html
-    assert "（上市以来）" in js
+    assert "结果显示「历史分位」" in html
+    assert "历史分位 " in js
     assert "price_percentile_5y_basis" in js
+
+
+def test_short_history_result_labels_use_historical_percentile_without_changing_five_year_or_missing_labels():
+    script = Path(__file__).resolve().parents[1] / 'web' / 'stock-filter.js'
+    probe = r"""
+      const source = require('fs').readFileSync(process.argv[1], 'utf8');
+      const cells = source.slice(source.indexOf('  function priceCell(row) {'), source.indexOf('  function epsRatioCell(row) {'));
+      const { priceCell, valuationCell } = new Function('fixed', 'esc', cells + '\nreturn { priceCell, valuationCell };')(
+        (value, digits) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits == null ? 1 : digits) : '—',
+        value => String(value == null ? '—' : value)
+      );
+      const price = {price: 31.28, price_percentile_5y: 86.3, price_percentile_5y_basis: 'since_listing'};
+      const pe = {pe_ttm: 10.68, ps_ttm: 3.37, pe_percentile_5y: 70.1, pe_percentile_5y_basis: 'since_listing'};
+      console.log(JSON.stringify({
+        shortPrice: priceCell(price), shortPe: valuationCell(pe),
+        fullPrice: priceCell({...price, price_percentile_5y_basis: 'five_year'}),
+        fullPe: valuationCell({...pe, pe_percentile_5y_basis: 'five_year'}),
+        missingPrice: priceCell({...price, price_percentile_5y: null}),
+        missingPe: valuationCell({...pe, pe_percentile_5y: null})
+      }));
+    """
+    completed = subprocess.run(['node', '-e', probe, str(script)], check=True, capture_output=True, text=True)
+    rows = json.loads(completed.stdout)
+    assert '>历史分位 86.3%</span>' in rows['shortPrice']
+    assert '>历史分位 70.1%</span>' in rows['shortPe']
+    assert '上市以来全部历史' in rows['shortPrice']  # 仅去掉结果括注，仍保留证据说明
+    assert '上市以来' in rows['shortPe']
+    assert '>五年分位 86.3%</span>' in rows['fullPrice']
+    assert '>PE五年分位 70.1%</span>' in rows['fullPe']
+    assert '>五年分位 —</span>' in rows['missingPrice']
+    assert '>PE五年分位 —</span>' in rows['missingPe']

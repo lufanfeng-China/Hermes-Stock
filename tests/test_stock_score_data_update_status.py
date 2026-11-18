@@ -81,6 +81,7 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
 
         with (
             mock.patch.object(pipeline_runner, "_latest_trading_day_for_refresh", return_value=None),
+            mock.patch.object(pipeline_runner, 'record_success_duration'),
             mock.patch.object(pipeline_runner.subprocess, "run", side_effect=fake_run),
         ):
             with self.assertRaises(pipeline_runner.DataUpdateStepError) as ctx:
@@ -108,6 +109,7 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
 
         with (
             mock.patch.object(pipeline_runner, "_latest_trading_day_for_refresh", return_value=None),
+            mock.patch.object(pipeline_runner, 'record_success_duration'),
             mock.patch.object(pipeline_runner.subprocess, "run", side_effect=fake_run),
         ):
             with self.assertRaises(pipeline_runner.DataUpdateStepError) as ctx:
@@ -127,27 +129,12 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
         self.assertEqual("农用化工", progress["current_industry"])
         self.assertEqual("当前进度：[24/127] 农用化工 正在构建...", progress["current_progress_text"])
 
-    def test_stage_history_rebuild_is_an_independent_pipeline_task(self) -> None:
-        """阶段历史日更：独立可重试，且必须排在 QFQ 同步与 RPS 日更之后。
-
-        依赖关系只体现为顺序（前置步骤产出新的前复权日线与 RPS 交易日），
-        不允许把它的失败绑死其它任务，也不允许它自己触发全量下载。
-        """
+    def test_retired_stage_rebuild_is_not_scheduled(self) -> None:
         from app.pipeline import commands as pipeline_commands
-
-        commands = pipeline_commands._data_update_commands(trading_day="2026-10-29")
-        names = [name for name, _ in commands]
-
-        self.assertIn("rebuild_stage_history", names)
-        command = dict(commands)["rebuild_stage_history"]
-        self.assertTrue(command[1].endswith("scripts/build_regime_history.py"))
-        self.assertEqual(pipeline_commands.TONGDAXIN_PYTHON, command[0])
-        self.assertGreater(names.index("rebuild_stage_history"), names.index("sync_tdx_qfq_exports"))
-        self.assertGreater(names.index("rebuild_stage_history"), names.index("refresh_rps_daily"))
-        self.assertGreater(names.index("rebuild_stage_history"), names.index("build_stock_filter_qfq_daily"))
-
-        retry_names = [name for name, _ in pipeline_commands._data_update_commands(trading_day=None, retry_failed=True)]
-        self.assertIn("rebuild_stage_history", retry_names)
+        for retry in (False, True):
+            names = [name for name, _ in pipeline_commands._data_update_commands(
+                trading_day="2026-10-29", retry_failed=retry)]
+            self.assertNotIn("rebuild_stage_history", names)
 
     def test_retry_failed_job_command_reuses_existing_complete_industry_snapshots(self) -> None:
         from app.pipeline import commands as pipeline_commands
@@ -162,9 +149,13 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
                 "build_industry_relative_valuation_snapshot",
                 "build_good_stock_financial_snapshot",
                 "build_good_stock_undervaluation_current",
-                "rebuild_stage_history",
+                "build_stock_filter_pe_percentile_snapshot",
+                "build_stock_filter_turnover_percentile_snapshot",
+                "build_swing_snapshot",
+                "build_swing_state_runs",
                 "build_concept_temperature",
                 "build_industry_temperature",
+                "build_wyckoff_snapshot",
             ],
             [name for name, _ in commands],
         )

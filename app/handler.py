@@ -19,11 +19,14 @@ from app.config import (
     DEFAULT_SYMBOL, DEFAULT_HERMES_MODEL, DERIVED_FINAL_DIR,
 )
 from app.data.watchlist import _load_watchlist, _save_watchlist
+from app.data.watchlist_summary import load_watchlist_summaries
+from app.data.watchlist_indicators import load_watchlist_indicators
 from app.data.tech_eval import _load_tech_eval, _load_prev_tech_evals
 from app.data.industry_temp import _load_industry_temp
 from app.data.rps_history import load_stock_rps_history, _load_rps_history_dataset
 from app.tdx.kline import load_stock_history, load_stock_kline, infer_market
 from app.tdx.percentile import compute_stock_price_percentile
+from app.relative_valuation.daily_pe_percentile import load_stock_daily_pe_percentile
 from app.financial.reports import load_recent_three_year_financial_reports
 from app.financial.ai_report import generate_stock_ai_report, generate_sub_indicator_ai_explanation
 from app.pipeline.state import (
@@ -32,6 +35,8 @@ from app.pipeline.state import (
     _record_data_update_progress, DataUpdateStepError, _format_timestamp,
 )
 from app.pipeline.commands import _latest_trading_day_for_refresh
+from app.pipeline.task_freshness import task_freshness
+from app.pipeline.task_eta import load_duration_history, task_estimates
 from app.pipeline.runner import start_data_update_job, start_data_update_task, run_full_data_update
 from app.industry.templates import _industry_template_tags, _build_industry_valuation_percentile_payload
 
@@ -557,10 +562,15 @@ DATA_UPDATE_TASK_PLAN: list[dict[str, str]] = [
             {'id': 'build_good_stock_financial_snapshot', 'name': '构建好股低估专用财报快照', 'desc': '使用本地财报时序库，逐股最新已披露季度 + 年度五年；不替换严格同周期排名文件，可独立执行/重试'},
             {'id': 'build_good_stock_undervaluation_current', 'name': '构建好股低估诊断快照', 'desc': '依赖本地前复权行情、好股专用财报、行业估值；独立原子发布，失败保留旧版且不阻断技术更新'},
             {'id': 'refresh_rps_daily', 'name': '刷新 RPS 数据', 'desc': '仅使用 QFQ 数据计算全市场截面 RPS，并原子更新历史/当前快照；QFQ 未覆盖原始日线最新日时拒绝更新'},
-            {'id': 'rebuild_stage_history', 'name': '重建阶段历史（A/B/C/D）', 'desc': '按前复权日线逐 bar 判定 A/B/C/D 四阶段并原子发布全市场历史库；含陈旧源阻断、抽样对拍与原子落盘，可独立执行/重试'},
+            {'id': 'build_stock_filter_pe_percentile_snapshot', 'name': '构建个股 PE-TTM 五年分位', 'desc': '在原始日线、前复权行情和财报更新后计算全市场每日 PE 分位；日期错位拒绝发布，失败保留旧快照并可独立重试'},
+            {'id': 'build_stock_filter_turnover_percentile_snapshot', 'name': '构建换手率一年分位', 'desc': '逐日以已上市流通A股为分母，股本缺证时使用截至交易日已公告财报；独立原子发布并可单独重试'},
+            {'id': 'build_stock_filter_fundamental_history', 'name': '发布当日历史筛选PIT快照', 'desc': '核对原始价格和前复权行情同日，财报按公告日截断；已发布完整同版文件直接复用，失败可单独重试'},
             {'id': 'rebuild_macd_signals', 'name': '重建 MACD信号', 'desc': '全市场MACD二次金叉/金叉转强/背离信号检测'},
-            {'id': 'build_concept_temperature', 'name': '构建概念温度快照', 'desc': '读通达信概念板块 + 前复权日线，逐窗口(3/5/10/20/60)算概念温度、连续天数与热度序列；单次 10-40 分钟，排在流水线末尾，独立执行/重试，不阻断其他任务'},
+            {'id': 'build_swing_snapshot', 'name': '更新波峰波谷走势快照', 'desc': '使用前复权5+5确认与逐股v5状态判读；原子发布同日全市场快照，筛选页缺失时阻断而非空池，可独立重试'},
+            {'id': 'build_swing_state_runs', 'name': '更新波峰波谷状态进入日', 'desc': '在同日完整波峰波谷快照后计算1～5有效交易日的新进入状态，原子发布全市场日期快照；筛选页缺失时阻断，可独立重试'},
+            {'id': 'build_concept_temperature', 'name': '构建概念温度快照', 'desc': '读通达信概念板块 + 前复权日线，逐窗口(3/5/10/20/60)算概念温度、连续天数与热度序列；单次 10-40 分钟，排在流水线尾段，独立执行/重试，不阻断其他任务'},
             {'id': 'build_industry_temperature', 'name': '构建二级行业温度快照', 'desc': '与概念温度同一算法，成分改用申万二级行业（127 个、每股唯一归属，最小成员数 3）；单次 15-25 分钟，排在概念温度之后，独立执行/重试，不阻断其他任务'},
+            {'id': 'build_wyckoff_snapshot', 'name': '更新威科夫量价事件快照', 'desc': '通达信前复权全历史预热，按最新交易日增量更新六类事件及旧事件确认/失效状态；原子发布版本化全市场快照，排在日更最后，失败可单独重试'},
 ]
 
 class StockDashboardHandler(BaseHTTPRequestHandler):
@@ -574,8 +584,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/stock-kline":
             self.handle_stock_kline(parsed.query)
             return
+        if parsed.path == "/api/stock-qfq-trend":
+            self.handle_stock_qfq_trend(parsed.query)
+            return
+        if parsed.path == "/api/stock-filter-turnover-trend":
+            self.handle_stock_filter_turnover_trend(parsed.query)
+            return
         if parsed.path == "/api/stock-pe-history":
             self.handle_stock_pe_history(parsed.query)
+            return
+        if parsed.path == "/api/stock-daily-pe-percentile":
+            self.handle_stock_daily_pe_percentile(parsed.query)
             return
         if parsed.path == "/api/stock-candle-patterns":
             self.handle_stock_candle_patterns(parsed.query)
@@ -613,6 +632,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/industry-hierarchy":
             self.handle_industry_hierarchy(parsed.query)
             return
+        if parsed.path == "/api/market-index-temperature":
+            from app.market_index_temperature import index_temperature_response
+            self.respond_json(HTTPStatus.OK, index_temperature_response())
+            return
+        if parsed.path == "/api/market-index-history":
+            from app.market_index_temperature import index_history_response
+            params = parse_qs(parsed.query, keep_blank_values=True)
+            result = index_history_response((params.get('market') or [''])[0],
+                                            (params.get('symbol') or [''])[0])
+            self.respond_json(HTTPStatus.OK if result['ok'] else HTTPStatus.BAD_REQUEST, result)
+            return
         if parsed.path == "/api/stock-filter":
             self.handle_stock_filter(parsed.query)
             return
@@ -622,12 +652,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/market-relative-strength":
             self.handle_market_relative_strength(parsed.query)
             return
-        if parsed.path == "/api/regime-classify":
-            self.handle_regime_classify(parsed.query)
-
-        if parsed.path == "/api/regime-history-series":
-            self.handle_regime_history_series(parsed.query)
-
+        if parsed.path == "/api/wyckoff-observation":
+            self.handle_wyckoff_observation(parsed.query)
+            return
+        if parsed.path == "/api/swing-structure":
+            self.handle_swing_structure(parsed.query)
+            return
         if parsed.path == "/api/stock-score":
             self.handle_stock_score(parsed.query)
             return
@@ -687,6 +717,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/stock-price-percentile":
             self.handle_stock_price_percentile(parsed.query)
+            return
+        if parsed.path == "/api/preview-qfq-price-position":
+            self.handle_preview_qfq_price_position(parsed.query)
             return
         if parsed.path == "/api/concept-analysis":
             self.handle_concept_analysis(parsed.query)
@@ -895,6 +928,30 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"ok": False, "error": {"code": "kline_unavailable", "message": str(exc)}},
             )
+
+    def handle_stock_qfq_trend(self, query: str) -> None:
+        """Return exact as-of Tongdaxin QFQ export bars, or an explicit 400."""
+        from app.stock_qfq_trend import trend_response
+
+        params = parse_qs(query, keep_blank_values=True)
+        raw_limit = (params.get('limit') or ['300'])[0]
+        try:
+            limit = int(raw_limit)
+        except ValueError:
+            limit = 0
+        result = trend_response((params.get('market') or [''])[0],
+                                (params.get('symbol') or [''])[0],
+                                (params.get('as_of_date') or [''])[0], limit=limit)
+        self.respond_json(HTTPStatus.OK if result['ok'] else HTTPStatus.BAD_REQUEST, result)
+
+    def handle_stock_filter_turnover_trend(self, query: str) -> None:
+        """Return per-day point-in-time turnover percentiles through the selected date."""
+        from app.stock_filter_turnover_trend import turnover_trend_response
+        params = parse_qs(query, keep_blank_values=True)
+        result = turnover_trend_response((params.get('market') or [''])[0],
+                                         (params.get('symbol') or [''])[0],
+                                         (params.get('as_of_date') or [''])[0])
+        self.respond_json(HTTPStatus.OK if result['ok'] else HTTPStatus.BAD_REQUEST, result)
 
     def handle_stock_pe_history(self, query: str) -> None:
         """Return quarterly PE-TTM history for a stock."""
@@ -1715,7 +1772,8 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
 
         tech_data = _load_tech_eval()
         ind_temp = _load_industry_temp()
-
+        summaries = load_watchlist_summaries(wl["stocks"])
+        indicators = load_watchlist_indicators(wl["stocks"])
         # Init mootdx reader for price/return data
         from mootdx.reader import Reader
         reader = Reader.factory(market="std", tdxdir=TONGDAXIN_DIR)
@@ -1736,34 +1794,10 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 "add_price": entry.get("add_price"),
             }
 
-            # Score data
-            try:
-                score = compute_stock_score(market, symbol)
-                row["stock_name"] = score.get("stock_name", symbol)
-                row["industry_level_1"] = score.get("ind1", "")
-                row["industry_level_2"] = score.get("ind2", "")
-                row["market_total_score"] = score.get("total_score")
-                row["market_total_rank"] = score.get("market_total_rank")
-                row["market_total_universe_size"] = score.get("market_total_universe_size")
-                row["industry_total_score"] = score.get("ind_total_score")
-                row["industry_total_rank"] = score.get("industry_total_rank")
-                row["industry_total_universe_size"] = score.get("industry_total_universe_size")
-                row["dim_scores"] = score.get("dim_scores", {})
-            except Exception as e:
-                row["_error"] = f"score: {e}"
-
-            # RPS data from stock_profile
-            if "_error" not in row:
-                try:
-                    profile = stock_profile_response(symbol)
-                    if profile.get("ok"):
-                        rps = profile.get("rps", {}) or {}
-                        row["rps_20"] = rps.get("rps_20")
-                        row["rps_50"] = rps.get("rps_50")
-                        row["rps_120"] = rps.get("rps_120")
-                        row["rps_250"] = rps.get("rps_250")
-                except Exception:
-                    pass
+            # The list only needs the already-published score/identity summary;
+            # detailed report and stock-profile computations belong to detail pages.
+            row.update(summaries.get((market, symbol), {}))
+            row.update(indicators.get((market.lower(), symbol.zfill(6)), {}))
 
             # Tech data
             tech = tech_data.get(symbol.zfill(6), {})
@@ -2053,56 +2087,95 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         result = stock_response(market, symbol)
         self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.NOT_FOUND, result)
 
-    def handle_regime_classify(self, query: str) -> None:
-        """Return the current A/B/C/D regime for one stock (60-bar window)."""
-        from app.stage_regime import classify_regime
-        from app.tdx.qfq_kline import load_tdx_qfq_daily
+    def handle_swing_structure(self, query: str) -> None:
+        """Latest single-stock QFQ swing; explicit historical dates remain snapshot-backed."""
+        from app.swing_api import swing_response
+        params = parse_qs(query, keep_blank_values=True)
+        result = swing_response((params.get('symbol') or [''])[0],
+                                (params.get('market') or [''])[0],
+                                (params.get('as_of_date') or [''])[0])
+        self.respond_json(HTTPStatus.OK if result.get('ok') else HTTPStatus.BAD_REQUEST, result)
 
-        params = parse_qs(query)
+    def handle_wyckoff_observation(self, query: str) -> None:
+        """Return causal QFQ price/volume observations, not an investment signal."""
+        from app.tdx.qfq_kline import load_tdx_qfq_daily
+        from app.wyckoff_events import clean_wyckoff_bars, observe_wyckoff
+
+        params = parse_qs(query, keep_blank_values=True)
         symbol = (params.get("symbol") or [""])[0].strip()
-        if not symbol:
-            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide symbol"}})
+        market = (params.get("market") or [""])[0].strip().lower()
+        if len(symbol) != 6 or not symbol.isdigit():
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide six-digit symbol"}})
+            return
+        expected_market = "sh" if symbol.startswith("6") else "sz" if symbol.startswith(("00", "30")) else "bj" if symbol.startswith("92") else None
+        if not expected_market or (market and market != expected_market):
+            self.respond_json(HTTPStatus.UNPROCESSABLE_ENTITY, {"ok": False, "error": {"code": "market_symbol_mismatch", "message": "该市场与股票代码不匹配，或并非沪深北 A 股；不展示其他证券的量价事件。"}})
+            return
+        chart_requested = "chart_event_date" in params or "chart_event_type" in params
+        chart_date = (params.get("chart_event_date") or [""])[0]
+        chart_type = (params.get("chart_event_type") or [""])[0]
+        valid_date = False
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", chart_date):
+            try:
+                valid_date = datetime.strptime(chart_date, "%Y-%m-%d").strftime("%Y-%m-%d") == chart_date
+            except ValueError:
+                pass
+        if chart_requested and (not valid_date or chart_type not in {"Spring", "SOS", "LPS", "UT", "SOW", "LPSY"}
+                                or len(params.get("chart_event_date", [])) != 1
+                                or len(params.get("chart_event_type", [])) != 1):
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_chart_event", "message": "provide one valid chart_event_date and chart_event_type pair"}})
             return
         try:
             bars = load_tdx_qfq_daily(symbol)
+            result = observe_wyckoff(bars)
         except FileNotFoundError as exc:
             self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "not_found", "message": str(exc)}})
             return
-        except Exception as exc:  # noqa: BLE001
-            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": {"code": "regime_error", "message": str(exc)}})
-            return
-        try:
-            result = classify_regime(bars)
         except ValueError as exc:
-            self.respond_json(HTTPStatus.UNPROCESSABLE_ENTITY, {"ok": False, "error": {"code": "insufficient_history", "message": str(exc)}})
+            self.respond_json(HTTPStatus.UNPROCESSABLE_ENTITY, {"ok": False, "error": {"code": "invalid_bars", "message": str(exc)}})
             return
-        result["symbol"] = symbol.zfill(6)
-        result["ok"] = True
-        self.respond_json(HTTPStatus.OK, result)
-
-    def handle_regime_history_series(self, query: str) -> None:
-        """Return one symbol's A/B/C/D labels for the last N trading days."""
-        from app.regime_history_store import DEFAULT_BARS, load_regime_series
-
-        params = parse_qs(query)
-        symbol = (params.get("symbol") or [""])[0].strip()
-        bars_raw = (params.get("bars") or [str(DEFAULT_BARS)])[0].strip()
-        if not symbol:
-            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_symbol", "message": "provide symbol"}})
+        result["symbol"] = symbol
+        result["price_basis"] = bars.attrs.get("price_basis", "tdx_export_qfq")
+        reference_day = _latest_trading_day_for_refresh()
+        result["reference_trading_day"] = reference_day
+        result["freshness"] = "unverified" if not reference_day else "stale" if result.get("as_of_date") != reference_day else "current"
+        if result["freshness"] == "stale":
+            result["ok"] = False
+            result["events"] = []
+            result["current"] = None
+            result["reason"] = f"前复权日线截至 {result.get('as_of_date') or '未知'}，参考交易日为 {reference_day}；请先同步前复权导出。"
+            self.respond_json(HTTPStatus.CONFLICT, result)
             return
-        try:
-            bars = int(bars_raw)
-        except ValueError:
-            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"code": "invalid_bars", "message": "bars must be an integer"}})
+        if result.get("ok"):
+            from app.wyckoff_effort_response import load_sse_intraday_index, measure_equal_volume_response
+            result["equal_volume_response"] = (
+                measure_equal_volume_response(bars, load_sse_intraday_index(), as_of_date=result.get("as_of_date"))
+                if {"open", "high", "low", "close", "volume"}.issubset(bars.columns)
+                else {"status": "unavailable", "reason": "missing_ohlcv"}
+            )
+        if chart_requested and result["freshness"] != "current":
+            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "events": [],
+                "error": {"code": "freshness_unverified", "message": "cannot verify latest QFQ trading day"}})
             return
-        try:
-            payload = load_regime_series(symbol, bars)
-            payload["ok"] = True   # 前端统一按 ok 判可用，缺了这个字段会显示「不可用」
-            self.respond_json(HTTPStatus.OK, payload)
-        except FileNotFoundError as exc:
-            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": {"code": "regime_history_missing", "message": str(exc)}})
-        except KeyError:
-            self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "not_found", "message": f"no regime rows for {symbol}"}})
+        if chart_requested and result.get("ok"):
+            event = next((item for item in result["events"]
+                          if item["date"] == chart_date and item["type"] == chart_type), None)
+            if event is None:
+                self.respond_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": {"code": "chart_event_not_found", "message": "event is not present in current QFQ observation"}})
+                return
+            clean = clean_wyckoff_bars(bars)
+            days = [str(index.date()) for index in clean.index]
+            event_pos = days.index(chart_date)
+            # An unresolved or still-confirmed event is judged through the latest QFQ bar;
+            # cutting the chart at +20 would conceal later evidence of continued validity.
+            invalidated_day = (event.get("invalidated_by") or {}).get("date")
+            end_pos = min(len(days) - 1, days.index(invalidated_day) + 8) if invalidated_day in days else len(days) - 1
+            selected = clean.iloc[max(0, event_pos - 35):end_pos + 1]
+            result["chart_bars"] = [
+                {"trading_day": str(day.date()), **{key: float(row[key]) for key in ("open", "high", "low", "close", "volume")}}
+                for day, row in selected.iterrows()
+            ]
+        self.respond_json(HTTPStatus.OK if result.get("ok") else HTTPStatus.UNPROCESSABLE_ENTITY, result)
 
     def handle_stock_score(self, query: str) -> None:
         from app.search.index import compute_financial_scores, compute_stock_score
@@ -2382,7 +2455,10 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         # archive_daily intentionally is not a workbench task: it produces a
         # legacy 1m/15m archive for one symbol and is not an input to current
         # financial, RPS, MACD, valuation, screening, or analysis indicators.
-        tasks = [dict(task) for task in DATA_UPDATE_TASK_PLAN]
+        estimates = task_estimates([task['id'] for task in DATA_UPDATE_TASK_PLAN], job, load_duration_history())
+        tasks = [{**task, 'data_freshness': task_freshness(task['id']),
+                  'estimated_completion': estimates[task['id']]}
+                 for task in DATA_UPDATE_TASK_PLAN]
 
         # Determine which tasks are completed (based on current data freshness)
         peer_snapshot = status.get('industry_metric_snapshot')
@@ -3013,6 +3089,29 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 {"ok": False, "error": {"code": "relative_valuation_error", "message": str(exc)}},
             )
 
+    def handle_stock_daily_pe_percentile(self, query: str) -> None:
+        params = parse_qs(query)
+        market = params.get("market", [""])[0].strip().lower()
+        symbol = params.get("symbol", [""])[0].strip()
+        if market not in {"sh", "sz", "bj"} or re.fullmatch(r"\d{6}", symbol) is None:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {
+                "code": "invalid_params", "message": "market/symbol 参数不合法"}})
+            return
+        try:
+            # Same quote source as the current relative-valuation PE, but no
+            # unverified quote timestamp is asserted. Raw .day close is fallback.
+            from app.search.index import _load_realtime_quote_snapshot
+            quote = _load_realtime_quote_snapshot(market, symbol) or {}
+            price = quote.get("price")
+            result = load_stock_daily_pe_percentile(
+                market, symbol, current_price=price,
+                include_history=params.get("history", [""])[0] == "1",
+            )
+            self.respond_json(HTTPStatus.OK, {"ok": True, **result})
+        except Exception as exc:
+            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": {
+                "code": "daily_pe_unavailable", "message": str(exc)}})
+
     def handle_industry_valuation_percentile(self, query: str) -> None:
         params = parse_qs(query)
         market = params.get("market", [""])[0].strip().lower()
@@ -3035,6 +3134,20 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                 {"ok": False, "error": {"code": "industry_valuation_percentile_error", "message": str(exc)}},
             )
 
+    def handle_preview_qfq_price_position(self, query: str) -> None:
+        """Published QFQ five-year or since-listing percentile for the preview."""
+        from app.tdx.price_position import price_position
+        params = parse_qs(query)
+        try:
+            payload = price_position(params.get("market", [""])[0], params.get("symbol", [""])[0])
+        except ValueError as exc:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {"message": str(exc)}})
+            return
+        except OSError as exc:
+            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": {"message": str(exc)}})
+            return
+        self.respond_json(HTTPStatus.OK, payload)
+
     def handle_stock_price_percentile(self, query: str) -> None:
         """Compute historical price percentile against the stock's own N-year trading history."""
         params = parse_qs(query)
@@ -3054,6 +3167,12 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         try:
             payload = compute_stock_price_percentile(market, symbol, years=years)
             self.respond_json(HTTPStatus.OK, payload)
+        except FileNotFoundError:
+            self.respond_json(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"ok": False, "error": {"code": "qfq_export_unavailable",
+                                        "message": "前复权导出缺失，股价分位不可用；不回退原始价"}},
+            )
         except ValueError as exc:
             self.respond_json(
                 HTTPStatus.BAD_REQUEST,

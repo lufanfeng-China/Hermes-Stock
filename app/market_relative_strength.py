@@ -112,13 +112,30 @@ def build_market_relative_strength(frame: pd.DataFrame, *, min_eligible_universe
     return {"schema_version": "market-relative-strength-v1", "as_of_date": str(as_of.date()), "price_basis": PRICE_BASIS, "benchmark_method": BENCHMARK_METHOD, "benchmark_universe_size": int(len(current)), "benchmark_daily_returns": {str(date.date()): round(float(value) * 100, 6) for date, value in benchmark_daily.tail(250).items()}, "stocks": stocks}
 
 
+def _snapshot_fingerprint() -> tuple:
+    """Identity of the published snapshot file; changes after every rebuild."""
+    try:
+        stat = CURRENT_SNAPSHOT.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return (None, None)
+
+
 @lru_cache(maxsize=1)
-def load_current_snapshot() -> dict[str, Any]:
+def _load_snapshot_for_fingerprint(fingerprint: tuple) -> dict[str, Any]:
     try:
         payload = json.loads(CURRENT_SNAPSHOT.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return payload if isinstance(payload, dict) and isinstance(payload.get("stocks"), dict) else {}
+
+
+def load_current_snapshot() -> dict[str, Any]:
+    """Current snapshot keyed by file identity so rebuilds are picked up without a restart."""
+    return _load_snapshot_for_fingerprint(_snapshot_fingerprint())
+
+
+setattr(load_current_snapshot, "cache_clear", _load_snapshot_for_fingerprint.cache_clear)
 
 
 def stock_response(market: str, symbol: str) -> dict[str, Any]:

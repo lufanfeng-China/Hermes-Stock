@@ -11,8 +11,11 @@ DIAG = 'build_good_stock_undervaluation_current'
 class GoodStockUpdateChainTests(unittest.TestCase):
     def setUp(self):
         self.old = dict(DATA_UPDATE_JOB_STATE)
+        self._duration_patch = patch.object(runner, 'record_success_duration')
+        self._duration_patch.start()
         DATA_UPDATE_JOB_STATE.clear()
     def tearDown(self):
+        self._duration_patch.stop()
         DATA_UPDATE_JOB_STATE.clear(); DATA_UPDATE_JOB_STATE.update(self.old)
     def test_declared_order_retry_and_plan(self):
         declared = commands._data_update_commands(None)

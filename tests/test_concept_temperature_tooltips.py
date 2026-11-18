@@ -8,12 +8,12 @@ JS = (ROOT / "web" / "concept-temperature.js").read_text(encoding="utf-8")
 CODE = (ROOT / "app" / "concept_temperature.py").read_text(encoding="utf-8")
 
 EXPECTED = {
-    "0": ("≤20%", "≤0", "35%"),
-    "1": ("≤40%",),
-    "2": ("≤60%",),
-    "3": ("≤80%", "≤0", "55%", "≤0"),
-    "4": ("80%", "55%", "0"),
-    "5": ("≥95%", "75%", "30%", "20%", "15 只"),
+    "0": ("≤ −5/−7/−12/−18/−30%",),
+    "1": ("−2/−3/−5/−7/−10%",),
+    "2": ("≤0%", "分化上涨", "50%"),
+    "3": (">0%", "50%"),
+    "4": ("1.5/2/3/4.5/8%", "60%", "超额 >0"),
+    "5": ("3/4.5/6/9/15%", "75%", "30%", "超额 >0"),
 }
 
 
@@ -36,10 +36,14 @@ def test_tooltips_state_the_thresholds_from_the_classifier():
 
 
 def test_classifier_still_uses_the_documented_thresholds():
-    # 代码里的分位与广度阈值必须仍是说明文字所写的那些
-    for literal in ("<= .20", "<= .40", "<= .60", "<= .80", ">= .95",
-                    "breadth < 35", "breadth < 55", "breadth >= 75",
-                    "strong >= 30", "active >= 20", "max(15, min_members)"):
+    from app.concept_temperature import TEMPERATURE_CUTS
+    assert TEMPERATURE_CUTS == {
+        3: (-5, -2, 1.5, 3), 5: (-7, -3, 2, 4.5),
+        10: (-12, -5, 3, 6), 20: (-18, -7, 4.5, 9),
+        60: (-30, -10, 8, 15),
+    }
+    for literal in ("breadth < 50", "breadth >= 60", "breadth >= 75",
+                    "strong >= 30", "excess > 0"):
         assert literal in CODE, f"判定代码里找不到 {literal}，说明文字可能已过期"
 
 
@@ -72,7 +76,8 @@ def test_rule_note_is_not_pulled_into_the_clipping_container():
 
 
 HEADERS = {
-    "热度分": ("30%", "25%", "20%", "15%", "10%", "分位"),
+    "热度分": ("30%", "25%", "20%", "15%", "10%", "分位", "不参与绝对档位"),
+    "相对排名": ("热度分", "不参与绝对档位"),
     "X日中位涨幅": ("中位数", "前复权"),
     "上涨广度": ("> 0", "比例"),
     "相对超额": ("全市场", "中位数", "pp"),

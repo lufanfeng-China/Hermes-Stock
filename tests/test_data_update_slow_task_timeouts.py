@@ -14,7 +14,8 @@ def test_long_builders_get_a_hour_and_everything_else_keeps_thirty_minutes():
     assert _task_timeout("build_concept_temperature") == 3600
     assert _task_timeout("build_industry_temperature") == 3600
     assert _task_timeout("refresh_rps_daily") == 1800
-    assert set(LONG_TASK_TIMEOUTS) == {"build_concept_temperature", "build_industry_temperature"}
+    assert _task_timeout("build_stock_filter_fundamental_history") == 7200
+    assert set(LONG_TASK_TIMEOUTS) == {"build_stock_filter_fundamental_history", "build_wyckoff_snapshot", "build_swing_snapshot", "build_swing_state_runs", "build_concept_temperature", "build_industry_temperature"}
 
 
 def test_runner_uses_the_per_task_timeout_for_both_subprocess_paths():
@@ -32,15 +33,30 @@ def test_industry_temperature_is_registered_in_chain_and_retry_subset():
     chain = _data_update_commands(trading_day="2026-10-30")
     names = [name for name, _ in chain]
     assert "build_industry_temperature" in names
-    # 排在概念温度之后：两者都读全套前复权日线，必须落在末尾
+    # 两个温度任务相邻且都排在尾段，威科夫慢任务是整条流水线最后一项。
     assert names.index("build_industry_temperature") > names.index("build_concept_temperature")
-    assert names[-1] == "build_industry_temperature"
+    assert names[-1] == "build_wyckoff_snapshot"
 
     command = dict(chain)["build_industry_temperature"]
     assert "--scope" in command and "industry" in command
 
     retry = [name for name, _ in _data_update_commands(trading_day=None, retry_failed=True)]
     assert "build_industry_temperature" in retry
+    assert "build_swing_snapshot" in retry
+    swing_command=dict(_data_update_commands(trading_day="2026-10-30"))["build_swing_snapshot"]
+    assert '--trading-day' not in swing_command
+    assert names.index('build_swing_snapshot') > names.index('sync_tdx_qfq_exports')
+
+
+def test_swing_chain_and_retry_use_current_source_and_parent_dates():
+    from app.pipeline.commands import _data_update_commands
+
+    full = dict(_data_update_commands(trading_day='2026-11-10'))
+    retry = dict(_data_update_commands(trading_day='2026-11-10', retry_failed=True))
+    for task in ('build_swing_snapshot', 'build_swing_state_runs'):
+        assert '--trading-day' not in full[task]
+        assert full[task] == retry[task]
+
 
 
 def test_plan_catalog_and_command_table_stay_identical():

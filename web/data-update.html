@@ -11,37 +11,6 @@
       margin: 0 auto;
       padding: 20px;
     }
-    .freshness-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 24px;
-    }
-    .freshness-card {
-      padding: 12px 16px;
-      border: 1px solid rgba(124,224,195,0.15);
-      border-radius: 10px;
-      background: rgba(124,224,195,0.03);
-    }
-    .freshness-card .label {
-      font-size: 10px;
-      text-transform: uppercase;
-      color: var(--muted);
-      letter-spacing: 0.08em;
-      margin-bottom: 4px;
-    }
-    .freshness-card .value {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-    .freshness-card .sub {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
     .task-list {
       border: 1px solid rgba(124,224,195,0.15);
       border-radius: 10px;
@@ -88,6 +57,11 @@
       font-weight: 600;
       color: var(--text);
     }
+    .task-title-line { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .task-freshness { font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .task-freshness.unknown { color: var(--muted); }
+    .task-eta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .task-eta.forecast { color: var(--warning); }
     .task-running .task-name { color: var(--accent); }
     .task-done .task-name { color: var(--muted); }
     .task-failed .task-name { color: var(--danger); }
@@ -196,36 +170,6 @@
   </header>
 
   <div class="update-shell">
-    <!-- Freshness -->
-    <div class="freshness-grid" id="freshness-grid">
-      <div class="freshness-card">
-        <div class="label">财务快照</div>
-        <div class="value" id="fs-date">读取中...</div>
-        <div class="sub" id="fs-report">—</div>
-      </div>
-      <div class="freshness-card">
-        <div class="label">行业估值快照</div>
-        <div class="value" id="iv-date">读取中...</div>
-        <div class="sub" id="iv-detail">—</div>
-      </div>
-      <div class="freshness-card">
-        <div class="label">行业财务指标同业快照</div>
-        <div class="value" id="im-date">读取中...</div>
-        <div class="sub" id="im-detail">—</div>
-        <div class="sub" id="im-error"></div>
-      </div>
-      <div class="freshness-card">
-        <div class="label">最后数据更新时间</div>
-        <div class="value" id="latest-date">读取中...</div>
-        <div class="sub">财务/估值数据集的最新时间</div>
-      </div>
-      <div class="freshness-card">
-        <div class="label">RPS 快照</div>
-        <div class="value">跟随行业估值快照时间</div>
-        <div class="sub">依赖 RPS 历史数据</div>
-      </div>
-    </div>
-
     <!-- Error banner -->
     <div class="error-banner" id="error-banner"></div>
 
@@ -283,26 +227,35 @@ function rowClass(taskStatus) {
   }
 }
 
-// ── Render ──
-function renderFreshness(status) {
-  $('fs-date').textContent = status.financial_snapshot_updated || '—';
-  $('fs-report').textContent = status.financial_report_date
-    ? `报告期 ${status.financial_report_date}`
-    : '无快照数据';
-  $('iv-date').textContent = status.industry_valuation_updated || '—';
-  $('iv-detail').textContent = status.industry_count
-    ? `覆盖 ${status.industry_count} 个行业`
-    : '—';
-  const peerSnapshot = status.industry_metric_snapshot || {};
-  $('im-date').textContent = peerSnapshot.updated_at || '—';
-  $('im-detail').textContent = peerSnapshot.coverage
-    ? `覆盖 ${peerSnapshot.member_count || 0} 个成员 / ${peerSnapshot.industry_count || 0} 个行业`
-    : '无同业快照数据';
-  $('im-error').textContent = peerSnapshot.error ? `发布错误：${peerSnapshot.error}` : '';
-  $('latest-date').textContent = status.latest_updated_at || '—';
-
+function formatEta(t, job) {
+  const eta = t.estimated_completion || {};
+  if (eta.finish_at) {
+    const date = new Date(eta.finish_at);
+    if (!Number.isNaN(date.getTime())) {
+      const parts = new Intl.DateTimeFormat('zh-CN', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(date);
+      return { text: `预计完成：${parts}（估算）`, forecast: true };
+    }
+  }
+  if (eta.state === 'overdue') return { text: '预计完成：已超出历史耗时，待确认', forecast: false };
+  if (eta.state === 'failed') return { text: '预计完成：任务失败，无法估时', forecast: false };
+  if (eta.state === 'done') return { text: '预计完成：已完成', forecast: false };
+  if (eta.state === 'no_history' || (eta.state === 'not_started' && !eta.samples)) {
+    return { text: '预计完成：暂无历史耗时', forecast: false };
+  }
+  if (eta.state === 'not_started' && job.running) return {
+    text: '预计完成：待前序任务完成', forecast: false,
+  };
+  if (eta.state === 'not_started') return {
+    text: `预计完成：启动后计算（历史约 ${Math.max(1, Math.round(eta.duration_seconds / 60))} 分钟）`,
+    forecast: false,
+  };
+  return { text: '预计完成：待前序任务完成', forecast: false };
 }
 
+// ── Render ──
 function renderTasks(taskList, job) {
   const container = $('task-list');
   const currentStep = job.current_step || '';
@@ -346,12 +299,16 @@ function renderTasks(taskList, job) {
     // Legacy/full-pipeline fallback only while an older job lacks task records.
     if (!recorded.status && job.running && i === runningIdx) status = 'running';
     if (!recorded.status && job.running && i < runningIdx && job.mode !== 'single_task' && !t.id.startsWith('build_good_stock_')) status = 'done';
+    const eta = formatEta(t, job);
+    const etaBasis = t.estimated_completion?.samples
+      ? `近 ${t.estimated_completion.samples} 次成功运行耗时中位数；仅供参考，受数据量和机器负载影响`
+      : '暂无该任务成功运行的耗时样本；不使用超时阈值冒充估算';
 
     return `<div class="task-row ${rowClass(status)}">
       <span class="task-num">${i + 1}</span>
       <span class="task-status">${statusIcon(status)}</span>
       <span class="task-info">
-        <div class="task-name">${t.name}</div>
+        <div class="task-title-line"><span class="task-name">${t.name}</span><span class="task-freshness${t.data_freshness?.data_date ? '' : ' unknown'}">${t.data_freshness?.data_date ? `${t.data_freshness.label} ${t.data_freshness.data_date}` : '数据日期未知'}</span><span class="task-eta${eta.forecast ? ' forecast' : ''}" title="${etaBasis}">${eta.text}</span></div>
         <div class="task-desc">${t.desc}</div>
       </span>
       ${status === 'done' ? '<span class="task-time">完成</span>' : ''}
@@ -374,6 +331,7 @@ function renderProgress(job) {
       const idx = job.progress_index || 0;
       const total = job.progress_total || 1;
       const percent = Math.round((idx / total) * 100);
+      bar.style.animation = '';
       bar.style.width = percent + '%';
       pct.textContent = percent + '%';
     } else {
@@ -462,9 +420,6 @@ function renderButtons(job) {
 function renderAll(data) {
   tasks = data.tasks || [];
   const job = data.job || {};
-  const status = data.current_status || {};
-
-  renderFreshness(status);
   renderTasks(tasks, job);
   renderProgress(job);
   renderStatusLine(job);

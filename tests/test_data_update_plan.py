@@ -9,7 +9,7 @@ from app import handler as app_handler
 
 class DataUpdatePlanTests(unittest.TestCase):
     def test_plan_and_command_registry_do_not_drift(self) -> None:
-        """计划页展示的任务必须都能真正执行，且阶段历史必须在两边都登记。
+        """计划页展示的任务必须能执行，退役任务不得继续出现。
 
         两处注册表（handler 的展示目录 / pipeline 的命令表）历史上各写一份，
         新增步骤时容易只改一边：UI 上点了没反应，或命令跑了但页面看不见。
@@ -23,8 +23,8 @@ class DataUpdatePlanTests(unittest.TestCase):
         plan_ids = [task["id"] for task in payload["tasks"]]
         command_ids = [name for name, _ in pipeline_commands._data_update_commands(trading_day="2026-10-29")]
 
-        self.assertIn("rebuild_stage_history", plan_ids)
-        self.assertIn("rebuild_stage_history", command_ids)
+        self.assertNotIn("rebuild_stage_history", plan_ids)
+        self.assertNotIn("rebuild_stage_history", command_ids)
         # 展示目录里的每个任务都必须有对应命令，否则点下去无从执行
         self.assertEqual([], [task_id for task_id in plan_ids if task_id not in command_ids])
 
@@ -63,13 +63,13 @@ class DataUpdatePlanTests(unittest.TestCase):
         self.assertEqual("peer build failed", peer_snapshot["error"])
         self.assertTrue(payload["job"]["can_retry_failed"])
 
-    def test_data_update_page_renders_peer_snapshot_freshness_and_retry(self) -> None:
+    def test_data_update_page_omits_redundant_summary_but_keeps_retry(self) -> None:
         page = (Path(__file__).parents[1] / "web" / "data-update.html").read_text(encoding="utf-8")
-
-        self.assertIn('id="im-date"', page)
-        self.assertIn('id="im-detail"', page)
-        self.assertIn('id="im-error"', page)
-        self.assertIn("status.industry_metric_snapshot", page)
+        self.assertNotIn('id="freshness-grid"', page)
+        self.assertNotIn('id="im-date"', page)
+        self.assertNotIn('renderFreshness(', page)
+        self.assertIn('id="task-list"', page)
+        self.assertIn('class="task-freshness${', page)
         button_renderer = page[page.index("function renderButtons"):]
         self.assertLess(button_renderer.index("job.can_retry_failed"), button_renderer.index("job.status === 'succeeded'"))
 
@@ -83,6 +83,19 @@ class DataUpdatePlanTests(unittest.TestCase):
             "/home/lufanfeng/Project-Hermes-Stock/scripts/build_industry_metric_snapshot.py",
             commands["build_industry_metric_snapshot"][1],
         )
+
+    def test_pe_percentile_uses_execution_time_raw_day_in_full_and_retry(self) -> None:
+        from app.pipeline.commands import _data_update_commands
+
+        # QFQ/raw snapshots can advance after the pipeline's initial date lookup.
+        # The builder must discover the raw day at its own launch, for both paths.
+        for retry in (False, True):
+            commands = dict(_data_update_commands("2026-11-05", retry_failed=retry))
+            pe_command = commands["build_stock_filter_pe_percentile_snapshot"]
+            self.assertEqual(
+                ["build_stock_filter_pe_percentile_snapshot.py"],
+                [Path(arg).name for arg in pe_command[1:]],
+            )
 
     def test_default_pipeline_rebuilds_qfq_daily_before_filter_market_metrics(self) -> None:
         from app.pipeline.commands import _data_update_commands

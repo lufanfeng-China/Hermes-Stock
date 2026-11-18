@@ -73,7 +73,8 @@ class RetiredFeatureContractTests(unittest.TestCase):
         page = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertNotIn("/api/stage-classify", page)
         self.assertNotIn("/api/stage-history-series", page)
-        self.assertIn("/api/regime-history-series", page)
+        self.assertNotIn("/api/regime-history-series", page)
+        self.assertIn("/api/wyckoff-observation", page)
 
     def test_screener_strategy_builder_is_not_shipped(self) -> None:
         self.assertFalse((ROOT / "scripts" / "build_stock_screener_strategies.py").exists())

@@ -9,8 +9,11 @@ from app.pipeline.state import DATA_UPDATE_JOB_STATE, _update_data_update_job_st
 class DataUpdateRunnerProgressTests(unittest.TestCase):
     def setUp(self) -> None:
         self._old_state = dict(DATA_UPDATE_JOB_STATE)
+        self._duration_patch = mock.patch.object(runner, 'record_success_duration')
+        self._duration_patch.start()
 
     def tearDown(self) -> None:
+        self._duration_patch.stop()
         with runner.DATA_UPDATE_JOB_STATE_LOCK:
             DATA_UPDATE_JOB_STATE.clear()
             DATA_UPDATE_JOB_STATE.update(self._old_state)

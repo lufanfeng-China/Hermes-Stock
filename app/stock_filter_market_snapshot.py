@@ -6,8 +6,91 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BASIC_MARKET_FIELDS = ("volume_ratio_5", "ma5", "ma10", "ma20",
+                       "ma5_distance_pct", "ma10_distance_pct", "ma20_distance_pct")
+
+MA_ALIGNMENT_GROUPS = ((5, 10, 20), (10, 20, 30), (10, 30, 60), (20, 60, 120))
+GOLDEN_CROSS_PAIRS = (("5/10", 5, 10), ("10/20", 10, 20), ("20/60", 20, 60))
+
+def _golden_cross_metrics(closes: list[float]) -> dict[str, str]:
+    """Only same-day QFQ crossings; no lookback or stale technical-eval fields."""
+    crosses = []
+    for code, fast, slow in GOLDEN_CROSS_PAIRS:
+        if len(closes) < slow + 1:
+            continue
+        fast_now = sum(closes[-fast:]) / fast
+        slow_now = sum(closes[-slow:]) / slow
+        fast_prev = sum(closes[-fast-1:-1]) / fast
+        slow_prev = sum(closes[-slow-1:-1]) / slow
+        if fast_prev <= slow_prev and fast_now > slow_now:
+            crosses.append(code)
+    return {"golden_cross": ",".join(crosses)}
+
+def _macd_cross_metrics(closes: list[float]) -> dict[str, Any]:
+    """TDX-style EMA(12,26,9) crossing on the last valid QFQ trading bar."""
+    result: dict[str, Any] = {"macd_cross": "", "macd_cross_label": "",
+                              "macd_cross_dif": None, "macd_cross_dea": None,
+                              "macd_cross_prev_dif": None, "macd_cross_prev_dea": None}
+    if len(closes) < 35:
+        return result
+    ema12 = ema26 = float(closes[0])
+    dea = 0.0
+    dif = 0.0
+    prev_dif = prev_dea = 0.0
+    for i, close in enumerate(closes[1:], 1):
+        if i == len(closes) - 1:
+            prev_dif, prev_dea = dif, dea
+        ema12 = ema12 * 11 / 13 + float(close) * 2 / 13
+        ema26 = ema26 * 25 / 27 + float(close) * 2 / 27
+        dif = ema12 - ema26
+        dea = dea * 8 / 10 + dif * 2 / 10
+    result.update(macd_cross_dif=round(dif, 6), macd_cross_dea=round(dea, 6),
+                  macd_cross_prev_dif=round(prev_dif, 6), macd_cross_prev_dea=round(prev_dea, 6))
+    if prev_dif <= prev_dea and dif > dea:
+        if dif > 0 and dea > 0:
+            result.update(macd_cross="zero_above", macd_cross_label="零轴上金叉")
+        elif dif < 0 and dea < 0:
+            result.update(macd_cross="zero_below", macd_cross_label="零轴下金叉")
+    return result
+
+
+def _ma_alignment_metrics(closes: list[float]) -> dict[str, Any]:
+    """Strict same-day MA order on valid QFQ closes; never require price or slope."""
+    averages = {days: sum(closes[-days:]) / days if len(closes) >= days else None
+                for days in (5, 10, 20, 30, 60, 120)}
+    def ordered(a: int, b: int, c: int) -> bool:
+        fast, middle, slow = averages[a], averages[b], averages[c]
+        return (fast is not None and middle is not None and slow is not None
+                and fast > middle > slow)
+    return {
+        "ma_alignment": [f"{a}/{b}/{c}" for a, b, c in MA_ALIGNMENT_GROUPS
+                         if ordered(a, b, c)],
+        "ma_alignment_ma": {str(days): round(value, 4) if value is not None else None
+                            for days, value in averages.items()},
+    }
+
+
+def _basic_market_metrics(group: pd.DataFrame) -> dict[str, float | None]:
+    """Use valid QFQ trading bars; exclude today's volume from its five-bar baseline."""
+    bars = group[["open", "close", "volume"]].apply(pd.to_numeric, errors="coerce")
+    bars = bars.loc[(bars["open"] > 0) & (bars["close"] > 0) & (bars["volume"] > 0)
+                    & np.isfinite(bars).all(axis=1)]
+    result: dict[str, float | None] = dict.fromkeys(BASIC_MARKET_FIELDS)
+    closes, volumes = bars["close"].tolist(), bars["volume"].tolist()
+    if len(volumes) >= 6:
+        baseline = sum(volumes[-6:-1]) / 5
+        if baseline > 0:
+            result["volume_ratio_5"] = round(volumes[-1] / baseline, 4)
+    for days in (5, 10, 20):
+        if len(closes) >= days:
+            ma = sum(closes[-days:]) / days
+            if ma > 0:
+                result[f"ma{days}"] = round(ma, 4)
+                result[f"ma{days}_distance_pct"] = round((closes[-1] / ma - 1) * 100, 4)
+    return result
 
 
 def _num(value: Any) -> float | None:
@@ -332,12 +415,19 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
     total_groups = int(rows[["market", "symbol"]].drop_duplicates().shape[0])
     for completed, ((market, symbol), group) in enumerate(grouped, 1):
         group = group.set_index("date")
+        valid = group[["open", "close", "volume"]].apply(pd.to_numeric, errors="coerce")
+        group = group.loc[(valid["open"] > 0) & (valid["close"] > 0) & (valid["volume"] > 0)
+                          & np.isfinite(valid).all(axis=1)]
         closes = pd.to_numeric(group["close"], errors="coerce").dropna()
         close = closes.tolist()
         daily_trend, short_trend = _daily_trend(close), _short_trend(close)
         item: dict[str, Any] = {"qfq_as_of": str(closes.index[-1].date()) if len(closes) else None,
                                 "trend_daily": daily_trend, "trend_daily_label": _trend_label(daily_trend),
                                 "short_trend": short_trend, "short_trend_label": _trend_label(short_trend)}
+        item.update(_basic_market_metrics(group))
+        item.update(_golden_cross_metrics(close))
+        item.update(_macd_cross_metrics(close))
+        item.update(_ma_alignment_metrics(close))
         item.update(_blowup_break_metrics(group))
         item.update(_trend_template_metrics(group))
         item.update(_price_percentile_5y(group))
@@ -360,4 +450,4 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
         metrics[f"{market}:{symbol}"] = item
         if on_progress is not None and (completed == total_groups or completed % 50 == 0):
             on_progress(completed, total_groups)
-    return {"schema_version": "stock-filter-market-metrics-v3", "stocks": len(metrics), "metrics": metrics}
+    return {"schema_version": "stock-filter-market-metrics-v4", "stocks": len(metrics), "metrics": metrics}
