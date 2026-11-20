@@ -118,6 +118,38 @@
     .swing-entry-toggle { display:flex; align-items:center; gap:7px; margin:10px 0 6px; }
     .filter-group input[type="number"] { appearance:textfield; -moz-appearance:textfield; }
     .filter-group input[type="number"]::-webkit-inner-spin-button, .filter-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+    .scope-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .scope-select-button { min-height:34px; border:1px solid var(--sf-line-strong); border-radius:8px; background:rgba(183,227,107,.06); color:var(--sf-text); font:inherit; font-size:12px; cursor:pointer; }
+    .scope-select-button:hover,.scope-select-button:focus-visible { border-color:var(--sf-accent); color:var(--sf-accent); outline:none; }
+    .scope-select-button:disabled { opacity:.42; cursor:not-allowed; }
+    .scope-summary { display:grid; gap:5px; margin-top:8px; color:var(--sf-muted); font-size:10px; line-height:1.5; }
+    .scope-summary-row { display:flex; align-items:flex-start; gap:5px; }
+    .scope-summary-row strong { flex:0 0 45px; color:#c7d6d0; font-weight:600; }
+    .scope-summary-values { min-width:0; overflow-wrap:anywhere; }
+    .scope-clear { justify-self:start; border:0; padding:2px 0; background:transparent; color:var(--sf-accent); font:inherit; font-size:10px; cursor:pointer; }
+    .scope-dialog { position:fixed; inset:0; margin:auto; width:min(720px,calc(100vw - 24px)); max-height:calc(100vh - 24px); box-sizing:border-box; border:1px solid var(--sf-line-strong); border-radius:14px; padding:0; background:#0c181f; color:var(--sf-text); }
+    .scope-dialog::backdrop { background:rgba(0,0,0,.78); }
+    .scope-dialog-shell { display:grid; grid-template-rows:auto auto minmax(0,1fr) auto; height:min(760px,calc(100vh - 26px)); max-height:calc(100vh - 26px); }
+    .scope-dialog-head,.scope-dialog-tools,.scope-dialog-foot { padding:14px 16px; border-bottom:1px solid var(--sf-line); }
+    .scope-dialog-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .scope-dialog-head h3 { margin:0; font-size:17px; }
+    .scope-dialog-head p { margin:4px 0 0; color:#91a9a2; font-size:12px; line-height:1.5; }
+    .scope-dialog-close { border:0; background:transparent; color:var(--sf-muted); font:inherit; font-size:12px; cursor:pointer; }
+    .scope-dialog-tools { display:grid; gap:10px; }
+    .scope-dialog-tools input[type="search"] { box-sizing:border-box; width:100%; min-height:36px; border:1px solid var(--sf-line-strong); border-radius:8px; padding:7px 10px; background:var(--sf-input); color:var(--sf-text); font:inherit; }
+    .scope-temperature-options { display:flex; flex-wrap:wrap; gap:7px; }
+    .scope-temperature-options label { display:flex; align-items:center; gap:4px; border:1px solid var(--sf-line); border-radius:999px; padding:5px 8px; color:var(--sf-muted); font-size:11px; cursor:pointer; }
+    .scope-temperature-options input { accent-color:var(--sf-accent); }
+    .scope-option-list { min-height:0; overflow:auto; padding:8px 16px 18px; scrollbar-gutter:stable; }
+    .scope-option { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:9px; padding:9px 3px; border-bottom:1px solid rgba(151,204,190,.09); cursor:pointer; }
+    .scope-option input { accent-color:var(--sf-accent); }
+    .scope-option-name { min-width:0; font-size:13px; }
+    .scope-option-meta { color:#91a9a2; font-size:11px; line-height:1.45; text-align:right; }
+    .scope-dialog-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--sf-line); border-bottom:0; }
+    .scope-dialog-foot span { color:#91a9a2; font-size:12px; }
+    .scope-dialog-buttons { display:flex; gap:8px; }
+    .scope-dialog-buttons button { border:1px solid var(--sf-line-strong); border-radius:8px; padding:7px 12px; background:transparent; color:var(--sf-text); font:inherit; cursor:pointer; }
+    .scope-dialog-buttons .scope-confirm { border-color:var(--sf-accent); background:var(--sf-accent); color:var(--sf-accent-ink); font-weight:800; }
     .trend-grid { display:grid; grid-template-columns:1fr; gap:7px; }
     .trend-grid label { display:grid; grid-template-columns:58px minmax(0,1fr); align-items:start; gap:8px; color:#c7d6d0; font-size:11px; }
     .trend-grid select { margin-top:0; }
@@ -211,7 +243,14 @@
           </section>
           <fieldset class="filter-group" data-filter-group="scope"><legend><button class="filter-group-toggle" type="button" aria-expanded="true"><span>01</span>股票范围</button></legend><div class="range-grid">
             <label class="filter-field"><select name="stock_scope" aria-label="范围"><option value="all">全部</option><option value="csi300">沪深300</option><option value="main_board">沪深主板</option><option value="chinext">创业板</option><option value="star">科创板</option><option value="dual_creative">双创（科创+创业）</option></select></label>
-          </fieldset>
+            <input type="hidden" name="industry_l2_codes" value="">
+            <input type="hidden" name="industry_temperature_levels" value="">
+            <input type="hidden" name="concept_codes" value="">
+            <input type="hidden" name="concept_temperature_levels" value="">
+            <div class="scope-actions"><button id="industry-scope-open" class="scope-select-button" type="button">选择二级行业</button><button id="concept-scope-open" class="scope-select-button" type="button">选择概念与温度</button></div>
+            <div id="scope-selection-summary" class="scope-summary" aria-live="polite"><span>行业、概念均不限；同类多选取并集，行业与概念取交集。</span></div>
+            <button id="scope-selection-clear" class="scope-clear" type="button">清空行业与概念范围</button>
+          </div></fieldset>
           <fieldset class="filter-group is-collapsed" data-filter-group="rps"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>02</span>RPS 强度</button></legend><div class="range-grid">
             <label class="filter-field">RPS20<div class="range-pair"><input name="rps_20_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_20_max" type="number" min="0" max="100" placeholder="最大"></div></label>
             <label class="filter-field">RPS50<div class="range-pair"><input name="rps_50_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="rps_50_max" type="number" min="0" max="100" placeholder="最大"></div></label>
@@ -223,6 +262,10 @@
             <label class="filter-field">现价（元）<div class="range-pair"><input name="price_min" type="number" step="0.01" placeholder="最小"><b>—</b><input name="price_max" type="number" step="0.01" placeholder="最大"></div></label>
             <p class="filter-note">以下涨跌、量比及均线距离使用同一交易日的通达信前复权有效日线；缺失或过期不参与筛选。当日涨跌为收盘价相对前一有效交易日收盘价；量比＝当日成交量÷前5个有效交易日均量（不含当天）；均线距离＝（收盘价÷当日MA−1）×100%，正值在线上，负值在线下。范围边界包含等号。</p>
             <label class="filter-field">当日涨跌（%）<div class="range-pair"><input name="return_1d_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="return_1d_max" type="number" step="0.1" placeholder="最大"></div></label>
+            <label class="filter-field" title="N日涨跌幅＝当前前复权收盘价÷N个有效交易日前的前复权收盘价−1；N允许1—250，停牌0价行不计入交易日。仅支持当前筛选日。">N日涨跌幅（1—250日）<div class="range-pair"><input name="return_n_days" type="number" min="1" max="250" step="1" placeholder="N"><b>日</b></div><div class="range-pair"><input name="return_n_pct_min" type="number" step="0.1" placeholder="最小%"><b>—</b><input name="return_n_pct_max" type="number" step="0.1" placeholder="最大%"></div></label>
+            <label class="filter-field" title="最近N个有效前复权交易日逐日比较收盘价：高于前一有效日计上涨，低于计下跌，相等计平盘；需要N+1个有效收盘价。仅支持当前筛选日。">N日涨跌天数窗口（1—250日）<div class="range-pair"><input name="change_days_n" type="number" min="1" max="250" step="1" placeholder="N"><b>日</b></div></label>
+            <label class="filter-field">上涨天数<div class="range-pair"><input name="up_days_min" type="number" min="0" max="250" step="1" placeholder="最小"><b>—</b><input name="up_days_max" type="number" min="0" max="250" step="1" placeholder="最大"></div></label>
+            <label class="filter-field">下跌天数<div class="range-pair"><input name="down_days_min" type="number" min="0" max="250" step="1" placeholder="最小"><b>—</b><input name="down_days_max" type="number" min="0" max="250" step="1" placeholder="最大"></div></label>
             <label class="filter-field">量比（倍）<div class="range-pair"><input name="volume_ratio_5_min" type="number" min="0" step="0.01" placeholder="最小"><b>—</b><input name="volume_ratio_5_max" type="number" min="0" step="0.01" placeholder="最大"></div></label>
             <label class="filter-field">收盘价距MA5（%）<div class="range-pair"><input name="ma5_distance_pct_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="ma5_distance_pct_max" type="number" step="0.1" placeholder="最大"></div></label>
             <label class="filter-field">收盘价距MA10（%）<div class="range-pair"><input name="ma10_distance_pct_min" type="number" step="0.1" placeholder="最小"><b>—</b><input name="ma10_distance_pct_max" type="number" step="0.1" placeholder="最大"></div></label>
@@ -270,6 +313,7 @@
             <label class="filter-field">MACD 金叉<select name="macd_cross" multiple size="2"><option value="zero_below">零轴下金叉</option><option value="zero_above">零轴上金叉</option></select></label>
             <label class="filter-field">均线金叉<select name="golden_cross" multiple size="3"><option value="5/10">MA5 / MA10</option><option value="10/20">MA10 / MA20</option><option value="20/60">MA20 / MA60</option></select></label>
             <label class="filter-field" title="同一筛选日的通达信前复权有效日线，简单收盘均线严格多头排列（短期＞中期＞长期），不要求股价站上均线或均线斜率；组内多选取或，与其他条件取且。历史日期暂不支持。">均线多头<select name="ma_alignment" multiple size="4"><option value="5/10/20">MA5 ＞ MA10 ＞ MA20</option><option value="10/20/30">MA10 ＞ MA20 ＞ MA30</option><option value="10/30/60">MA10 ＞ MA30 ＞ MA60</option><option value="20/60/120">MA20 ＞ MA60 ＞ MA120</option></select></label>
+            <label class="filter-field" title="当前严格均线多头排列已经连续保持的有效前复权交易日。已选择多个均线组合时，任一已选组合的持续天数落入区间即可；未选择组合时检查当前任一多头组合。历史日期暂不支持。">当前多头持续天数<div class="range-pair"><input name="ma_alignment_days_min" type="number" min="1" step="1" placeholder="最小"><b>—</b><input name="ma_alignment_days_max" type="number" min="1" step="1" placeholder="最大"></div></label>
           </div></fieldset>
           <fieldset class="filter-group is-collapsed" data-filter-group="relative-strength"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>07</span>相对大盘强弱</button></legend><p class="filter-note">全A可交易股每日等权、与RPS同一成分池、前复权。ER为跑赢大盘百分点；抗跌仅统计最近20日的大盘下跌日。</p><div class="range-grid">
             <label class="filter-field">MRS 强弱分<div class="range-pair"><input name="mrs_score_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="mrs_score_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
@@ -309,6 +353,8 @@
       </section>
     </div>
 
+  <dialog id="industry-scope-dialog" class="scope-dialog" aria-labelledby="industry-scope-title"><div class="scope-dialog-shell"><header class="scope-dialog-head"><div><h3 id="industry-scope-title">选择申万二级行业与温度</h3><p id="industry-scope-meta">行业温度读取现有10日快照；明确行业与温度同时选择时取交集。</p></div><button class="scope-dialog-close" type="button" data-scope-close="industry">关闭 ×</button></header><div class="scope-dialog-tools"><input id="industry-scope-search" type="search" placeholder="搜索二级行业名称" autocomplete="off"><div id="industry-temperature-options" class="scope-temperature-options" aria-label="二级行业温度"></div></div><div id="industry-scope-options" class="scope-option-list"></div><footer class="scope-dialog-foot"><span id="industry-scope-count">已选择 0 个行业，温度不限</span><div class="scope-dialog-buttons"><button type="button" data-scope-clear-draft="industry">清空</button><button type="button" data-scope-close="industry">取消</button><button type="button" class="scope-confirm" data-scope-confirm="industry">确定</button></div></footer></div></dialog>
+  <dialog id="concept-scope-dialog" class="scope-dialog" aria-labelledby="concept-scope-title"><div class="scope-dialog-shell"><header class="scope-dialog-head"><div><h3 id="concept-scope-title">选择概念与温度</h3><p id="concept-scope-meta">概念温度读取现有10日快照；明确概念与温度同时选择时取交集。</p></div><button class="scope-dialog-close" type="button" data-scope-close="concept">关闭 ×</button></header><div class="scope-dialog-tools"><input id="concept-scope-search" type="search" placeholder="搜索概念名称" autocomplete="off"><div id="concept-temperature-options" class="scope-temperature-options" aria-label="概念温度"></div></div><div id="concept-scope-options" class="scope-option-list"></div><footer class="scope-dialog-foot"><span id="concept-scope-count">已选择 0 个概念，温度不限</span><div class="scope-dialog-buttons"><button type="button" data-scope-clear-draft="concept">清空</button><button type="button" data-scope-close="concept">取消</button><button type="button" class="scope-confirm" data-scope-confirm="concept">确定</button></div></footer></div></dialog>
   <dialog class="dist-dialog" id="eps-distribution-dialog">
     <div class="dist-shell">
       <div class="dist-top">
@@ -342,7 +388,7 @@
   <script src="/nav.js?v=20261015-stock-filter-v2"></script>
   <script src="/swing-chart.js?v=20261112-pressure-line-v1"></script>
   <script src="/price-trend-chart.js?v=20261111-a"></script>
-  <script src="/stock-filter.js?v=20261117-remove-top-reset"></script>
+  <script src="/stock-filter.js?v=20261119-custom-return-v2"></script>
   <script src="/stock-filter-market-temperature.js?v=20261117-index-history-b"></script>
   <script src="/stock-filter-distribution.js?v=20261101"></script>
 <div class="filter-tip" id="filter-tip" role="tooltip" aria-hidden="true"></div></body>

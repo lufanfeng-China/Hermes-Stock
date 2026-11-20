@@ -25,7 +25,9 @@ class StockFilterPageTest(unittest.TestCase):
 
         for name in (
             "rps_20_min", "rps_50_min", "rps_120_min", "rps_250_min", "rps_total_min",
-            "price_min", "total_market_cap_min", "free_float_market_cap_min", "pe_ttm_min",
+            "price_min", "return_n_days", "return_n_pct_min", "return_n_pct_max",
+            "change_days_n", "up_days_min", "up_days_max", "down_days_min", "down_days_max",
+            "total_market_cap_min", "free_float_market_cap_min", "pe_ttm_min",
             "annual_total_min", "quarterly_total_min", "composite_total_min",
             "annual_growth_quality_min", "annual_profitability_min", "annual_cash_quality_min",
             "annual_working_capital_min", "annual_reinvestment_min", "annual_financial_risk_min",
@@ -187,6 +189,43 @@ class StockFilterPageTest(unittest.TestCase):
         self.assertNotIn("form.reset()", block)
         self.assertNotIn("asOfDate.value =", block)
         self.assertNotIn("option.disabled = historical", script)
+
+    def test_scope_group_has_industry_and_concept_dialog_selectors(self):
+        html = PAGE.read_text(encoding="utf-8")
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+        for token in ('id="industry-scope-open"', 'id="concept-scope-open"',
+                      'id="industry-scope-dialog"', 'id="concept-scope-dialog"',
+                      'name="industry_l2_codes"', 'name="industry_temperature_levels"',
+                      'id="industry-temperature-options"', 'name="concept_codes"',
+                      'name="concept_temperature_levels"', 'id="scope-selection-summary"'):
+            self.assertIn(token, html)
+        self.assertIn("/api/stock-filter/scopes", script)
+        self.assertIn("renderScopeSummary", script)
+        self.assertIn("concept_temperature_window", script)
+        self.assertIn("industry_temperature_window", script)
+        self.assertIn("draftIndustryTemperatureLevels", script)
+
+    def test_scope_selection_is_not_reset_when_a_preset_is_toggled(self):
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+        block = script.split("  presetOptions.forEach(function (option) {", 2)[-1].split("  function updateHistoricalMode()", 1)[0]
+        self.assertNotIn("clearScopeSelection", block)
+        self.assertNotIn("industry_l2_codes.value =", block)
+        self.assertNotIn("concept_codes.value =", block)
+
+    def test_custom_scope_status_does_not_mislabel_the_reduced_pool_as_full_market(self):
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+        self.assertIn("hasCustomScope", script)
+        self.assertIn("行业/概念范围", script)
+
+    def test_historical_mode_disables_current_concept_scope_without_silent_fallback(self):
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+        self.assertIn("当前概念及概念温度不支持历史日期", script)
+        self.assertIn("conceptScopeOpen.disabled = historical", script)
+
+    def test_historical_mode_clears_current_industry_temperature_but_keeps_explicit_industries(self):
+        script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+        self.assertIn("selectedIndustryTemperatureLevels.clear()", script)
+        self.assertIn("当前行业温度不支持历史日期", script)
 
     def test_result_table_displays_report_release_return_without_the_red_flag_count(self):
         html = PAGE.read_text(encoding="utf-8")

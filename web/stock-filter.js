@@ -19,6 +19,20 @@
   var runSequence = 0;
   var historicalRetryTimer = null;
   var multi = { trend_daily: true, trend_weekly: true, trend_monthly: true, macd_cross: true, golden_cross: true, ma_alignment: true, wyckoff_type: true, wyckoff_status: true, swing_state: true, swing_tendency: true, swing_star: true, swing_observation: true };
+  var industryScopeOpen = document.getElementById('industry-scope-open');
+  var conceptScopeOpen = document.getElementById('concept-scope-open');
+  var scopeSummary = document.getElementById('scope-selection-summary');
+  var industryScopeDialog = document.getElementById('industry-scope-dialog');
+  var conceptScopeDialog = document.getElementById('concept-scope-dialog');
+  var scopeCatalog = null;
+  var selectedIndustryCodes = new Set();
+  var selectedIndustryTemperatureLevels = new Set();
+  var selectedConceptCodes = new Set();
+  var selectedTemperatureLevels = new Set();
+  var draftIndustryCodes = new Set();
+  var draftIndustryTemperatureLevels = new Set();
+  var draftConceptCodes = new Set();
+  var draftTemperatureLevels = new Set();
 
   function esc(value) {
     var node = document.createElement('span');
@@ -44,6 +58,182 @@
   function selectedValues(field) {
     return Array.prototype.slice.call(field && field.selectedOptions || []).map(function (option) { return option.value; });
   }
+
+  function scopeNameMap(items) {
+    var map = new Map();
+    (items || []).forEach(function (item) { map.set(String(item.code), item); });
+    return map;
+  }
+
+  function syncScopeInputs() {
+    form.elements.industry_l2_codes.value = Array.from(selectedIndustryCodes).sort().join(',');
+    form.elements.industry_temperature_levels.value = Array.from(selectedIndustryTemperatureLevels).sort().join(',');
+    form.elements.concept_codes.value = Array.from(selectedConceptCodes).sort().join(',');
+    form.elements.concept_temperature_levels.value = Array.from(selectedTemperatureLevels).sort().join(',');
+  }
+
+  function selectedLabels(codes, items, fallback) {
+    var byCode = scopeNameMap(items);
+    var names = Array.from(codes).map(function (code) { return (byCode.get(code) || {}).name || code; });
+    return names.length ? names.join('、') : fallback;
+  }
+
+  function renderScopeSummary() {
+    if (!scopeCatalog) {
+      scopeSummary.innerHTML = '<span>正在读取二级行业、概念和概念温度…</span>';
+      return;
+    }
+    var tempMap = new Map((scopeCatalog.temperature_options || []).map(function (item) { return [String(item.value), item.label]; }));
+    var industryTemperatures = Array.from(selectedIndustryTemperatureLevels).map(function (value) { return tempMap.get(String(value)) || value; });
+    var temperatures = Array.from(selectedTemperatureLevels).map(function (value) { return tempMap.get(String(value)) || value; });
+    scopeSummary.innerHTML =
+      '<div class="scope-summary-row"><strong>二级行业</strong><span class="scope-summary-values">' + esc(selectedLabels(selectedIndustryCodes, scopeCatalog.industries, '不限')) + '</span></div>' +
+      '<div class="scope-summary-row"><strong>行业温度</strong><span class="scope-summary-values">' + esc(industryTemperatures.length ? industryTemperatures.join('、') + '（' + scopeCatalog.industry_temperature_window + '日）' : '不限') + '</span></div>' +
+      '<div class="scope-summary-row"><strong>概念</strong><span class="scope-summary-values">' + esc(selectedLabels(selectedConceptCodes, scopeCatalog.concepts, '不限')) + '</span></div>' +
+      '<div class="scope-summary-row"><strong>概念温度</strong><span class="scope-summary-values">' + esc(temperatures.length ? temperatures.join('、') + '（' + scopeCatalog.concept_temperature_window + '日）' : '不限') + '</span></div>';
+  }
+
+  function renderIndustryScopeOptions() {
+    var query = document.getElementById('industry-scope-search').value.trim().toLowerCase();
+    var rows = (scopeCatalog && scopeCatalog.industries || []).filter(function (item) {
+      var textMatch = !query || String(item.name).toLowerCase().indexOf(query) >= 0 || String(item.code).toLowerCase().indexOf(query) >= 0;
+      var tempMatch = !draftIndustryTemperatureLevels.size || draftIndustryTemperatureLevels.has(String(item.temperature));
+      return textMatch && (tempMatch || draftIndustryCodes.has(String(item.code)));
+    });
+    document.getElementById('industry-scope-options').innerHTML = rows.map(function (item) {
+      var temperature = item.temperature == null ? '数据不足' : item.temperature_label + ' · ' + item.temperature;
+      return '<label class="scope-option"><input type="checkbox" data-scope-industry="' + esc(item.code) + '"' + (draftIndustryCodes.has(String(item.code)) ? ' checked' : '') + '><span class="scope-option-name">' + esc(item.name) + '</span><span class="scope-option-meta">' + esc(temperature) + '<br>' + Number(item.member_count || 0).toLocaleString('zh-CN') + '只</span></label>';
+    }).join('') || '<p class="empty-state">没有匹配的二级行业。</p>';
+    document.getElementById('industry-scope-count').textContent = '已选择 ' + draftIndustryCodes.size + ' 个行业，' + (draftIndustryTemperatureLevels.size ? draftIndustryTemperatureLevels.size + ' 个温度档位' : '温度不限');
+  }
+
+  function renderIndustryTemperatureOptions() {
+    var historical = Boolean(asOfDate.value);
+    document.getElementById('industry-temperature-options').innerHTML = (scopeCatalog && scopeCatalog.temperature_options || []).map(function (item) {
+      var value = String(item.value);
+      return '<label><input type="checkbox" data-scope-industry-temperature="' + esc(value) + '"' + (draftIndustryTemperatureLevels.has(value) ? ' checked' : '') + (historical ? ' disabled' : '') + '>' + esc(item.label) + '</label>';
+    }).join('');
+  }
+
+  function renderTemperatureOptions() {
+    document.getElementById('concept-temperature-options').innerHTML = (scopeCatalog && scopeCatalog.temperature_options || []).map(function (item) {
+      var value = String(item.value);
+      return '<label><input type="checkbox" data-scope-temperature="' + esc(value) + '"' + (draftTemperatureLevels.has(value) ? ' checked' : '') + '>' + esc(item.label) + '</label>';
+    }).join('');
+  }
+
+  function renderConceptScopeOptions() {
+    var query = document.getElementById('concept-scope-search').value.trim().toLowerCase();
+    var rows = (scopeCatalog && scopeCatalog.concepts || []).filter(function (item) {
+      var textMatch = !query || String(item.name).toLowerCase().indexOf(query) >= 0 || String(item.code).toLowerCase().indexOf(query) >= 0;
+      var tempMatch = !draftTemperatureLevels.size || draftTemperatureLevels.has(String(item.temperature));
+      return textMatch && (tempMatch || draftConceptCodes.has(String(item.code)));
+    });
+    document.getElementById('concept-scope-options').innerHTML = rows.map(function (item) {
+      var temperature = item.temperature == null ? '数据不足' : item.temperature_label + ' · ' + item.temperature;
+      return '<label class="scope-option"><input type="checkbox" data-scope-concept="' + esc(item.code) + '"' + (draftConceptCodes.has(String(item.code)) ? ' checked' : '') + '><span class="scope-option-name">' + esc(item.name) + '</span><span class="scope-option-meta">' + esc(temperature) + '<br>' + Number(item.member_count || 0).toLocaleString('zh-CN') + '只</span></label>';
+    }).join('') || '<p class="empty-state">没有匹配的概念。</p>';
+    document.getElementById('concept-scope-count').textContent = '已选择 ' + draftConceptCodes.size + ' 个概念，' + (draftTemperatureLevels.size ? draftTemperatureLevels.size + ' 个温度档位' : '温度不限');
+  }
+
+  function openScopeDialog(kind) {
+    if (!scopeCatalog) return;
+    if (kind === 'industry') {
+      draftIndustryCodes = new Set(selectedIndustryCodes);
+      draftIndustryTemperatureLevels = new Set(selectedIndustryTemperatureLevels);
+      document.getElementById('industry-scope-search').value = '';
+      renderIndustryTemperatureOptions();
+      renderIndustryScopeOptions();
+      industryScopeDialog.showModal();
+      return;
+    }
+    draftConceptCodes = new Set(selectedConceptCodes);
+    draftTemperatureLevels = new Set(selectedTemperatureLevels);
+    document.getElementById('concept-scope-search').value = '';
+    renderTemperatureOptions();
+    renderConceptScopeOptions();
+    conceptScopeDialog.showModal();
+  }
+
+  function clearScopeSelection(runNow) {
+    selectedIndustryCodes.clear();
+    selectedIndustryTemperatureLevels.clear();
+    selectedConceptCodes.clear();
+    selectedTemperatureLevels.clear();
+    syncScopeInputs();
+    renderScopeSummary();
+    if (runNow) run(1);
+  }
+
+  async function loadScopeCatalog() {
+    try {
+      var response = await fetch('/api/stock-filter/scopes');
+      var data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error && data.error.message || '范围数据不可用');
+      scopeCatalog = data;
+      document.getElementById('industry-scope-meta').textContent = '行业温度读取现有' + data.industry_temperature_window + '日快照，截至 ' + (data.industry_temperature_as_of || '未知') + '；明确行业与温度同时选择时取交集。';
+      document.getElementById('concept-scope-meta').textContent = '概念温度读取现有' + data.concept_temperature_window + '日快照，截至 ' + (data.concept_temperature_as_of || '未知') + '；明确概念与温度同时选择时取交集。';
+      industryScopeOpen.disabled = false;
+      conceptScopeOpen.disabled = Boolean(asOfDate.value);
+      renderScopeSummary();
+    } catch (error) {
+      industryScopeOpen.disabled = true;
+      conceptScopeOpen.disabled = true;
+      scopeSummary.innerHTML = '<span>行业/概念范围不可用：' + esc(error.message) + '</span>';
+    }
+  }
+
+  industryScopeOpen.disabled = true;
+  conceptScopeOpen.disabled = true;
+  industryScopeOpen.addEventListener('click', function () { openScopeDialog('industry'); });
+  conceptScopeOpen.addEventListener('click', function () { openScopeDialog('concept'); });
+  document.getElementById('scope-selection-clear').addEventListener('click', function () { clearScopeSelection(true); });
+  document.getElementById('industry-scope-search').addEventListener('input', renderIndustryScopeOptions);
+  document.getElementById('concept-scope-search').addEventListener('input', renderConceptScopeOptions);
+  document.getElementById('industry-scope-options').addEventListener('change', function (event) {
+    var code = event.target.dataset.scopeIndustry;
+    if (!code) return;
+    if (event.target.checked) draftIndustryCodes.add(code); else draftIndustryCodes.delete(code);
+    renderIndustryScopeOptions();
+  });
+  document.getElementById('industry-temperature-options').addEventListener('change', function (event) {
+    var level = event.target.dataset.scopeIndustryTemperature;
+    if (level == null) return;
+    if (event.target.checked) draftIndustryTemperatureLevels.add(level); else draftIndustryTemperatureLevels.delete(level);
+    renderIndustryScopeOptions();
+  });
+  document.getElementById('concept-scope-options').addEventListener('change', function (event) {
+    var code = event.target.dataset.scopeConcept;
+    if (!code) return;
+    if (event.target.checked) draftConceptCodes.add(code); else draftConceptCodes.delete(code);
+    renderConceptScopeOptions();
+  });
+  document.getElementById('concept-temperature-options').addEventListener('change', function (event) {
+    var level = event.target.dataset.scopeTemperature;
+    if (level == null) return;
+    if (event.target.checked) draftTemperatureLevels.add(level); else draftTemperatureLevels.delete(level);
+    renderConceptScopeOptions();
+  });
+  document.querySelectorAll('[data-scope-close]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      (button.dataset.scopeClose === 'industry' ? industryScopeDialog : conceptScopeDialog).close();
+    });
+  });
+  document.querySelectorAll('[data-scope-clear-draft]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      if (button.dataset.scopeClearDraft === 'industry') {
+        draftIndustryCodes.clear(); draftIndustryTemperatureLevels.clear(); renderIndustryTemperatureOptions(); renderIndustryScopeOptions();
+      } else {
+        draftConceptCodes.clear(); draftTemperatureLevels.clear(); renderTemperatureOptions(); renderConceptScopeOptions();
+      }
+    });
+  });
+  document.querySelector('[data-scope-confirm="industry"]').addEventListener('click', function () {
+    selectedIndustryCodes = new Set(draftIndustryCodes); selectedIndustryTemperatureLevels = new Set(draftIndustryTemperatureLevels); syncScopeInputs(); renderScopeSummary(); industryScopeDialog.close(); clearWatchlistSelection(); run(1);
+  });
+  document.querySelector('[data-scope-confirm="concept"]').addEventListener('click', function () {
+    selectedConceptCodes = new Set(draftConceptCodes); selectedTemperatureLevels = new Set(draftTemperatureLevels); syncScopeInputs(); renderScopeSummary(); conceptScopeDialog.close(); clearWatchlistSelection(); run(1);
+  });
 
   function setPreset(value) {
     var selected = new Set((value || '').split(',').filter(Boolean));
@@ -129,7 +319,19 @@
     var price = clickablePrice
       ? '<button type="button" class="price-trend-link" data-price-trend="1" data-market="' + esc(row.market) + '" data-symbol="' + esc(row.symbol) + '" data-day="' + esc(day) + '" data-name="' + esc(row.stock_name || '') + '" data-price="' + esc(row.price) + '" aria-label="查看' + esc(row.stock_name || row.symbol) + '截至' + esc(day) + '的股价趋势、成交量、MACD和RPS">' + priceText + '</button>'
       : priceText;
-    return price + '<span class="subvalue" title="' + esc(title) + '">' + label + '</span>';
+    var customReturn = Number(row.return_n_pct);
+    var customDays = Number(row.return_n_days);
+    var custom = Number.isFinite(customReturn) && Number.isInteger(customDays)
+      ? '<span class="subvalue" title="前复权收盘价：' + esc(row.return_n_start_close) + ' → ' + esc(row.return_n_end_close) + '；截至 ' + esc(row.return_n_as_of || day || '—') + '">' + customDays + '日 ' + (customReturn > 0 ? '+' : '') + fixed(customReturn, 2) + '%</span>'
+      : '';
+    var changeDays = Number(row.change_days_n);
+    var upDays = Number(row.up_days);
+    var downDays = Number(row.down_days);
+    var flatDays = Number(row.flat_days);
+    var changes = Number.isInteger(changeDays) && Number.isInteger(upDays) && Number.isInteger(downDays) && Number.isInteger(flatDays)
+      ? '<span class="subvalue" title="最近' + changeDays + '个有效前复权交易日；截至 ' + esc(row.change_days_as_of || day || '—') + '">' + changeDays + '日 ↑' + upDays + ' ↓' + downDays + ' →' + flatDays + '</span>'
+      : '';
+    return price + '<span class="subvalue" title="' + esc(title) + '">' + label + '</span>' + custom + changes;
   }
 
   function valuationCell(row) {
@@ -628,9 +830,13 @@
     status.classList.remove('error');
     var historical = data.is_historical ? ' · 历史基本面：公告日 point-in-time · 估值为当日原始收盘价' : '';
     var scopeLabel = data.stock_scope_label || '全部';
-    var scopeText = scopeLabel === '全部'
-      ? '全市场 ' + Number(data.total_universe || 0).toLocaleString('zh-CN')
-      : '范围 ' + scopeLabel + ' ' + Number(data.total_universe || 0).toLocaleString('zh-CN') + ' 只（全市场 ' + Number(data.universe_total || data.total_universe || 0).toLocaleString('zh-CN') + '）';
+    var selection = data.scope_selection || {};
+    var hasCustomScope = (selection.industry_l2_codes || []).length || (selection.industry_temperature_levels || []).length || (selection.concept_codes || []).length || (selection.concept_temperature_levels || []).length;
+    var scopeText = hasCustomScope
+      ? '行业/概念范围 ' + Number(data.total_universe || 0).toLocaleString('zh-CN') + ' 只（全市场 ' + Number(data.universe_total || 0).toLocaleString('zh-CN') + '）'
+      : scopeLabel === '全部'
+        ? '全市场 ' + Number(data.total_universe || 0).toLocaleString('zh-CN')
+        : '范围 ' + scopeLabel + ' ' + Number(data.total_universe || 0).toLocaleString('zh-CN') + ' 只（全市场 ' + Number(data.universe_total || data.total_universe || 0).toLocaleString('zh-CN') + '）';
     var wyckoff = data.wyckoff_snapshot;
     var wyckoffText = wyckoff ? ' · 威科夫前复权 ' + wyckoff.as_of_date + '（' + wyckoff.rule_version + '）' : '';
     if (wyckoff && wyckoff.excluded_lagged) {
@@ -742,7 +948,7 @@
   form.addEventListener('input', clearWatchlistSelection);
   form.addEventListener('change', clearWatchlistSelection);
   form.addEventListener('submit', function (event) { event.preventDefault(); clearWatchlistSelection(); run(1); });
-  form.addEventListener('reset', function () { clearWatchlistSelection(); window.setTimeout(function () { setPreset(''); updateHistoricalMode(); run(1); }, 0); });
+  form.addEventListener('reset', function () { clearWatchlistSelection(); window.setTimeout(function () { clearScopeSelection(false); setPreset(''); updateHistoricalMode(); run(1); }, 0); });
   Array.prototype.slice.call(document.querySelectorAll('.filter-group-toggle')).forEach(function (button) {
     button.addEventListener('click', function () {
       var group = button.closest('fieldset');
@@ -759,19 +965,43 @@
   });
   function updateHistoricalMode() {
     var historical = Boolean(asOfDate.value);
-    var unsupported = ['rps_20_min', 'rps_20_max', 'rps_50_min', 'rps_50_max', 'rps_120_min', 'rps_120_max', 'rps_250_min', 'rps_250_max', 'rps_total_min', 'rps_total_max', 'total_market_cap_min', 'free_float_market_cap_min', 'free_float_market_cap_max', 'niche_leader', 'trend_daily', 'trend_weekly', 'trend_monthly', 'macd_cross', 'golden_cross', 'ma_alignment'];
+    var unsupported = ['rps_20_min', 'rps_20_max', 'rps_50_min', 'rps_50_max', 'rps_120_min', 'rps_120_max', 'rps_250_min', 'rps_250_max', 'rps_total_min', 'rps_total_max', 'total_market_cap_min', 'free_float_market_cap_min', 'free_float_market_cap_max', 'niche_leader', 'trend_daily', 'trend_weekly', 'trend_monthly', 'macd_cross', 'golden_cross', 'ma_alignment', 'ma_alignment_days_min', 'ma_alignment_days_max', 'return_n_days', 'return_n_pct_min', 'return_n_pct_max', 'change_days_n', 'up_days_min', 'up_days_max', 'down_days_min', 'down_days_max'];
     unsupported.forEach(function (name) {
       var field = form.elements[name];
       if (field) field.disabled = historical;
     });
+    conceptScopeOpen.disabled = historical || !scopeCatalog;
+    if (historical && selectedIndustryTemperatureLevels.size) {
+      selectedIndustryTemperatureLevels.clear();
+      status.textContent = '当前行业温度不支持历史日期，已清除行业温度；明确选择的二级行业范围保留。';
+    }
+    if (historical && (selectedConceptCodes.size || selectedTemperatureLevels.size)) {
+      selectedConceptCodes.clear();
+      selectedTemperatureLevels.clear();
+      status.textContent = '当前概念及概念温度不支持历史日期，已清除这两项范围；二级行业范围保留。';
+    }
+    syncScopeInputs();
+    renderScopeSummary();
   }
 
   sort.addEventListener('change', function () { clearWatchlistSelection(); run(1); });
   asOfDate.addEventListener('change', function () {
+    var historical = Boolean(asOfDate.value);
+    var removedIndustryTemperature = historical && selectedIndustryTemperatureLevels.size;
+    var removedCurrentConceptScope = historical && (selectedConceptCodes.size || selectedTemperatureLevels.size);
     updateHistoricalMode();
     // Date is sent as as_of_date by requestParams; the server rejects a missing
     // point-in-time snapshot rather than falling back to current fundamentals.
-    status.textContent = asOfDate.value ? '已选择历史信号日期，等待筛选。' : '已切回最新数据。';
+    status.textContent = asOfDate.value
+      ? (removedIndustryTemperature && removedCurrentConceptScope
+          ? '当前行业温度、概念及概念温度不支持历史日期，已清除；明确选择的二级行业范围保留。'
+          : removedIndustryTemperature
+            ? '当前行业温度不支持历史日期，已清除行业温度；明确选择的二级行业范围保留。'
+            : removedCurrentConceptScope
+              ? '当前概念及概念温度不支持历史日期，已清除这两项范围；二级行业范围保留。'
+              : '已选择历史信号日期，等待筛选。')
+      : '已切回最新数据。';
   });
+  loadScopeCatalog();
   run(1);
 }());

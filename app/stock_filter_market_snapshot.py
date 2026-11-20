@@ -58,16 +58,32 @@ def _macd_cross_metrics(closes: list[float]) -> dict[str, Any]:
 
 
 def _ma_alignment_metrics(closes: list[float]) -> dict[str, Any]:
-    """Strict same-day MA order on valid QFQ closes; never require price or slope."""
+    """Strict MA order plus its current consecutive valid-QFQ trading-day run."""
     averages = {days: sum(closes[-days:]) / days if len(closes) >= days else None
                 for days in (5, 10, 20, 30, 60, 120)}
     def ordered(a: int, b: int, c: int) -> bool:
         fast, middle, slow = averages[a], averages[b], averages[c]
         return (fast is not None and middle is not None and slow is not None
                 and fast > middle > slow)
+    alignments = [f"{a}/{b}/{c}" for a, b, c in MA_ALIGNMENT_GROUPS if ordered(a, b, c)]
+    prefix = [0.0]
+    for close in closes:
+        prefix.append(prefix[-1] + float(close))
+    durations: dict[str, int] = {}
+    for fast, middle, slow in MA_ALIGNMENT_GROUPS:
+        key = f"{fast}/{middle}/{slow}"
+        duration = 0
+        for end in range(len(closes), slow - 1, -1):
+            ma_fast = (prefix[end] - prefix[end-fast]) / fast
+            ma_middle = (prefix[end] - prefix[end-middle]) / middle
+            ma_slow = (prefix[end] - prefix[end-slow]) / slow
+            if not ma_fast > ma_middle > ma_slow:
+                break
+            duration += 1
+        durations[key] = duration
     return {
-        "ma_alignment": [f"{a}/{b}/{c}" for a, b, c in MA_ALIGNMENT_GROUPS
-                         if ordered(a, b, c)],
+        "ma_alignment": alignments,
+        "ma_alignment_duration": durations,
         "ma_alignment_ma": {str(days): round(value, 4) if value is not None else None
                             for days, value in averages.items()},
     }
@@ -423,7 +439,8 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
         daily_trend, short_trend = _daily_trend(close), _short_trend(close)
         item: dict[str, Any] = {"qfq_as_of": str(closes.index[-1].date()) if len(closes) else None,
                                 "trend_daily": daily_trend, "trend_daily_label": _trend_label(daily_trend),
-                                "short_trend": short_trend, "short_trend_label": _trend_label(short_trend)}
+                                "short_trend": short_trend, "short_trend_label": _trend_label(short_trend),
+                                "return_close_history": [round(float(value), 4) for value in close[-251:]]}
         item.update(_basic_market_metrics(group))
         item.update(_golden_cross_metrics(close))
         item.update(_macd_cross_metrics(close))
@@ -450,4 +467,4 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
         metrics[f"{market}:{symbol}"] = item
         if on_progress is not None and (completed == total_groups or completed % 50 == 0):
             on_progress(completed, total_groups)
-    return {"schema_version": "stock-filter-market-metrics-v4", "stocks": len(metrics), "metrics": metrics}
+    return {"schema_version": "stock-filter-market-metrics-v6", "stocks": len(metrics), "metrics": metrics}

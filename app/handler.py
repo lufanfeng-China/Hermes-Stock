@@ -643,6 +643,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
                                             (params.get('symbol') or [''])[0])
             self.respond_json(HTTPStatus.OK if result['ok'] else HTTPStatus.BAD_REQUEST, result)
             return
+        if parsed.path == "/api/stock-filter/scopes":
+            self.handle_stock_filter_scopes()
+            return
         if parsed.path == "/api/stock-filter":
             self.handle_stock_filter(parsed.query)
             return
@@ -2063,6 +2066,17 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         """Clear entire watchlist."""
         _save_watchlist({"stocks": []})
         self.respond_json(HTTPStatus.OK, {"ok": True})
+
+    def handle_stock_filter_scopes(self) -> None:
+        """Return current secondary-industry and concept scope options."""
+        try:
+            from app.stock_filter_scope import scope_options_response
+            self.respond_json(HTTPStatus.OK, scope_options_response())
+        except (OSError, ValueError, KeyError) as exc:
+            self.respond_json(HTTPStatus.SERVICE_UNAVAILABLE, {
+                "ok": False,
+                "error": {"code": "scope_snapshot_unavailable", "message": str(exc)},
+            })
 
     def handle_stock_filter(self, query: str) -> None:
         """Return the new independent all-market stock filter response."""

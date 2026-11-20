@@ -16,6 +16,7 @@ import pandas as pd
 
 from app.stock_filter_history_progress import read_progress
 from app.stock_filter_market_snapshot import BASIC_MARKET_FIELDS, PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
+from app.stock_filter_scope import filter_rows_by_scope, stock_scope_index
 import math
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -305,6 +306,8 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "market": market, "symbol": symbol, "stock_name": names.get((market, symbol), symbol),
             "niche_leader": niche_leaders.get((market, symbol), ""),
             "industry": industry.get("industry_level_2_name") or industry.get("industry_level_1_name") or "",
+            "industry_level_2_code": industry.get("industry_level_2_code") or "",
+            "industry_level_2_name": industry.get("industry_level_2_name") or "",
             "price": _num(valuation.get("current_price")),
             "total_market_cap": _num(valuation.get("total_market_cap")),
             "free_float_market_cap": _num(valuation.get("free_float_market_cap")),
@@ -312,7 +315,9 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             **{key: qfq.get(key) for key in PRICE_PERCENTILE_FIELDS},
             "return_1d": qfq.get("return_1d"), "return_5d": qfq.get("return_5d"), "return_20d": qfq.get("return_20d"),
             **{key: qfq.get(key) for key in BASIC_MARKET_FIELDS},
-            "ma_alignment": qfq.get("ma_alignment"), "ma_alignment_ma": qfq.get("ma_alignment_ma"),
+            "ma_alignment": qfq.get("ma_alignment"),
+            "ma_alignment_duration": qfq.get("ma_alignment_duration"),
+            "ma_alignment_ma": qfq.get("ma_alignment_ma"),
             "turnover_5_sum": qfq.get("turnover_5_sum"), "turnover_5_avg": qfq.get("turnover_5_avg"), "qfq_as_of": qfq.get("qfq_as_of"),
             "eps_ratio_5y": _num(qfq.get("eps_ratio_5y")), "eps_ratio_5y_years": qfq.get("eps_ratio_5y_years"),
             "eps_ratio_5y_factor": qfq.get("eps_ratio_5y_factor"), "eps_ratio_5y_eps_sum": qfq.get("eps_ratio_5y_eps_sum"),
@@ -494,7 +499,9 @@ def _historical_universe(as_of_date: str) -> tuple[list[dict[str, Any]], str]:
         industry = industries.get((market, symbol.zfill(6)), {})
         rows.append({"market": market, "symbol": symbol.zfill(6), **value,
                      "stock_name": names.get((market, symbol.zfill(6)), symbol.zfill(6)),
-                     "industry": industry.get("industry_level_2_name") or industry.get("industry_level_1_name") or "", "rps_total": None,
+                     "industry": industry.get("industry_level_2_name") or industry.get("industry_level_1_name") or "",
+                     "industry_level_2_code": industry.get("industry_level_2_code") or "",
+                     "industry_level_2_name": industry.get("industry_level_2_name") or "", "rps_total": None,
                      "annual_dimensions": value.get("annual_dimensions") or {},
                      "quarterly_dimensions": value.get("quarterly_dimensions") or {}})
     return rows, as_of_date
@@ -517,13 +524,90 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         ma_alignments = _selected(params, "ma_alignment")
         if ma_alignments - {"5/10/20", "10/20/30", "10/30/60", "20/60/120"}:
             raise ValueError("unsupported ma_alignment")
-        if as_of_date and ma_alignments:
-            raise ValueError("ma_alignment is not supported for historical dates")
+        ma_days = []
+        for suffix in ("min", "max"):
+            text = str((params.get(f"ma_alignment_days_{suffix}") or [""])[0] or "").strip()
+            if text and (not text.isascii() or not text.isdecimal() or int(text) < 1):
+                raise ValueError(f"ma_alignment_days_{suffix} must be a positive integer")
+            ma_days.append(int(text) if text else None)
+        ma_days_min, ma_days_max = ma_days
+        if ma_days_min is not None and ma_days_max is not None and ma_days_min > ma_days_max:
+            raise ValueError("ma_alignment_days_min must not exceed ma_alignment_days_max")
+        ma_duration_active = ma_days_min is not None or ma_days_max is not None
+        if as_of_date and (ma_alignments or ma_duration_active):
+            raise ValueError("ma_alignment and its duration are not supported for historical dates")
+        return_n_text = str((params.get("return_n_days") or [""])[0] or "").strip()
+        return_n_bound_texts = [str((params.get(f"return_n_pct_{suffix}") or [""])[0] or "").strip()
+                                for suffix in ("min", "max")]
+        return_n_requested = bool(return_n_text or any(return_n_bound_texts))
+        if return_n_requested:
+            if not return_n_text or not return_n_text.isascii() or not return_n_text.isdecimal():
+                raise ValueError("return_n_days must be an integer in 1..250")
+            return_n_days = int(return_n_text)
+            if return_n_days not in range(1, 251):
+                raise ValueError("return_n_days must be an integer in 1..250")
+            if not any(return_n_bound_texts):
+                raise ValueError("return_n_days requires at least one return percentage bound")
+            return_n_bounds = [float(text) if text else None for text in return_n_bound_texts]
+            if any(value is not None and not math.isfinite(value) for value in return_n_bounds):
+                raise ValueError("return_n_pct bounds must be finite")
+            return_n_min, return_n_max = return_n_bounds
+            if return_n_min is not None and return_n_max is not None and return_n_min > return_n_max:
+                raise ValueError("return_n_pct_min must not exceed return_n_pct_max")
+            if as_of_date:
+                raise ValueError("custom N-day return is not supported for historical dates")
+        else:
+            return_n_days = return_n_min = return_n_max = None
+        change_days_n_text = str((params.get("change_days_n") or [""])[0] or "").strip()
+        change_bound_names = ("up_days_min", "up_days_max", "down_days_min", "down_days_max")
+        change_bound_texts = [str((params.get(name) or [""])[0] or "").strip()
+                              for name in change_bound_names]
+        change_days_requested = bool(change_days_n_text or any(change_bound_texts))
+        if change_days_requested:
+            if (not change_days_n_text or not change_days_n_text.isascii()
+                    or not change_days_n_text.isdecimal()):
+                raise ValueError("change_days_n must be an integer in 1..250")
+            change_days_n = int(change_days_n_text)
+            if change_days_n not in range(1, 251):
+                raise ValueError("change_days_n must be an integer in 1..250")
+            if not any(change_bound_texts):
+                raise ValueError("change_days_n requires at least one up/down day-count bound")
+            change_bounds = []
+            for name, text in zip(change_bound_names, change_bound_texts):
+                if text and (not text.isascii() or not text.isdecimal() or int(text) > change_days_n):
+                    raise ValueError(f"{name} must be an integer in 0..N")
+                change_bounds.append(int(text) if text else None)
+            up_days_min, up_days_max, down_days_min, down_days_max = change_bounds
+            if up_days_min is not None and up_days_max is not None and up_days_min > up_days_max:
+                raise ValueError("up_days_min must not exceed up_days_max")
+            if down_days_min is not None and down_days_max is not None and down_days_min > down_days_max:
+                raise ValueError("down_days_min must not exceed down_days_max")
+            if (up_days_min or 0) + (down_days_min or 0) > change_days_n:
+                raise ValueError("minimum up days plus minimum down days must not exceed N")
+            if as_of_date:
+                raise ValueError("N-day up/down counts are not supported for historical dates")
+        else:
+            change_days_n = up_days_min = up_days_max = down_days_min = down_days_max = None
         niche_leader = (params.get("niche_leader") or [""])[0].strip().lower()
         if niche_leader not in {"", "yes", "no"}: raise ValueError("niche_leader must be yes or no")
         stock_scope = (params.get("stock_scope") or [""])[0].strip().lower() or "all"
         if stock_scope not in STOCK_SCOPE_LABELS:
             raise ValueError("stock_scope must be one of " + ", ".join(STOCK_SCOPE_LABELS))
+        industry_l2_codes = _selected(params, "industry_l2_codes")
+        concept_codes = _selected(params, "concept_codes")
+        temperature_texts = _selected(params, "concept_temperature_levels")
+        industry_temperature_texts = _selected(params, "industry_temperature_levels")
+        if any(not value.isascii() or not value.isdecimal()
+               for value in temperature_texts | industry_temperature_texts):
+            raise ValueError("temperature levels must contain integers 0..5")
+        concept_temperature_levels = {int(value) for value in temperature_texts}
+        industry_temperature_levels = {int(value) for value in industry_temperature_texts}
+        if (concept_temperature_levels | industry_temperature_levels) - set(range(6)):
+            raise ValueError("temperature levels must contain integers 0..5")
+        if as_of_date and industry_temperature_levels:
+            raise ValueError("历史日期不支持当前行业温度范围，不能回退使用当前快照")
+        if as_of_date and (concept_codes or concept_temperature_levels):
+            raise ValueError("历史日期不支持当前概念及概念温度范围，不能回退使用当前快照")
         wyckoff_types = _selected(params, "wyckoff_type")
         wyckoff_statuses = _selected(params, "wyckoff_status")
         wyckoff_since = (params.get("wyckoff_since") or [""])[0].strip()
@@ -602,6 +686,33 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if code == "historical_snapshot_building" and as_of_date:
             error["progress"] = read_progress(HISTORICAL_FUNDAMENTALS, as_of_date)
         return {"ok": False, "error": error}
+    dynamic_qfq = _qfq_latest() if (return_n_requested or change_days_requested) else {}
+    return_n_qfq = dynamic_qfq if return_n_requested else {}
+    if return_n_requested:
+        assert isinstance(return_n_days, int)
+    if return_n_requested and rows and not any(
+        isinstance((metric := return_n_qfq.get((row["market"], row["symbol"]))), dict)
+        and metric.get("qfq_as_of") == data_date
+        and isinstance(metric.get("return_close_history"), list)
+        and len(metric["return_close_history"]) > return_n_days
+        for row in rows
+    ):
+        return {"ok": False, "error": {"code": "return_n_unavailable",
+            "message": f"{data_date} 的前复权N日涨跌幅快照缺失、过期或历史不足，请重建同日行情快照"}}
+    if change_days_requested:
+        assert isinstance(change_days_n, int)
+        change_n = change_days_n
+    else:
+        change_n = 0
+    if change_days_requested and rows and not any(
+        isinstance((metric := dynamic_qfq.get((row["market"], row["symbol"]))), dict)
+        and metric.get("qfq_as_of") == data_date
+        and isinstance(metric.get("return_close_history"), list)
+        and len(metric["return_close_history"]) > change_n
+        for row in rows
+    ):
+        return {"ok": False, "error": {"code": "change_days_unavailable",
+            "message": f"{data_date} 的前复权涨跌天数快照缺失、过期或历史不足，请重建同日行情快照"}}
     turnover_active = ranges["turnover_percentile_1y"] != (None, None) or sort == "turnover_percentile_1y" or "turnover_high" in presets
     if as_of_date:
         # Historical rows are immutable date-specific publications, never today's snapshot.
@@ -646,8 +757,9 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     ):
         return {"ok": False, "error": {"code": "market_metrics_unavailable",
                                       "message": f"{data_date} 的前复权基础行情快照缺失或过期，请先重建同日快照"}}
-    if ma_alignments and rows and not any(
+    if (ma_alignments or ma_duration_active) and rows and not any(
         row.get("qfq_as_of") == data_date and isinstance(row.get("ma_alignment"), list)
+        and (not ma_duration_active or isinstance(row.get("ma_alignment_duration"), dict))
         for row in rows
     ):
         return {"ok": False, "error": {"code": "ma_alignment_unavailable",
@@ -749,6 +861,27 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     market = (params.get("market") or [""])[0].strip().lower()
     # 01 股票范围先锁定股票池，再套用其余条件。
     scoped_rows = [row for row in rows if matches_scope(row.get("market"), row.get("symbol"), stock_scope)]
+    effective_industry_codes: set[str] = set()
+    effective_concept_codes: set[str] = set()
+    if industry_l2_codes or industry_temperature_levels or concept_codes or concept_temperature_levels:
+        try:
+            scope_index = stock_scope_index()
+        except (OSError, ValueError, KeyError) as exc:
+            return {"ok": False, "error": {"code": "scope_snapshot_unavailable", "message": f"行业/概念范围快照不可用：{exc}"}}
+        known_industries = set(scope_index.get("industry_members") or {})
+        known_concepts = set(scope_index.get("concept_members") or {})
+        if industry_l2_codes - known_industries:
+            return {"ok": False, "error": {"code": "invalid_filter", "message": "包含未知二级行业代码"}}
+        if concept_codes - known_concepts:
+            return {"ok": False, "error": {"code": "invalid_filter", "message": "包含未知概念代码"}}
+        scoped_rows, effective_industry_codes, effective_concept_codes = filter_rows_by_scope(
+            scoped_rows,
+            scope_index,
+            industry_codes=industry_l2_codes,
+            industry_temperature_levels=industry_temperature_levels,
+            concept_codes=concept_codes,
+            temperature_levels=concept_temperature_levels,
+        )
     lagged_wyckoff = []
     if wyckoff_snapshot is not None:
         lagged_wyckoff = [f"{row['market']}:{row['symbol']}" for row in scoped_rows
@@ -763,14 +896,70 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     excluded_entry = 0
     for row in scoped_rows:
         if wyckoff_snapshot is not None and f"{row['market']}:{row['symbol']}" in lagged_set: continue
+        if return_n_requested:
+            metric = return_n_qfq.get((row["market"], row["symbol"])) or {}
+            history = metric.get("return_close_history")
+            if (metric.get("qfq_as_of") != data_date or not isinstance(history, list)
+                    or len(history) <= return_n_days):
+                excluded_missing += 1
+                continue
+            start_price, end_price = _num(history[-1-return_n_days]), _num(history[-1])
+            if start_price is None or end_price is None or start_price <= 0 or end_price <= 0:
+                excluded_missing += 1
+                continue
+            return_n_pct = (end_price / start_price - 1.0) * 100.0
+            if ((return_n_min is not None and return_n_pct < return_n_min)
+                    or (return_n_max is not None and return_n_pct > return_n_max)):
+                continue
+            row = {**row, "return_n_days": return_n_days,
+                   "return_n_pct": round(return_n_pct, 4),
+                   "return_n_start_close": start_price, "return_n_end_close": end_price,
+                   "return_n_as_of": data_date, "return_n_price_basis": "tdx_export_qfq"}
+        if change_days_requested:
+            metric = dynamic_qfq.get((row["market"], row["symbol"])) or {}
+            history = metric.get("return_close_history")
+            if (metric.get("qfq_as_of") != data_date or not isinstance(history, list)
+                    or len(history) <= change_n):
+                excluded_missing += 1
+                continue
+            window = [_num(value) for value in history[-1-change_n:]]
+            if any(value is None or value <= 0 for value in window):
+                excluded_missing += 1
+                continue
+            numeric_window = [float(value) for value in window if value is not None]
+            up_days = sum(current > previous for previous, current in zip(numeric_window, numeric_window[1:]))
+            down_days = sum(current < previous for previous, current in zip(numeric_window, numeric_window[1:]))
+            flat_days = change_n - up_days - down_days
+            if ((up_days_min is not None and up_days < up_days_min)
+                    or (up_days_max is not None and up_days > up_days_max)
+                    or (down_days_min is not None and down_days < down_days_min)
+                    or (down_days_max is not None and down_days > down_days_max)):
+                continue
+            row = {**row, "change_days_n": change_n, "up_days": up_days,
+                   "down_days": down_days, "flat_days": flat_days,
+                   "change_days_as_of": data_date,
+                   "change_days_price_basis": "tdx_export_qfq"}
         if basic_active and row.get("qfq_as_of") != data_date:
             excluded_missing += 1
             continue
-        if ma_alignments:
-            if row.get("qfq_as_of") != data_date or not isinstance(row.get("ma_alignment"), list):
+        if ma_alignments or ma_duration_active:
+            if (row.get("qfq_as_of") != data_date or not isinstance(row.get("ma_alignment"), list)
+                    or (ma_duration_active and not isinstance(row.get("ma_alignment_duration"), dict))):
                 excluded_missing += 1
                 continue
-            if not ma_alignments.intersection(row["ma_alignment"]): continue
+            current_groups = set(row["ma_alignment"])
+            eligible_groups = current_groups.intersection(ma_alignments) if ma_alignments else current_groups
+            if not eligible_groups:
+                continue
+            if ma_duration_active:
+                durations = row["ma_alignment_duration"]
+                if not any(
+                    type(durations.get(group)) is int
+                    and (ma_days_min is None or durations[group] >= ma_days_min)
+                    and (ma_days_max is None or durations[group] <= ma_days_max)
+                    for group in eligible_groups
+                ):
+                    continue
         if turnover_active and row.get("turnover_percentile_1y_as_of") != data_date:
             excluded_missing += 1
             continue
@@ -883,6 +1072,21 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     return {"ok": True, "data_as_of": data_date, "effective_trade_date": data_date, "is_historical": bool(as_of_date),
             "pe_percentile_snapshot": {"status": pe_status, "as_of_date": data_date if pe_status == "ready" else None},
             "stock_scope": stock_scope, "stock_scope_label": STOCK_SCOPE_LABELS[stock_scope],
+            "scope_selection": {"industry_l2_codes": sorted(industry_l2_codes),
+                                "industry_temperature_levels": sorted(industry_temperature_levels),
+                                "effective_industry_codes": sorted(effective_industry_codes),
+                                "concept_codes": sorted(concept_codes),
+                                "concept_temperature_levels": sorted(concept_temperature_levels),
+                                "effective_concept_codes": sorted(effective_concept_codes)},
+            "return_n_filter": ({"days": return_n_days, "min_pct": return_n_min,
+                                 "max_pct": return_n_max, "price_basis": "tdx_export_qfq",
+                                 "definition": "close_today/close_N_valid_trading_days_ago-1"}
+                                if return_n_requested else None),
+            "change_days_filter": ({"days": change_days_n, "up_min": up_days_min,
+                                    "up_max": up_days_max, "down_min": down_days_min,
+                                    "down_max": down_days_max, "price_basis": "tdx_export_qfq",
+                                    "definition": "compare_each_valid_close_with_previous_valid_close"}
+                                   if change_days_requested else None),
             "total_universe": len(scoped_rows), "universe_total": len(rows), "total_matched": total,
             "page": page, "page_size": PAGE_SIZE, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE),
             "rows": page_rows, "excluded_missing": excluded_missing,
