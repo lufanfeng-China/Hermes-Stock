@@ -127,3 +127,53 @@ def test_disclosure_reader_filters_one_stock_and_rejects_unknown_ttm(tmp_path: P
     assert reports[1]["ttm_profit_yi"] == 4.52475
     assert reports[1]["total_shares"] == 1939968384
     assert reports[1]["announce_date"] == "20261030"
+
+
+def test_disclosure_reader_reuses_cumulative_ttm_formula_when_precomputed_value_is_zero(tmp_path: Path):
+    rows = {
+        "2025A": {"announce_date": 20260420, "近一年归母净利润（万元）": 1659977.0,
+                  "归属于母公司所有者的净利润": 16_599_770_112.0, "总股本": 7_742_858_240},
+        "2025Q3": {"announce_date": 20251030, "近一年归母净利润（万元）": 1500000.0,
+                   "归属于母公司所有者的净利润": 11_518_290_944.0, "总股本": 7_742_858_240},
+        "2026Q3": {"announce_date": 20261030, "近一年归母净利润（万元）": 0.0,
+                   "归属于母公司所有者的净利润": 13_056_983_040.0, "总股本": 7_742_858_240},
+    }
+    for period, row in rows.items():
+        pd.DataFrame([{"code": "002475", **row}]).set_index("code").to_parquet(tmp_path / f"{period}.parquet")
+
+    reports = read_stock_disclosures(tmp_path, "002475", 2025, 2026)
+    latest = next(row for row in reports if row["period"] == "2026Q3")
+
+    assert latest["ttm_profit_yi"] == 181.38462208
+    assert latest["ttm_profit_source"] == "cumulative_reports"
+    assert compute_daily_pe_percentile(
+        [(date(2026, 11, 19), 47.65)], reports,
+    )["current_pe"] == 20.340599
+
+
+def test_disclosure_reader_preserves_real_negative_precomputed_ttm(tmp_path: Path):
+    pd.DataFrame([{
+        "code": "000001", "announce_date": 20261030,
+        "近一年归母净利润（万元）": -10000.0,
+        "归属于母公司所有者的净利润": 5_000_000_000.0,
+        "总股本": 1_000_000_000,
+    }]).set_index("code").to_parquet(tmp_path / "2026Q3.parquet")
+
+    report = read_stock_disclosures(tmp_path, "000001", 2026, 2026)[0]
+
+    assert report["ttm_profit_yi"] == -1.0
+    assert report["ttm_profit_source"] == "precomputed_tdx"
+
+
+def test_disclosure_reader_does_not_treat_partial_quarter_profit_as_ttm(tmp_path: Path):
+    pd.DataFrame([{
+        "code": "000001", "announce_date": 20261030,
+        "近一年归母净利润（万元）": 0.0,
+        "归属于母公司所有者的净利润": 5_000_000_000.0,
+        "总股本": 1_000_000_000,
+    }]).set_index("code").to_parquet(tmp_path / "2026Q3.parquet")
+
+    report = read_stock_disclosures(tmp_path, "000001", 2026, 2026)[0]
+
+    assert report["ttm_profit_yi"] is None
+    assert report["ttm_profit_source"] is None

@@ -15,7 +15,8 @@ import sys
 import pandas as pd
 
 from app.stock_filter_history_progress import read_progress
-from app.stock_filter_market_snapshot import BASIC_MARKET_FIELDS, PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS
+from app.stock_filter_market_snapshot import (BASIC_MARKET_FIELDS, LIMIT_UP_FIELDS,
+                                              PRICE_PERCENTILE_FIELDS, TREND_TEMPLATE_FIELDS)
 from app.stock_filter_scope import filter_rows_by_scope, stock_scope_index
 import math
 
@@ -27,6 +28,36 @@ TURNOVER_PERCENTILE_SNAPSHOT = FINAL / "stock_filter_turnover_percentile_current
 PAGE_SIZE = 50
 BASIC_MARKET_FILTERS = ("return_1d", "volume_ratio_5", "ma5_distance_pct",
                         "ma10_distance_pct", "ma20_distance_pct")
+HISTORICAL_LATEST_ONLY_PARAMS = frozenset({
+    "industry_l2_codes", "industry_temperature_levels", "concept_codes", "concept_temperature_levels",
+    "rps_20_min", "rps_20_max", "rps_50_min", "rps_50_max", "rps_120_min", "rps_120_max",
+    "rps_250_min", "rps_250_max", "rps_total_min", "rps_total_max",
+    "return_n_days", "return_n_pct_min", "return_n_pct_max",
+    "change_days_n", "up_days_min", "up_days_max", "down_days_min", "down_days_max",
+    "limit_up_n_days", "eps_ratio_5y_min", "eps_ratio_5y_max",
+    "total_market_cap_min", "total_market_cap_max",
+    "free_float_market_cap_min", "free_float_market_cap_max",
+    "niche_leader", "composite_total_min", "composite_total_max",
+    "trend_weekly", "trend_monthly", "macd_cross", "golden_cross",
+    "ma_alignment", "ma_alignment_days_min", "ma_alignment_days_max",
+    "mrs_score_min", "mrs_score_max", "excess_return_5_pp_min", "excess_return_5_pp_max",
+    "excess_return_20_pp_min", "excess_return_20_pp_max",
+    "excess_return_50_pp_min", "excess_return_50_pp_max",
+    "excess_return_120_pp_min", "excess_return_120_pp_max",
+    "excess_return_250_pp_min", "excess_return_250_pp_max",
+    "down_market_win_rate_20_min", "down_market_win_rate_20_max",
+    "down_market_total_excess_pp_20_min", "down_market_total_excess_pp_20_max",
+    "return_5d_min", "return_5d_max", "return_20d_min", "return_20d_max",
+    "turnover_5_sum_min", "turnover_5_sum_max", "turnover_5_avg_min", "turnover_5_avg_max",
+})
+HISTORICAL_LATEST_ONLY_SORTS = frozenset({
+    "rps_total", "mrs_score", "excess_return_20_pp", "composite_total",
+    "total_market_cap", "free_float_market_cap", "eps_ratio_5y", "return_pct", "turnover_sum",
+})
+HISTORICAL_PARAM_LABELS = {
+    "industry_l2_codes": "二级行业成员", "industry_temperature_levels": "行业温度",
+    "concept_codes": "概念成员", "concept_temperature_levels": "概念温度",
+}
 SORT_FIELDS = {"eps_ratio_5y", "rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "pe_percentile_5y", "price_percentile_5y", "turnover_percentile_1y", "ps_ttm", "return_pct", "turnover_sum"}
 
 # 01 股票范围：先锁定股票池，再套用其它筛选条件。
@@ -324,6 +355,7 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "eps_ratio_5y_price": qfq.get("eps_ratio_5y_price"),
             "blowup_break_volume_price_ok": qfq.get("blowup_break_volume_price_ok"), "blowup_break_va": qfq.get("blowup_break_va"),
             "blowup_break_vol_ratios": qfq.get("blowup_break_vol_ratios") or [], "blowup_break_return_5d": qfq.get("blowup_break_return_5d"),
+            **{key: qfq.get(key) for key in LIMIT_UP_FIELDS},
             **{key: qfq.get(key) for key in TREND_TEMPLATE_FIELDS},
             "rps_20": _num(r.get("rps_20")), "rps_50": _num(r.get("rps_50")),
             "rps_120": _num(r.get("rps_120")), "rps_250": _num(r.get("rps_250")), "rps_total": round(total, 2),
@@ -333,6 +365,9 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "composite_total": _num(composite.get("score")), "composite_mode": composite.get("mode"),
             "annual_total": _num(a.get("score")), "annual_dimensions": a.get("dimensions") or {}, "annual_derived": a.get("derived") or {},
             "annual_assessment_track": a.get("assessment_track"), "annual_coverage_weight": _num(a.get("coverage_weight")),
+            "annual_score_version": a.get("score_version"), "annual_score_basis_track": a.get("score_basis_track"),
+            "annual_score_comparable": a.get("score_comparable"), "annual_growth_quality_basis": a.get("growth_quality_basis"),
+            "annual_cash_quality_basis": a.get("cash_quality_basis"),
             "quarterly_total": _num(q.get("score")), "quarterly_dimensions": q.get("dimensions") or {}, "quarterly_coverage_weight": _num(q.get("coverage_weight")),
             "quarterly_revenue_yoy": _num(q_quality.get("revenue_yoy")), "quarterly_ex_net_profit_yoy": _num(q_quality.get("ex_net_profit_yoy")),
             "quarterly_ttm_fcf_margin": _num(q_quality.get("ttm_fcf_margin")), "quarterly_profitability_status": q_quality.get("profitability_status"),
@@ -514,13 +549,25 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         if page < 1: raise ValueError("page must be >= 1")
         page_size = int((params.get("page_size") or [str(PAGE_SIZE)])[0])
         if page_size != PAGE_SIZE: raise ValueError("page_size is fixed at 50")
-        sort = (params.get("sort") or ["rps_total"])[0]
-        if sort not in SORT_FIELDS: raise ValueError("unsupported sort")
-        presets = {name.strip() for value in params.get("preset", []) for name in value.split(",") if name.strip()}
-        if presets - {"financial_reversal", "blowup_break", "trend_template", "turnover_high"}: raise ValueError("unsupported preset")
+        requested_sort = (params.get("sort") or [""])[0].strip()
         as_of_date = (params.get("as_of_date") or [""])[0].strip()
         if as_of_date:
             datetime.strptime(as_of_date, "%Y-%m-%d")
+        sort = requested_sort or "pe_ttm"
+        if sort not in SORT_FIELDS: raise ValueError("unsupported sort")
+        presets = {name.strip() for value in params.get("preset", []) for name in value.split(",") if name.strip()}
+        if presets - {"financial_reversal", "blowup_break", "trend_template", "turnover_high"}: raise ValueError("unsupported preset")
+        if as_of_date:
+            active_unsupported = next((name for name in sorted(HISTORICAL_LATEST_ONLY_PARAMS)
+                                       if any(str(value or "").strip() for value in params.get(name, []))), None)
+            if active_unsupported:
+                label = HISTORICAL_PARAM_LABELS.get(active_unsupported, "该筛选条件")
+                raise ValueError(f"{active_unsupported}（{label}）仅支持最新日期，历史日期禁止使用")
+            requested_scope = (params.get("stock_scope") or [""])[0].strip().lower()
+            if requested_scope == "csi300":
+                raise ValueError("stock_scope=csi300 only supports the latest constituent list")
+            if requested_sort and sort in HISTORICAL_LATEST_ONLY_SORTS:
+                raise ValueError(f"sort={sort} only supports the latest date")
         ma_alignments = _selected(params, "ma_alignment")
         if ma_alignments - {"5/10/20", "10/20/30", "10/30/60", "20/60/120"}:
             raise ValueError("unsupported ma_alignment")
@@ -588,6 +635,16 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
                 raise ValueError("N-day up/down counts are not supported for historical dates")
         else:
             change_days_n = up_days_min = up_days_max = down_days_min = down_days_max = None
+        limit_up_n_text = str((params.get("limit_up_n_days") or [""])[0] or "").strip()
+        if limit_up_n_text:
+            if (not limit_up_n_text.isascii() or not limit_up_n_text.isdecimal()
+                    or int(limit_up_n_text) not in range(1, 251)):
+                raise ValueError("limit_up_n_days must be an integer in 1..250")
+            limit_up_n_days = int(limit_up_n_text)
+            if as_of_date:
+                raise ValueError("limit_up_n_days is not supported for historical dates")
+        else:
+            limit_up_n_days = None
         niche_leader = (params.get("niche_leader") or [""])[0].strip().lower()
         if niche_leader not in {"", "yes", "no"}: raise ValueError("niche_leader must be yes or no")
         stock_scope = (params.get("stock_scope") or [""])[0].strip().lower() or "all"
@@ -882,6 +939,17 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
             concept_codes=concept_codes,
             temperature_levels=concept_temperature_levels,
         )
+    if limit_up_n_days is not None:
+        missing_limit_up = [f"{row['market']}:{row['symbol']}" for row in scoped_rows
+                            if (row.get('qfq_as_of') is not None and (
+                                row.get('limit_up_raw_as_of') != row.get('qfq_as_of')
+                                or row.get('limit_up_status') != 'ok'
+                                or row.get('limit_up_price_basis') != 'raw_unadjusted'
+                                or (row.get('limit_up_recent_days_ago') is not None
+                                    and type(row.get('limit_up_recent_days_ago')) is not int)))]
+        if missing_limit_up:
+            return {"ok": False, "error": {"code": "limit_up_unavailable",
+                "message": f"{data_date} 的原始价涨停快照缺失、过期或覆盖不完整（例如 {missing_limit_up[0]}），请重建同日行情快照"}}
     lagged_wyckoff = []
     if wyckoff_snapshot is not None:
         lagged_wyckoff = [f"{row['market']}:{row['symbol']}" for row in scoped_rows
@@ -896,6 +964,14 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     excluded_entry = 0
     for row in scoped_rows:
         if wyckoff_snapshot is not None and f"{row['market']}:{row['symbol']}" in lagged_set: continue
+        if limit_up_n_days is not None:
+            if row.get('limit_up_raw_as_of') != data_date:
+                excluded_missing += 1
+                continue
+            days_ago = row.get('limit_up_recent_days_ago')
+            if days_ago is None or days_ago >= limit_up_n_days:
+                continue
+            row = {**row, 'limit_up_filter_n_days': limit_up_n_days}
         if return_n_requested:
             metric = return_n_qfq.get((row["market"], row["symbol"])) or {}
             history = metric.get("return_close_history")
@@ -948,17 +1024,20 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
                 excluded_missing += 1
                 continue
             current_groups = set(row["ma_alignment"])
-            eligible_groups = current_groups.intersection(ma_alignments) if ma_alignments else current_groups
+            if ma_alignments and not ma_alignments.issubset(current_groups):
+                continue
+            eligible_groups = ma_alignments if ma_alignments else current_groups
             if not eligible_groups:
                 continue
             if ma_duration_active:
                 durations = row["ma_alignment_duration"]
-                if not any(
+                duration_matches = [
                     type(durations.get(group)) is int
                     and (ma_days_min is None or durations[group] >= ma_days_min)
                     and (ma_days_max is None or durations[group] <= ma_days_max)
                     for group in eligible_groups
-                ):
+                ]
+                if not (all(duration_matches) if ma_alignments else any(duration_matches)):
                     continue
         if turnover_active and row.get("turnover_percentile_1y_as_of") != data_date:
             excluded_missing += 1
@@ -991,12 +1070,14 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
             if row.get("macd_cross_as_of") != data_date or row.get("qfq_as_of") != data_date:
                 excluded_missing += 1
                 continue
-            if row.get("macd_cross") not in macds: continue
+            row_macds = {value.strip() for value in str(row.get("macd_cross") or "").split(",") if value.strip()}
+            if not macds.issubset(row_macds): continue
         if crosses:
             if row.get("golden_cross_as_of") != data_date or row.get("qfq_as_of") != data_date:
                 excluded_missing += 1
                 continue
-            if not crosses.intersection(str(row.get("golden_cross") or "").split(",")): continue
+            row_crosses = {value.strip() for value in str(row.get("golden_cross") or "").split(",") if value.strip()}
+            if not crosses.issubset(row_crosses): continue
         if wyckoff_snapshot is not None:
             stock = wyckoff_snapshot["stocks"].get(f"{row['market']}:{row['symbol']}") or {}
             event = _wyckoff_match(stock.get("events") or [], wyckoff_types, wyckoff_statuses,
@@ -1042,7 +1123,52 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
                 stock = {**stock, 'state_run': run}
             row = {**row, 'swing_structure': {**stock, **view}}
         filtered.append(row)
-    reverse = (params.get("order") or ["desc"])[0].lower() != "asc"
+    industry_counts: dict[tuple[str, str], int] = {}
+    unknown_industry = 0
+    for row in filtered:
+        industry_code = str(row.get("industry_level_2_code") or "").strip()
+        industry_name = str(row.get("industry_level_2_name") or row.get("industry") or "").strip()
+        if not industry_name:
+            industry_code, industry_name = "", "未分类"
+            unknown_industry += 1
+        key = (industry_code, industry_name)
+        industry_counts[key] = industry_counts.get(key, 0) + 1
+    distribution_total = len(filtered)
+    try:
+        distribution_scope_index = stock_scope_index()
+    except (OSError, ValueError, KeyError, json.JSONDecodeError):
+        distribution_scope_index = {}
+    temperature_lookup = distribution_scope_index.get("industry_temperature") or {}
+    industry_distribution_rows = []
+    for (code, name), count in industry_counts.items():
+        temperature = temperature_lookup.get(code) or {}
+        industry_distribution_rows.append({
+            "industry_code": code, "industry_name": name, "count": count,
+            "pct": round(count / distribution_total * 100.0, 2) if distribution_total else 0.0,
+            "temperature": temperature.get("temperature"),
+            "temperature_label": temperature.get("temperature_label") or "数据不足",
+            "temperature_previous": temperature.get("temperature_previous"),
+            "temperature_previous_label": temperature.get("temperature_previous_label") or "数据不足",
+            "temperature_change": temperature.get("temperature_change"),
+            "temperature_trend": temperature.get("temperature_trend") or "unknown",
+            "temperature_trend_label": temperature.get("temperature_trend_label") or "数据不足",
+            "temperature_previous_gap_days": temperature.get("temperature_previous_gap_days"),
+        })
+    industry_distribution_rows.sort(
+        key=lambda item: (item["industry_name"] == "未分类", -item["count"], item["industry_name"], item["industry_code"])
+    )
+    industry_distribution = {
+        "total": distribution_total,
+        "classified": distribution_total - unknown_industry,
+        "unknown": unknown_industry,
+        "membership_basis": "current_industry_membership",
+        "temperature_as_of": distribution_scope_index.get("industry_temperature_as_of"),
+        "temperature_window": distribution_scope_index.get("industry_temperature_window"),
+        "rows": industry_distribution_rows,
+    }
+    requested_order = (params.get("order") or [""])[0].lower()
+    default_order = "asc" if sort in {"pe_ttm", "pe_percentile_5y", "price_percentile_5y"} else "desc"
+    reverse = (requested_order or default_order) != "asc"
     def sort_key(row: dict[str, Any]) -> tuple[bool, float]:
         number = (_num(row.get(sort)) if sort not in {"price_percentile_5y", "turnover_percentile_1y"}
                   or row.get("qfq_as_of" if sort == "price_percentile_5y" else "turnover_percentile_1y_as_of") == data_date
@@ -1070,8 +1196,10 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
                 enriched.append(row)
             page_rows = enriched
     return {"ok": True, "data_as_of": data_date, "effective_trade_date": data_date, "is_historical": bool(as_of_date),
+            "sort": sort,
             "pe_percentile_snapshot": {"status": pe_status, "as_of_date": data_date if pe_status == "ready" else None},
             "stock_scope": stock_scope, "stock_scope_label": STOCK_SCOPE_LABELS[stock_scope],
+            "industry_distribution": industry_distribution,
             "scope_selection": {"industry_l2_codes": sorted(industry_l2_codes),
                                 "industry_temperature_levels": sorted(industry_temperature_levels),
                                 "effective_industry_codes": sorted(effective_industry_codes),
@@ -1087,6 +1215,10 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
                                     "down_max": down_days_max, "price_basis": "tdx_export_qfq",
                                     "definition": "compare_each_valid_close_with_previous_valid_close"}
                                    if change_days_requested else None),
+            "limit_up_filter": ({"days": limit_up_n_days, "price_basis": "raw_unadjusted",
+                                 "definition": "at_least_one_exact_close_limit_up_in_latest_N_valid_trading_days",
+                                 "window_includes_as_of_day": True}
+                                if limit_up_n_days is not None else None),
             "total_universe": len(scoped_rows), "universe_total": len(rows), "total_matched": total,
             "page": page, "page_size": PAGE_SIZE, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE),
             "rows": page_rows, "excluded_missing": excluded_missing,
@@ -1103,5 +1235,5 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
                                      'coverage': entry_snapshot.get('coverage') or {},
                                      'selected_days': entry_days, 'excluded_after_other_filters': excluded_entry}
                                     if entry_snapshot is not None else None),
-            "capabilities": {"available": ["rps", "financial_health", "trend", "macd", "ma_golden_cross", "ma_alignment_qfq", "wyckoff_qfq_snapshot", "swing_structure_qfq_snapshot"],
+            "capabilities": {"available": ["rps", "financial_health", "trend", "macd", "ma_golden_cross", "ma_alignment_qfq", "limit_up_raw_snapshot", "wyckoff_qfq_snapshot", "swing_structure_qfq_snapshot"],
                              "pending_snapshot": ["basic_market", "annual_derived"]}}

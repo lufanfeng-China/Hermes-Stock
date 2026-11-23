@@ -3,6 +3,46 @@ from unittest import mock
 
 
 class RelativeValuationDataLoaderTests(unittest.TestCase):
+    def test_resolve_ttm_preserves_negative_precomputed_value(self) -> None:
+        from app.relative_valuation.data_loader import resolve_ttm_metric_from_rows
+
+        value, source = resolve_ttm_metric_from_rows(
+            period="2026Q3", field_name="归属于母公司所有者的净利润",
+            precomputed_value=-10_000.0, precomputed_multiplier=10_000.0,
+            current_row={"归属于母公司所有者的净利润": 5_000_000_000.0},
+            prev_annual_row={"归属于母公司所有者的净利润": 10_000_000_000.0},
+            prev_same_row={"归属于母公司所有者的净利润": 4_000_000_000.0},
+        )
+
+        self.assertEqual(-100_000_000.0, value)
+        self.assertEqual("precomputed_tdx", source)
+
+    def test_resolve_quarterly_ttm_is_unknown_when_comparative_reports_are_missing(self) -> None:
+        from app.relative_valuation.data_loader import resolve_ttm_metric_from_rows
+
+        value, source = resolve_ttm_metric_from_rows(
+            period="2026Q3", field_name="归属于母公司所有者的净利润",
+            precomputed_value=0.0, precomputed_multiplier=10_000.0,
+            current_row={"归属于母公司所有者的净利润": 13_000_000_000.0},
+            prev_annual_row=None, prev_same_row=None,
+        )
+
+        self.assertIsNone(value)
+        self.assertEqual("unavailable", source)
+
+    def test_resolve_annual_ttm_adds_q4_standalone_to_q3_cumulative(self) -> None:
+        from app.relative_valuation.data_loader import resolve_ttm_metric_from_rows
+
+        value, source = resolve_ttm_metric_from_rows(
+            period="2025A", field_name="归属于母公司所有者的净利润",
+            precomputed_value=0.0, precomputed_multiplier=10_000.0,
+            current_row={"归属于母公司所有者的净利润": 2_000_000_000.0},
+            current_q3_row={"归属于母公司所有者的净利润": 8_000_000_000.0},
+        )
+
+        self.assertEqual(10_000_000_000.0, value)
+        self.assertEqual("cumulative_reports", source)
+
     def test_compute_ttm_metric_uses_cumulative_report_formula_for_quarterly_period(self) -> None:
         from app.relative_valuation.data_loader import compute_ttm_metric_from_rows
 
@@ -88,7 +128,17 @@ class RelativeValuationDataLoaderTests(unittest.TestCase):
 
         self.assertAlmostEqual(1200.0, pick_free_float_shares({"自由流通股(股)": 1200.0, "已上市流通A股": 1800.0}), places=6)
         self.assertAlmostEqual(1800.0, pick_free_float_shares({"自由流通股(股)": None, "已上市流通A股": 1800.0}), places=6)
+        self.assertAlmostEqual(1800.0, pick_free_float_shares({"自由流通股(股)": 0.0, "已上市流通A股": 1800.0}), places=6)
+        self.assertAlmostEqual(1800.0, pick_free_float_shares({"自由流通股(股)": -1.0, "已上市流通A股": 1800.0}), places=6)
+        self.assertAlmostEqual(1800.0, pick_free_float_shares({"自由流通股(股)": float("nan"), "已上市流通A股": 1800.0}), places=6)
         self.assertIsNone(pick_free_float_shares({"自由流通股(股)": None, "已上市流通A股": None}))
+
+    def test_pick_total_shares_falls_back_when_primary_is_nonpositive(self) -> None:
+        from app.relative_valuation.data_loader import pick_total_shares
+
+        self.assertEqual(2000.0, pick_total_shares({"总股本": 0.0, "实收资本（或股本）": 2000.0}))
+        self.assertEqual(2000.0, pick_total_shares({"总股本": -10.0, "实收资本（或股本）": 2000.0}))
+        self.assertIsNone(pick_total_shares({"总股本": 0.0, "实收资本（或股本）": 0.0}))
 
     def test_first_non_null_returns_first_available_value(self) -> None:
         from app.relative_valuation.data_loader import first_non_null
@@ -107,6 +157,13 @@ class RelativeValuationDataLoaderTests(unittest.TestCase):
 
         self.assertAlmostEqual(3.0, compute_ps_ttm(3000.0, 1000.0), places=6)
         self.assertIsNone(compute_ps_ttm(3000.0, None))
+
+    def test_compute_pe_ttm_is_unavailable_for_nonpositive_profit(self) -> None:
+        from app.relative_valuation.data_loader import compute_pe_ttm
+
+        self.assertEqual(20.0, compute_pe_ttm(2000.0, 100.0))
+        self.assertIsNone(compute_pe_ttm(2000.0, 0.0))
+        self.assertIsNone(compute_pe_ttm(2000.0, -1.0))
 
     def test_total_market_cap_ps_matches_tongdaxin_style_002160_example(self) -> None:
         from app.relative_valuation.data_loader import compute_market_cap_yi, compute_ps_ttm

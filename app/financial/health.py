@@ -123,9 +123,12 @@ def _ratio_series(numerators: list[float | None], denominators: list[float | Non
 def _profit_path(values: list[float | None]) -> str:
     if any(value is None for value in values):
         return "unknown"
-    first, last = values[0], values[-1]
+    numeric_values = [float(value) for value in values if value is not None]
+    first, last = numeric_values[0], numeric_values[-1]
     if first == 0 and last < 0:
         return "break_even_to_loss"
+    if first > 0 and last <= 0:
+        return "profit_to_loss"
     if first < 0 and last == 0:
         return "loss_to_break_even"
     if first <= 0 < last:
@@ -133,6 +136,56 @@ def _profit_path(values: list[float | None]) -> str:
     if first < 0 and last < 0:
         return "loss_narrowing" if last > first else "loss_widening" if last < first else "loss_flat"
     return "profitable" if first > 0 and last > 0 else "unknown"
+
+
+def _profit_path_score(values: list[float | None], path: str) -> float | None:
+    """Score economically meaningful loss/recovery paths when CAGR is invalid."""
+    if any(value is None for value in values) or path in {"unknown", "profitable"}:
+        return None
+    numeric_values = [float(value) for value in values if value is not None]
+    if path == "profit_to_loss":
+        return 0.0
+    score = {
+        "turnaround": 6.0,
+        "loss_to_break_even": 4.0,
+        "loss_narrowing": 3.0,
+        "loss_flat": 1.0,
+        "loss_widening": 0.0,
+        "break_even_to_loss": 0.0,
+    }.get(path)
+    if score is None:
+        return None
+    if len(numeric_values) >= 2 and all(value > 0 for value in numeric_values[-2:]):
+        score += 3
+    if len(numeric_values) >= 3 and all(value > 0 for value in numeric_values[-3:]):
+        score += 2
+    improvements = sum(current > previous for previous, current in zip(numeric_values, numeric_values[1:]))
+    if improvements >= 3:
+        score += 2
+    return min(13.0, score)
+
+
+def _absolute_cash_support_score(
+    ocf_values: list[float | None], revenue_values: list[float | None]
+) -> float | None:
+    """Score absolute cash creation when cumulative profit is non-positive."""
+    if (any(value is None for value in ocf_values)
+            or any(value is None for value in revenue_values)
+            or not revenue_values):
+        return None
+    ocf: list[float | None] = [float(value) for value in ocf_values if value is not None]
+    revenue: list[float | None] = [float(value) for value in revenue_values if value is not None]
+    if revenue[-1] is None or revenue[-1] <= 0:
+        return None
+    numeric_ocf = [value for value in ocf if value is not None]
+    score = 2 if sum(numeric_ocf) > 0 else 0
+    positive_years = sum(value > 0 for value in numeric_ocf)
+    score += 3 if positive_years == len(numeric_ocf) else 2 if positive_years >= 4 else 1 if positive_years >= 3 else 0
+    latest_margin = numeric_ocf[-1] / revenue[-1] * 100
+    score += 3 if latest_margin >= 10 else 2 if latest_margin >= 5 else 1 if latest_margin > 0 else 0
+    trend = _series_trend(ocf)
+    score += 2 if trend == "up" else 1 if trend == "flat" else 0
+    return float(min(10, score))
 
 
 def _average(values: list[float | None]) -> float | None:
@@ -166,6 +219,10 @@ def build_financial_health(
         "confidence": confidence,
         "score_label": score_label,
         "score_comparability": "comparable" if assessment_track == "five_year" else "not_comparable_to_five_year",
+        "score_basis_track": "five_year_standard" if assessment_track == "five_year" else assessment_track,
+        "score_comparable": assessment_track == "five_year",
+        "growth_quality_basis": "cagr",
+        "cash_quality_basis": "cash_profit_ratio",
         "score_breakdown": [],
         "rule_results": [],
         "periods": [str(row.get("period")) for row in rows],
@@ -194,12 +251,18 @@ def build_financial_health(
     if industry_level_1 is None or (isinstance(industry_level_1, str) and not industry_level_1.strip()):
         result["status"] = "not_applicable"
         result["reason"] = "industry_classification_unavailable"
+        result.update({"score_basis_track": "not_applicable", "score_comparable": False,
+                       "score_comparability": "not_applicable", "growth_quality_basis": "unavailable",
+                       "cash_quality_basis": "unavailable"})
         mark_all_rules_unavailable("industry_classification_unavailable")
         mark_all_outputs_unavailable("industry_classification_unavailable", "not_applicable")
         return result
     if industry_level_1 in SPECIAL_INDUSTRY_L1:
         result["status"] = "not_applicable"
         result["reason"] = f"{industry_level_1}行业不适用通用工商企业五年财务健康度评分规则"
+        result.update({"score_basis_track": "not_applicable", "score_comparable": False,
+                       "score_comparability": "not_applicable", "growth_quality_basis": "unavailable",
+                       "cash_quality_basis": "unavailable"})
         mark_all_rules_unavailable("not_applicable")
         mark_all_outputs_unavailable("not_applicable", "not_applicable")
         return result
@@ -249,6 +312,31 @@ def build_financial_health(
     inventory_gaps = [a - b if a is not None and b is not None else None for a, b in zip(_growth_series(values["inventory"]), revenue_growths)]
     goodwill_equities = _ratio_series(values["goodwill"], values["equity"], 100)
     ex_profit_path = _profit_path(values["ex_net_profit"])
+    profit_path_score = _profit_path_score(values["ex_net_profit"], ex_profit_path)
+    absolute_cash_support_score = (
+        _absolute_cash_support_score(values["ocf"], values["revenue"])
+        if total_ex_profit is not None and total_ex_profit <= 0 else None
+    )
+    if ex_profit_cagr is None and profit_path_score is None:
+        result["growth_quality_basis"] = "unavailable"
+    if cash_profit_ratio is None and absolute_cash_support_score is None:
+        result["cash_quality_basis"] = "unavailable"
+    if ex_profit_cagr is None and profit_path_score is not None:
+        result["growth_quality_basis"] = "profit_path"
+        if ex_profit_path in {"profit_to_loss", "break_even_to_loss", "loss_widening", "loss_flat"}:
+            result["score_basis_track"] = "deteriorating_track"
+        else:
+            result["score_basis_track"] = "recovery_track"
+        result["score_comparable"] = False
+        result["score_comparability"] = "not_comparable_to_standard_five_year"
+    if absolute_cash_support_score is not None:
+        result["cash_quality_basis"] = "absolute_cash_support"
+        if result["score_basis_track"] == "five_year_standard":
+            result["score_basis_track"] = "recovery_track"
+        result["score_comparable"] = False
+        result["score_comparability"] = "not_comparable_to_standard_five_year"
+    if result["score_basis_track"] in {"recovery_track", "deteriorating_track"}:
+        result["score_version"] = "financial-health-v3-recovery"
     goodwill_assets_ratios = _ratio_series(values["goodwill"], values["total_assets"], 100)
     display_receivable_gaps = [None, *receivable_gaps]
     display_inventory_gaps = [None, *inventory_gaps]
@@ -265,6 +353,7 @@ def build_financial_health(
         "ex_net_profit_path": ex_profit_path,
         "annual_cash_profit_ratio": annual_cash_profit_ratios[-1],
         "five_year_cash_profit_ratio": cash_profit_ratio,
+        "absolute_cash_support_score": absolute_cash_support_score,
         "fcf_margin": fcf_margin,
         "receivable_growth_gap": receivable_gap,
         "inventory_growth_gap": inventory_gap,
@@ -278,7 +367,10 @@ def build_financial_health(
     growth_score = _score_band(revenue_cagr, ((10, 7), (5, 5), (0, 3)))
     adjusted_score = _score_band(ex_profit_cagr, ((12, 7), (6, 5), (0, 3)))
     premium_score = _score_band(premium, ((5, 6), (0, 4), (-5, 2)))
-    growth = None if None in (growth_score, adjusted_score, premium_score) else growth_score + adjusted_score + premium_score
+    if profit_path_score is not None:
+        growth = growth_score + profit_path_score if growth_score is not None else None
+    else:
+        growth = None if None in (growth_score, adjusted_score, premium_score) else growth_score + adjusted_score + premium_score
 
     gross_score = _score_band(values["gross_margin"][-1] - values["gross_margin"][0] if None not in (values["gross_margin"][-1], values["gross_margin"][0]) else None, ((2, 5), (0, 3), (-2, 1)))
     net_score = _score_band(values["net_margin"][-1] - values["net_margin"][0] if None not in (values["net_margin"][-1], values["net_margin"][0]) else None, ((2, 5), (0, 3), (-2, 1)))
@@ -288,7 +380,8 @@ def build_financial_health(
 
     cash_ratio_score = _score_band(cash_profit_ratio, ((1.2, 10), (.8, 7), (.5, 3)))
     fcf_score = _score_band(fcf_margin, ((10, 10), (5, 7), (0, 4)))
-    cash = None if None in (cash_ratio_score, fcf_score) else cash_ratio_score + fcf_score
+    cash_basis_score = absolute_cash_support_score if absolute_cash_support_score is not None else cash_ratio_score
+    cash = cash_basis_score + fcf_score if cash_basis_score is not None and fcf_score is not None else None
 
     receivable_score = _score_band(-receivable_gap if receivable_gap is not None else None, ((5, 8), (-5, 6), (-15, 3)))
     inventory_score = _score_band(-inventory_gap if inventory_gap is not None else None, ((5, 7), (-5, 5), (-15, 2)))
@@ -367,9 +460,9 @@ def build_financial_health(
     start_roe, end_roe = values["roe_ex"][0], values["roe_ex"][-1]
     roe_change_for_score = end_roe - start_roe if start_roe is not None and end_roe is not None else None
     score_evidence = {
-        "growth_quality": {"metrics": {"revenue_cagr": revenue_cagr, "ex_net_profit_cagr": ex_profit_cagr, "profit_premium": premium}, "thresholds": {"revenue_cagr": "bands: >=10/5/0", "ex_net_profit_cagr": "bands: >=12/6/0", "profit_premium": "bands: >=5/0/-5"}, "subscores": {"growth": growth_score, "adjusted_profit": adjusted_score, "premium": premium_score}},
+        "growth_quality": {"metrics": {"revenue_cagr": revenue_cagr, "ex_net_profit_cagr": ex_profit_cagr, "profit_premium": premium, "profit_path": ex_profit_path}, "thresholds": {"revenue_cagr": "bands: >=10/5/0", "ex_net_profit_cagr": "bands: >=12/6/0", "profit_premium": "bands: >=5/0/-5", "profit_path": "v1 recovery/deterioration path table"}, "subscores": {"growth": growth_score, "adjusted_profit": adjusted_score, "premium": premium_score, "profit_path": profit_path_score}},
         "profitability": {"metrics": {"gross_margin_change": result["derived"]["gross_margin_change"], "net_margin_change": result["derived"]["net_margin_change"], "roe_ex": values["roe_ex"][-1], "roe_ex_change": roe_change_for_score}, "thresholds": {"margin_change": "bands: >=2/0/-2", "roe_ex": "bands: >=15/10/5/0", "roe_ex_change": "bands: >=2/0/-2"}, "subscores": {"gross_margin": gross_score, "net_margin": net_score, "roe_ex": roe_score, "roe_trend": roe_trend_score}},
-        "cash_quality": {"metrics": {"cash_profit_ratio": cash_profit_ratio, "fcf_margin": fcf_margin}, "thresholds": {"cash_profit_ratio": "bands: >=1.2/0.8/0.5", "fcf_margin": "bands: >=10/5/0"}, "subscores": {"cash_ratio": cash_ratio_score, "fcf_margin": fcf_score}},
+        "cash_quality": {"metrics": {"cash_profit_ratio": cash_profit_ratio, "absolute_cash_support_score": absolute_cash_support_score, "fcf_margin": fcf_margin}, "thresholds": {"cash_profit_ratio": "bands: >=1.2/0.8/0.5", "absolute_cash_support": "v1 cumulative OCF / positive years / latest OCF margin / OCF trend", "fcf_margin": "bands: >=10/5/0"}, "subscores": {"cash_ratio": cash_ratio_score, "absolute_cash_support": absolute_cash_support_score, "fcf_margin": fcf_score}},
         "working_capital": {"metrics": {"receivable_growth_gap": receivable_gap, "inventory_growth_gap": inventory_gap}, "thresholds": {"growth_gap": "bands: <=-5/5/15"}, "subscores": {"receivables": receivable_score, "inventory": inventory_score}},
         "reinvestment": {"metrics": {"capex_intensity": capex_intensity, "capex_intensity_trend": capex_intensity_trend, "revenue_growth_trend": reinvestment_revenue_trend, "fcf_margin": fcf_margin, "fcf_margin_trend": reinvestment_fcf_trend}, "thresholds": {"capex_chain": "营收趋势向上且 FCF Margin 趋势向上=5；CapEx强度上行且营收增速趋势向下=1；其他=3", "fcf_margin": "bands: >=5/0"}, "subscores": {"capex_chain": capex_score, "fcf_margin": _score_band(fcf_margin, ((5, 5), (0, 3)))}},
         "financial_risk": {"metrics": {"debt_ratio": values["debt_ratio"][-1], "goodwill_equity_ratio": goodwill_equity, "fcf_margin": fcf_margin, "debt_ratio_trend": _series_trend(values["debt_ratio"], .5, inverse=True), "goodwill_equity_trend": _series_trend(_ratio_series(values["goodwill"], values["equity"], 100), .5, inverse=True), "fcf_margin_trend": _series_trend(fcf_margins)}, "thresholds": {"debt_ratio": "bands: <=40/60/75", "goodwill_equity_ratio": "bands: <=10/25", "fcf_margin": "bands: >=0/-5", "five_year_trend": "debt ±2；goodwill/FCF 各±1"}, "subscores": {"debt": debt_score, "goodwill": goodwill_score, "fcf": risk_fcf_score, "debt_trend": debt_trend_score, "goodwill_trend": goodwill_trend_score, "fcf_trend": risk_fcf_trend_score}},
@@ -389,8 +482,8 @@ def build_financial_health(
         result["reason"] = "financial_risk_unavailable"
 
     investigations: list[dict[str, str]] = []
-    if ex_profit_path in {"turnaround", "loss_narrowing", "loss_widening", "loss_flat", "break_even_to_loss", "loss_to_break_even"}:
-        labels = {"turnaround": "扣非利润已扭亏", "loss_narrowing": "扣非亏损正在收窄", "loss_widening": "扣非亏损正在扩大", "loss_flat": "扣非利润持续亏损", "break_even_to_loss": "扣非利润由平亏转为亏损", "loss_to_break_even": "扣非利润由亏损恢复至盈亏平衡"}
+    if ex_profit_path in {"turnaround", "loss_narrowing", "loss_widening", "loss_flat", "break_even_to_loss", "loss_to_break_even", "profit_to_loss"}:
+        labels = {"turnaround": "扣非利润已扭亏", "loss_narrowing": "扣非亏损正在收窄", "loss_widening": "扣非亏损正在扩大", "loss_flat": "扣非利润持续亏损", "break_even_to_loss": "扣非利润由平亏转为亏损", "loss_to_break_even": "扣非利润由亏损恢复至盈亏平衡", "profit_to_loss": "扣非利润由盈利转为亏损"}
         investigations.append(_flag(f"ex_net_profit_{ex_profit_path}", labels[ex_profit_path], "扣非利润存在亏损期，CAGR 不适用；请结合绝对利润路径判断。"))
     capex_growth_latest = _growth(values["capex"][-2], values["capex"][-1])
     revenue_growth_latest = _growth(values["revenue"][-2], values["revenue"][-1])

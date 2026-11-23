@@ -10,6 +10,18 @@
   var addToWatchlist = document.getElementById('add-to-watchlist');
   var watchlistSelectedCount = document.getElementById('watchlist-selected-count');
   var watchlistFeedback = document.getElementById('watchlist-feedback');
+  var openIndustryDistribution = document.getElementById('open-industry-distribution');
+  var industryDistributionDialog = document.getElementById('industry-distribution-dialog');
+  var industryDistributionMeta = document.getElementById('industry-distribution-meta');
+  var industryDistributionDefinition = document.getElementById('industry-distribution-definition');
+  var industryDistributionRows = document.getElementById('industry-distribution-rows');
+  var latestIndustryDistribution = null;
+  var financialQuarterDialog = document.getElementById('financial-quarter-history-dialog');
+  var financialQuarterTitle = document.getElementById('financial-quarter-history-title');
+  var financialQuarterMeta = document.getElementById('financial-quarter-history-meta');
+  var financialQuarterCharts = document.getElementById('financial-quarter-history-charts');
+  var financialQuarterController = null;
+  var financialQuarterTrigger = null;
   var selectedStocks = new Map();
   var addingToWatchlist = false;
   var presetInput = form.elements.preset;
@@ -173,7 +185,7 @@
       scopeCatalog = data;
       document.getElementById('industry-scope-meta').textContent = '行业温度读取现有' + data.industry_temperature_window + '日快照，截至 ' + (data.industry_temperature_as_of || '未知') + '；明确行业与温度同时选择时取交集。';
       document.getElementById('concept-scope-meta').textContent = '概念温度读取现有' + data.concept_temperature_window + '日快照，截至 ' + (data.concept_temperature_as_of || '未知') + '；明确概念与温度同时选择时取交集。';
-      industryScopeOpen.disabled = false;
+      industryScopeOpen.disabled = Boolean(asOfDate.value);
       conceptScopeOpen.disabled = Boolean(asOfDate.value);
       renderScopeSummary();
     } catch (error) {
@@ -292,13 +304,25 @@
     return '<span class="health">' + fixed(score) + '</span>' + (period ? '<span class="subvalue">' + esc(period) + '</span>' : '');
   }
 
-  function reportReleaseReturnCell(row) {
-    var value = Number(row.report_release_return_pct);
-    if (!Number.isFinite(value)) return '—';
-    var sign = value > 0 ? '+' : '';
-    var klass = value > 0 ? 'report-return positive' : value < 0 ? 'report-return negative' : 'report-return';
-    var title = '财报公告日后首个交易日（T+1）开盘至最新原始日线收盘价；T+1：' + (row.report_release_entry_trading_day || '—') + '；最新收盘：' + (row.report_release_latest_close_as_of || '—');
-    return '<span class="' + klass + '" title="' + esc(title) + '">' + sign + fixed(value, 2) + '%</span>';
+  function annualScoreBasisLabel(track) {
+    return ({ recovery_track: '恢复型', deteriorating_track: '恶化型', not_applicable: '不适用' })[track] || '';
+  }
+
+  function annualHealthCell(row, historical) {
+    if (historical) return healthCell(row.annual_total, row.annual_period);
+    var score = row.annual_total === null || row.annual_total === undefined ? '—' : fixed(row.annual_total);
+    var name = row.stock_name || row.symbol;
+    var basisLabel = annualScoreBasisLabel(row.annual_score_basis_track);
+    var basisTitle = basisLabel ? '；五年健康口径：' + basisLabel + '，增长=' + (row.annual_growth_quality_basis || '未知') + '，现金=' + (row.annual_cash_quality_basis || '未知') : '';
+    var subvalue = [row.annual_period, basisLabel].filter(Boolean).join(' · ');
+    return '<button type="button" class="financial-history-trigger" data-market="' + esc(row.market) + '" data-symbol="' + esc(row.symbol) + '" data-stock-name="' + esc(name) + '" aria-label="查看' + esc(name) + '五年健康对应的单季度财务指标历史" title="查看七项单季度财务指标历史' + esc(basisTitle) + '">' +
+      '<span class="health">' + score + '</span>' + (subvalue ? '<span class="subvalue">' + esc(subvalue) + '</span>' : '') + '</button>';
+  }
+
+  function marketCapCell(row) {
+    var value = Number(row.total_market_cap);
+    if (!Number.isFinite(value) || value < 0) return '—';
+    return '<span class="market-cap" title="总市值，单位亿元">' + fixed(value, 1) + '</span>';
   }
 
   function priceCell(row, day) {
@@ -422,15 +446,6 @@
     return parts.join('');
   }
 
-  function epsRatioCell(row) {
-    var value = row.eps_ratio_5y;
-    if (value === null || value === undefined || !isFinite(Number(value))) return '—';
-    var years = Number(row.eps_ratio_5y_years || 0);
-    var cls = 'eps-ratio' + (Number(value) < 0 ? ' negative' : (Number(value) >= 50 ? ' positive' : ''));
-    var text = Number(value).toFixed(1) + '%';
-    var note = years && years < 5 ? '<span class="subvalue">' + years + '年年化</span>' : '';
-    return '<span class="' + cls + '" title="5年累计EPS ' + (row.eps_ratio_5y_eps_sum === null || row.eps_ratio_5y_eps_sum === undefined ? '—' : Number(row.eps_ratio_5y_eps_sum).toFixed(3)) + ' 元 · 年化系数 ' + (row.eps_ratio_5y_factor || 1) + ' · 股价 ' + (row.eps_ratio_5y_price || '—') + '">' + text + '</span>' + note;
-  }
 
   function swingCell(row, snapshot, historical) {
     var swing = row.swing_structure;
@@ -784,9 +799,80 @@
       updateWatchlistSelection();
     }
   });
+  function renderFinancialQuarterCharts(payload) {
+    var fragment = document.createDocumentFragment();
+    QuarterlyFinancialChart.METRICS.forEach(function (metric) {
+      var rendered = QuarterlyFinancialChart.renderQuarterMetric(payload, metric.key);
+      var card = document.createElement('section');
+      card.className = 'financial-quarter-chart-card';
+      var title = document.createElement('h3');
+      title.textContent = metric.label + ' · 单季度';
+      var basis = document.createElement('p');
+      basis.textContent = metric.basis + ' · ' + metric.unit;
+      var chart = document.createElement('div');
+      chart.className = 'financial-quarter-chart-scroll';
+      chart.setAttribute('role', 'img');
+      chart.setAttribute('aria-label', rendered.ariaLabel);
+      if (rendered.svg) chart.innerHTML = rendered.svg;
+      else {
+        var empty = document.createElement('p');
+        empty.className = 'financial-quarter-dialog-state';
+        empty.textContent = rendered.emptyMessage;
+        chart.appendChild(empty);
+      }
+      card.append(title, basis, chart);
+      fragment.appendChild(card);
+    });
+    financialQuarterCharts.replaceChildren(fragment);
+  }
+
+  async function showFinancialQuarterHistory(trigger) {
+    if (financialQuarterController) financialQuarterController.abort();
+    var controller = new AbortController();
+    financialQuarterController = controller;
+    financialQuarterTrigger = trigger;
+    var market = trigger.dataset.market;
+    var symbol = trigger.dataset.symbol;
+    var name = trigger.dataset.stockName || symbol;
+    financialQuarterTitle.textContent = name + ' ' + symbol + ' · 单季度财务指标';
+    financialQuarterMeta.textContent = '正在读取过去5个完整年度及今年已披露季度…';
+    financialQuarterCharts.innerHTML = '<p class="financial-quarter-dialog-state">正在加载七项财务指标…</p>';
+    if (!financialQuarterDialog.open) financialQuarterDialog.showModal();
+    try {
+      var query = new URLSearchParams({ market: market, symbol: symbol, years: '30' });
+      var response = await fetch('/api/stock-score-report-history?' + query.toString(), { signal: controller.signal });
+      var payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error && payload.error.message || '财务报告历史不可用');
+      if (controller.signal.aborted || !financialQuarterDialog.open || financialQuarterTrigger !== trigger) return;
+      var reports = Array.isArray(payload.reports) ? payload.reports : [];
+      var periods = reports.map(function (row) { return String(row.period || ''); }).filter(Boolean);
+      financialQuarterMeta.textContent = (periods.length ? '报告期 ' + periods[0] + '—' + periods[periods.length - 1] + '｜' : '') +
+        '最多5个完整年度＋今年已披露季度；不足5年显示全部历史｜累计值逐季差分｜金额亿元、EPS元/股｜正值红、负值绿。';
+      renderFinancialQuarterCharts(payload);
+    } catch (error) {
+      if (controller.signal.aborted || !financialQuarterDialog.open) return;
+      financialQuarterMeta.textContent = '单季度财务指标加载失败。';
+      financialQuarterCharts.innerHTML = '<p class="financial-quarter-dialog-state">' + esc(error.message || '未知错误') + '</p>';
+    }
+  }
+
+  results.addEventListener('click', function (event) {
+    var trigger = event.target.closest('.financial-history-trigger');
+    if (trigger && results.contains(trigger) && !asOfDate.value) showFinancialQuarterHistory(trigger);
+  });
+  document.getElementById('financial-quarter-history-close').addEventListener('click', function () { financialQuarterDialog.close(); });
+  financialQuarterDialog.addEventListener('close', function () {
+    if (financialQuarterDialog.open) return;
+    if (financialQuarterController) financialQuarterController.abort();
+    financialQuarterController = null;
+    var trigger = financialQuarterTrigger;
+    financialQuarterTrigger = null;
+    if (trigger && trigger.isConnected) trigger.focus();
+  });
+
   function renderRows(data) {
     if (!(data.rows || []).length) {
-      results.innerHTML = '<tr><td colspan="12" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
+      results.innerHTML = '<tr><td colspan="11" class="empty-state">没有符合当前条件的股票。可以放宽区间或点击重置后重新筛选。</td></tr>';
       return;
     }
     results.innerHTML = data.rows.map(function (row) {
@@ -794,21 +880,70 @@
       var market = esc(row.market).replace(/"/g, '&quot;');
       var symbol = esc(row.symbol).replace(/"/g, '&quot;');
       var checked = selectedStocks.has(row.market + ':' + row.symbol) ? ' checked' : '';
+      var nicheLeader = String(row.niche_leader || '').trim();
+      var nicheBadge = nicheLeader ? '<span class="niche-leader-badge" title="细分龙头标签：' + esc(nicheLeader).replace(/"/g, '&quot;') + '" aria-label="细分龙头">龙</span>' : '';
       return '<tr>' +
         '<td class="select-cell"><input type="checkbox" data-stock-select data-market="' + market + '" data-symbol="' + symbol + '" aria-label="选择 ' + market + ':' + symbol + '"' + checked + '></td>' +
-        '<td><a class="stock-link" href="' + href + '">' + esc(row.stock_name) + '</a><span class="stock-code">' + esc(row.market) + ':' + esc(row.symbol) + '</span></td>' +
+        '<td>' + nicheBadge + '<a class="stock-link" href="' + href + '">' + esc(row.stock_name) + '</a><span class="stock-code">' + esc(row.market) + ':' + esc(row.symbol) + '</span></td>' +
         '<td>' + esc(row.industry) + '</td>' +
         '<td class="num" title="' + esc(basicMarketTitle(row)).replace(/"/g, '&quot;') + '">' + priceCell(row, data.data_as_of) + '</td>' +
         '<td>' + valuationCell(row) + '</td>' +
         '<td class="num">' + turnoverCell(row, data.data_as_of) + '</td>' +
         '<td>' + relativeStrengthCell(row) + '</td>' +
-        '<td>' + healthCell(row.annual_total, row.annual_period) + '</td>' +
+        '<td>' + annualHealthCell(row, data.is_historical) + '</td>' +
         '<td>' + healthCell(row.quarterly_total, row.quarterly_period) + '</td>' +
-        '<td class="num">' + reportReleaseReturnCell(row) + '</td>' +
-        '<td class="num">' + epsRatioCell(row) + '</td>' +
+        '<td class="num">' + marketCapCell(row) + '</td>' +
         '<td class="swing-cell">' + swingCell(row, data.swing_snapshot || {as_of_date: data.data_as_of}, data.is_historical) + '</td>' +
       '</tr>';
     }).join('');
+  }
+
+  function temperatureCurrentCell(row) {
+    if (row.temperature === null || row.temperature === undefined || row.temperature === '') return '<span class="temperature-current" data-level="unknown">数据不足</span>';
+    var level = Number(row.temperature);
+    if (!Number.isInteger(level) || level < 0 || level > 5) return '<span class="temperature-current" data-level="unknown">数据不足</span>';
+    return '<span class="temperature-current" data-level="' + level + '" title="当前10日行业温度档位 ' + level + '">' + esc(row.temperature_label || '数据不足') + '（' + level + '）</span>';
+  }
+
+  function temperatureChangeCell(row) {
+    var change = Number(row.temperature_change);
+    var valid = Number.isFinite(change) && row.temperature_previous !== null && row.temperature_previous !== undefined;
+    if (!valid) return '<span class="temperature-change unknown">数据不足</span>';
+    var trend = ['warming', 'cooling', 'flat'].includes(row.temperature_trend) ? row.temperature_trend : (change > 0 ? 'warming' : change < 0 ? 'cooling' : 'flat');
+    var sign = change > 0 ? '+' : '';
+    var title = (row.temperature_previous_label || '数据不足') + '（' + row.temperature_previous + '）→ ' +
+      (row.temperature_label || '数据不足') + '（' + row.temperature + '）' +
+      (row.temperature_previous_gap_days == null ? '' : '；前次有效温度距今 ' + row.temperature_previous_gap_days + ' 个交易日');
+    return '<span class="temperature-change ' + trend + '" title="' + esc(title).replace(/"/g, '&quot;') + '">' +
+      esc(row.temperature_trend_label || (change > 0 ? '升温' : change < 0 ? '降温' : '持平')) + ' ' + sign + change + '</span>';
+  }
+
+  function renderIndustryDistribution(data) {
+    var distribution = data && data.industry_distribution;
+    latestIndustryDistribution = distribution || null;
+    openIndustryDistribution.disabled = !distribution;
+    if (!distribution) return;
+    var rows = distribution.rows || [];
+    var maxPct = rows.reduce(function (max, row) { return Math.max(max, Number(row.pct) || 0); }, 0) || 1;
+    industryDistributionMeta.textContent = '筛选结果 ' + Number(distribution.total || 0).toLocaleString('zh-CN') +
+      ' 只 · 已分类 ' + Number(distribution.classified || 0).toLocaleString('zh-CN') +
+      ' 只 · 二级行业 ' + rows.filter(function (row) { return row.industry_name !== '未分类'; }).length +
+      ' 个 · 未分类 ' + Number(distribution.unknown || 0).toLocaleString('zh-CN') + ' 只 · 数据日期 ' + (data.data_as_of || '—') +
+      ' · 温度' + (distribution.temperature_window || '—') + '日截至 ' + (distribution.temperature_as_of || '未知');
+    industryDistributionDefinition.textContent = '按当前完整筛选结果统计，不受每页50只分页影响；行业归属采用当前申万二级行业映射' +
+      (data.is_historical ? '（历史筛选日仍使用当前行业归属，不代表历史时点成分）' : '') +
+      '；当前温度与变化读取当前10日行业温度快照，不随历史筛选日期回溯。';
+    industryDistributionRows.innerHTML = rows.map(function (row, index) {
+      var pct = Number(row.pct) || 0;
+      var width = Math.max(pct > 0 ? 2 : 0, pct / maxPct * 100);
+      return '<tr><td class="industry-dist-rank">' + (index + 1) + '</td>' +
+        '<td class="industry-dist-name">' + esc(row.industry_name) + (row.industry_code ? '<span class="industry-dist-code">' + esc(row.industry_code) + '</span>' : '') + '</td>' +
+        '<td>' + temperatureCurrentCell(row) + '</td>' +
+        '<td>' + temperatureChangeCell(row) + '</td>' +
+        '<td class="num">' + Number(row.count || 0).toLocaleString('zh-CN') + '</td>' +
+        '<td class="num">' + fixed(pct, 2) + '%</td>' +
+        '<td><div class="industry-share-track" aria-label="' + esc(row.industry_name) + '占比' + fixed(pct, 2) + '%"><span class="industry-share-bar" style="width:' + width.toFixed(2) + '%"></span></div></td></tr>';
+    }).join('') || '<tr><td colspan="7" class="empty-state">当前筛选结果为空。</td></tr>';
   }
 
   function renderPagination(data) {
@@ -850,6 +985,7 @@
     var peSnapshot = data.pe_percentile_snapshot;
     var peText = peSnapshot && peSnapshot.status !== 'ready' ? ' · PE-TTM五年分位快照未覆盖该筛选日，暂不提供分位及分位筛选' : '';
     status.textContent = scopeText + ' · 数据日期 ' + (data.data_as_of || '—') + historical + peText + wyckoffText + swingText + entryText + ' · 已因已启用字段缺失排除 ' + Number(data.excluded_missing || 0).toLocaleString('zh-CN') + ' 只';
+    renderIndustryDistribution(data);
     renderRows(data);
     renderPagination(data);
   }
@@ -860,7 +996,7 @@
     var percent = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
     var stage = progress && progress.stage || '正在准备历史快照';
     status.textContent = '正在生成历史快照：' + stage + '（' + percent + '%），将自动重试。';
-    results.innerHTML = '<tr><td colspan="12" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '%" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
+    results.innerHTML = '<tr><td colspan="11" class="empty-state"><div>首次选择该交易日需生成公告日 point-in-time 快照；页面会自动刷新，无需重复点击。</div><progress value="' + percent + '%" max="100"></progress><strong> ' + percent + '%</strong></td></tr>';
     pages.innerHTML = '';
     if (historicalRetryTimer) window.clearTimeout(historicalRetryTimer);
     historicalRetryTimer = window.setTimeout(function () {
@@ -881,7 +1017,10 @@
     currentPage = page || 1;
     status.classList.remove('error');
     status.textContent = '正在按全市场条件筛选…';
-    results.innerHTML = '<tr><td colspan="12" class="empty-state">正在加载筛选结果…</td></tr>';
+    openIndustryDistribution.disabled = true;
+    latestIndustryDistribution = null;
+    if (industryDistributionDialog.open) industryDistributionDialog.close();
+    results.innerHTML = '<tr><td colspan="11" class="empty-state">正在加载筛选结果…</td></tr>';
     pages.innerHTML = '';
     try {
       var response = await fetch('/api/stock-filter?' + requestParams(currentPage).toString());
@@ -898,9 +1037,19 @@
       matchCount.textContent = '—';
       status.classList.add('error');
       status.textContent = error.message;
-      results.innerHTML = '<tr><td colspan="12" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
+      results.innerHTML = '<tr><td colspan="11" class="empty-state">无法读取筛选结果。请检查数据快照后重试。</td></tr>';
     }
   }
+
+  openIndustryDistribution.addEventListener('click', function () {
+    if (!latestIndustryDistribution) return;
+    if (typeof industryDistributionDialog.showModal === 'function') industryDistributionDialog.showModal();
+    else industryDistributionDialog.setAttribute('open', 'open');
+  });
+  document.getElementById('industry-distribution-close').addEventListener('click', function () { industryDistributionDialog.close(); });
+  industryDistributionDialog.addEventListener('click', function (event) {
+    if (event.target === industryDistributionDialog) industryDistributionDialog.close();
+  });
 
 
   function bindPresetTooltips() {
@@ -965,21 +1114,55 @@
   });
   function updateHistoricalMode() {
     var historical = Boolean(asOfDate.value);
-    var unsupported = ['rps_20_min', 'rps_20_max', 'rps_50_min', 'rps_50_max', 'rps_120_min', 'rps_120_max', 'rps_250_min', 'rps_250_max', 'rps_total_min', 'rps_total_max', 'total_market_cap_min', 'free_float_market_cap_min', 'free_float_market_cap_max', 'niche_leader', 'trend_daily', 'trend_weekly', 'trend_monthly', 'macd_cross', 'golden_cross', 'ma_alignment', 'ma_alignment_days_min', 'ma_alignment_days_max', 'return_n_days', 'return_n_pct_min', 'return_n_pct_max', 'change_days_n', 'up_days_min', 'up_days_max', 'down_days_min', 'down_days_max'];
-    unsupported.forEach(function (name) {
-      var field = form.elements[name];
-      if (field) field.disabled = historical;
+    var capabilities = window.StockFilterHistoryCapabilities;
+    if (!capabilities) throw new Error('历史日期筛选能力模块未加载');
+    capabilities.applyHistoricalFieldState(form, historical);
+    capabilities.applyHistoricalSortState(sort, historical);
+    ['rps', 'technical', 'relative-strength'].forEach(function (groupName) {
+      var group = document.querySelector('[data-filter-group="' + groupName + '"]');
+      if (!group) return;
+      group.classList.toggle('history-disabled-group', historical);
+      var groupToggle = group.querySelector('.filter-group-toggle');
+      if (historical) {
+        group.dataset.historyBadge = '历史不可用';
+        if (groupToggle) groupToggle.dataset.historyBadge = '历史不可用';
+      } else {
+        delete group.dataset.historyBadge;
+        if (groupToggle) delete groupToggle.dataset.historyBadge;
+      }
     });
-    conceptScopeOpen.disabled = historical || !scopeCatalog;
-    if (historical && selectedIndustryTemperatureLevels.size) {
-      selectedIndustryTemperatureLevels.clear();
-      status.textContent = '当前行业温度不支持历史日期，已清除行业温度；明确选择的二级行业范围保留。';
+    var stockScope = form.elements.stock_scope;
+    [stockScope.closest('label'), document.querySelector('label[for="sort"]')].forEach(function (control) {
+      if (!control) return;
+      control.classList.toggle('history-partial-control', historical);
+      if (historical) control.dataset.historyBadge = '部分选项不可用';
+      else delete control.dataset.historyBadge;
+    });
+    var csi300Option = Array.prototype.slice.call(stockScope.options).find(function (option) { return option.value === 'csi300'; });
+    if (csi300Option) {
+      csi300Option.disabled = historical;
+      csi300Option.title = historical ? '沪深300使用当前成分，仅支持最新日期。' : '';
     }
-    if (historical && (selectedConceptCodes.size || selectedTemperatureLevels.size)) {
+    if (historical && stockScope.value === 'csi300') stockScope.value = 'all';
+    industryScopeOpen.disabled = historical || !scopeCatalog;
+    conceptScopeOpen.disabled = historical || !scopeCatalog;
+    industryScopeOpen.title = historical ? '行业成员与行业温度均使用当前快照，仅支持最新日期。' : '';
+    conceptScopeOpen.title = historical ? '概念成员与概念温度均使用当前快照，仅支持最新日期。' : '';
+    [industryScopeOpen, conceptScopeOpen].forEach(function (button) {
+      button.classList.toggle('history-disabled-field', historical);
+      if (historical) button.dataset.historyBadge = '历史不可用';
+      else delete button.dataset.historyBadge;
+    });
+    if (historical) {
+      selectedIndustryCodes.clear();
+      selectedIndustryTemperatureLevels.clear();
       selectedConceptCodes.clear();
       selectedTemperatureLevels.clear();
-      status.textContent = '当前概念及概念温度不支持历史日期，已清除这两项范围；二级行业范围保留。';
     }
+    results.querySelectorAll('.financial-history-trigger').forEach(function (button) {
+      button.disabled = historical;
+      button.title = historical ? '历史筛选日期不展示当前财报历史，避免未来数据泄漏。' : '查看七项单季度财务指标历史';
+    });
     syncScopeInputs();
     renderScopeSummary();
   }
@@ -987,19 +1170,14 @@
   sort.addEventListener('change', function () { clearWatchlistSelection(); run(1); });
   asOfDate.addEventListener('change', function () {
     var historical = Boolean(asOfDate.value);
-    var removedIndustryTemperature = historical && selectedIndustryTemperatureLevels.size;
-    var removedCurrentConceptScope = historical && (selectedConceptCodes.size || selectedTemperatureLevels.size);
+    var removedCurrentScope = historical && (selectedIndustryCodes.size || selectedIndustryTemperatureLevels.size || selectedConceptCodes.size || selectedTemperatureLevels.size || form.elements.stock_scope.value === 'csi300');
     updateHistoricalMode();
     // Date is sent as as_of_date by requestParams; the server rejects a missing
     // point-in-time snapshot rather than falling back to current fundamentals.
     status.textContent = asOfDate.value
-      ? (removedIndustryTemperature && removedCurrentConceptScope
-          ? '当前行业温度、概念及概念温度不支持历史日期，已清除；明确选择的二级行业范围保留。'
-          : removedIndustryTemperature
-            ? '当前行业温度不支持历史日期，已清除行业温度；明确选择的二级行业范围保留。'
-            : removedCurrentConceptScope
-              ? '当前概念及概念温度不支持历史日期，已清除这两项范围；二级行业范围保留。'
-              : '已选择历史信号日期，等待筛选。')
+      ? (removedCurrentScope
+          ? '已选择历史信号日期；当前行业/概念范围或沪深300成分已清除，仅保留有同日历史证据的条件。'
+          : '已选择历史信号日期；仅最新条件已清空并禁用，悬停可查看原因。')
       : '已切回最新数据。';
   });
   loadScopeCatalog();

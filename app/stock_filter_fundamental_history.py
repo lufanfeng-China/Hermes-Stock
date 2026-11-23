@@ -151,6 +151,9 @@ def build_historical_fundamental_snapshot(*, as_of_date: str, period_frames: dic
         stocks[key] = {
             'annual_total': annual.get('score'), 'annual_dimensions': annual.get('dimensions') or {}, 'annual_period': annual.get('anchor_period'), 'annual_reason': annual.get('reason'),
             'annual_assessment_track': annual.get('assessment_track'), 'annual_coverage_weight': annual.get('coverage_weight'),
+            'annual_score_version': annual.get('score_version'), 'annual_score_basis_track': annual.get('score_basis_track'),
+            'annual_score_comparable': annual.get('score_comparable'), 'annual_growth_quality_basis': annual.get('growth_quality_basis'),
+            'annual_cash_quality_basis': annual.get('cash_quality_basis'),
             'quarterly_total': quarterly.get('score'), 'quarterly_dimensions': quarterly.get('dimensions') or {}, 'quarterly_period': quarterly.get('anchor_period'), 'quarterly_quality': quarterly.get('quality') or {}, 'quarterly_reason': quarterly.get('reason'),
             'quarterly_coverage_weight': quarterly.get('coverage_weight'),
             'quarterly_revenue_yoy': (quarterly.get('quality') or {}).get('revenue_yoy'),

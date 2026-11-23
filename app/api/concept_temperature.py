@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -15,6 +16,55 @@ DATASET_PATHS = {
 DATASET_PATH = DATASET_PATHS['concept']  # 兼容旧引用
 VALID_WINDOWS = {'3', '5', '10', '20', '60'}
 VALID_SCOPES = {'concept', 'industry'}
+
+MEMBER_METRIC_FIELDS = (
+    'mrs_score', 'turnover_percentile_1y', 'pe_ttm',
+    'annual_total', 'annual_period', 'annual_score_basis_track',
+    'annual_growth_quality_basis', 'annual_cash_quality_basis',
+    'quarterly_total', 'quarterly_period',
+)
+
+
+def _market_for_symbol(symbol: str) -> str:
+    value = str(symbol or '').strip().zfill(6)
+    if value.startswith('6'):
+        return 'sh'
+    if value.startswith('92'):
+        return 'bj'
+    return 'sz'
+
+
+@lru_cache(maxsize=2)
+def _stock_metric_map(as_of_date: str) -> dict[str, dict]:
+    """Reuse the cached stock-filter universe; never scan daily bars in HTTP."""
+    from app.stock_filter import _read_turnover_snapshot, _universe
+
+    rows, data_date = _universe()
+    if str(data_date) != str(as_of_date):
+        return {}
+    turnover_payload = _read_turnover_snapshot()
+    turnover = turnover_payload.get('stocks') if (
+        turnover_payload.get('as_of_date') == as_of_date and isinstance(turnover_payload.get('stocks'), dict)
+    ) else {}
+    result: dict[str, dict] = {}
+    for row in rows:
+        key = f"{row.get('market')}:{str(row.get('symbol') or '').zfill(6)}"
+        values = {field: row.get(field) for field in MEMBER_METRIC_FIELDS}
+        values['turnover_percentile_1y'] = (turnover.get(key) or {}).get('turnover_percentile_1y')
+        result[key] = values
+    return result
+
+
+def _enrich_members(rows: list[dict], as_of_date: str) -> list[dict]:
+    metrics = _stock_metric_map(as_of_date)
+    enriched = []
+    for source in rows:
+        row = dict(source)
+        symbol = str(row.get('symbol') or '').zfill(6)
+        key = f"{_market_for_symbol(symbol)}:{symbol}"
+        row.update(metrics.get(key) or {field: None for field in MEMBER_METRIC_FIELDS})
+        enriched.append(row)
+    return enriched
 SCOPE_LABELS = {'concept': '概念', 'industry': '二级行业'}
 
 
@@ -125,8 +175,37 @@ def handle_concept_temperature_members(query: str) -> dict:
             return {'ok': False, 'status': HTTPStatus.NOT_FOUND, 'error': 'concept not found'}
         from app.concept_temperature import fill_member_names
 
+        stocks = _enrich_members(fill_member_names(section['members'].get(concept_code, [])), data['as_of_date'])
         return {'ok': True, 'scope': scope, 'as_of_date': data['as_of_date'], 'window': int(window),
                 'price_basis': data['price_basis'], 'concept': concept,
-                'stocks': fill_member_names(section['members'].get(concept_code, []))}
+                'stocks': stocks}
+    except Exception as exc:
+        return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}
+
+
+def handle_stock_concept_temperature(query: str) -> dict:
+    """Return every published temperature concept containing one stock."""
+    params = {key: values[0] for key, values in parse_qs(query).items() if values}
+    symbol = str(params.get('symbol', '')).strip()
+    window = str(params.get('window', '10')).strip()
+    market = str(params.get('market', '')).strip().lower() or _market_for_symbol(symbol)
+    if not symbol.isdigit() or len(symbol) != 6:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'symbol must be a 6-digit code'}
+    if window not in VALID_WINDOWS:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'window must be 3, 5, 10, 20, or 60'}
+    if market not in {'sh', 'sz', 'bj'}:
+        return {'ok': False, 'status': HTTPStatus.BAD_REQUEST, 'error': 'market must be sh, sz or bj'}
+    try:
+        data = _load('concept'); _require_absolute(data); section = data['windows'][window]
+        member_codes = {
+            code for code, members in (section.get('members') or {}).items()
+            if any(str(row.get('symbol') or '').zfill(6) == symbol for row in (members or []))
+        }
+        concepts = [dict(row) for row in section.get('concepts') or [] if row.get('concept_code') in member_codes]
+        return {
+            'ok': True, 'market': market, 'symbol': symbol, 'window': int(window),
+            'as_of_date': data.get('as_of_date'), 'price_basis': data.get('price_basis'),
+            'concept_count': len(concepts), 'concepts': concepts,
+        }
     except Exception as exc:
         return {'ok': False, 'status': HTTPStatus.INTERNAL_SERVER_ERROR, 'error': str(exc)}

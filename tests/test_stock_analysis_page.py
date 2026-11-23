@@ -14,18 +14,29 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('loadSwingStructure(stock);', startup)
 
     def test_swing_chart_trigger_has_its_renderer_loaded_before_the_page_script(self):
-        """Regression: the trigger was dead because swing-chart.js was never included."""
+        """Both the legacy evidence button and overview structure card share one audited dialog."""
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
         self.assertRegex(html, r'<script src="/swing-chart\.js\?v=[^"]+"></script>')
         self.assertLess(html.index("swing-chart.js"), html.index("stock-analysis.js"),
                         "swing-chart.js must load before stock-analysis.js")
-        # A missing renderer must surface a message and open the dialog, never fail silently.
-        self.assertIn("typeof SwingChart === 'undefined'", js)
-        self.assertIn("K线组件未加载", js)
-        trigger = js.split("document.getElementById('swing-structure')?.addEventListener('click'")[-1][:700]
-        self.assertIn("swingDialog.showModal()", trigger)
-        self.assertIn("波峰波谷K线数据尚未就绪", trigger)
+        self.assertIn("波峰波谷 · 前复权K线与峰谷证据", html)
+        self.assertIn("function openSwingChart(trigger)", js)
+        opener = js.split("async function openSwingChart(trigger)")[-1][:4200]
+        self.assertIn("swingChartTrigger = trigger", opener)
+        self.assertIn("swingDialog.showModal()", opener)
+        self.assertIn("波峰波谷K线数据尚未就绪", opener)
+        self.assertIn("swingChartScroll.hidden = true", opener)
+        self.assertIn("SwingChart.chartEvidence", opener)
+        self.assertIn("swingKlineChart.load(evidence.bars, evidence.rpsHistory, 120)", opener)
+        self.assertIn("event.target.closest('[data-swing-chart-trigger]')", js)
+        self.assertIn("if (swingDialog.open) return", js)
+        self.assertIn("swingChartTrigger?.isConnected", js)
+        self.assertIn("margin:auto", html)
+        self.assertIn("box-sizing:border-box", html)
+        self.assertIn("width:min(1500px,calc(100vw - 24px))", html)
+        self.assertIn("height:min(600px,60vh)", html)
+        self.assertIn("height:min(220px,22vh)", html)
 
     def test_antifall_card_opens_auditable_down_market_day_dialog(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")

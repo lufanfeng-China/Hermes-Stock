@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import struct
 from typing import Any, Callable
 
 import pandas as pd
@@ -412,8 +413,111 @@ def _price_percentile_5y(group: pd.DataFrame) -> dict[str, Any]:
     return result
 
 
+_RAW_DAY_RECORD = struct.Struct('<IIIIIfII')
+_LIMIT_UP_BANDS = (5, 10, 20, 30)
+_LIMIT_UP_DEFINITION = 'close_equals_exact_board_specific_limit_price'
+LIMIT_UP_FIELDS = (
+    'limit_up_raw_as_of', 'limit_up_status', 'limit_up_recent_days_ago',
+    'limit_up_recent_date', 'limit_up_recent_band_pct', 'limit_up_price_basis',
+    'limit_up_definition', 'limit_up_history_bars', 'limit_up_error',
+)
+
+
+def _day_int(value: Any) -> int:
+    text = str(value).strip()[:10].replace('-', '')
+    if len(text) != 8 or not text.isascii() or not text.isdecimal():
+        raise ValueError(f'invalid trading day: {value}')
+    return int(text)
+
+
+def _iso_day(value: int) -> str:
+    text = f'{int(value):08d}'
+    return f'{text[:4]}-{text[4:6]}-{text[6:8]}'
+
+
+def _limit_up_empty(status: str) -> dict[str, Any]:
+    return {
+        'limit_up_raw_as_of': None,
+        'limit_up_status': status,
+        'limit_up_recent_days_ago': None,
+        'limit_up_recent_date': None,
+        'limit_up_recent_band_pct': None,
+        'limit_up_price_basis': 'raw_unadjusted',
+        'limit_up_definition': _LIMIT_UP_DEFINITION,
+        'limit_up_history_bars': 0,
+        'limit_up_error': None,
+    }
+
+
+def _limit_up_metrics_from_raw_bars(raw_bars: list[tuple[int, int]], as_of: Any,
+                                    *, max_days: int = 250,
+                                    listing_guard_bars: int = 20,
+                                    bands: tuple[int, ...] = _LIMIT_UP_BANDS) -> dict[str, Any]:
+    """Find the latest exact close-limit event in raw, unadjusted daily bars."""
+    cutoff = _day_int(as_of)
+    bars = sorted((int(day), int(close)) for day, close in raw_bars
+                  if int(day) <= cutoff and int(close) > 0)
+    if not bars:
+        return _limit_up_empty('missing_bars')
+    result = _limit_up_empty('ok')
+    result['limit_up_raw_as_of'] = _iso_day(bars[-1][0])
+    result['limit_up_history_bars'] = min(len(bars), max_days)
+    earliest = max(listing_guard_bars, len(bars) - max_days)
+    for index in range(len(bars) - 1, earliest - 1, -1):
+        previous = bars[index - 1][1]
+        close = bars[index][1]
+        if previous <= 0:
+            continue
+        # Prices are integer cents.  Adding 50 before integer division gives
+        # exchange-style half-up cent rounding without float/QFQ approximation.
+        matched = next((pct for pct in bands
+                        if close == (previous * (100 + pct) + 50) // 100), None)
+        if matched is None:
+            continue
+        result.update({
+            'limit_up_recent_days_ago': len(bars) - 1 - index,
+            'limit_up_recent_date': _iso_day(bars[index][0]),
+            'limit_up_recent_band_pct': matched,
+        })
+        break
+    return result
+
+
+def _limit_up_bands_for_symbol(market: str, symbol: str) -> tuple[int, ...]:
+    market, symbol = str(market).lower(), str(symbol).zfill(6)
+    if market == 'bj':
+        return (30,)
+    if (market == 'sh' and symbol.startswith(('688', '689'))) or (
+            market == 'sz' and symbol.startswith(('300', '301', '302'))):
+        return (20,)
+    # The production stock-filter universe excludes ST/*ST/S names, so its
+    # Shanghai/Shenzhen main-board members use the ordinary 10% band.
+    return (10,)
+
+
+def load_raw_limit_up_metrics(tdx_dir: Path, as_of_by_key: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Read raw ``vipdoc/<market>/lday`` files once during snapshot build."""
+    root = Path(tdx_dir)
+    metrics: dict[str, dict[str, Any]] = {}
+    for key, as_of in as_of_by_key.items():
+        try:
+            market, symbol = str(key).split(':', 1)
+            path = root / 'vipdoc' / market / 'lday' / f'{market}{symbol}.day'
+            data = path.read_bytes()
+            if len(data) % _RAW_DAY_RECORD.size:
+                raise ValueError('raw .day record size is not divisible by 32')
+            bars = [(record[0], record[4]) for record in _RAW_DAY_RECORD.iter_unpack(data)]
+            metrics[key] = _limit_up_metrics_from_raw_bars(
+                bars, as_of, bands=_limit_up_bands_for_symbol(market, symbol))
+        except (OSError, ValueError, IndexError) as exc:
+            metrics[key] = _limit_up_empty('missing_file')
+            metrics[key]['limit_up_error'] = str(exc)
+    return metrics
+
+
 def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int], Any] | None = None,
-                         annual_eps: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+                         annual_eps: dict[str, dict[str, Any]] | None = None,
+                         raw_limit_up: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """Convert QFQ daily bars to a small current-per-symbol snapshot."""
     required = {"date", "market", "symbol", "open", "close", "volume", "free_float_shares"}
     missing = required.difference(frame.columns)
@@ -441,6 +545,7 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
                                 "trend_daily": daily_trend, "trend_daily_label": _trend_label(daily_trend),
                                 "short_trend": short_trend, "short_trend_label": _trend_label(short_trend),
                                 "return_close_history": [round(float(value), 4) for value in close[-251:]]}
+        item.update((raw_limit_up or {}).get(f'{market}:{symbol}') or _limit_up_empty('not_built'))
         item.update(_basic_market_metrics(group))
         item.update(_golden_cross_metrics(close))
         item.update(_macd_cross_metrics(close))
@@ -467,4 +572,4 @@ def build_market_metrics(frame: pd.DataFrame, *, on_progress: Callable[[int, int
         metrics[f"{market}:{symbol}"] = item
         if on_progress is not None and (completed == total_groups or completed % 50 == 0):
             on_progress(completed, total_groups)
-    return {"schema_version": "stock-filter-market-metrics-v6", "stocks": len(metrics), "metrics": metrics}
+    return {"schema_version": "stock-filter-market-metrics-v7", "stocks": len(metrics), "metrics": metrics}

@@ -44,15 +44,31 @@ class _Materializer:
     _pick = staticmethod(search_index._pick)
 
 
-def _market_map() -> dict[str, str]:
+def _infer_market(symbol: str) -> str | None:
+    normalized = str(symbol or "").zfill(6)
+    if normalized.startswith("6"):
+        return "sh"
+    if normalized.startswith(("00", "30")):
+        return "sz"
+    if normalized.startswith("92"):
+        return "bj"
+    return None
+
+
+def _market_map(financial_symbols: list[str] | set[str] | tuple[str, ...] = ()) -> dict[str, str]:
     # The warehouse index has only codes.  Derive market from the project's A-share
     # universe convention, rather than taking the first TNF hit (e.g. SH000001 index).
     result: dict[str, str] = {}
     for row in search_index.load_security_rows():
         symbol = str(row.get("symbol") or "").zfill(6)
-        market = "sh" if symbol.startswith("6") else "sz" if symbol.startswith(("00", "30")) else "bj" if symbol.startswith("92") else ""
+        market = _infer_market(symbol)
         if market:
             result[symbol] = market
+    for raw_symbol in financial_symbols:
+        symbol = str(raw_symbol or "").zfill(6)
+        market = _infer_market(symbol)
+        if market:
+            result.setdefault(symbol, market)
     return result
 
 
@@ -92,11 +108,12 @@ def _report(period: str, row: pd.Series) -> dict:
 
 
 def build_snapshot() -> dict:
-    frames, markets, industries = _read_periods(), _market_map(), _industry_map()
+    frames, industries = _read_periods(), _industry_map()
     # Membership only requires the five annual frames: a stock that skipped an
     # earlier quarter still belongs in the pool, its quarterly track just starts
     # from the newest period it actually filed.
     codes = set.intersection(*(set(frames[period].index) for period in ANNUAL_PERIODS))
+    markets = _market_map(codes)
     stocks = {}
     for n, symbol in enumerate(sorted(codes), 1):
         market = markets.get(symbol)
@@ -127,7 +144,7 @@ def build_snapshot() -> dict:
                   or (record.get("quarterly") or {}).get("anchor_period") or "unavailable")
         periods_used[period] = periods_used.get(period, 0) + 1
     return {
-        "schema_version": "stock-filter-strict-financial-v2",
+        "schema_version": "stock-filter-strict-financial-v3-recovery-track",
         "annual_anchor": "2025A",
         "quarterly_mode": "per_stock_latest",
         "quarterly_newest_period": QUARTERLY_PERIODS[-1],

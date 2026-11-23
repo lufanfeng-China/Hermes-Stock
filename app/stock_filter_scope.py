@@ -79,6 +79,7 @@ def build_scope_index(
             concept_names.setdefault(code, _text(row.get("concept_name")))
 
     industry_temperature: dict[str, dict[str, Any]] = {}
+    temperature_labels = {item["value"]: item["label"] for item in TEMPERATURE_OPTIONS}
     industry_window = (industry_temperature_payload.get("windows") or {}).get(str(temperature_window)) or {}
     for row in industry_window.get("concepts") or []:
         code = _text(row.get("concept_code"))
@@ -89,6 +90,12 @@ def build_scope_index(
             "temperature_label": _text(row.get("temperature_label")),
             "heat_score": row.get("heat_score"),
             "heat_rank": row.get("heat_rank"),
+            "temperature_previous": row.get("temperature_previous"),
+            "temperature_previous_label": temperature_labels.get(row.get("temperature_previous"), "数据不足"),
+            "temperature_previous_gap_days": row.get("temperature_previous_gap_days"),
+            "temperature_change": row.get("temperature_change"),
+            "temperature_trend": _text(row.get("temperature_trend")),
+            "temperature_trend_label": _text(row.get("temperature_trend_label")),
         }
 
     industries = []
@@ -100,6 +107,12 @@ def build_scope_index(
             "temperature_label": temp.get("temperature_label") or "数据不足",
             "heat_score": temp.get("heat_score"),
             "heat_rank": temp.get("heat_rank"),
+            "temperature_previous": temp.get("temperature_previous"),
+            "temperature_previous_label": temp.get("temperature_previous_label") or "数据不足",
+            "temperature_previous_gap_days": temp.get("temperature_previous_gap_days"),
+            "temperature_change": temp.get("temperature_change"),
+            "temperature_trend": temp.get("temperature_trend"),
+            "temperature_trend_label": temp.get("temperature_trend_label") or "数据不足",
         })
     industries.sort(key=lambda row: row["name"])
     concepts = []

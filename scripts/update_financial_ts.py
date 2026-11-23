@@ -24,10 +24,14 @@ update_financial_ts.py
 """
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import sys
+import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from collections import defaultdict
 
@@ -40,6 +44,8 @@ TDX_CW  = Path(os.environ.get("TDX_CW_DIR", "/home/lufanfeng/tdx_data/vipdoc/cw"
 OUT_DIR = PROJECT / "data/derived/financial_ts/by_quarter"
 META_FP = PROJECT / "data/derived/financial_ts/meta.json"
 CHANGE_MANIFEST_FP = PROJECT / "data/derived/manifests/financial_changes_current.json"
+MIN_COMPLETE_PACKAGE_BYTES = 1024
+MIN_FULL_PERIOD_ROWS = 1000
 
 sys.path.insert(0, "/home/lufanfeng/.venvs/moontdx-china-stock-data/lib/python3.12/site-packages")
 
@@ -80,6 +86,7 @@ def canonical_code(idx_val) -> str:
 
 def _period_order(p: str) -> tuple:
     """将 '2023A' / '2023Q1' 转为排序键 (year, q)。年报 q=5 排在 Q3 之后。"""
+    p = str(p or "")
     if not p:
         return (0, 0)
     year = int(p[:4])
@@ -88,6 +95,271 @@ def _period_order(p: str) -> tuple:
     else:
         q = int(p[-1])
     return (year, q)
+
+
+def source_package_fingerprint(path: Path) -> dict[str, object]:
+    """Return a content fingerprint; mtime alone is never revision evidence."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    stat = Path(path).stat()
+    return {
+        "sha256": digest.hexdigest(),
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
+
+
+def changed_source_packages(meta: dict, packages: list[Path]) -> list[dict[str, object]]:
+    """Detect same-name package revisions previously recorded in meta.
+
+    Unknown packages are handled by the ordinary new-report path and baselined
+    after successful publication; they are not revisions by definition.
+    """
+    known = meta.get("source_packages") or {}
+    changed = []
+    for path in packages:
+        path = Path(path)
+        period = parse_period(int(path.stem[-8:]))
+        previous = known.get(path.name)
+        fingerprint = source_package_fingerprint(path)
+        if not isinstance(previous, dict) or not previous.get("sha256"):
+            if (OUT_DIR / f"{period}.parquet").exists():
+                changed.append({
+                    "path": path,
+                    "period": period,
+                    "fingerprint": fingerprint,
+                    "previous_fingerprint": previous,
+                    "reason": "untracked_existing_period",
+                })
+            elif path.stat().st_size >= MIN_COMPLETE_PACKAGE_BYTES:
+                changed.append({
+                    "path": path,
+                    "period": period,
+                    "fingerprint": fingerprint,
+                    "previous_fingerprint": previous,
+                    "reason": "untracked_new_package",
+                })
+            continue
+        if fingerprint["sha256"] == previous.get("sha256") and previous.get("published") is False:
+            changed.append({
+                "path": path,
+                "period": period,
+                "fingerprint": fingerprint,
+                "previous_fingerprint": previous,
+                "reason": "incomplete_publication",
+            })
+        elif fingerprint["sha256"] != previous.get("sha256"):
+            changed.append({
+                "path": path,
+                "period": period,
+                "fingerprint": fingerprint,
+                "previous_fingerprint": previous,
+                "reason": "sha256_changed",
+            })
+    return changed
+
+
+def source_packages_to_scan(meta: dict, packages: list[Path], latest_limit: int = 5) -> list[Path]:
+    """Always scan registered packages plus recent unknown packages/new periods."""
+    ordered = sorted((Path(path) for path in packages), key=lambda path: path.name, reverse=True)
+    known = set((meta.get("source_packages") or {}).keys())
+    latest = {path.name for path in ordered[:latest_limit]}
+    return [path for path in ordered if path.name in known or path.name in latest]
+
+
+def load_full_period_frame(path: Path) -> pd.DataFrame:
+    """Read the complete corrected package with the warehouse's canonical schema."""
+    from scripts.financial_ts_builder import load_cw_zip
+
+    frame = load_cw_zip(Path(path))
+    if frame is None:
+        raise ValueError(f"failed to read source package: {path}")
+    frame.index = frame.index.astype(str).map(canonical_code)
+    frame.index.name = "code"
+    return frame.sort_index(kind="stable")
+
+
+def _validate_period_frame(period: str, frame: pd.DataFrame) -> None:
+    if frame.empty:
+        raise ValueError(f"{period}: source package produced no rows")
+    if frame.index.has_duplicates:
+        raise ValueError(f"{period}: duplicate stock codes")
+    if "report_date" not in frame.columns:
+        raise ValueError(f"{period}: missing report_date")
+    periods = {
+        parse_period(int(value))
+        for value in pd.to_numeric(frame["report_date"], errors="coerce").dropna()
+    }
+    if periods != {period}:
+        raise ValueError(f"{period}: report_date periods mismatch: {sorted(periods)}")
+    numeric = frame.select_dtypes(include=[np.number])
+    if np.isinf(numeric.to_numpy(dtype=float, copy=False)).any():
+        raise ValueError(f"{period}: non-finite infinite values")
+
+
+def _normalize_period_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    frame = frame.copy()
+    frame.index = frame.index.astype(str).map(canonical_code)
+    frame.index.name = "code"
+    frame["report_date"] = pd.to_numeric(frame["report_date"], errors="raise").astype("int64")
+    if "announce_date" in frame.columns:
+        source = frame["announce_date"]
+    elif "财报公告日期" in frame.columns:
+        source = frame["财报公告日期"]
+    else:
+        source = pd.Series(0, index=frame.index)
+    frame["announce_date"] = [
+        int(float(value)) if pd.notna(value) and float(value) >= 10_000_000
+        else format_announce_date(value)
+        for value in source
+    ]
+    return frame.sort_index(kind="stable")
+
+
+def _validate_period_coverage(
+    period: str,
+    new_codes: set[str],
+    old_codes: set[str],
+    *,
+    allow_large_deletion: bool = False,
+) -> dict[str, object]:
+    invalid_codes = sorted(code for code in new_codes if len(code) != 6 or not code.isdigit())
+    if invalid_codes:
+        raise ValueError(f"{period}: invalid stock codes: {invalid_codes[:10]}")
+    if len(new_codes) < MIN_FULL_PERIOD_ROWS:
+        raise ValueError(
+            f"{period}: coverage row count {len(new_codes)} below minimum {MIN_FULL_PERIOD_ROWS}"
+        )
+    removed = old_codes - new_codes
+    added = new_codes - old_codes
+    if old_codes and removed and not allow_large_deletion:
+        raise ValueError(
+            f"{period}: coverage deletion gate failed: old={len(old_codes)} "
+            f"new={len(new_codes)} removed={len(removed)} added={len(added)}; "
+            "explicit --allow-large-deletion is required"
+        )
+    return {
+        "old_rows": len(old_codes),
+        "new_rows": len(new_codes),
+        "intersection_rows": len(old_codes & new_codes),
+        "added_rows": len(added),
+        "removed_rows": len(removed),
+    }
+
+
+def _latest_period_from_entries(entries: dict) -> str:
+    return max(entries, key=_period_order) if entries else ""
+
+
+def refresh_period_from_package(
+    meta: dict,
+    package: Path,
+    *,
+    allow_large_deletion: bool = False,
+    preserve_missing_codes: set[str] | None = None,
+) -> dict[str, object]:
+    """Atomically replace one complete report period from a revised CW package."""
+    package = Path(package)
+    period = parse_period(int(package.stem[-8:]))
+    frame = _normalize_period_frame(load_full_period_frame(package))
+    _validate_period_frame(period, frame)
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    target = OUT_DIR / f"{period}.parquet"
+    old_codes: set[str] = set()
+    old_frame: pd.DataFrame | None = None
+    if target.exists():
+        old_frame = pd.read_parquet(target)
+        old_frame.index = old_frame.index.astype(str).map(canonical_code)
+        old_frame.index.name = "code"
+        old_codes = set(old_frame.index)
+
+    requested_preserves = {canonical_code(code) for code in (preserve_missing_codes or set())}
+    preserved_codes: list[str] = []
+    if requested_preserves:
+        missing_from_source = old_codes - set(frame.index.astype(str))
+        invalid_preserves = requested_preserves - missing_from_source
+        if invalid_preserves:
+            raise ValueError(
+                f"{period}: preserve codes are not old rows missing from source: "
+                f"{sorted(invalid_preserves)}"
+            )
+        assert old_frame is not None
+        preserved_codes = sorted(requested_preserves)
+        frame = pd.concat([frame, old_frame.loc[preserved_codes]], axis=0, sort=False)
+        frame = frame.sort_index(kind="stable")
+        _validate_period_frame(period, frame)
+
+    new_codes = set(frame.index.astype(str))
+    coverage = _validate_period_coverage(
+        period, new_codes, old_codes, allow_large_deletion=allow_large_deletion,
+    )
+
+    if target.exists():
+        backup_dir = OUT_DIR.parent / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        shutil.copy2(target, backup_dir / f"{period}.{stamp}.parquet")
+
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=OUT_DIR, prefix=f".{period}.", suffix=".tmp", delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        frame.to_parquet(temporary, index=True, engine="pyarrow", compression="snappy")
+        published = pd.read_parquet(temporary)
+        published.index = published.index.astype(str).map(canonical_code)
+        pd.testing.assert_frame_equal(published, frame, check_dtype=False, check_exact=True)
+        os.replace(temporary, target)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+    stocks = meta.setdefault("stocks", {})
+    for code in old_codes - new_codes:
+        info = stocks.get(code)
+        if not isinstance(info, dict):
+            continue
+        periods = info.setdefault("periods", {})
+        periods.pop(period, None)
+        info["latest_period"] = _latest_period_from_entries(periods)
+    for code, row in frame.iterrows():
+        info = stocks.setdefault(code, {"name": "", "periods": {}, "latest_period": ""})
+        periods = info.setdefault("periods", {})
+        report_date = int(float(row.get("report_date", 0)))
+        announce_date = int(float(row.get("announce_date", 0) or 0))
+        if not announce_date:
+            announce_date = format_announce_date(row.get("财报公告日期", 0))
+        periods[period] = {
+            "report_date": report_date,
+            "announce_date": announce_date,
+            "file": f"{period}.parquet",
+        }
+        info["latest_period"] = _latest_period_from_entries(periods)
+
+    fingerprint = source_package_fingerprint(package)
+    meta.setdefault("source_packages", {})[package.name] = {
+        **fingerprint,
+        "period": period,
+        "refreshed_at": datetime.now(timezone.utc).isoformat(),
+        "published": False,
+        "preserved_missing_codes": preserved_codes,
+    }
+    meta["stock_count"] = len(stocks)
+    return {
+        "period": period,
+        "rows": len(frame),
+        "changed_symbols": sorted(old_codes | new_codes),
+        "fingerprint": fingerprint,
+        "source_package": package.name,
+        "target": str(target),
+        "coverage": coverage,
+        "preserved_missing_codes": preserved_codes,
+    }
 
 
 # ── Meta 读写 ────────────────────────────────────────────────────────────────
@@ -101,8 +373,64 @@ def load_meta() -> dict:
 
 def save_meta(meta: dict):
     meta["last_updated"] = pd.Timestamp.now().isoformat()
-    with open(META_FP, "w") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
+    META_FP.parent.mkdir(parents=True, exist_ok=True)
+    temp = META_FP.with_suffix(".tmp")
+    temp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temp, META_FP)
+
+
+def _record_package_fingerprints(meta: dict, packages: list[Path]) -> None:
+    recorded = meta.setdefault("source_packages", {})
+    for path in packages:
+        fingerprint = source_package_fingerprint(path)
+        previous = recorded.get(path.name) if isinstance(recorded.get(path.name), dict) else {}
+        same_content = previous.get("sha256") == fingerprint["sha256"]
+        recorded[path.name] = {
+            **fingerprint,
+            "period": parse_period(int(path.stem[-8:])),
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "published": previous.get("published", True) if same_content else True,
+        }
+
+
+def mark_refreshes_published(meta: dict, refresh_results: list[dict[str, object]]) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    recorded = meta.setdefault("source_packages", {})
+    for result in refresh_results:
+        package_name = str(result["source_package"])
+        entry = recorded.get(package_name)
+        if not isinstance(entry, dict):
+            raise KeyError(f"missing source package fingerprint: {package_name}")
+        entry["published"] = True
+        entry["published_at"] = now
+
+
+def finalize_refresh_publication(
+    meta: dict,
+    refresh_results: list[dict[str, object]],
+    manifest_updates: list[tuple[str, str, int, int, dict]],
+) -> None:
+    write_change_manifest(manifest_updates)
+    mark_refreshes_published(meta, refresh_results)
+    save_meta(meta)
+
+
+def _source_package_for_period(period: str) -> Path:
+    matches = [path for path in TDX_CW.glob("gpcw*.zip")
+               if parse_period(int(path.stem[-8:])) == period]
+    if not matches:
+        raise FileNotFoundError(f"no CW package found for {period} under {TDX_CW}")
+    return max(matches, key=lambda path: path.stat().st_mtime_ns)
+
+
+def _manifest_updates_for_refresh(meta: dict, result: dict[str, object]) -> list[tuple[str, str, int, int, dict]]:
+    period = str(result["period"])
+    updates = []
+    for code in result["changed_symbols"]:
+        entry = ((meta.get("stocks", {}).get(code, {}).get("periods", {}) or {}).get(period, {}) or {})
+        updates.append((code, period, int(entry.get("report_date") or 0),
+                        int(entry.get("announce_date") or 0), {}))
+    return updates
 
 
 def write_change_manifest(updates: list[tuple[str, str, int, int, dict]]) -> None:
@@ -280,6 +608,11 @@ def rebuild_snapshot(period: str = "latest"):
     return True
 
 
+def rebuild_latest_snapshot_or_raise() -> None:
+    if not rebuild_snapshot("latest"):
+        raise RuntimeError("financial_snapshot_latest publication failed")
+
+
 # ── Main流程 ──────────────────────────────────────────────────────────────────
 def main():
     ap = argparse.ArgumentParser()
@@ -287,6 +620,12 @@ def main():
     ap.add_argument("--full", action="store_true", help="全量重建模式（调用 builder）")
     ap.add_argument("--rebuild-period", type=str, default=None,
                     help="重建指定报告期的快照（如 2025A, latest）")
+    ap.add_argument("--refresh-period", type=str, default=None,
+                    help="从当前CW包整期原子替换Parquet并重建快照（如 2026Q3）")
+    ap.add_argument("--allow-large-deletion", action="store_true",
+                    help="仅人工确认后允许整期刷新突破旧仓删除阈值；不绕过最低行数和代码格式")
+    ap.add_argument("--preserve-missing-code", action="append", default=[],
+                    help="显式保留源包漏失的旧仓代码；可重复，仅用于已审计的上游缺失例外")
     args = ap.parse_args()
 
     # 单独重建快照模式
@@ -302,14 +641,50 @@ def main():
         print("[FULL MODE] 请使用 financial_ts_builder.py 进行全量重建")
         sys.exit(0)
 
+    if args.refresh_period:
+        package = _source_package_for_period(args.refresh_period)
+        if args.dry_run:
+            print(f"[DRY RUN] 将整期刷新 {args.refresh_period}: {package}")
+            sys.exit(0)
+        result = refresh_period_from_package(
+            meta,
+            package,
+            allow_large_deletion=args.allow_large_deletion,
+            preserve_missing_codes=set(args.preserve_missing_code),
+        )
+        save_meta(meta)
+        print(
+            f"整期刷新完成: {result['period']} rows={result['rows']} "
+            f"changed={len(result['changed_symbols'])} coverage={result['coverage']}"
+        )
+        rebuild_latest_snapshot_or_raise()
+        finalize_refresh_publication(
+            meta, [result], _manifest_updates_for_refresh(meta, result),
+        )
+        sys.exit(0)
+
     # 增量检测
     print("=== 检测新财报 ===")
     t0 = time.time()
+    all_packages = list(TDX_CW.glob("gpcw*.zip"))
+    scanned_packages = source_packages_to_scan(meta, all_packages)
+    revised_packages = changed_source_packages(meta, scanned_packages)
+    if args.dry_run and revised_packages:
+        for item in revised_packages:
+            print(f"  同名包内容变化: {item['path'].name} -> {item['period']}")
+    refresh_results = []
+    if not args.dry_run:
+        for item in revised_packages:
+            print(f"  整期刷新同名修订包: {item['path'].name}")
+            refresh_results.append(refresh_period_from_package(meta, item["path"]))
     updates = detect_updates(meta)
     print(f"\n发现 {len(updates)} 只股票有新财报 (检测耗时 {time.time()-t0:.1f}s)\n")
 
-    if not updates:
-        write_change_manifest([])
+    if not updates and not refresh_results:
+        if not args.dry_run:
+            _record_package_fingerprints(meta, scanned_packages)
+            save_meta(meta)
+            write_change_manifest([])
         print("无需更新，退出")
         sys.exit(0)
 
@@ -345,16 +720,19 @@ def main():
         if _period_order(period_key) >= _period_order(prev):
             meta["stocks"][code]["latest_period"] = period_key
 
+    _record_package_fingerprints(meta, scanned_packages)
     save_meta(meta)
-    write_change_manifest(updates)
+    refresh_updates = [item for result in refresh_results
+                       for item in _manifest_updates_for_refresh(meta, result)]
     print(f"\nMeta 已更新: {meta['stock_count']} 只股票")
     print(f"本次新增 {len(updates)} 条股票-报告期记录")
 
     # 重建最新期快照
     # 找出本次更新涉及的最新年份
-    if updates:
-        latest_period = max((u[1] for u in updates), key=_period_order)
-        rebuild_snapshot(latest_period)
+    changed_periods = [u[1] for u in updates] + [str(result["period"]) for result in refresh_results]
+    if changed_periods:
+        rebuild_latest_snapshot_or_raise()
+        finalize_refresh_publication(meta, refresh_results, updates + refresh_updates)
 
 
 if __name__ == "__main__":

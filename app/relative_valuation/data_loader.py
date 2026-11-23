@@ -14,6 +14,47 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INDUSTRY_VALUATION_CURRENT_PATH = PROJECT_ROOT / "data" / "derived" / "datasets" / "final" / "dataset_industry_valuation_current.json"
 
 
+def resolve_ttm_metric_from_rows(
+    *,
+    period: str,
+    field_name: str,
+    precomputed_value: object = None,
+    precomputed_multiplier: float = 1.0,
+    current_row=None,
+    prev_annual_row=None,
+    prev_same_row=None,
+    prev_q3_row=None,
+    current_q3_row=None,
+) -> tuple[float | None, str]:
+    """Resolve one TTM metric without masking losses or using partial quarters."""
+    from math import isfinite
+
+    precomputed = _to_float(precomputed_value)
+    if precomputed is not None and isfinite(precomputed) and precomputed != 0:
+        return precomputed * precomputed_multiplier, "precomputed_tdx"
+
+    text = str(period or "").strip()
+    current = _pick_from_row(current_row, field_name)
+    if not text or current is None:
+        return None, "unavailable"
+    if text.endswith("A"):
+        q3 = _pick_from_row(current_q3_row, field_name)
+        if q3 is not None and current < q3:
+            return current + q3, "cumulative_reports"
+        return current, "cumulative_reports"
+    if not (len(text) >= 6 and text[:4].isdigit() and text[4:] in {"Q1", "Q2", "Q3"}):
+        return None, "unavailable"
+
+    prior_annual = _pick_from_row(prev_annual_row, field_name)
+    prior_same = _pick_from_row(prev_same_row, field_name)
+    if prior_annual is None or prior_same is None:
+        return None, "unavailable"
+    prior_q3 = _pick_from_row(prev_q3_row, field_name)
+    if prior_q3 is not None and prior_annual < prior_q3:
+        prior_annual += prior_q3
+    return current + prior_annual - prior_same, "cumulative_reports"
+
+
 def compute_ttm_metric_from_rows(
     *,
     period: str,
@@ -85,19 +126,35 @@ def compute_ttm_metric_from_rows_by_fields(
     return None
 
 
+def _positive_financial_value(value: object) -> float | None:
+    parsed = _to_float(value)
+    if parsed is None:
+        return None
+    from math import isfinite
+    return parsed if isfinite(parsed) and parsed > 0 else None
+
+
 def pick_free_float_shares(financial_row) -> float | None:
     search_index = _search_index_module()
-    value = search_index._pick(financial_row.get("自由流通股(股)")) if financial_row is not None else None
+    value = _positive_financial_value(
+        search_index._pick(financial_row.get("自由流通股(股)")) if financial_row is not None else None
+    )
     if value is None:
-        value = search_index._pick(financial_row.get("已上市流通A股")) if financial_row is not None else None
+        value = _positive_financial_value(
+            search_index._pick(financial_row.get("已上市流通A股")) if financial_row is not None else None
+        )
     return value
 
 
 def pick_total_shares(financial_row) -> float | None:
     search_index = _search_index_module()
-    value = search_index._pick(financial_row.get("总股本")) if financial_row is not None else None
+    value = _positive_financial_value(
+        search_index._pick(financial_row.get("总股本")) if financial_row is not None else None
+    )
     if value is None:
-        value = search_index._pick(financial_row.get("实收资本（或股本）")) if financial_row is not None else None
+        value = _positive_financial_value(
+            search_index._pick(financial_row.get("实收资本（或股本）")) if financial_row is not None else None
+        )
     return value
 
 
@@ -121,12 +178,10 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         return None
 
     year = int(str(latest_period)[:4]) if str(latest_period)[:4].isdigit() else None
-    previous_quarter_rows = [
-        search_index._load_financial_quarter_row(previous_period, symbol)
-        for previous_period in _latest_three_previous_periods(latest_period)
-    ]
     prev_annual_row = search_index._load_financial_quarter_row(f"{year - 1}A", symbol) if year else None
     prev_same_row = search_index._load_financial_quarter_row(f"{year - 1}{str(latest_period)[4:]}", symbol) if year and str(latest_period)[4:] else None
+    prev_q3_row = search_index._load_financial_quarter_row(f"{year - 1}Q3", symbol) if year else None
+    current_q3_row = search_index._load_financial_quarter_row(f"{year}Q3", symbol) if year else None
 
     basic_info = search_index._load_stock_basic_info(market, symbol)
     daily_snapshot = search_index._load_latest_daily_snapshot(market, symbol)
@@ -147,45 +202,41 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
     elif current_price is not None and _to_float((basic_info or {}).get("total_shares")) is not None:
         total_market_cap = current_price * _to_float((basic_info or {}).get("total_shares"))
 
-    # —— TTM 净利润：优先使用通达信预计算字段，回退手动计算 ——
-    ttm_net_profit = None
-    try:
-        ttm_net_precomputed = current_row.get("ttm_net_profit_yi") if hasattr(current_row, "get") else None
-        if ttm_net_precomputed is not None:
-            ttm_net_precomputed = _to_float(getattr(ttm_net_precomputed, "iloc[0]", ttm_net_precomputed) if hasattr(ttm_net_precomputed, "iloc") else ttm_net_precomputed)
-        if ttm_net_precomputed is not None and ttm_net_precomputed > 0:
-            ttm_net_profit = ttm_net_precomputed
-    except Exception:
-        pass
-    if ttm_net_profit is None:
-        ttm_net_profit = normalize_amount_to_yi(compute_ttm_metric_from_rows(
-            period=latest_period,
-            field_name="归属于母公司所有者的净利润",
-            current_row=current_row,
-            previous_quarter_rows=previous_quarter_rows,
-            prev_annual_row=prev_annual_row,
-            prev_same_row=prev_same_row,
-        ))
+    ttm_net_profit_raw, ttm_net_profit_source = resolve_ttm_metric_from_rows(
+        period=latest_period,
+        field_name="归属于母公司所有者的净利润",
+        precomputed_value=search_index._pick(current_row.get("近一年归母净利润（万元）")),
+        precomputed_multiplier=10_000.0,
+        current_row=current_row,
+        prev_annual_row=prev_annual_row,
+        prev_same_row=prev_same_row,
+        prev_q3_row=prev_q3_row,
+        current_q3_row=current_q3_row,
+    )
+    ttm_net_profit = normalize_amount_to_yi(ttm_net_profit_raw)
 
-    # —— TTM 营收：优先使用通达信预计算字段，回退手动计算 ——
-    ttm_revenue = None
-    try:
-        ttm_rev_precomputed = current_row.get("ttm_revenue_yi") if hasattr(current_row, "get") else None
-        if ttm_rev_precomputed is not None:
-            ttm_rev_precomputed = _to_float(getattr(ttm_rev_precomputed, "iloc[0]", ttm_rev_precomputed) if hasattr(ttm_rev_precomputed, "iloc") else ttm_rev_precomputed)
-        if ttm_rev_precomputed is not None and ttm_rev_precomputed > 0:
-            ttm_revenue = ttm_rev_precomputed
-    except Exception:
-        pass
-    if ttm_revenue is None:
-        ttm_revenue = normalize_amount_to_yi(compute_ttm_metric_from_rows_by_fields(
+    ttm_revenue_raw, ttm_revenue_source = resolve_ttm_metric_from_rows(
+        period=latest_period,
+        field_name="其中：营业收入",
+        precomputed_value=search_index._pick(current_row.get("营业总收入TTM(万元)")),
+        precomputed_multiplier=10_000.0,
+        current_row=current_row,
+        prev_annual_row=prev_annual_row,
+        prev_same_row=prev_same_row,
+        prev_q3_row=prev_q3_row,
+        current_q3_row=current_q3_row,
+    )
+    if ttm_revenue_raw is None:
+        ttm_revenue_raw, ttm_revenue_source = resolve_ttm_metric_from_rows(
             period=latest_period,
-            field_names=("其中：营业收入", "营业收入"),
+            field_name="营业收入",
             current_row=current_row,
-            previous_quarter_rows=previous_quarter_rows,
             prev_annual_row=prev_annual_row,
             prev_same_row=prev_same_row,
-        ))
+            prev_q3_row=prev_q3_row,
+            current_q3_row=current_q3_row,
+        )
+    ttm_revenue = normalize_amount_to_yi(ttm_revenue_raw)
 
     revenue_yoy = _normalize_percent(search_index._pick(current_row.get("营业收入增长率(%)")))
     gross_margin = _extract_gross_margin(search_index, current_row)
@@ -194,10 +245,8 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         search_index._pick(current_row.get("每股净资产(调整后)")),
     )
     listed_days = _load_listed_days(market, symbol)
-    pe_ttm = None
-    if total_market_cap is not None and ttm_net_profit not in (None, 0):
-        pe_ttm = total_market_cap / ttm_net_profit
-    else:
+    pe_ttm = compute_pe_ttm(total_market_cap, ttm_net_profit)
+    if pe_ttm is None and ttm_net_profit is None:
         pe_ttm = _to_float((basic_info or {}).get("dynamic_pe"))
     ps_ttm = compute_ps_ttm(total_market_cap, ttm_revenue)
 
@@ -213,7 +262,9 @@ def load_stock_relative_valuation_inputs(market: str, symbol: str) -> dict[str, 
         "total_market_cap": total_market_cap,
         "free_float_market_cap": free_float_market_cap,
         "ttm_net_profit": ttm_net_profit,
+        "ttm_net_profit_source": ttm_net_profit_source,
         "ttm_revenue": ttm_revenue,
+        "ttm_revenue_source": ttm_revenue_source,
         "revenue_yoy": revenue_yoy,
         "gross_margin": gross_margin,
         "book_value_per_share": book_value_per_share,
@@ -624,6 +675,12 @@ def compute_ps_ttm(free_float_market_cap: float | None, ttm_revenue: float | Non
     if free_float_market_cap is None or ttm_revenue in (None, 0):
         return None
     return free_float_market_cap / ttm_revenue
+
+
+def compute_pe_ttm(total_market_cap: float | None, ttm_net_profit: float | None) -> float | None:
+    if total_market_cap is None or ttm_net_profit is None or ttm_net_profit <= 0:
+        return None
+    return total_market_cap / ttm_net_profit
 
 
 def compute_market_cap_yi(current_price: float | None, shares_raw: float | None) -> float | None:

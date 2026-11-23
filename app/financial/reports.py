@@ -11,6 +11,11 @@ from app.financial.industry_position import build_industry_financial_position
 from app.financial.composite_health import build_composite_financial_health
 
 
+def _normalize_industry_market(value: object) -> str:
+    market = str(value or "").strip().lower()
+    return "bj" if market == "2" else market
+
+
 def _cash_profit_ratio(metrics: dict[str, object] | None) -> float | None:
     """Operating cash flow ÷ deducted profit; missing/zero denominator stays unavailable."""
     if not isinstance(metrics, dict):
@@ -278,8 +283,8 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         years = int(years)
     except (TypeError, ValueError) as exc:
         raise ValueError("years must be an integer") from exc
-    if not 1 <= years <= 6:
-        raise ValueError("years must be between 1 and 6")
+    if not 1 <= years <= 30:
+        raise ValueError("years must be between 1 and 30")
 
     market = str(market or "").strip().lower()
     symbol = str(symbol or "").strip()
@@ -346,7 +351,7 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
     reports.sort(key=lambda row: str(row.get("report_date") or ""))
     latest_report = reports[-1] if reports else None
     industry_row = next(
-        (row for row in search_index.load_industry_rows() if str(row.get("market") or "").lower() == market and str(row.get("symbol") or "").zfill(6) == symbol),
+        (row for row in search_index.load_industry_rows() if _normalize_industry_market(row.get("market")) == market and str(row.get("symbol") or "").zfill(6) == symbol),
         {},
     )
     industry = {

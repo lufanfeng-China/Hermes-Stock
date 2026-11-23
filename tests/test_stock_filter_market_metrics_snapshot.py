@@ -20,8 +20,8 @@ class StockFilterMarketMetricsSnapshotTest(unittest.TestCase):
 
         payload = build_market_metrics(frame)
 
-        # v2股价收益比；v3趋势模版；v4均线多头；v5持续天数；v6任意N日涨跌幅
-        self.assertEqual(payload["schema_version"], "stock-filter-market-metrics-v6")
+        # v2股价收益比；v3趋势模版；v4均线多头；v5持续天数；v6任意N日涨跌幅；v7原始价涨停事件
+        self.assertEqual(payload["schema_version"], "stock-filter-market-metrics-v7")
         self.assertIn("eps_ratio_5y", payload["metrics"]["sh:600001"])
         self.assertIn("trend_template_ok", payload["metrics"]["sh:600001"])
         self.assertIn("ma_alignment_duration", payload["metrics"]["sh:600001"])

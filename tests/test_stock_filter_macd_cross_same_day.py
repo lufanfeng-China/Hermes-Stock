@@ -30,6 +30,12 @@ def test_filter_rejects_old_tech_macd_marker_without_same_day_cross():
     assert result['ok'] and result['total_matched'] == 0
 
 
+def test_multiple_macd_choices_are_and_so_mutually_exclusive_choices_match_nothing():
+    with patch('app.stock_filter._universe', return_value=([_row(cross='zero_above')], DAY)):
+        result = filter_response({'macd_cross': ['zero_below,zero_above']})
+    assert result['ok'] and result['total_matched'] == 0
+
+
 def test_filter_rejects_missing_or_stale_macd_snapshot():
     with patch('app.stock_filter._universe', return_value=([_row(cross=None)], DAY)):
         missing = filter_response({'macd_cross': ['zero_above']})

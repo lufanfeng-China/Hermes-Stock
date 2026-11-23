@@ -49,7 +49,9 @@ def test_filter_fails_closed_when_cross_snapshot_missing_or_stale():
     assert stale['error']['code'] == 'golden_cross_unavailable'
 
 
-def test_cross_pairs_match_any_selected_pair_not_the_whole_csv_field():
+def test_cross_pairs_require_all_selected_pairs():
     with patch('app.stock_filter._universe', return_value=([_row(cross='5/10,20/60')], DAY)):
-        result = filter_response({'golden_cross': ['20/60']})
-    assert result['ok'] and result['total_matched'] == 1
+        both = filter_response({'golden_cross': ['5/10,20/60']})
+        missing_one = filter_response({'golden_cross': ['5/10,10/20']})
+    assert both['ok'] and both['total_matched'] == 1
+    assert missing_one['ok'] and missing_one['total_matched'] == 0

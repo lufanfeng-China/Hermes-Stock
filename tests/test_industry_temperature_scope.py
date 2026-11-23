@@ -72,6 +72,27 @@ def test_api_defaults_to_concept_scope():
     assert result["scope"] == "concept"
 
 
+def test_stock_filter_scope_preserves_current_temperature_change_evidence():
+    from app.stock_filter_scope import build_scope_index
+
+    index = build_scope_index(
+        [{'market': 'sz', 'symbol': '000001', 'industry_level_2_code': 'I1',
+          'industry_level_2_name': '医疗器械'}],
+        [], {},
+        industry_temperature_payload={'as_of_date': '2026-11-19', 'windows': {'10': {'concepts': [{
+            'concept_code': 'I1', 'concept_name': '医疗器械', 'temperature': 5,
+            'temperature_label': '极热', 'temperature_previous': 4,
+            'temperature_change': 1, 'temperature_trend': 'warming',
+            'temperature_trend_label': '升温', 'temperature_previous_gap_days': 1,
+        }]}}},
+    )
+    evidence = index['industry_temperature']['I1']
+    assert evidence['temperature_previous'] == 4
+    assert evidence['temperature_previous_label'] == '热门'
+    assert evidence['temperature_change'] == 1
+    assert evidence['temperature_trend_label'] == '升温'
+
+
 @pytest.mark.parametrize("query", ["scope=etf&window=10"])
 def test_unknown_scope_is_rejected(query):
     from app.api.concept_temperature import handle_concept_temperature
@@ -87,6 +108,26 @@ def test_members_endpoint_honours_scope():
         result = handle_concept_temperature_members("scope=industry&window=10&concept_code=X5001")
     assert result["ok"] is True and result["scope"] == "industry"
     assert result["stocks"][0]["symbol"] == "000001"
+
+
+def test_members_endpoint_enriches_stock_filter_metrics_from_same_day_snapshot():
+    from app.api.concept_temperature import handle_concept_temperature_members
+
+    metrics = {"sz:000001": {
+        "mrs_score": 88.2, "turnover_percentile_1y": 76.4, "pe_ttm": 12.3,
+        "annual_total": 81.0, "annual_period": "2025A",
+        "quarterly_total": 73.0, "quarterly_period": "2026Q3",
+    }}
+    with patch("app.api.concept_temperature._load", return_value=_fixture()), \
+         patch("app.api.concept_temperature._stock_metric_map", return_value=metrics):
+        result = handle_concept_temperature_members("scope=industry&window=10&concept_code=X5001")
+
+    stock = result["stocks"][0]
+    assert stock["mrs_score"] == 88.2
+    assert stock["turnover_percentile_1y"] == 76.4
+    assert stock["pe_ttm"] == 12.3
+    assert stock["annual_total"] == 81.0 and stock["annual_period"] == "2025A"
+    assert stock["quarterly_total"] == 73.0 and stock["quarterly_period"] == "2026Q3"
 
 
 def test_missing_industry_dataset_says_how_to_build_it():

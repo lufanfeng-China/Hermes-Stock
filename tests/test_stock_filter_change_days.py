@@ -94,6 +94,6 @@ def test_page_wires_up_down_count_controls_display_and_historical_guard():
         assert f'name="{name}"' in market
     assert 'N日涨跌天数' in market and '上涨天数' in market and '下跌天数' in market
     assert 'row.up_days' in js and 'row.down_days' in js and 'row.flat_days' in js
-    historical = js.split('function updateHistoricalMode()', 1)[1]
+    historical = (ROOT / 'web/stock-filter-history-capabilities.js').read_text(encoding='utf-8')
     assert all(f"'{name}'" in historical for name in
                ('change_days_n', 'up_days_min', 'up_days_max', 'down_days_min', 'down_days_max'))

@@ -45,16 +45,16 @@ def test_strict_alignments_from_valid_qfq_bars_and_minimum_120_days():
     assert with_halt['qfq_as_of'] != str(pd.bdate_range('2026-05-01', periods=121)[-1].date())
 
 
-def test_multiple_choices_are_or_and_apply_before_pagination():
-    rows = [_row(i, ['5/10/20'] if i < 50 else ['20/60/120']) for i in range(51)]
-    rows[0]['ma_alignment'] = []
+def test_multiple_choices_are_and_and_apply_before_pagination():
+    rows = [_row(i, ['5/10/20']) for i in range(50)]
+    rows += [_row(50, ['20/60/120']), _row(51, ['5/10/20', '20/60/120'])]
     with patch('app.stock_filter._universe', return_value=(rows, DAY)):
         a = filter_response({'ma_alignment': ['5/10/20,20/60/120']})
         b = filter_response({'ma_alignment': ['5/10/20,20/60/120'], 'page': ['2']})
         c = filter_response({'ma_alignment': ['20/60/120']})
-    assert a['ok'] and a['total_matched'] == 50 and len(a['rows']) == 50
-    assert b['ok'] and b['total_matched'] == 50 and b['rows'] == []
-    assert c['ok'] and c['total_matched'] == 1 and c['rows'][0]['symbol'] == '000050'
+    assert a['ok'] and a['total_matched'] == 1 and [row['symbol'] for row in a['rows']] == ['000051']
+    assert b['ok'] and b['total_matched'] == 1 and b['rows'] == []
+    assert c['ok'] and c['total_matched'] == 2
 
 
 def test_missing_or_stale_ma_snapshot_is_not_zero_matches_or_raw_fallback():
@@ -85,6 +85,19 @@ def test_current_bullish_duration_range_constrains_selected_or_any_alignment():
     assert any_group['ok'] and [row['symbol'] for row in any_group['rows']] == ['000002', '000003']
 
 
+def test_duration_range_requires_every_selected_alignment_to_match():
+    rows = [
+        _row(1, ['5/10/20', '20/60/120'], durations={'5/10/20': 5, '20/60/120': 2}),
+        _row(2, ['5/10/20', '20/60/120'], durations={'5/10/20': 5, '20/60/120': 6}),
+        _row(3, ['5/10/20'], durations={'5/10/20': 5}),
+    ]
+    with patch('app.stock_filter._universe', return_value=(rows, DAY)):
+        result = filter_response({'ma_alignment': ['5/10/20,20/60/120'],
+                                  'ma_alignment_days_min': ['4'],
+                                  'ma_alignment_days_max': ['6']})
+    assert result['ok'] and [row['symbol'] for row in result['rows']] == ['000002']
+
+
 def test_duration_range_rejects_invalid_historical_or_missing_snapshot_values():
     for params in (
         {'ma_alignment_days_min': ['0']},
@@ -111,8 +124,10 @@ def test_ui_four_choices_are_real_multiselect_and_historical_is_explicitly_disab
     assert 'name="ma_alignment_days_min"' in group
     assert 'name="ma_alignment_days_max"' in group
     assert '当前多头持续天数' in group
+    assert group.count('组内多选取且') >= 3
     assert 'ma_alignment: true' in js
-    assert "'ma_alignment'" in js.split('function updateHistoricalMode()', 1)[1]
-    historical = js.split('function updateHistoricalMode()', 1)[1]
+    capabilities = (ROOT / 'web/stock-filter-history-capabilities.js').read_text(encoding='utf-8')
+    assert "'ma_alignment'" in capabilities
+    historical = capabilities
     assert "'ma_alignment_days_min'" in historical
     assert "'ma_alignment_days_max'" in historical

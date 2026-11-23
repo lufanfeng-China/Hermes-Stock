@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import hashlib
 import json
 import os
 import sys
@@ -43,7 +44,16 @@ def resolve_latest_day() -> str:
     return raw_day
 
 
-def reusable_snapshot(path: Path, day: str) -> bool:
+def financial_warehouse_signature(warehouse: Path = WAREHOUSE) -> str:
+    digest = hashlib.sha256()
+    files = sorted(path for path in Path(warehouse).glob('20*.parquet') if path.is_file())
+    for path in files:
+        stat = path.stat()
+        digest.update(f'{path.name}:{stat.st_size}:{stat.st_mtime_ns}\n'.encode())
+    return digest.hexdigest()
+
+
+def reusable_snapshot(path: Path, day: str, financial_signature: str | None = None) -> bool:
     """Reuse only an atomically published, parseable current-schema PIT file."""
     try:
         payload = json.loads(path.read_text(encoding='utf-8'))
@@ -54,6 +64,8 @@ def reusable_snapshot(path: Path, day: str) -> bool:
             and payload.get('schema_version') == 'stock-filter-fundamental-history-v7'
             and payload.get('as_of_date') == day
             and payload.get('financial_information_cutoff') == day
+            and (financial_signature is None
+                 or payload.get('financial_warehouse_signature') == financial_signature)
             and payload.get('valuation_price_basis') == 'raw_unadjusted_close'
             and isinstance(stocks, dict) and bool(stocks)
             and all(isinstance(key, str) and ':' in key and isinstance(row, dict)
@@ -133,7 +145,8 @@ def main() -> None:
     day = resolve_latest_day() if args.latest_trading_day else date.fromisoformat(args.trading_day).isoformat()
     args.trading_day = day
     output = args.output or OUT_DIR / f"{day}.json"
-    if args.output is None and reusable_snapshot(output, day):
+    warehouse_signature = financial_warehouse_signature()
+    if args.output is None and reusable_snapshot(output, day, financial_signature=warehouse_signature):
         print(json.dumps({'output': str(output), 'trading_day': day, 'reused': True}, ensure_ascii=False), flush=True)
         return
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -177,6 +190,7 @@ def main() -> None:
         market_by_symbol=markets, industry_by_key=_industry_by_key(), market_metrics_by_key=market_payload["metrics"], pe_by_key=pe_by_key,
         turnover_by_key=turnover_payload['stocks'],
     )
+    payload['financial_warehouse_signature'] = warehouse_signature
     output.parent.mkdir(parents=True, exist_ok=True)
     write_progress(OUT_DIR, args.trading_day, stage="写入历史快照", percent=99)
     with NamedTemporaryFile("w", encoding="utf-8", dir=output.parent, delete=False) as handle:

@@ -4,11 +4,12 @@ from app.financial.composite_health import build_composite_financial_health
 
 
 class CompositeFinancialHealthTests(unittest.TestCase):
-    def annual(self, score=75, coverage=100, track="five_year", flags=None):
+    def annual(self, score=75, coverage=100, track="five_year", flags=None, basis="five_year_standard"):
         return {
             "score": score,
             "coverage_weight": coverage,
             "assessment_track": track,
+            "score_basis_track": basis,
             "red_flags": flags or [],
         }
 
@@ -55,6 +56,15 @@ class CompositeFinancialHealthTests(unittest.TestCase):
         self.assertEqual(result["mode"], "quarterly_only")
         self.assertEqual(result["score"], 65.0)
         self.assertEqual(result["reason"], "annual_score_not_five_year_comparable")
+
+    def test_recovery_annual_score_is_not_blended_as_standard_five_year(self):
+        result = build_composite_financial_health(
+            self.annual(88, basis="recovery_track"), self.quarterly(65)
+        )
+
+        self.assertEqual(result["mode"], "quarterly_only")
+        self.assertEqual(result["score"], 65.0)
+        self.assertEqual(result["reason"], "annual_score_not_standard_five_year")
 
     def test_high_severity_quarterly_alert_caps_display_status_without_hidden_penalty(self):
         result = build_composite_financial_health(

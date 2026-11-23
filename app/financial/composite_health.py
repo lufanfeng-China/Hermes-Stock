@@ -102,7 +102,14 @@ def build_composite_financial_health(health: dict[str, Any] | None, monitor: dic
     monitor = monitor or {}
     annual_score = _number(health.get("score"))
     annual_coverage = _number(health.get("coverage_weight")) or 0.0
-    annual_comparable = health.get("assessment_track") == "five_year"
+    annual_period_comparable = health.get("assessment_track") == "five_year"
+    annual_basis = str(health.get("score_basis_track") or "five_year_standard")
+    annual_comparable = annual_period_comparable and annual_basis == "five_year_standard"
+    annual_unavailable_reason = (
+        "annual_score_not_standard_five_year"
+        if annual_period_comparable and not annual_comparable
+        else "annual_score_not_five_year_comparable"
+    )
     realtime = monitor.get("realtime_score") or {}
     quarterly_score = _number(realtime.get("score"))
     quarterly_coverage = _number(realtime.get("coverage_weight")) or 0.0
@@ -147,11 +154,11 @@ def build_composite_financial_health(health: dict[str, Any] | None, monitor: dic
     elif quarterly_eligible:
         assert quarterly_score is not None
         result.update({
-            "mode": "quarterly_only", "reason": "annual_score_not_five_year_comparable",
+            "mode": "quarterly_only", "reason": annual_unavailable_reason,
             "quarterly_weight": 1.0, "score": round(quarterly_score, 1),
         })
     elif not annual_comparable:
-        result["reason"] = "annual_score_not_five_year_comparable"
+        result["reason"] = annual_unavailable_reason
     else:
         result["reason"] = "annual_score_unavailable"
 

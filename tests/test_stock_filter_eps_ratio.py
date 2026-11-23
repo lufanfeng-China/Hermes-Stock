@@ -87,13 +87,13 @@ def test_filter_note_and_column_are_wired():
 
     assert 'name="eps_ratio_5y_min"' in html and 'name="eps_ratio_5y_max"' in html
     assert "股价收益比" in html
-    assert '5年累计EPS ' in js and '年化系数 ' in js and 'eps_ratio_5y_factor' in js  # 说明段已移除，审计口径仍在悬停证据
-    assert "epsRatioCell(row)" in js and "row.eps_ratio_5y" in js
+    assert "epsRatioCell(row)" not in js
+    assert '<th class="num">股价收益比</th>' not in html
 
     # 结果表不再有日/周/月趋势列与金叉列
     header = html.split("<th>日 / 周 / 月趋势</th>")[0] if "<th>日 / 周 / 月趋势</th>" in html else html
     assert "<th>日 / 周 / 月趋势</th>" not in html
     assert "<th>金叉</th>" not in html
     assert "trend_daily_label" not in js and "golden_cross_label" not in js
-    # 移除 RPS 展示列，空状态与现有 11 列对齐
+    # 筛选条件保留，但结果表删除股价收益比列；空状态与当前11列表格对齐
     assert 'colspan="11"' in js and 'colspan="10"' not in js and 'colspan="12"' not in js

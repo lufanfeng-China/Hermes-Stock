@@ -74,6 +74,27 @@ test('screener dialog wires shared KlineChart, MACD, volume, RPS and viewport co
   assert.match(js,/SwingChart\.chartEvidence/);
 });
 
+test('stock analysis structure dialog matches the full KlineChart evidence format', () => {
+  const html=readFileSync(resolve(__dirname,'../web/stock-analysis.html'),'utf8');
+  const js=readFileSync(resolve(__dirname,'../web/stock-analysis.js'),'utf8');
+  for (const size of ['20','60','120','250','-1']) assert.match(html,new RegExp(`data-swing-window="${size}"`));
+  assert.match(html,/id="swing-chart-macd"/);
+  assert.match(html,/price-trend-chart\.js/);
+  assert.ok(html.indexOf('price-trend-chart.js') < html.indexOf('stock-analysis.js'));
+  assert.match(html,/前复权K线、均线、成交量、RPS及已确认峰谷、候选点/);
+  assert.match(html,/K线、量、MACD来自同日通达信前复权有效日线；RPS缺失日期不补值/);
+  assert.match(js,/const stock = state\.selected/);
+  assert.doesNotMatch(js.split('async function openSwingChart(trigger)')[1].split("document.getElementById('swing-structure')")[0],/selectedStock/);
+  assert.match(js,/fetch\('\/api\/stock-rps-history\?symbol='/);
+  assert.match(js,/import\('\.\/kline-chart\.js/);
+  assert.match(js,/new KlineChart\(swingChartSvg, \{marginRight:48, interpolateRps:false\}\)/);
+  assert.match(js,/SwingChart\.chartEvidence/);
+  assert.match(js,/SwingChart\.renderOverlay/);
+  assert.match(js,/PriceTrendChart\.renderMacd\(swingChartMacd/);
+  assert.match(js,/swingKlineChart\.load\(evidence\.bars, evidence\.rpsHistory, 120\)/);
+  assert.match(js,/swingKlineChart\.setPreset\(Number\(button\.dataset\.swingWindow\)\)/);
+});
+
 test('shared renderer declines missing real OHLC without faking a chart', () => {
   const svg = node(), meta = node();
   render({observation:{},bars:[]}, svg, meta);

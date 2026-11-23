@@ -6,6 +6,13 @@ import pandas as pd
 
 
 class FinancialWarehouseReportsTests(unittest.TestCase):
+    def test_industry_market_key_normalizes_beijing_exchange_code(self):
+        from app.financial.reports import _normalize_industry_market
+
+        self.assertEqual(_normalize_industry_market("2"), "bj")
+        self.assertEqual(_normalize_industry_market("BJ"), "bj")
+        self.assertEqual(_normalize_industry_market("sh"), "sh")
+
     def test_load_symbol_rows_returns_only_requested_symbol_and_recent_window(self):
         from app.financial.warehouse_reports import load_symbol_financial_rows
 

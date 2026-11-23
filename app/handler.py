@@ -617,6 +617,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/concept-temperature/members":
             self.handle_concept_temperature_members(parsed.query)
             return
+        if parsed.path == "/api/stock-concept-temperature":
+            self.handle_stock_concept_temperature(parsed.query)
+            return
         if parsed.path == "/api/stock-profile":
             self.handle_stock_profile(parsed.query)
             return
@@ -1746,6 +1749,16 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         """Return a selected concept's members ordered by QFQ interval return."""
         try:
             from app.api.concept_temperature import handle_concept_temperature_members as _handle
+            result = _handle(query)
+            status = result.pop('status', HTTPStatus.OK)
+            self.respond_json(status, result)
+        except Exception as exc:
+            self.respond_json(HTTPStatus.INTERNAL_SERVER_ERROR, {'ok': False, 'error': str(exc)})
+
+    def handle_stock_concept_temperature(self, query: str) -> None:
+        """Return every temperature concept containing the selected stock."""
+        try:
+            from app.api.concept_temperature import handle_stock_concept_temperature as _handle
             result = _handle(query)
             status = result.pop('status', HTTPStatus.OK)
             self.respond_json(status, result)

@@ -975,6 +975,8 @@
     grid.innerHTML = cards.map(card => `<article class="basic-market-card ${card.className || ''}"${card.clickable ? ' data-market-antifall-detail role="button" tabindex="0"' : ''} title="${escapeHtml(card.definition || '')}" aria-label="${escapeHtml(`${card.label}：${card.value}。${card.definition || ''}`)}"><strong>${escapeHtml(card.label)}</strong><span>${escapeHtml(card.value)}</span>${card.meta ? `<em class="basic-market-status">${escapeHtml(card.meta)}</em>` : ''}</article>`).join('');
     const trigger = grid.querySelector('[data-market-antifall-detail]');
     if (trigger) {
+      trigger.dataset.antiFallStatus = rs.anti_fall_status || '';
+      trigger.dataset.antiFallWinRate = Number.isFinite(Number(rs.down_market_win_rate_20)) ? String(Number(rs.down_market_win_rate_20)) : '';
       const open = () => showMarketAntiFallDetail(rs.down_market_detail_20 || []);
       trigger.addEventListener('click', open);
       trigger.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
@@ -1052,6 +1054,10 @@
     const data = payload?.data;
     const o = data?.observation;
     if (!payload?.ok || !o) {
+      delete target.dataset.swingDurationDays;
+      delete target.dataset.swingDurationExact;
+      delete target.dataset.swingPreviousState;
+      delete target.dataset.swingPreviousDate;
       target.className = 'analysis-metric-status'; target.textContent = `波峰波谷不可用：${payload?.error?.message || '数据未返回'}`;
       if (period) period.textContent = '未知 / 数据不可用';
       return;
@@ -1082,6 +1088,12 @@
     const previousText = duration?.start_confirmed
       ? `${duration.previous_date || '—'}：${duration.previous_state || '未知'} → ${duration.start_date}：${o.state}`
       : (duration ? '已追至可用历史起点，上一状态未知。' : (data.duration_unavailable_reason || '证据不足，无法确定进入日期。'));
+    const durationDays = Number.isInteger(Number(duration?.trading_days)) && Number(duration.trading_days) > 0
+      ? String(Number(duration.trading_days)) : '';
+    target.dataset.swingDurationDays = durationDays;
+    target.dataset.swingDurationExact = duration?.start_confirmed ? 'true' : 'false';
+    target.dataset.swingPreviousState = duration?.start_confirmed ? String(duration.previous_state || '') : '';
+    target.dataset.swingPreviousDate = duration?.start_confirmed ? String(duration.previous_date || '') : '';
     target.className = '';
     target.innerHTML = `<div class="swing-summary"><div><small>${escapeHtml(snapshotLabel)} · ${escapeHtml(status)}</small><strong>${escapeHtml(unknown ? '未知' : o.state)}</strong></div><div><small>结构倾向 / 星级</small><strong>${escapeHtml(unknown ? '未知' : tendency[o.tendency] || '未知')} · ${escapeHtml(stars)}</strong></div><div><small>该股结构对应交易日</small><strong>${escapeHtml(o.last_bar_date || '—')}</strong></div><div><small>收盘与最近确认峰谷</small><strong>${escapeHtml(position)}</strong></div>${underlying ? `<div><small>被暂缓的主结构基础评级</small><strong>${escapeHtml(underlying)}</strong></div>` : ''}${riskText ? `<div class="swing-duration"><small>独立观察 · 尚未确认的风险</small><strong>${escapeHtml(riskText)}</strong></div>` : ''}${pressureText ? `<div class="swing-duration"><small>独立观察 · 压力线</small><strong>${escapeHtml(pressureText)}</strong></div>` : ''}<div class="swing-duration"><small>当前状态持续（截至该股结构交易日）</small><strong>${escapeHtml(durationText)}</strong></div><div class="swing-duration"><small>上一状态与切换</small><strong>${escapeHtml(previousText)}</strong></div></div><p class="basic-market-note">${escapeHtml(o.reason || '暂无可核验原因')}｜规则 ${escapeHtml(data.rule_version || '—')}｜${live ? '数据日' : '快照'} ${escapeHtml(data.as_of_date || '—')}${escapeHtml(lagNotice)}</p><div class="swing-points">${swingPoints(o.last_10_peaks, 'peak')}${swingPoints(o.last_10_valleys, 'valley')}</div><button type="button" class="swing-chart-trigger" ${Array.isArray(data.bars) && data.bars.length ? '' : 'disabled'}>查看前复权K线与峰谷证据</button>${!Array.isArray(data.bars) || !data.bars.length ? `<p class="basic-market-note">${escapeHtml(chartNotice)}</p>` : ''}`;
     if (period) period.textContent = `${live ? '本地最新有效前复权 ' : (data.snapshot_lagged ? '最近快照 ' : '')}${data.as_of_date || '—'}｜${basis}｜${status}${data.snapshot_lagged ? `｜源最新 ${data.source_as_of_date || '未知'} · 非实时` : ''}`;
@@ -1759,20 +1771,104 @@
     if (metric && heading) heading.innerHTML = `<button type="button" class="metric-lineage-trigger" data-metric-lineage="${metric}" title="查看指标口径与数据血缘">${heading.textContent}</button>`;
   });
   const swingDialog = document.getElementById('swing-chart-dialog');
-  document.getElementById('swing-structure')?.addEventListener('click', event => {
-    if (!event.target.closest('.swing-chart-trigger')) return;
+  const swingChartSvg = document.getElementById('swing-chart-svg');
+  const swingChartMacd = document.getElementById('swing-chart-macd');
+  const swingChartMeta = document.getElementById('swing-chart-meta');
+  const swingChartScroll = swingDialog?.querySelector('.swing-chart-scroll');
+  let swingChartTrigger = null;
+  let swingChartController = null;
+  let swingKlineChart = null;
+  let swingChartData = null;
+  let swingChartBars = null;
+  function renderSwingViewport(viewport) {
+    if (!swingChartData || !swingChartBars || !swingKlineChart) return;
+    SwingChart.renderOverlay(swingChartData, swingKlineChart);
+    PriceTrendChart.renderMacd(swingChartMacd, swingChartBars, viewport);
+  }
+  async function openSwingChart(trigger) {
+    swingChartController?.abort();
+    const controller = new AbortController();
+    swingChartController = controller;
+    swingChartTrigger = trigger;
+    swingChartData = null;
+    swingChartBars = null;
+    swingChartScroll.hidden = true;
     if (swingDialog && !swingDialog.open) swingDialog.showModal();
-    if (!swingPayload?.data) {
-      const meta = document.getElementById('swing-chart-meta');
-      if (meta) meta.textContent = '波峰波谷K线数据尚未就绪，请重新选择该股票后再试。';
+    const stock = state.selected;
+    const data = swingPayload?.data;
+    if (!stock || !data) {
+      swingChartMeta.textContent = '波峰波谷K线数据尚未就绪，请重新选择该股票后再试。';
       return;
     }
-    renderSwingChart(swingPayload.data);
-    const chartScroll = swingDialog?.querySelector('.swing-chart-scroll');
-    if (chartScroll) chartScroll.scrollLeft = chartScroll.scrollWidth;
+    swingChartMeta.textContent = `${stock.symbol}｜正在读取前复权K线、均线、成交量、RPS、MACD与峰谷证据…`;
+    try {
+      const [rpsResponse, module] = await Promise.all([
+        fetch('/api/stock-rps-history?symbol=' + encodeURIComponent(stock.symbol), {signal: controller.signal}),
+        import('./kline-chart.js?v=20261111-price-rps-nointerp-a'),
+      ]);
+      const rps = await rpsResponse.json().catch(() => ({ok:false}));
+      if (controller.signal.aborted || !swingDialog.open || identity(state.selected) !== identity(stock)) return;
+      const observation = data.observation || {};
+      if (data.market !== stock.market || data.symbol !== stock.symbol || !data.as_of_date ||
+          observation.last_bar_date !== data.as_of_date || observation.status !== 'ok' ||
+          data.price_basis !== 'tdx_export_qfq' || data.source_type !== 'live_qfq' || !observation.source_sha256) {
+        throw new Error('当前前复权源、证券代码或结构证据不一致，拒绝绘制');
+      }
+      const rpsOk = rpsResponse.ok && rps.ok && rps.symbol === stock.symbol;
+      const evidence = SwingChart.chartEvidence(data, rpsOk ? rps.history : []);
+      const KlineChart = module.KlineChart;
+      if (!swingKlineChart) swingKlineChart = new KlineChart(swingChartSvg, {marginRight:48, interpolateRps:false});
+      swingChartData = data;
+      swingChartBars = evidence.bars;
+      swingKlineChart.onViewportChange = (viewport) => {
+        renderSwingViewport(viewport);
+        swingDialog.querySelectorAll('[data-swing-window]').forEach((button) => button.classList.remove('is-active'));
+      };
+      swingChartScroll.hidden = false;
+      swingKlineChart.load(evidence.bars, evidence.rpsHistory, 120);
+      renderSwingViewport(swingKlineChart.visible);
+      swingDialog.querySelectorAll('[data-swing-window]').forEach((button) => {
+        button.classList.toggle('is-active', Number(button.dataset.swingWindow) === 120);
+      });
+      swingChartMeta.textContent = `${stock.symbol} ${data.name || stock.stock_name || ''}` +
+        `｜页面结构截至 ${data.as_of_date}｜单股当前前复权截至 ${data.as_of_date}（本地即时计算）` +
+        `｜结构 ${observation.state || '证据不足'}｜有效日线 ${evidence.bars.length} 根｜实心峰谷=确认，虚线圈=候选` +
+        (SwingChart.verifiedBox(observation) ? '｜箱体检验通过：前三组边界／第四组核验' : '｜当前无通过检验的箱体') +
+        `｜RPS${evidence.rpsAsOf ? `截至 ${evidence.rpsAsOf}${evidence.rpsAsOf === data.as_of_date ? '' : '（当日缺失，不补值）'}` : '不可用（未绘制）'}` +
+        (rpsOk ? '' : '；RPS接口读取失败');
+    } catch (error) {
+      if (controller.signal.aborted || !swingDialog.open) return;
+      swingChartScroll.hidden = true;
+      swingChartData = null;
+      swingChartBars = null;
+      swingChartMeta.textContent = `无法绘制当前前复权结构：${error.message || '未知错误'}`;
+    }
+  }
+  document.getElementById('swing-structure')?.addEventListener('click', event => {
+    const trigger = event.target.closest('.swing-chart-trigger');
+    if (trigger) openSwingChart(trigger);
   });
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-swing-chart-trigger]');
+    if (trigger) openSwingChart(trigger);
+  });
+  swingDialog?.querySelectorAll('[data-swing-window]').forEach((button) => button.addEventListener('click', () => {
+    if (!swingKlineChart || !swingChartBars) return;
+    swingKlineChart.setPreset(Number(button.dataset.swingWindow));
+    renderSwingViewport(swingKlineChart.visible);
+    swingDialog.querySelectorAll('[data-swing-window]').forEach((item) => item.classList.toggle('is-active', item === button));
+  }));
   swingDialog?.querySelector('.swing-chart-close')?.addEventListener('click', () => swingDialog.close());
   swingDialog?.addEventListener('click', event => { if (event.target === swingDialog) swingDialog.close(); });
+  swingDialog?.addEventListener('close', () => {
+    if (swingDialog.open) return;
+    swingChartController?.abort();
+    if (swingChartTrigger?.isConnected) swingChartTrigger.focus();
+    swingChartController = null;
+    swingChartTrigger = null;
+    swingChartData = null;
+    swingChartBars = null;
+  });
   const wyckoffGuideLink = document.getElementById('wyckoff-pattern-guide-link');
   const wyckoffGuideDialog = document.getElementById('wyckoff-pattern-guide-dialog');
   wyckoffGuideLink?.addEventListener('click', (event) => {

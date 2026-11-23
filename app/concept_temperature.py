@@ -53,6 +53,35 @@ def _return_and_volume(frame: pd.DataFrame, window: int) -> tuple[float, float, 
     return return_pct, float(close.iloc[-1]), volume_ratio
 
 
+def build_horizon_return_fields(frame: pd.DataFrame) -> dict[str, Any]:
+    """Build auditable 1/3/5 calendar-year QFQ returns.
+
+    If the stock has not traded for the requested number of years, use its
+    first valid QFQ close and mark the basis as ``all_history``.
+    """
+    if frame is None or "close" not in frame:
+        return {}
+    close = pd.to_numeric(frame["close"], errors="coerce")
+    close = close[(close.notna()) & (close > 0)].sort_index()
+    if close.empty:
+        return {}
+    latest_date = pd.Timestamp(close.index[-1])
+    latest_close = float(close.iloc[-1])
+    result: dict[str, Any] = {"return_history_end_date": latest_date.strftime("%Y-%m-%d")}
+    for years in (1, 3, 5):
+        cutoff = latest_date - pd.DateOffset(years=years)
+        eligible = close.loc[close.index <= cutoff]
+        if eligible.empty:
+            base_date, base_close, basis = pd.Timestamp(close.index[0]), float(close.iloc[0]), "all_history"
+        else:
+            base_date, base_close, basis = pd.Timestamp(eligible.index[-1]), float(eligible.iloc[-1]), f"{years}y"
+        prefix = f"return_{years}y"
+        result[f"{prefix}_pct"] = round((latest_close / base_close - 1.0) * 100.0, 2)
+        result[f"{prefix}_basis"] = basis
+        result[f"{prefix}_start_date"] = base_date.strftime("%Y-%m-%d")
+    return result
+
+
 def prepare_series(frames: dict[str, pd.DataFrame]) -> dict[str, dict[str, Any]]:
     """把每只股票的日线压成 numpy 数组，避免逐日裁剪 DataFrame。
 
@@ -75,6 +104,7 @@ def prepare_series(frames: dict[str, pd.DataFrame]) -> dict[str, dict[str, Any]]
             # 旧实现按「截至当时的有效成交量条数」判断，这里用累计计数复现同一口径
             "volume_valid_upto": (np.cumsum(~np.isnan(volume_array)).astype(np.int64)
                                   if volume_array is not None else None),
+            "horizon_returns": build_horizon_return_fields(frame),
         }
     return prepared
 
@@ -257,7 +287,10 @@ def build_temperature_rows(mapping: list[dict[str, str]], frames: dict[str, pd.D
         if metric is None:
             continue
         ret, close, volume_ratio = metric
-        enriched = {**entry, "return_pct": round(ret, 2), "latest_close": round(close, 2), "volume_ratio_5d_20d": round(volume_ratio, 2)}
+        horizon_returns = ((prepared.get(entry["symbol"], {}).get("horizon_returns") or {})
+                           if prepared is not None else build_horizon_return_fields(frames.get(entry["symbol"])))
+        enriched = {**entry, "return_pct": round(ret, 2), "latest_close": round(close, 2),
+                    "volume_ratio_5d_20d": round(volume_ratio, 2), **horizon_returns}
         groups[entry["concept_code"]].append(enriched)
         all_member_returns.append(ret)
 

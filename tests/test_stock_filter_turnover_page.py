@@ -59,11 +59,11 @@ class StockFilterTurnoverPageTest(unittest.TestCase):
         self.assertIn(">换手分位</th>", header)
         self.assertNotIn("一年换手率分位", header)
         self.assertIn("turnoverCell(row, data.data_as_of)", js)
-        self.assertEqual(header.count("<th"), 12)
-        rows = js[js.index('function renderRows('):js.index('function renderPagination(')]
-        self.assertEqual(len(re.findall(r'<td[^>]*>', rows[rows.index("return '<tr>'"):])), 12)
+        self.assertEqual(header.count("<th"), 11)
+        rows = js[js.index('function renderRows('):js.index('function renderIndustryDistribution(')]
+        self.assertEqual(len(re.findall(r'<td[^>]*>', rows[rows.index("return '<tr>'"):])) , 11)
         self.assertNotIn('colspan="13"', js)
-        self.assertEqual(js.count('colspan="12"'), 4)
+        self.assertEqual(js.count('colspan="11"'), 4)
         self.assertIn("历史", html)
         self.assertIn("换手率", html)
 
@@ -93,7 +93,7 @@ class StockFilterTurnoverPageTest(unittest.TestCase):
         self.assertIn('id="turnover-trend-status" role="status"', html)
         self.assertIn('id="turnover-trend-svg"', html)
         self.assertIn('id="turnover-trend-tooltip"', html)
-        self.assertRegex(html, r'/stock-filter\.js\?v=20261115-turnover-trend-\w+')
+        self.assertRegex(html, r'/stock-filter\.js\?v=[^"\s]+')
 
     def test_chart_uses_historical_percentiles_not_raw_turnover_and_breaks_missing_points(self):
         source = JS.read_text(encoding="utf-8")

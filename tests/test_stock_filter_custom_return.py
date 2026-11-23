@@ -31,7 +31,7 @@ def test_snapshot_keeps_only_251_latest_valid_qfq_closes_for_dynamic_return():
     })
     payload = build_market_metrics(frame, annual_eps={})
     metric = payload['metrics']['sz:002370']
-    assert payload['schema_version'] == 'stock-filter-market-metrics-v6'
+    assert payload['schema_version'] == 'stock-filter-market-metrics-v7'
     assert len(metric['return_close_history']) == 251
     assert metric['return_close_history'][0] == 10.0
     assert metric['return_close_history'][-1] == 260.0
@@ -101,6 +101,6 @@ def test_page_wires_dynamic_return_controls_display_and_historical_guard():
     assert 'name="return_n_pct_max"' in market
     assert 'N日涨跌幅' in market and '1—250' in market
     assert 'row.return_n_pct' in js and 'row.return_n_days' in js
-    historical = js.split('function updateHistoricalMode()', 1)[1]
+    historical = (ROOT / 'web/stock-filter-history-capabilities.js').read_text(encoding='utf-8')
     assert all(f"'{name}'" in historical for name in
                ('return_n_days', 'return_n_pct_min', 'return_n_pct_max'))

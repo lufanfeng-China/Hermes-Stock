@@ -61,9 +61,13 @@ def _read_disclosure_files(symbol: str, signatures: tuple[tuple[str, int, int], 
         announcement_field = "announce_date" if "announce_date" in schema else "财报公告日期"
         if announcement_field not in schema:
             continue
+        optional_fields = [
+            field for field in ("归属于母公司所有者的净利润", "实收资本（或股本）")
+            if field in schema
+        ]
         rows = pq.read_table(
             path,
-            columns=[announcement_field, "近一年归母净利润（万元）", "总股本"],
+            columns=[announcement_field, "近一年归母净利润（万元）", "总股本", *optional_fields],
             filters=[("code", "==", symbol)],
             use_threads=False,
         ).to_pylist()
@@ -71,15 +75,43 @@ def _read_disclosure_files(symbol: str, signatures: tuple[tuple[str, int, int], 
             raw_announcement = _number(row.get(announcement_field))
             if raw_announcement is not None and 100000 <= raw_announcement < 1000000:
                 raw_announcement += 20000000  # 6-digit YYMMDD in older TDX files
+            precomputed_wan = _number(row.get("近一年归母净利润（万元）"))
+            total_shares = _positive(row.get("总股本"))
+            if total_shares is None:
+                total_shares = _positive(row.get("实收资本（或股本）"))
             out.append({
                 "period": path.stem,
                 "announce_date": str(int(raw_announcement)) if raw_announcement is not None else None,
-                "ttm_profit_yi": (
-                    _number(row.get("近一年归母净利润（万元）")) / 10000
-                    if _number(row.get("近一年归母净利润（万元）")) is not None else None
-                ),
-                "total_shares": _number(row.get("总股本")),
+                "ttm_profit_yi": precomputed_wan / 10000 if precomputed_wan not in (None, 0) else None,
+                "ttm_profit_source": "precomputed_tdx" if precomputed_wan not in (None, 0) else None,
+                "total_shares": total_shares,
+                "financial_row": row,
             })
+    by_period = {str(row["period"]): row for row in out}
+    from app.relative_valuation.data_loader import normalize_amount_to_yi, resolve_ttm_metric_from_rows
+
+    for disclosure in out:
+        if disclosure["ttm_profit_yi"] is not None:
+            continue
+        period = str(disclosure["period"])
+        if len(period) < 5 or not period[:4].isdigit():
+            continue
+        year = int(period[:4])
+        suffix = period[4:]
+        calculated, source = resolve_ttm_metric_from_rows(
+            period=period,
+            field_name="归属于母公司所有者的净利润",
+            current_row=disclosure.get("financial_row"),
+            prev_annual_row=by_period.get(f"{year - 1}A", {}).get("financial_row"),
+            prev_same_row=by_period.get(f"{year - 1}{suffix}", {}).get("financial_row"),
+            prev_q3_row=by_period.get(f"{year - 1}Q3", {}).get("financial_row"),
+            current_q3_row=by_period.get(f"{year}Q3", {}).get("financial_row"),
+        )
+        if calculated is not None:
+            disclosure["ttm_profit_yi"] = normalize_amount_to_yi(calculated)
+            disclosure["ttm_profit_source"] = source
+    for disclosure in out:
+        disclosure.pop("financial_row", None)
     return tuple(out)
 
 

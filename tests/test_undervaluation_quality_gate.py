@@ -16,6 +16,22 @@ class QualityGateTests(unittest.TestCase):
         self.assertEqual("QUALITY_ELIGIBLE", result["status"])
         self.assertTrue(result["eligible"])
         self.assertEqual([], result["reasons"])
+
+    def test_recovery_track_never_enters_standard_quality_pool(self):
+        from app.undervaluation.quality_gate import evaluate_quality_gate
+
+        result = evaluate_quality_gate({
+            "assessment_track": "five_year",
+            "score_basis_track": "recovery_track",
+            "score": 88,
+            "coverage_weight": 100,
+            "red_flags": [],
+            "red_flag_coverage": {"evaluated": 10, "total": 10, "unavailable": []},
+        })
+
+        self.assertEqual("NOT_QUALITY_ELIGIBLE", result["status"])
+        self.assertFalse(result["eligible"])
+        self.assertIn("annual_recovery_or_deteriorating_track", result["reasons"])
     def test_rejects_high_or_critical_annual_red_flag_even_with_passing_score(self):
         from app.undervaluation.quality_gate import evaluate_quality_gate
 

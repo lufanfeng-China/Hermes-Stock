@@ -43,12 +43,14 @@ def test_daily_rerun_reuses_complete_same_date_snapshot_without_scanning_or_touc
     target = tmp_path / f'{day}.json'
     payload = {'schema_version': 'stock-filter-fundamental-history-v7', 'as_of_date': day,
                'financial_information_cutoff': day, 'valuation_price_basis': 'raw_unadjusted_close',
+               'financial_warehouse_signature': 'same-signature',
                'stocks': {'sz:000001': {'pe_ttm': 9}}}
     target.write_text(json.dumps(payload), encoding='utf-8')
     locked = tmp_path / f'{day}.building'
     locked.touch()
     monkeypatch.setattr(builder, 'OUT_DIR', tmp_path)
     monkeypatch.setattr(builder, 'resolve_latest_day', lambda: day)
+    monkeypatch.setattr(builder, 'financial_warehouse_signature', lambda: 'same-signature')
     monkeypatch.setattr('sys.argv', ['build_stock_filter_fundamental_history.py', '--latest-trading-day'])
     with patch.object(builder.pd, 'read_parquet', side_effect=AssertionError('must reuse without scans')):
         builder.main()
@@ -63,6 +65,22 @@ def test_old_schema_is_not_accepted_as_reusable(tmp_path):
     file = tmp_path / f'{day}.json'
     file.write_text(json.dumps({'schema_version': 'stock-filter-fundamental-history-v4', 'as_of_date': day, 'stocks': {'sz:000001': {}}}))
     assert not builder.reusable_snapshot(file, day)
+
+
+def test_same_day_snapshot_is_not_reused_after_financial_warehouse_changes(tmp_path):
+    from scripts import build_stock_filter_fundamental_history as builder
+    day = '2026-11-19'
+    file = tmp_path / f'{day}.json'
+    file.write_text(json.dumps({
+        'schema_version': 'stock-filter-fundamental-history-v7',
+        'as_of_date': day,
+        'financial_information_cutoff': day,
+        'financial_warehouse_signature': 'old-signature',
+        'valuation_price_basis': 'raw_unadjusted_close',
+        'stocks': {'sz:002475': {'pe_ttm': None}},
+    }), encoding='utf-8')
+
+    assert not builder.reusable_snapshot(file, day, financial_signature='new-signature')
 
 
 def test_on_demand_builder_adopts_only_its_own_lock(tmp_path):

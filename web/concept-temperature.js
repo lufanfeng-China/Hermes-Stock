@@ -36,6 +36,26 @@
     if (value == null || Number.isNaN(Number(value))) return '—';
     var n = Number(value); return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
   }
+  function numberText(value, digits, suffix) {
+    var number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(digits) + (suffix || '') : '—';
+  }
+  function horizonReturnCell(row, years) {
+    var values = {1: row.return_1y_pct, 3: row.return_3y_pct, 5: row.return_5y_pct};
+    var bases = {1: row.return_1y_basis, 3: row.return_3y_basis, 5: row.return_5y_basis};
+    var starts = {1: row.return_1y_start_date, 3: row.return_3y_start_date, 5: row.return_5y_start_date};
+    var value = values[years];
+    if (value == null || !Number.isFinite(Number(value))) return '—';
+    var fallback = bases[years] === 'all_history' ? '<small class="member-return-basis">全部历史</small>' : '';
+    return '<span class="' + color(value) + '" title="起始日 ' + esc(starts[years] || '未知') + '">' + pct(value) + '</span>' + fallback;
+  }
+  function scoreCell(value, period, basisTrack, growthBasis, cashBasis) {
+    var labels = { recovery_track: '恢复型', deteriorating_track: '恶化型', not_applicable: '不适用' };
+    var basisLabel = labels[basisTrack] || '';
+    var title = basisLabel ? '评分口径：' + basisLabel + '；增长：' + (growthBasis || '未知') + '；现金：' + (cashBasis || '未知') : '';
+    return '<span' + (title ? ' title="' + esc(title) + '"' : '') + '>' + numberText(value, 1, '') + '</span>' +
+      (basisLabel ? '<small class="member-return-basis">' + basisLabel + '</small>' : (period ? '<small class="member-return-basis">' + esc(period) + '</small>' : ''));
+  }
   function color(value) { return Number(value) >= 0 ? 'positive' : 'negative'; }
   function tempPill(row) {
     if (row.temperature == null) return '<span class="pill t2">数据不足</span>';
@@ -210,7 +230,7 @@
   }
   async function loadMembers() {
     if (!selected) return;
-    membersEl.innerHTML = '<tr><td colspan="5" class="empty">加载中…</td></tr>';
+    membersEl.innerHTML = '<tr><td colspan="13" class="empty">加载中…</td></tr>';
     try {
       var resp = await fetch('/api/concept-temperature/members?scope=' + encodeURIComponent(scope) + '&window=' + encodeURIComponent(windowEl.value) + '&concept_code=' + encodeURIComponent(selected));
       var data = await resp.json();
@@ -221,16 +241,21 @@
       membersEl.innerHTML = data.stocks.map(function (row) {
         var market = row.symbol[0] === '6' ? 'sh' : (row.symbol.startsWith('92') ? 'bj' : 'sz');
         var href = '/stock-analysis.html?market=' + market + '&symbol=' + encodeURIComponent(row.symbol) + '&name=' + encodeURIComponent(row.stock_name);
-        return '<tr><td>' + esc(row.symbol) + '</td><td><a class="stock-link" href="' + href + '">' + esc(row.stock_name) + '</a></td><td class="' + color(row.return_pct) + '">' + pct(row.return_pct) + '</td><td>' + Number(row.latest_close).toFixed(2) + '</td><td>' + Number(row.volume_ratio_5d_20d).toFixed(2) + '</td></tr>';
+        return '<tr><td>' + esc(row.symbol) + '</td><td><a class="stock-link" href="' + href + '">' + esc(row.stock_name) + '</a></td>' +
+          '<td class="' + color(row.return_pct) + '">' + pct(row.return_pct) + '</td><td>' + numberText(row.latest_close, 2, '') + '</td>' +
+          '<td>' + horizonReturnCell(row, 1) + '</td><td>' + horizonReturnCell(row, 3) + '</td><td>' + horizonReturnCell(row, 5) + '</td>' +
+          '<td>' + numberText(row.volume_ratio_5d_20d, 2, '') + '</td><td>' + numberText(row.mrs_score, 1, '') + '</td>' +
+          '<td>' + numberText(row.turnover_percentile_1y, 1, '%') + '</td><td>' + numberText(row.pe_ttm, 2, '') + '</td>' +
+          '<td>' + scoreCell(row.annual_total, row.annual_period, row.annual_score_basis_track, row.annual_growth_quality_basis, row.annual_cash_quality_basis) + '</td><td>' + scoreCell(row.quarterly_total, row.quarterly_period) + '</td></tr>';
       }).join('');
     } catch (err) {
       memberMeta.textContent = '加载失败：' + err.message;
-      membersEl.innerHTML = '<tr><td colspan="5" class="empty">无法加载成分股</td></tr>';
+      membersEl.innerHTML = '<tr><td colspan="13" class="empty">无法加载成分股</td></tr>';
     }
   }
   windowEl.addEventListener('change', function () {
     selected = ''; currentPage = 1; memberTitle.textContent = '成分股清单'; memberCount.textContent = '0';
-    memberMeta.textContent = '点击上方概念查看'; membersEl.innerHTML = '<tr><td colspan="5" class="empty">尚未选择概念</td></tr>';
+    memberMeta.textContent = '点击上方概念查看'; membersEl.innerHTML = '<tr><td colspan="13" class="empty">尚未选择概念</td></tr>';
     loadConcepts();
   });
   function bindTemperatureTooltips() {
@@ -279,7 +304,7 @@
     selected = ''; currentPage = 1;
     memberTitle.textContent = '成分股清单'; memberCount.textContent = '0';
     memberMeta.textContent = '点击上方查看';
-    membersEl.innerHTML = '<tr><td colspan="5" class="empty">尚未选择' + (scope === 'industry' ? '行业' : '概念') + '</td></tr>';
+    membersEl.innerHTML = '<tr><td colspan="13" class="empty">尚未选择' + (scope === 'industry' ? '行业' : '概念') + '</td></tr>';
     conceptsEl.innerHTML = '<tr><td colspan="10" class="empty">加载中…</td></tr>';
     loadConcepts();
   }

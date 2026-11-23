@@ -1,0 +1,59 @@
+{
+  "name": "financial-health-recovery-track-scoring",
+  "version": "v1",
+  "frozen_date": "2026-11-23",
+  "status": "proposal_saved_not_implemented",
+  "coverage_gate": {
+    "minimum_weight": 85,
+    "financial_risk_required": true
+  },
+  "growth_quality": {
+    "weight": 20,
+    "revenue_cagr_max_points": 7,
+    "profit_component_max_points": 13,
+    "standard_basis": "ex_net_profit_cagr_plus_growth_premium",
+    "path_base_points": {
+      "turnaround": 6,
+      "loss_to_break_even": 4,
+      "loss_narrowing": 3,
+      "loss_flat": 1,
+      "loss_widening": 0,
+      "break_even_to_loss": 0,
+      "unknown": null
+    },
+    "persistence_bonus": {
+      "latest_2_annual_positive": 3,
+      "latest_3_annual_positive_additional": 2,
+      "at_least_3_of_4_annual_changes_improve": 2
+    }
+  },
+  "cash_quality": {
+    "weight": 20,
+    "fcf_margin_max_points": 10,
+    "standard_basis": "five_year_cash_profit_ratio",
+    "recovery_basis": "absolute_cash_support",
+    "absolute_cash_support": {
+      "five_year_cumulative_ocf_positive": 2,
+      "positive_ocf_years_points": {"5": 3, "4": 2, "3": 1, "lt_3": 0},
+      "latest_ocf_margin_points": {"gte_10_pct": 3, "gte_5_pct": 2, "gt_0_pct": 1, "lte_0_pct": 0},
+      "five_year_ocf_trend_points": {"up": 2, "flat": 1, "down": 0}
+    }
+  },
+  "tracks": {
+    "standard": "five_year_standard",
+    "recovery": "recovery_track"
+  },
+  "quality_pool_policy": {
+    "standard_quality_requires_standard_track": true,
+    "recovery_track_auto_enters_standard_quality_pool": false,
+    "still_loss_must_be_labelled": "亏损改善观察"
+  },
+  "prohibited": [
+    "coerce_missing_to_zero",
+    "lower_coverage_gate_to_force_score",
+    "absolute_value_cagr_for_negative_profit",
+    "epsilon_profit_denominator",
+    "mix_quarterly_reports_into_annual_score",
+    "mix_recovery_and_standard_scores_without_basis_label"
+  ]
+}

@@ -73,6 +73,31 @@ class ConceptTemperatureTests(unittest.TestCase):
         self.assertEqual(3, current[1]["temperature_streak_days"])
         self.assertIsNone(current[2]["temperature_streak_days"])
 
+    def test_horizon_returns_use_calendar_years_and_fall_back_to_all_history(self):
+        import pandas as pd
+        from app.concept_temperature import build_horizon_return_fields
+
+        full = pd.DataFrame(
+            {"close": [50, 60, 70, 80, 90, 100, 120]},
+            index=pd.to_datetime([f"{year}-01-02" for year in range(2020, 2027)]),
+        )
+        result = build_horizon_return_fields(full)
+        self.assertEqual(20.0, result["return_1y_pct"])
+        self.assertEqual(50.0, result["return_3y_pct"])
+        self.assertEqual(100.0, result["return_5y_pct"])
+        self.assertEqual("1y", result["return_1y_basis"])
+        self.assertEqual("3y", result["return_3y_basis"])
+        self.assertEqual("5y", result["return_5y_basis"])
+
+        short = full.loc["2024-01-01":]
+        short_result = build_horizon_return_fields(short)
+        self.assertEqual(20.0, short_result["return_1y_pct"])
+        self.assertEqual(33.33, short_result["return_3y_pct"])
+        self.assertEqual(33.33, short_result["return_5y_pct"])
+        self.assertEqual("all_history", short_result["return_3y_basis"])
+        self.assertEqual("all_history", short_result["return_5y_basis"])
+        self.assertEqual("2024-01-02", short_result["return_5y_start_date"])
+
 
 if __name__ == "__main__":
     unittest.main()

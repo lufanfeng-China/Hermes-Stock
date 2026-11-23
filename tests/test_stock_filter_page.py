@@ -27,6 +27,7 @@ class StockFilterPageTest(unittest.TestCase):
             "rps_20_min", "rps_50_min", "rps_120_min", "rps_250_min", "rps_total_min",
             "price_min", "return_n_days", "return_n_pct_min", "return_n_pct_max",
             "change_days_n", "up_days_min", "up_days_max", "down_days_min", "down_days_max",
+            "limit_up_n_days",
             "total_market_cap_min", "free_float_market_cap_min", "pe_ttm_min",
             "annual_total_min", "quarterly_total_min", "composite_total_min",
             "annual_growth_quality_min", "annual_profitability_min", "annual_cash_quality_min",
@@ -219,24 +220,32 @@ class StockFilterPageTest(unittest.TestCase):
 
     def test_historical_mode_disables_current_concept_scope_without_silent_fallback(self):
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
-        self.assertIn("当前概念及概念温度不支持历史日期", script)
-        self.assertIn("conceptScopeOpen.disabled = historical", script)
+        self.assertIn("conceptScopeOpen.disabled = historical || !scopeCatalog", script)
+        self.assertIn("概念成员与概念温度均使用当前快照", script)
 
-    def test_historical_mode_clears_current_industry_temperature_but_keeps_explicit_industries(self):
+    def test_historical_mode_clears_current_industry_members_and_temperature(self):
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
+        self.assertIn("selectedIndustryCodes.clear()", script)
         self.assertIn("selectedIndustryTemperatureLevels.clear()", script)
-        self.assertIn("当前行业温度不支持历史日期", script)
+        self.assertIn("industryScopeOpen.disabled = historical || !scopeCatalog", script)
+        self.assertIn("行业成员与行业温度均使用当前快照", script)
 
-    def test_result_table_displays_report_release_return_without_the_red_flag_count(self):
+    def test_result_table_shows_compact_market_cap_and_removes_eps_ratio_column(self):
         html = PAGE.read_text(encoding="utf-8")
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
-        self.assertIn("财报涨跌", html)
-        self.assertIn("report_release_return_pct", script)
-        # 红旗数量列已按需求从结果清单移除；数据仍由接口返回，只是不再展示
+        self.assertIn("<th class=\"num\">总市值</th>", html)
+        self.assertNotIn("总市值（亿元）", html)
+        self.assertNotIn("<th class=\"num\">股价收益比</th>", html)
+        self.assertNotIn("财报涨跌</th>", html)
+        self.assertIn("marketCapCell(row)", script)
+        self.assertIn("row.total_market_cap", script)
+        self.assertIn("fixed(value, 1)", script)
+        self.assertNotIn("epsRatioCell(row)", script)
+        self.assertNotIn("reportReleaseReturnCell", script)
         self.assertNotIn("触发红旗数量（当季）", html)
         self.assertNotIn("redFlagCell", script)
-        self.assertIn('colspan="12"', script)  # 删除结果展示列后，空状态须占满全表
-        self.assertNotIn('colspan="11"', script)
+        self.assertIn('colspan="11"', script)
+        self.assertNotIn('colspan="12"', script)
         self.assertNotIn('colspan="10"', script)
 
     def test_rps_total_is_not_a_result_column_but_remains_a_filter_and_sort(self):
@@ -244,7 +253,7 @@ class StockFilterPageTest(unittest.TestCase):
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
         header = html.split('<table class="filter-table"><thead><tr>', 1)[1].split('</tr></thead>', 1)[0]
         self.assertNotIn('RPS Total', header)
-        self.assertEqual(header.count('<th'), 12)
+        self.assertEqual(header.count('<th'), 11)
         self.assertIn('选择', header)
         self.assertIn('<th>相对大盘强弱</th>', header)
         self.assertNotIn('威科夫事件', header)
@@ -268,7 +277,7 @@ class StockFilterPageTest(unittest.TestCase):
     def test_valuation_sort_options_send_ascending_order(self):
         html = PAGE.read_text(encoding="utf-8")
         script = (ROOT / "web" / "stock-filter.js").read_text(encoding="utf-8")
-        self.assertIn('<option value="pe_ttm" data-order="asc">PE-TTM（升序）</option>', html)
+        self.assertIn('<option value="pe_ttm" data-order="asc" selected>PE-TTM（升序）</option>', html)
         self.assertIn('<option value="pe_percentile_5y" data-order="asc">PE五年分位（升序）</option>', html)
         self.assertIn('<option value="price_percentile_5y" data-order="asc">股价5年分位（升序）</option>', html)
         self.assertIn("query.set('order', sort.selectedOptions[0].dataset.order || 'desc');", script)

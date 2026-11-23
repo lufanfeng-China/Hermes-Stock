@@ -1,7 +1,20 @@
 import unittest
+from unittest.mock import patch
 
 
 class StrictFinancialSnapshotContractTest(unittest.TestCase):
+    def test_financial_symbols_get_market_even_when_security_master_is_missing(self):
+        from scripts.build_strict_financial_health_snapshot import _market_map
+
+        with patch("scripts.build_strict_financial_health_snapshot.search_index.load_security_rows", return_value=[]):
+            market_map = _market_map(["601059", "002582", "301033", "920001", "999999"])
+
+        self.assertEqual(market_map["601059"], "sh")
+        self.assertEqual(market_map["002582"], "sz")
+        self.assertEqual(market_map["301033"], "sz")
+        self.assertEqual(market_map["920001"], "bj")
+        self.assertNotIn("999999", market_map)
+
     def test_strict_record_keeps_annual_and_quarterly_health_separate(self):
         from app.stock_filter_snapshot import build_strict_financial_record
 

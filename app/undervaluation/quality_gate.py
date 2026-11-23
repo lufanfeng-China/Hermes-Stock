@@ -37,6 +37,9 @@ def evaluate_quality_gate(annual_health: dict[str, Any] | None) -> dict[str, Any
     reasons: list[str] = []
     if health.get("assessment_track") != "five_year":
         reasons.append("annual_health_not_five_year_comparable")
+    score_basis_track = str(health.get("score_basis_track") or "five_year_standard")
+    if score_basis_track in {"recovery_track", "deteriorating_track"}:
+        reasons.append("annual_recovery_or_deteriorating_track")
     score = _number(health.get("score"))
     if score is None or score < MIN_ANNUAL_SCORE:
         reasons.append("annual_score_below_70")

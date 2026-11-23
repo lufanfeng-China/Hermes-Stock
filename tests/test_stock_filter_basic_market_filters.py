@@ -103,8 +103,12 @@ def test_basic_market_controls_are_in_sidebar_and_explain_sign_and_volume_baseli
     for field in ('return_1d', 'volume_ratio_5', 'ma5_distance_pct', 'ma10_distance_pct', 'ma20_distance_pct'):
         assert f'name="{field}_min"' in group
         assert f'name="{field}_max"' in group
+    assert '<p class="filter-note">以下涨跌、量比及均线距离' not in group
+    assert '<p class="filter-note">每个交易日取最近7个有效交易日换手率截尾' not in group
     assert '前5个有效交易日' in group
     assert '负值在线下' in group
+    assert '至少120个样本' in group
+    assert '历史筛选日期不以最新数据补缺' in group
 
 
 def test_result_price_cell_exposes_filtered_market_evidence_on_hover():
