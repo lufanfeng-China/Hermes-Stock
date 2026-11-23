@@ -480,6 +480,17 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn("sector_blended", js)
         self.assertIn("sector_annual_only", js)
 
+    def test_sector_comparison_uses_general_table_grid_instead_of_one_run_on_dimension_cell(self):
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        sector_block = js.split("if (view.isSector) {", 1)[1].split("      return;", 1)[0]
+        self.assertIn("function sectorQuarterlyGroups", js)
+        self.assertIn("const annualDimensions = view.annualDimensions.slice(0, 6);", sector_block)
+        self.assertIn("const quarterlyGroups = sectorQuarterlyGroups(view.model.code, view.quarterlyDimensions);", sector_block)
+        self.assertIn("annualDimensions.map((item) => `<th", sector_block)
+        self.assertIn("quarterlyGroups.map((item) => `<td", sector_block)
+        self.assertIn("<th>已触发红旗</th><th>更新状态</th>", sector_block)
+        self.assertNotIn("sector-dimension-list", sector_block)
+
     def test_total_score_opens_overall_financial_conclusion_and_keeps_six_kpi_actions(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")

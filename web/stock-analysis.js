@@ -1367,6 +1367,38 @@
     svg.innerHTML=`${grid}<path d="${path}" fill="none" stroke="#62b8ff" stroke-width="3"/>${markerSvg}${ticks}`; meta.textContent=`原始价收盘趋势｜${rows[0].trading_day} 至 ${rows.at(-1).trading_day}｜标记为 T+1 开盘、区间最高/最低及当前价。`; dialog.showModal();
   }
 
+  function sectorQuarterlyGroups(modelCode, dimensions) {
+    const specs = modelCode === 'bank'
+      ? [
+          ['asset_quality', ['npl_ratio', 'provision_coverage_ratio']],
+          ['capital_adequacy', ['capital_adequacy_ratio', 'cet1_ratio', 'tier1_ratio']],
+          ['earnings_stability', ['net_interest_margin']],
+          ['liquidity_funding', ['liquidity_coverage_ratio', 'net_stable_funding_ratio']],
+          ['profitability_efficiency', ['cost_income_ratio']],
+          ['risk_buffer', ['credit_impairment_revenue_pct']],
+        ]
+      : [
+          ['capital_and_risk_coverage', ['risk_coverage_ratio', 'net_capital_to_net_assets_pct']],
+          ['credit_impairment', ['credit_impairment_revenue_pct', 'margin_financing_risk']],
+          ['income_structure', []],
+          ['leverage_liquidity', ['capital_leverage_ratio', 'liquidity_coverage_ratio', 'net_stable_funding_ratio']],
+          ['market_risk', ['proprietary_income_revenue_pct']],
+          ['profitability_efficiency', []],
+        ];
+    const byCode = new Map((dimensions || []).map((item) => [item.code, item]));
+    return specs.map(([code, metricCodes]) => {
+      const items = metricCodes.map((metricCode) => byCode.get(metricCode)).filter(Boolean);
+      const available = items.filter((item) => Number.isFinite(Number(item.points ?? item.score)));
+      const maxItems = items.filter((item) => Number.isFinite(Number(item.max_points ?? item.weight)));
+      return {
+        code,
+        items,
+        points: available.length ? available.reduce((sum, item) => sum + Number(item.points ?? item.score), 0) : null,
+        max_points: maxItems.length ? maxItems.reduce((sum, item) => sum + Number(item.max_points ?? item.weight), 0) : null,
+      };
+    });
+  }
+
   function renderHealthComparisonTable(health, monitor, financialModel, financialUpdate) {
     const target = document.getElementById('health-comparison-body');
     const head = document.getElementById('health-comparison-head');
@@ -1378,16 +1410,21 @@
     const number = (value) => value === null || value === undefined || !Number.isFinite(Number(value)) ? unavailable : Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1);
     if (context) context.textContent = view.isSector ? view.contextText : '通用工商模型｜年度使用完整年报，季度使用最新可比披露期。';
     if (view.isSector) {
-      const dimensionList = (items) => items.length ? `<div class="sector-dimension-list">${items.map((item) => {
-        const value = item.points ?? item.score;
-        const max = item.max_points ?? item.weight;
-        return `<span><strong>${escapeHtml(item.title || item.code)}</strong> ${number(value)}${max == null ? '' : ` / ${escapeHtml(max)}`}</span>`;
-      }).join('')}</div>` : unavailable;
+      const annualDimensions = view.annualDimensions.slice(0, 6);
+      const quarterlyGroups = sectorQuarterlyGroups(view.model.code, view.quarterlyDimensions);
+      const dimensionValue = (item) => number(item?.points ?? item?.score);
+      const quarterlyGroupValue = (item) => {
+        const detail = item.items.map((metric) => `${metric.title || metric.code} ${number(metric.points ?? metric.score).replace(/<[^>]+>/g, '—')}`).join('；');
+        const max = item.max_points;
+        return `<span class="sector-group-score"${detail ? ` title="${escapeHtml(detail)}"` : ''}>${number(item.points)}${max == null ? '' : `<small> / ${number(max)}</small>`}</span>`;
+      };
       const annualFlags = (health?.red_flags || []).length;
+      const quarterlyFlags = view.currentQuarterlyScore == null ? unavailable : String((monitor?.alerts || []).length);
+      const annualStatus = health?.status === 'ready' ? '可评分' : '年度证据不足';
       const quarterlyStatus = view.statusLabel || '状态未知';
-      head.innerHTML = '<tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th><th>专用模型维度／监管指标</th><th>风险／更新状态</th></tr>';
-      target.innerHTML = `<tr><td class="comparison-annual"><strong>${escapeHtml(`${view.model.label}｜年度 ${view.annualPeriod}`)}</strong></td><td>${number(health?.score)}</td><td>${number(health?.coverage_weight)}</td><td>${dimensionList(view.annualDimensions)}</td><td>${annualFlags ? `${annualFlags} 项红旗` : '未触发红旗'}</td></tr>` +
-        `<tr><td class="comparison-quarter"><strong>${escapeHtml(`${view.model.label}｜季度 ${view.currentQuarterlyPeriod || '待更新'}`)}</strong></td><td>${number(view.currentQuarterlyScore)}</td><td>${number(monitor?.realtime_score?.coverage_weight)}</td><td>${dimensionList(view.quarterlyDimensions)}</td><td>${escapeHtml(quarterlyStatus)}${view.previousQuarterlyScore == null ? '' : `<br><small>上一可信 ${number(view.previousQuarterlyScore)} · ${escapeHtml(view.previousQuarterlyPeriod || '未知期间')}</small>`}</td></tr>`;
+      head.innerHTML = `<tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th>${annualDimensions.map((item) => `<th title="${escapeHtml(item.title || item.code)}">${escapeHtml(item.title || item.code)}</th>`).join('')}<th>已触发红旗</th><th>更新状态</th></tr>`;
+      target.innerHTML = `<tr><td class="comparison-annual"><strong>${escapeHtml(`${view.model.label}｜年度 ${view.annualPeriod}`)}</strong></td><td>${number(health?.score)}</td><td>${number(health?.coverage_weight)}</td>${annualDimensions.map((item) => `<td>${dimensionValue(item)}</td>`).join('')}<td><button type="button" class="comparison-flag-button" data-flag-source="annual">${annualFlags}</button></td><td>${escapeHtml(annualStatus)}</td></tr>` +
+        `<tr><td class="comparison-quarter"><strong>${escapeHtml(`${view.model.label}｜季度 ${view.currentQuarterlyPeriod || '待更新'}`)}</strong></td><td>${number(view.currentQuarterlyScore)}</td><td>${number(monitor?.realtime_score?.coverage_weight)}</td>${quarterlyGroups.map((item) => `<td>${quarterlyGroupValue(item)}</td>`).join('')}<td>${quarterlyFlags}</td><td>${escapeHtml(quarterlyStatus)}${view.previousQuarterlyScore == null ? '' : `<br><small>上一可信 ${number(view.previousQuarterlyScore)} · ${escapeHtml(view.previousQuarterlyPeriod || '未知期间')}</small>`}</td></tr>`;
       return;
     }
     head.innerHTML = '<tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th><th>核心增长质量（20）</th><th>盈利能力（20）</th><th>现金含金量（20）</th><th>营运资本（15）</th><th>再投资效率（10）</th><th>财务风险（15）</th><th>已触发红旗</th><th>待调查事项</th></tr>';
