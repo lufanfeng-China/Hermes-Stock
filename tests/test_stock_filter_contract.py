@@ -19,7 +19,10 @@ class StockFilterContractTest(unittest.TestCase):
         self.assertEqual(PAGE_SIZE, 50)
 
     def test_annual_dimension_range_filters_full_market(self):
-        result = filter_response({"annual_growth_quality_min": ["1"], "page": ["1"], "page_size": ["50"]})
+        result = filter_response({
+            "financial_model_code": ["general"], "annual_period": ["2025A"],
+            "annual_growth_quality_min": ["1"], "page": ["1"], "page_size": ["50"],
+        })
         self.assertTrue(result["ok"])
         self.assertGreater(result["total_matched"], 0)
         self.assertTrue(all((row["annual_dimensions"].get("growth_quality") or 0) >= 1 for row in result["rows"]))

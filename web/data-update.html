@@ -157,6 +157,21 @@
       margin-bottom: 12px;
       font-style: italic;
     }
+    .sector-panel { margin:22px 0; border:1px solid rgba(139,216,255,.22); border-radius:10px; overflow:hidden; background:rgba(98,184,255,.025); }
+    .sector-panel-head { padding:12px 14px; border-bottom:1px solid rgba(139,216,255,.14); }
+    .sector-panel-head h2 { margin:0 0 5px; font-size:15px; }
+    .sector-summary { color:var(--muted); font-size:11px; }
+    .sector-filters { display:grid; grid-template-columns:140px 170px minmax(180px,1fr); gap:8px; padding:10px 14px; }
+    .sector-filters select,.sector-filters input { min-width:0; padding:7px 9px; color:var(--text); background:#0b171e; border:1px solid rgba(139,216,255,.25); border-radius:7px; }
+    .sector-table-wrap { max-height:440px; overflow:auto; }
+    .sector-table { width:100%; border-collapse:collapse; font-size:11px; }
+    .sector-table th,.sector-table td { padding:8px 9px; border-top:1px solid rgba(139,216,255,.09); text-align:left; white-space:nowrap; }
+    .sector-table th { position:sticky; top:0; z-index:1; background:#0b171e; color:var(--muted); }
+    .sector-status { font-weight:700; }.sector-status.ok { color:var(--accent); }.sector-status.failed { color:var(--danger); }.sector-status.pending { color:var(--warning); }
+    .sector-error { max-width:220px; overflow:hidden; text-overflow:ellipsis; color:var(--danger); }
+    .btn-symbol-retry { padding:4px 8px; border:1px solid rgba(255,193,7,.4); border-radius:6px; background:rgba(255,193,7,.07); color:var(--warning); cursor:pointer; font-size:10px; }
+    .btn-symbol-retry:disabled { opacity:.35; cursor:not-allowed; }
+    @media (max-width:760px) { .sector-filters { grid-template-columns:1fr; }.sector-table { min-width:900px; } }
   </style>
 </head>
 <body>
@@ -190,6 +205,16 @@
     <!-- Task list -->
     <div class="task-list" id="task-list"></div>
 
+    <section class="sector-panel" aria-labelledby="sector-update-title">
+      <div class="sector-panel-head"><h2 id="sector-update-title">银行 / 证券外部财报逐股状态</h2><div class="sector-summary" id="sector-summary">正在加载90只股票状态…</div></div>
+      <div class="sector-filters">
+        <select id="sector-filter"><option value="">全部模型</option><option value="bank">银行</option><option value="securities">证券</option></select>
+        <select id="sector-status-filter"><option value="">全部状态</option><option value="up_to_date">已是最新</option><option value="pending">尚未更新</option><option value="queued">等待处理</option><option value="processing">处理中</option><option value="insufficient_evidence">证据不足</option><option value="download_failed">下载失败</option><option value="parse_failed">解析失败</option><option value="validation_failed">校验失败</option><option value="failed">失败</option></select>
+        <input id="sector-query" type="search" placeholder="按代码或名称筛选">
+      </div>
+      <div class="sector-table-wrap"><table class="sector-table"><thead><tr><th>股票</th><th>模型</th><th>最新公告期</th><th>最新有效期</th><th>最近可信计分期</th><th>年度分</th><th>当前季报分</th><th>上一可信季报</th><th>状态</th><th>错误</th><th>操作</th></tr></thead><tbody id="sector-status-body"><tr><td colspan="11">正在加载…</td></tr></tbody></table></div>
+    </section>
+
     <!-- Actions -->
     <div class="action-bar">
       <button class="btn-start" id="btn-start" type="button">▶ 启动更新</button>
@@ -205,6 +230,9 @@ let tasks = [];
 let running = false;
 let pollTimer = null;
 let currentJobStatus = 'idle';
+let sectorRows = [];
+let sectorSummary = {};
+let sectorPollTimer = null;
 
 // ── Helpers ──
 const $ = (id) => document.getElementById(id);
@@ -429,12 +457,79 @@ function renderAll(data) {
   currentJobStatus = job.status || 'idle';
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+const SECTOR_STATUS_LABELS = {
+  up_to_date:'已是最新', pending:'尚未更新', queued:'等待处理', processing:'处理中',
+  insufficient_evidence:'证据不足', download_failed:'下载失败', parse_failed:'解析失败',
+  validation_failed:'校验失败', publish_failed:'发布失败', failed:'失败',
+};
+
+function renderSectorStatus() {
+  const sector = $('sector-filter').value;
+  const status = $('sector-status-filter').value;
+  const query = $('sector-query').value.trim().toLowerCase();
+  const rows = sectorRows.filter(row => (!sector || row.sector_model === sector)
+    && (!status || row.status === status)
+    && (!query || String(row.symbol || '').includes(query) || String(row.name || '').toLowerCase().includes(query)));
+  const counts = sectorSummary.status_counts || {};
+  $('sector-summary').textContent = `共 ${sectorSummary.total ?? 90} 只｜已最新 ${counts.up_to_date || 0}｜处理中 ${(counts.queued || 0) + (counts.processing || 0)}｜失败 ${Object.entries(counts).filter(([key]) => key.endsWith('_failed') || key === 'failed').reduce((sum,[,value]) => sum + Number(value || 0), 0)}｜证据不足 ${counts.insufficient_evidence || 0}｜尚未更新 ${sectorSummary.missing_status_count || 0}｜最新公告期 ${sectorSummary.latest_announced_period || '未知'}`;
+  $('sector-status-body').innerHTML = rows.length ? rows.map(row => {
+    const state = row.status || 'pending';
+    const stateClass = state === 'up_to_date' ? 'ok' : state === 'queued' || state === 'processing' ? 'pending' : state === 'pending' ? 'pending' : 'failed';
+    const error = row.last_error?.message || row.last_error || '';
+    const busy = state === 'queued' || state === 'processing';
+    const model = row.sector_model === 'bank' ? '银行模型' : row.sector_model === 'securities' ? '证券模型' : '—';
+    const previous = row.previous_quarterly_score == null ? '—' : `${escapeHtml(row.previous_quarterly_score)}｜${escapeHtml(row.previous_quarterly_period || '—')}`;
+    return `<tr data-symbol="${escapeHtml(row.symbol)}"><td>${escapeHtml(row.symbol)} ${escapeHtml(row.name)}</td><td>${model}</td><td>${escapeHtml(row.latest_announced_period || '—')}</td><td>${escapeHtml(row.latest_valid_period || '—')}</td><td>${escapeHtml(row.latest_scored_period || '—')}</td><td>${row.annual_score == null ? '—' : escapeHtml(row.annual_score)}</td><td>${row.quarterly_score == null ? '—' : escapeHtml(row.quarterly_score)}</td><td>${previous}</td><td class="sector-status ${stateClass}">${escapeHtml(SECTOR_STATUS_LABELS[state] || state)}</td><td class="sector-error" title="${escapeHtml(error)}">${escapeHtml(error || '—')}</td><td><button class="btn-symbol-retry" type="button" data-symbol-retry="${escapeHtml(row.symbol)}" ${busy ? 'disabled' : ''}>${busy ? '处理中' : '重试'}</button></td></tr>`;
+  }).join('') : '<tr><td colspan="11">没有符合条件的股票。</td></tr>';
+}
+
+async function loadFinancialSectorStatus() {
+  try {
+    const resp = await fetch('/api/financial-sector-update-status');
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error?.message || '状态加载失败');
+    sectorRows = data.stocks || [];
+    sectorSummary = data.summary || {};
+    renderSectorStatus();
+  } catch (err) {
+    $('sector-summary').textContent = `逐股状态加载失败：${err.message}`;
+  }
+}
+
+async function retryFinancialSectorSymbol(symbol) {
+  const row = sectorRows.find(item => item.symbol === symbol) || {};
+  const resp = await fetch('/api/financial-sector-update-retry', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({symbol, report_period:row.latest_announced_period || '', source_type:''}),
+  });
+  const data = await resp.json();
+  if (!data.ok) throw new Error(data.error?.message || '单股重试启动失败');
+  await loadFinancialSectorStatus();
+  if (!sectorPollTimer) {
+    let ticks = 0;
+    sectorPollTimer = setInterval(async () => {
+      await loadFinancialSectorStatus();
+      ticks += 1;
+      if (ticks >= 150 || !sectorRows.some(item => ['queued','processing'].includes(item.status))) {
+        clearInterval(sectorPollTimer); sectorPollTimer = null;
+      }
+    }, 2000);
+  }
+}
+
 // ── API ──
 async function loadPlan() {
   try {
     const resp = await fetch('/api/data-update-plan');
     const data = await resp.json();
-    if (data.ok) renderAll(data);
+    if (data.ok) {
+      renderAll(data);
+      await loadFinancialSectorStatus();
+    }
   } catch (err) {
     console.error('Failed to load plan:', err);
   }
@@ -517,6 +612,15 @@ $('task-list').addEventListener('click', async (event) => {
   button.disabled = true;
   try { await runTask(button.dataset.taskId); }
   catch (err) { $('status-line').textContent = '❌ 单任务启动失败: ' + err.message; $('status-line').style.color = 'var(--danger)'; button.disabled = false; }
+});
+['sector-filter','sector-status-filter'].forEach(id => $(id).addEventListener('change', renderSectorStatus));
+$('sector-query').addEventListener('input', renderSectorStatus);
+$('sector-status-body').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-symbol-retry]');
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  try { await retryFinancialSectorSymbol(button.dataset.symbolRetry); }
+  catch (err) { $('sector-summary').textContent = `单股重试失败：${err.message}`; button.disabled = false; }
 });
 
 // Initial load

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import json
+import re
 from pathlib import Path
 from typing import Any
 from datetime import date, datetime
@@ -59,6 +60,22 @@ HISTORICAL_PARAM_LABELS = {
     "concept_codes": "概念成员", "concept_temperature_levels": "概念温度",
 }
 SORT_FIELDS = {"eps_ratio_5y", "rps_total", "mrs_score", "excess_return_20_pp", "composite_total", "annual_total", "quarterly_total", "price", "total_market_cap", "free_float_market_cap", "pe_ttm", "pe_percentile_5y", "price_percentile_5y", "turnover_percentile_1y", "ps_ttm", "return_pct", "turnover_sum"}
+FINANCIAL_SCORE_SORTS = frozenset({"composite_total", "annual_total", "quarterly_total"})
+
+
+def _financial_score_sort_group(row: dict[str, Any], sort: str) -> tuple[object, ...]:
+    """Keep unlike financial models/periods in separate groups before score sorting."""
+    if sort not in FINANCIAL_SCORE_SORTS:
+        return ()
+    model = str(row.get("financial_model_code") or "general")
+    model_order = {"general": 0, "bank": 1, "securities": 2}.get(model, 3)
+    if sort == "annual_total":
+        period = str(row.get("annual_period") or "pending")
+    elif sort == "quarterly_total":
+        period = str(row.get("quarterly_period") or "pending")
+    else:
+        period = f"{row.get('annual_period') or 'pending'}|{row.get('quarterly_period') or 'pending'}"
+    return model_order, model, period
 
 # 01 股票范围：先锁定股票池，再套用其它筛选条件。
 STOCK_SCOPE_LABELS = {
@@ -325,6 +342,8 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
         tech = tech_rows.get(symbol, {})
         financial = strict_financial.get(key, {})
         a, q = financial.get("annual", {}), financial.get("quarterly", {})
+        financial_model = financial.get("financial_model") or {"code": "general", "label": "通用工商模型"}
+        financial_update = financial.get("financial_update") or {}
         composite = financial.get("composite") or {}
         release_performance = financial.get("report_release_price_performance") or {}
         q_quality = q.get("quality") or {}
@@ -363,6 +382,15 @@ def _universe() -> tuple[list[dict[str, Any]], str]:
             "excess_return_5_pp": _num(relative.get("excess_return_5_pp")), "excess_return_20_pp": _num(relative.get("excess_return_20_pp")), "excess_return_50_pp": _num(relative.get("excess_return_50_pp")), "excess_return_120_pp": _num(relative.get("excess_return_120_pp")), "excess_return_250_pp": _num(relative.get("excess_return_250_pp")),
             "down_market_days_20": _num(relative.get("down_market_days_20")), "down_market_win_rate_20": _num(relative.get("down_market_win_rate_20")), "down_market_total_excess_pp_20": _num(relative.get("down_market_total_excess_pp_20")), "anti_fall_status": relative.get("anti_fall_status"),
             "composite_total": _num(composite.get("score")), "composite_mode": composite.get("mode"),
+            "financial_model_code": financial_model.get("code"), "financial_model_label": financial_model.get("label"),
+            "financial_update_status": financial_update.get("status"),
+            "financial_latest_announced_period": financial_update.get("latest_announced_period"),
+            "financial_latest_valid_period": financial_update.get("latest_valid_period"),
+            "financial_latest_scored_period": financial_update.get("latest_scored_period"),
+            "financial_using_previous_score": bool(financial_update.get("using_previous_score")),
+            "financial_previous_quarterly_period": financial_update.get("previous_quarterly_period"),
+            "financial_previous_quarterly_score": _num(financial_update.get("previous_quarterly_score")),
+            "financial_update_error": financial_update.get("last_error"),
             "annual_total": _num(a.get("score")), "annual_dimensions": a.get("dimensions") or {}, "annual_derived": a.get("derived") or {},
             "annual_assessment_track": a.get("assessment_track"), "annual_coverage_weight": _num(a.get("coverage_weight")),
             "annual_score_version": a.get("score_version"), "annual_score_basis_track": a.get("score_basis_track"),
@@ -555,8 +583,21 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
             datetime.strptime(as_of_date, "%Y-%m-%d")
         sort = requested_sort or "pe_ttm"
         if sort not in SORT_FIELDS: raise ValueError("unsupported sort")
+        financial_model_code = (params.get("financial_model_code") or [""])[0].strip().lower()
+        if financial_model_code not in {"", "general", "bank", "securities"}:
+            raise ValueError("financial_model_code must be general, bank, or securities")
+        if as_of_date and financial_model_code in {"bank", "securities"}:
+            raise ValueError("historical bank/securities sector models are unavailable in v1")
+        annual_period = (params.get("annual_period") or [""])[0].strip().upper()
+        quarterly_period = (params.get("quarterly_period") or [""])[0].strip().upper()
+        if annual_period and not re.fullmatch(r"20\d{2}A", annual_period):
+            raise ValueError("annual_period must use YYYYA format")
+        if quarterly_period and not re.fullmatch(r"20\d{2}(?:Q[1-4]|H1)", quarterly_period):
+            raise ValueError("quarterly_period must use YYYYQn or YYYYH1 format")
         presets = {name.strip() for value in params.get("preset", []) for name in value.split(",") if name.strip()}
         if presets - {"financial_reversal", "blowup_break", "trend_template", "turnover_high"}: raise ValueError("unsupported preset")
+        if "financial_reversal" in presets and not financial_model_code:
+            financial_model_code = "general"
         if as_of_date:
             active_unsupported = next((name for name in sorted(HISTORICAL_LATEST_ONLY_PARAMS)
                                        if any(str(value or "").strip() for value in params.get(name, []))), None)
@@ -732,6 +773,15 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
         ranges["pe_percentile_5y"] = tuple(pe_bounds)
         annual_dimension_ranges = {name: _range(params, f"annual_{name}") for name in ("growth_quality", "profitability", "cash_quality", "working_capital", "reinvestment", "financial_risk")}
         quarterly_dimension_ranges = {name: _range(params, f"quarterly_{name}") for name in ("growth", "profitability", "cash", "working_capital", "reinvestment", "financial_risk")}
+        financial_ranges = ("composite_total", "annual_total", "quarterly_total")
+        annual_score_range_requested = (ranges["annual_total"] != (None, None)
+                                        or any(bound != (None, None) for bound in annual_dimension_ranges.values()))
+        quarterly_score_range_requested = (ranges["quarterly_total"] != (None, None)
+                                           or any(bound != (None, None) for bound in quarterly_dimension_ranges.values()))
+        composite_score_range_requested = ranges["composite_total"] != (None, None)
+        financial_score_range_requested = (
+            annual_score_range_requested or quarterly_score_range_requested or composite_score_range_requested
+        )
     except ValueError as exc:
         return {"ok": False, "error": {"code": "invalid_filter", "message": str(exc)}}
     try:
@@ -918,6 +968,40 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     market = (params.get("market") or [""])[0].strip().lower()
     # 01 股票范围先锁定股票池，再套用其余条件。
     scoped_rows = [row for row in rows if matches_scope(row.get("market"), row.get("symbol"), stock_scope)]
+    if financial_score_range_requested and not financial_model_code:
+        available_models = {
+            str(row.get("financial_model_code") or "general") for row in scoped_rows
+        }
+        if len(available_models) > 1:
+            return {"ok": False, "error": {
+                "code": "invalid_filter",
+                "message": "financial_model_code is required for financial score ranges on a mixed-model pool",
+            }}
+        financial_model_code = next(iter(available_models), "general")
+    if financial_model_code:
+        scoped_rows = [
+            row for row in scoped_rows
+            if str(row.get("financial_model_code") or "general") == financial_model_code
+        ]
+    if financial_score_range_requested:
+        needs_annual = annual_score_range_requested or composite_score_range_requested
+        needs_quarterly = quarterly_score_range_requested or composite_score_range_requested
+        if needs_annual and not annual_period:
+            periods = {str(row.get("annual_period") or "") for row in scoped_rows}
+            if len(periods) != 1 or "" in periods:
+                return {"ok": False, "error": {"code": "invalid_filter",
+                    "message": "annual_period is required when financial score candidates mix or omit annual periods"}}
+            annual_period = next(iter(periods))
+        if needs_quarterly and not quarterly_period:
+            periods = {str(row.get("quarterly_period") or "") for row in scoped_rows}
+            if len(periods) != 1 or "" in periods:
+                return {"ok": False, "error": {"code": "invalid_filter",
+                    "message": "quarterly_period is required when financial score candidates mix or omit quarterly periods"}}
+            quarterly_period = next(iter(periods))
+    if annual_period:
+        scoped_rows = [row for row in scoped_rows if str(row.get("annual_period") or "") == annual_period]
+    if quarterly_period:
+        scoped_rows = [row for row in scoped_rows if str(row.get("quarterly_period") or "") == quarterly_period]
     effective_industry_codes: set[str] = set()
     effective_concept_codes: set[str] = set()
     if industry_l2_codes or industry_temperature_levels or concept_codes or concept_temperature_levels:
@@ -1169,13 +1253,24 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
     requested_order = (params.get("order") or [""])[0].lower()
     default_order = "asc" if sort in {"pe_ttm", "pe_percentile_5y", "price_percentile_5y"} else "desc"
     reverse = (requested_order or default_order) != "asc"
-    def sort_key(row: dict[str, Any]) -> tuple[bool, float]:
+    def sort_key(row: dict[str, Any]) -> tuple[object, ...]:
         number = (_num(row.get(sort)) if sort not in {"price_percentile_5y", "turnover_percentile_1y"}
                   or row.get("qfq_as_of" if sort == "price_percentile_5y" else "turnover_percentile_1y_as_of") == data_date
                   else None)
-        return number is None, (-number if reverse else number) if number is not None else 0.0
+        return (*_financial_score_sort_group(row, sort), number is None,
+                (-number if reverse else number) if number is not None else 0.0)
     filtered.sort(key=sort_key)
     total = len(filtered); start = (page - 1) * PAGE_SIZE
+    financial_model_distribution: dict[str, int] = {}
+    quarterly_period_distribution: dict[str, int] = {}
+    financial_update_status_distribution: dict[str, int] = {}
+    for item in filtered:
+        model_code = str(item.get("financial_model_code") or "general")
+        period = str(item.get("quarterly_period") or "pending")
+        update_status = str(item.get("financial_update_status") or "not_applicable")
+        financial_model_distribution[model_code] = financial_model_distribution.get(model_code, 0) + 1
+        quarterly_period_distribution[period] = quarterly_period_distribution.get(period, 0) + 1
+        financial_update_status_distribution[update_status] = financial_update_status_distribution.get(update_status, 0) + 1
     page_rows = filtered[start:start + PAGE_SIZE]
     if swing_snapshot is None:
         # Optional display enrichment never changes the selected universe. Historical
@@ -1200,6 +1295,9 @@ def filter_response(params: dict[str, list[str]]) -> dict[str, Any]:
             "pe_percentile_snapshot": {"status": pe_status, "as_of_date": data_date if pe_status == "ready" else None},
             "stock_scope": stock_scope, "stock_scope_label": STOCK_SCOPE_LABELS[stock_scope],
             "industry_distribution": industry_distribution,
+            "financial_model_distribution": dict(sorted(financial_model_distribution.items())),
+            "quarterly_period_distribution": dict(sorted(quarterly_period_distribution.items())),
+            "financial_update_status_distribution": dict(sorted(financial_update_status_distribution.items())),
             "scope_selection": {"industry_l2_codes": sorted(industry_l2_codes),
                                 "industry_temperature_levels": sorted(industry_temperature_levels),
                                 "effective_industry_codes": sorted(effective_industry_codes),

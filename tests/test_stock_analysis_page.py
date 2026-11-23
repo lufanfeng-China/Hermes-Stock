@@ -309,7 +309,7 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('id="financial-health-kpi"', html)
         self.assertLess(html.index('id="financial-health-kpi"'), html.index('aria-label="五年经营指标"'))
         self.assertIn('年度与季度财报监测对比', html)
-        self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor)', js)
+        self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor, payload.financial_model, payload.financial_update)', js)
         self.assertNotIn('id="health-dimensions"', html)
         self.assertNotIn('id="health-red-flag-panel"', html)
 
@@ -377,7 +377,8 @@ class StockAnalysisPageTests(unittest.TestCase):
 
     def test_health_ui_has_comparison_loading_and_failure_states(self):
         js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
-        self.assertIn('renderHealthComparisonTable(null, null)', js)
+        self.assertIn('renderHealthComparisonTable(null, null, null, null)', js)
+        self.assertIn('renderFinancialModelPresentation(null)', js)
         self.assertNotIn("renderQuarterlyMonitor(null)", js)
         self.assertNotIn("renderFinancialHealth(null, null, 'loading')", js)
 
@@ -457,8 +458,27 @@ class StockAnalysisPageTests(unittest.TestCase):
         self.assertIn('const annualPeriod = annualAssessmentLabel(health);', js)
         self.assertIn("data-flag-source=\"annual\"", js)
         self.assertIn('id="health-comparison-body"', html)
-        self.assertIn('function renderHealthComparisonTable(health, monitor)', js)
-        self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor)', js)
+        self.assertIn('function renderHealthComparisonTable(health, monitor, financialModel, financialUpdate)', js)
+        self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor, payload.financial_model, payload.financial_update)', js)
+
+    def test_sector_financial_model_uses_dedicated_table_and_update_context(self):
+        html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")
+        js = (ROOT / "web" / "stock-analysis.js").read_text(encoding="utf-8")
+        self.assertIn('id="financial-model-context"', html)
+        self.assertIn('id="health-comparison-head"', html)
+        self.assertIn('id="health-question-section"', html)
+        self.assertIn('id="health-series-section"', html)
+        self.assertIn('function renderFinancialModelPresentation(payload)', js)
+        self.assertIn('function renderHealthComparisonTable(health, monitor, financialModel, financialUpdate)', js)
+        self.assertIn('sectorFinancialPresentation({ financial_model: financialModel, financial_update: financialUpdate, health, quarterly_monitor: monitor })', js)
+        self.assertIn('renderHealthComparisonTable(payload.health, payload.quarterly_monitor, payload.financial_model, payload.financial_update)', js)
+        self.assertIn('renderFinancialModelPresentation(payload)', js)
+        self.assertIn("view.isSector", js)
+        self.assertIn("view.annualDimensions", js)
+        self.assertIn("view.quarterlyDimensions", js)
+        self.assertIn("view.currentQuarterlyScore", js)
+        self.assertIn("sector_blended", js)
+        self.assertIn("sector_annual_only", js)
 
     def test_total_score_opens_overall_financial_conclusion_and_keeps_six_kpi_actions(self):
         html = (ROOT / "web" / "stock-analysis.html").read_text(encoding="utf-8")

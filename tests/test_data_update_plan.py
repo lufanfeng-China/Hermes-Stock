@@ -114,6 +114,24 @@ class DataUpdatePlanTests(unittest.TestCase):
             app_handler.StockDashboardHandler.handle_data_update_plan(request)
         _, payload = request.respond_json.call_args.args
         self.assertNotIn("fetch_financial_online", [task["id"] for task in payload["tasks"]])
+    def test_financial_sector_external_update_is_registered_after_warehouse_before_strict_snapshot(self) -> None:
+        from app.pipeline.commands import _data_update_commands
+
+        ids = [task_id for task_id, _ in _data_update_commands(trading_day=None)]
+        self.assertIn("update_financial_sector_external", ids)
+        self.assertLess(ids.index("update_financial_ts"), ids.index("update_financial_sector_external"))
+        self.assertLess(ids.index("update_financial_sector_external"), ids.index("build_strict_financial_health_snapshot"))
+
+        retry_ids = [task_id for task_id, _ in _data_update_commands(trading_day=None, retry_failed=True)]
+        self.assertIn("update_financial_sector_external", retry_ids)
+
+        request = Mock()
+        with patch.object(app_handler, "_latest_trading_day_for_refresh", return_value=None):
+            app_handler.StockDashboardHandler.handle_data_update_plan(request)
+        _, payload = request.respond_json.call_args.args
+        plan_ids = [task["id"] for task in payload["tasks"]]
+        self.assertIn("update_financial_sector_external", plan_ids)
+        self.assertEqual(ids.index("update_financial_sector_external"), plan_ids.index("update_financial_sector_external"))
 
 
 if __name__ == "__main__":

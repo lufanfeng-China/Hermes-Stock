@@ -38,6 +38,7 @@ VALID_VALUES = {
 def _row():
     return {
         'market': 'sz', 'symbol': '000001', 'stock_name': '平安银行',
+        'financial_model_code': 'general', 'annual_period': '2025A',
         'annual_total': 60.0, 'quarterly_total': 55.0,
         'annual_dimensions': {}, 'quarterly_dimensions': {},
         'price': 10.0, 'qfq_as_of': DAY, 'trend_daily': 'bullish',
@@ -86,6 +87,7 @@ def test_supported_historical_filters_are_not_misclassified():
     with patch.object(stock_filter, '_historical_universe', return_value=([_row()], DAY)):
         result = stock_filter.filter_response({
             'as_of_date': [DAY], 'price_min': ['9'], 'annual_total_min': ['50'],
+            'financial_model_code': ['general'], 'annual_period': ['2025A'],
             'trend_daily': ['bullish'], 'sort': ['annual_total'],
         })
     assert result['ok'] and result['total_matched'] == 1

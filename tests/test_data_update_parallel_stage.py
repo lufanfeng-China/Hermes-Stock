@@ -35,8 +35,9 @@ def test_grouping_mechanism_still_works_when_a_group_is_configured():
          patch.object(runner, "_available_memory_mb", return_value=6000):
         units = runner._build_units(_commands())
     assert len(units) == len(_commands()) - 1
-    assert [name for name, _ in units[-1]] == ["build_concept_temperature", "build_industry_temperature"]
-    assert [unit[0][0] for unit in units[:-1]] == [name for name, _ in _commands()][:-2]
+    grouped = next(unit for unit in units if len(unit) == 2)
+    assert [name for name, _ in grouped] == ["build_concept_temperature", "build_industry_temperature"]
+    assert [name for unit in units for name, _ in unit] == [name for name, _ in _commands()]
 
 
 def test_low_memory_falls_back_to_sequential():

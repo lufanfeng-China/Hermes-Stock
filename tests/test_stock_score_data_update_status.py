@@ -145,12 +145,16 @@ class StockScoreDataUpdateStatusContractTests(unittest.TestCase):
         # in it is independently retryable and must not re-run downloads.
         self.assertEqual(
             [
+                "update_financial_sector_external",
+                "build_financial_sector_health_snapshot",
+                "build_strict_financial_health_snapshot",
                 "build_industry_metric_snapshot",
                 "build_industry_relative_valuation_snapshot",
                 "build_good_stock_financial_snapshot",
                 "build_good_stock_undervaluation_current",
                 "build_stock_filter_pe_percentile_snapshot",
                 "build_stock_filter_turnover_percentile_snapshot",
+                "build_stock_filter_fundamental_history",
                 "build_swing_snapshot",
                 "build_swing_state_runs",
                 "build_concept_temperature",

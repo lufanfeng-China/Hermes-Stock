@@ -69,6 +69,129 @@ def _quarterly_quality(monitor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_sector_strict_financial_record(
+    source: dict[str, Any], *, annual_anchor: str, quarterly_anchor: str,
+) -> dict[str, Any]:
+    """Project bank/securities model output into the strict snapshot contract."""
+    annual_result = source.get("annual_score") if isinstance(source.get("annual_score"), dict) else {}
+    quarterly_result = source.get("quarterly_score") if isinstance(source.get("quarterly_score"), dict) else {}
+    annual_score = _number(annual_result.get("score"))
+    quarterly_score = _number(quarterly_result.get("score"))
+    annual_coverage = _number(annual_result.get("coverage_weight"))
+    quarterly_coverage = _number(quarterly_result.get("coverage_weight"))
+    scored_period = str(source.get("latest_scored_period") or "")
+    announced_period = str(source.get("latest_announced_period") or "")
+    quarterly_period = str(quarterly_result.get("report_period") or "") if quarterly_score is not None else ""
+    current_quarterly = bool(
+        quarterly_period
+        and scored_period == quarterly_period
+        and announced_period == quarterly_period
+        and source.get("update_status") == "up_to_date"
+    )
+    if annual_score is not None and quarterly_score is not None and current_quarterly:
+        composite_score = round(annual_score * 0.7 + quarterly_score * 0.3, 1)
+        composite_mode = "sector_blended"
+    elif annual_score is not None:
+        composite_score = annual_score
+        composite_mode = "sector_annual_only"
+    elif quarterly_score is not None and current_quarterly:
+        composite_score = quarterly_score
+        composite_mode = "sector_quarterly_only"
+    else:
+        composite_score = None
+        composite_mode = "unavailable"
+    red_flags = list(annual_result.get("red_flags") or [])
+    quality_reasons: list[str] = []
+    if annual_score is None or annual_score < 70:
+        quality_reasons.append("annual_score_below_70")
+    if annual_coverage is None or annual_coverage < 85:
+        quality_reasons.append("annual_coverage_below_85")
+    model = source.get("financial_model") if isinstance(source.get("financial_model"), dict) else {
+        "code": source.get("sector_model"), "label": source.get("sector_model")
+    }
+    using_previous = bool(
+        source.get("latest_announced_period")
+        and source.get("latest_scored_period")
+        and source.get("latest_announced_period") != source.get("latest_scored_period")
+    )
+    quarterly_announced_period = str(source.get("latest_announced_period") or "")
+    if quarterly_announced_period.endswith("A"):
+        quarterly_announced_period = ""
+    update = {
+        "status": source.get("update_status") or "not_started",
+        "latest_announced_period": source.get("latest_announced_period"),
+        "latest_valid_period": source.get("latest_valid_period"),
+        "latest_scored_period": source.get("latest_scored_period"),
+        "using_previous_score": using_previous,
+        "previous_quarterly_period": source.get("previous_quarterly_period"),
+        "previous_quarterly_score": _number(source.get("previous_quarterly_score")),
+        "last_error": source.get("last_error"),
+    }
+    return {
+        "financial_model": model,
+        "financial_update": update,
+        "composite": {
+            "version": "sector-composite-health-v1",
+            "mode": composite_mode,
+            "score": composite_score,
+            "annual_score": annual_score,
+            "quarterly_score": quarterly_score if current_quarterly else None,
+            "annual_weight": 0.7 if composite_mode == "sector_blended" else 1.0 if annual_score is not None else 0.0,
+            "quarterly_weight": 0.3 if composite_mode == "sector_blended" else 1.0 if composite_mode == "sector_quarterly_only" else 0.0,
+        },
+        "good_stock_quality": {
+            "version": "sector-quality-gate-v1",
+            "status": "QUALITY_ELIGIBLE" if not quality_reasons else "INSUFFICIENT_EVIDENCE" if annual_score is None else "NOT_QUALITY_ELIGIBLE",
+            "eligible": not quality_reasons,
+            "reasons": quality_reasons,
+            "annual_score": annual_score,
+            "annual_coverage_weight": annual_coverage,
+        },
+        "quarterly_momentum": {
+            "version": "sector-quarterly-momentum-v1",
+            "status": quarterly_result.get("status") if current_quarterly else "pending_update",
+            "eligible": current_quarterly and quarterly_score is not None,
+        },
+        "annual": {
+            "anchor_period": source.get("annual_period") or annual_anchor,
+            "periods": ["2021A", "2022A", "2023A", "2024A", "2025A"],
+            "assessment_track": "five_year",
+            "score_version": annual_result.get("score_version"),
+            "score_basis_track": str(source.get("sector_model") or "") + "_sector_model",
+            "score_comparable": annual_score is not None,
+            "score_comparability": annual_result.get("score_comparability"),
+            "score": annual_score,
+            "coverage_weight": annual_coverage,
+            "score_coverage_status": annual_result.get("status"),
+            "dimensions": {
+                str(code): _number(item.get("score"))
+                for code, item in (annual_result.get("dimensions") or {}).items()
+                if isinstance(item, dict)
+            },
+            "derived": dict(source.get("annual_inputs") or {}),
+            "red_flags": red_flags,
+            "reason": None if annual_score is not None else "sector_annual_score_unavailable",
+        },
+        "quarterly": {
+            "anchor_period": quarterly_announced_period or quarterly_anchor,
+            "anchor_period_global": quarterly_anchor,
+            "period": quarterly_period if current_quarterly else None,
+            "score": quarterly_score if current_quarterly else None,
+            "coverage_weight": quarterly_coverage if current_quarterly else None,
+            "score_coverage_status": quarterly_result.get("status") if current_quarterly else "pending_update",
+            "dimensions": {
+                str(code): _number(item.get("score"))
+                for code, item in (quarterly_result.get("parts") or {}).items()
+                if isinstance(item, dict)
+            } if current_quarterly else {},
+            "quality": {},
+            "profit_comparisons": {},
+            "triggered_red_flag_count": 0,
+            "reason": None if current_quarterly else "sector_quarterly_update_pending",
+        },
+    }
+
+
 def build_strict_financial_record(
     reports: list[dict[str, Any]], *, industry_level_1: str | None,
     annual_anchor: str, quarterly_anchor: str,

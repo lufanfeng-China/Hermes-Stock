@@ -24,6 +24,7 @@ TONGDAXIN_PYTHON = "/home/lufanfeng/.venvs/moontdx-china-stock-data/bin/python"
 # 实测 17-25 分钟,余量不足以覆盖机器变慢或映射扩张,因此单独放宽到 60 分钟。
 DEFAULT_TASK_TIMEOUT = 1800
 LONG_TASK_TIMEOUTS = {
+    'update_financial_sector_external': 7200,  # 90只银行证券首次下载五年年报和最新季报
     'build_stock_filter_fundamental_history': 7200,  # 全市场PIT首次构建可能较慢，重跑直接复用
     'build_wyckoff_snapshot': 7200,  # 全市场首轮全历史预热，日后增量通常更快
     'build_swing_snapshot': 7200,  # 全市场前复权峰谷首轮扫描，按源哈希重用同日结果
@@ -181,6 +182,10 @@ def _run_data_update_command(
 
 
 GOOD_STOCK_TASKS = {'build_good_stock_financial_snapshot', 'build_good_stock_undervaluation_current'}
+NON_BLOCKING_FINANCIAL_SECTOR_TASKS = {
+    'update_financial_sector_external',
+    'build_financial_sector_health_snapshot',
+}
 
 
 def _record_step_result(step):
@@ -248,7 +253,7 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
         try:
             result = _run_data_update_command(step_name, command, progress_callback=progress_callback)
         except (subprocess.SubprocessError, OSError) as exc:
-            if step_name in GOOD_STOCK_TASKS:
+            if step_name in GOOD_STOCK_TASKS or step_name in NON_BLOCKING_FINANCIAL_SECTOR_TASKS:
                 step = {'name': step_name, 'ok': False, 'returncode': None,
                         'stdout_tail': '', 'stderr_tail': str(exc)}
                 steps.append(step)
@@ -292,7 +297,7 @@ def run_full_data_update(progress_callback=None, retry_failed: bool = False) -> 
             # The peer snapshot is a self-contained financial presentation
             # artifact.  Its failure must stay visible and retryable, but must
             # not stop RPS/MACD technical data maintenance.
-            if step_name in {'build_industry_metric_snapshot', 'build_financial_health_peer_snapshot'}:
+            if step_name in {'build_industry_metric_snapshot', 'build_financial_health_peer_snapshot'} or step_name in NON_BLOCKING_FINANCIAL_SECTOR_TASKS:
                 continue
             raise DataUpdateStepError(
                 step_name,

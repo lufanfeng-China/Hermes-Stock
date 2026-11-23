@@ -27,6 +27,8 @@ SOURCES = {
     'build_stock_filter_turnover_percentile_snapshot': (FINAL + 'stock_filter_turnover_percentile_current.json', 'as_of_date'),
     'build_market_relative_strength': (FINAL + 'market_relative_strength_current.json', 'as_of_date'),
     'update_financial_ts': ('financial_ts/by_quarter', 'quarter_files'),
+    'update_financial_sector_external': ('financial_sector/update_status/current_summary.json', 'latest_announced_period'),
+    'build_financial_sector_health_snapshot': ('financial_sector/sector_health_snapshot.json', 'quarterly_newest_period'),
     'build_strict_financial_health_snapshot': (FINAL + 'strict_financial_health_snapshot_2025A__latest_quarter.json', 'quarterly_newest_period'),
     'build_financial_health_peer_snapshot': (FINAL + 'financial_health_peer_snapshot_current.json', 'quarterly_anchor'),
     'build_financial_snapshot': (FINAL, 'financial_snapshot_files'),
@@ -104,7 +106,7 @@ def _published_date(path: str, size: int, mtime_ns: int, field: str, fingerprint
             while chunk := source.read(1024 * 1024):
                 for match in pattern.finditer(chunk):
                     value = match.group(1).decode('utf-8', errors='replace')
-                    day = _period(value) if field in ('quarter_anchor', 'quarterly_anchor', 'quarterly_newest_period') else _iso(value)
+                    day = _period(value) if field in ('quarter_anchor', 'quarterly_anchor', 'quarterly_newest_period', 'latest_announced_period') else _iso(value)
                     if day and (newest is None or day > newest):
                         newest = day
                 # A scalar metadata field at the top is sufficient for objects.
@@ -125,7 +127,7 @@ def task_freshness(task_id: str, root: Path = ROOT) -> dict[str, str | None]:
     if not source:
         return {'data_date': None, 'label': label}
     relative, field = source
-    if field in ('quarter_anchor', 'quarterly_anchor', 'quarterly_newest_period', 'quarter_files', 'financial_snapshot_files'):
+    if field in ('quarter_anchor', 'quarterly_anchor', 'quarterly_newest_period', 'latest_announced_period', 'quarter_files', 'financial_snapshot_files'):
         label = '报告期截至'
     path = root / relative
     if field == 'unavailable':

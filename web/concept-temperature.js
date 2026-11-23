@@ -56,6 +56,30 @@
     return '<span' + (title ? ' title="' + esc(title) + '"' : '') + '>' + numberText(value, 1, '') + '</span>' +
       (basisLabel ? '<small class="member-return-basis">' + basisLabel + '</small>' : (period ? '<small class="member-return-basis">' + esc(period) + '</small>' : ''));
   }
+  function quarterlyScoreCell(row) {
+    var sectorModel = row.financial_model_code === 'bank' || row.financial_model_code === 'securities';
+    if (!sectorModel) return scoreCell(row.quarterly_total, row.quarterly_period);
+    var labels = {
+      up_to_date: '数据最新', queued: '等待更新', processing: '处理中', not_started: '尚未更新',
+      download_failed: '下载失败', parse_failed: '解析失败', validation_failed: '校验失败',
+      publish_failed: '发布失败', insufficient_evidence: '证据不足', failed: '更新失败'
+    };
+    var model = row.financial_model_label || (row.financial_model_code === 'bank' ? '银行模型' : '证券模型');
+    var announced = row.financial_latest_announced_period || row.quarterly_period || '最新报告';
+    var scored = row.financial_latest_scored_period || row.quarterly_period || '';
+    var stale = row.financial_using_previous_score === true || row.quarterly_total == null ||
+      (row.financial_latest_announced_period && scored && row.financial_latest_announced_period !== scored);
+    var status = labels[row.financial_update_status] || (stale ? '待更新' : '');
+    if (!stale) {
+      return '<span>' + numberText(row.quarterly_total, 1, '') + '</span>' +
+        '<small class="member-return-basis">' + esc([scored, model, status].filter(Boolean).join(' · ')) + '</small>';
+    }
+    var previous = row.financial_previous_quarterly_score == null ? '' :
+      '<small class="member-return-basis">上一可信 ' + numberText(row.financial_previous_quarterly_score, 1, '') +
+      ' · ' + esc(row.financial_previous_quarterly_period || '未知期间') + '</small>';
+    return '<span>—</span><small class="member-return-basis">' +
+      esc([announced, model, status || '待更新'].filter(Boolean).join(' · ')) + '</small>' + previous;
+  }
   function color(value) { return Number(value) >= 0 ? 'positive' : 'negative'; }
   function tempPill(row) {
     if (row.temperature == null) return '<span class="pill t2">数据不足</span>';
@@ -246,7 +270,7 @@
           '<td>' + horizonReturnCell(row, 1) + '</td><td>' + horizonReturnCell(row, 3) + '</td><td>' + horizonReturnCell(row, 5) + '</td>' +
           '<td>' + numberText(row.volume_ratio_5d_20d, 2, '') + '</td><td>' + numberText(row.mrs_score, 1, '') + '</td>' +
           '<td>' + numberText(row.turnover_percentile_1y, 1, '%') + '</td><td>' + numberText(row.pe_ttm, 2, '') + '</td>' +
-          '<td>' + scoreCell(row.annual_total, row.annual_period, row.annual_score_basis_track, row.annual_growth_quality_basis, row.annual_cash_quality_basis) + '</td><td>' + scoreCell(row.quarterly_total, row.quarterly_period) + '</td></tr>';
+          '<td>' + scoreCell(row.annual_total, row.annual_period, row.annual_score_basis_track, row.annual_growth_quality_basis, row.annual_cash_quality_basis) + '</td><td>' + quarterlyScoreCell(row) + '</td></tr>';
       }).join('');
     } catch (err) {
       memberMeta.textContent = '加载失败：' + err.message;

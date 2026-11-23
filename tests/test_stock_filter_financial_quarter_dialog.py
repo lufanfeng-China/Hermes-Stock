@@ -30,7 +30,8 @@ def test_result_rows_keep_quarter_health_static_and_annual_health_clickable():
     assert "if (historical) return healthCell(row.annual_total, row.annual_period);" in js
     assert "!asOfDate.value" in js
     assert "button.disabled = historical" in js
-    assert "healthCell(row.quarterly_total, row.quarterly_period)" in render_rows
+    assert "quarterlyHealthCell(row)" in render_rows
+    assert "return healthCell(row.quarterly_total, row.quarterly_period);" in js
     assert 'data-market="' in render_rows and 'data-symbol="' in render_rows
     assert "annualScoreBasisLabel(row.annual_score_basis_track)" in js
     assert "恢复型" in js and "恶化型" in js

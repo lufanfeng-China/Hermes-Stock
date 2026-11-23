@@ -95,6 +95,9 @@ def clear_runtime_data_caches() -> None:
 def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -> list[tuple[str, list[str]]]:
     if retry_failed:
         return [
+            ('update_financial_sector_external', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_sector_external.py')]),
+            ('build_financial_sector_health_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_sector_health_snapshot.py')]),
+            ('build_strict_financial_health_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_strict_financial_health_snapshot.py')]),
             ('build_industry_metric_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_industry_metric_snapshot.py')]),
             (
                 'build_industry_relative_valuation_snapshot',
@@ -133,7 +136,11 @@ def _data_update_commands(trading_day: str | None, retry_failed: bool = False) -
         ('build_stock_filter_market_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_stock_filter_market_snapshot.py')]),
         ('build_market_relative_strength', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_market_relative_strength.py')]),
         ('update_financial_ts', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_ts.py')]),
-        # 股票筛选页的当季健康直接读这份快照。它必须紧跟财报仓库更新重建，否则
+        # 银行/证券监管字段来自巨潮年报、季报和第三支柱报告；逐股隔离失败并持久化状态，
+        # 成功股票立即进入各股最新财报口径，失败股票保留上一可信结果并可单股重试。
+        ('update_financial_sector_external', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/update_financial_sector_external.py')]),
+        ('build_financial_sector_health_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_financial_sector_health_snapshot.py')]),
+        # 股票筛选页的当季健康直接读这份快照。它必须紧跟财报仓库和金融外部数据更新重建，否则
         # 新披露的季报永远进不了页面（曾经整整一季停在 2026Q2）。每只股票各自
         # 取最近一期已披露季报，季报缺失不影响是否入库。
         ('build_strict_financial_health_snapshot', [TONGDAXIN_PYTHON, str(PROJECT_ROOT / 'scripts/build_strict_financial_health_snapshot.py')]),

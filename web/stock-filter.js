@@ -304,6 +304,22 @@
     return '<span class="health">' + fixed(score) + '</span>' + (period ? '<span class="subvalue">' + esc(period) + '</span>' : '');
   }
 
+  function quarterlyHealthCell(row) {
+    var model = row.financial_model_code === 'bank' ? '银行模型' : row.financial_model_code === 'securities' ? '证券模型' : '';
+    var statusLabels = {up_to_date:'数据最新',queued:'等待更新',processing:'处理中',download_failed:'下载失败',parse_failed:'解析失败',validation_failed:'校验失败',publish_failed:'发布失败',failed:'更新失败',not_started:'尚未更新',insufficient_evidence:'证据不足'};
+    if (row.quarterly_total !== null && row.quarterly_total !== undefined) {
+      var details = [row.quarterly_period, model, statusLabels[row.financial_update_status]].filter(Boolean).join(' · ');
+      return '<span class="health">' + fixed(row.quarterly_total) + '</span>' + (details ? '<span class="subvalue">' + esc(details) + '</span>' : '');
+    }
+    if (row.financial_model_code === 'bank' || row.financial_model_code === 'securities') {
+      var announced = row.financial_latest_announced_period || row.quarterly_period || '最新报告';
+      var state = statusLabels[row.financial_update_status] || '待更新';
+      var previous = row.financial_previous_quarterly_score == null ? '' : '<span class="subvalue">上一可信 ' + fixed(row.financial_previous_quarterly_score) + ' · ' + esc(row.financial_previous_quarterly_period || '未知期间') + '</span>';
+      return '<span class="health">—</span><span class="subvalue">' + esc(announced + ' · ' + state + (model ? ' · ' + model : '')) + '</span>' + previous;
+    }
+    return healthCell(row.quarterly_total, row.quarterly_period);
+  }
+
   function annualScoreBasisLabel(track) {
     return ({ recovery_track: '恢复型', deteriorating_track: '恶化型', not_applicable: '不适用' })[track] || '';
   }
@@ -891,7 +907,7 @@
         '<td class="num">' + turnoverCell(row, data.data_as_of) + '</td>' +
         '<td>' + relativeStrengthCell(row) + '</td>' +
         '<td>' + annualHealthCell(row, data.is_historical) + '</td>' +
-        '<td>' + healthCell(row.quarterly_total, row.quarterly_period) + '</td>' +
+        '<td>' + quarterlyHealthCell(row) + '</td>' +
         '<td class="num">' + marketCapCell(row) + '</td>' +
         '<td class="swing-cell">' + swingCell(row, data.swing_snapshot || {as_of_date: data.data_as_of}, data.is_historical) + '</td>' +
       '</tr>';

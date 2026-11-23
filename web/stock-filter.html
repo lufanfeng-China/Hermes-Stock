@@ -335,10 +335,13 @@
           </div></fieldset>
           <fieldset class="filter-group is-collapsed" data-filter-group="financial"><legend><button class="filter-group-toggle" type="button" aria-expanded="false"><span>04</span>财务健康</button></legend>
             <div class="financial-section-title">标签条件</div><div class="range-grid"><label class="filter-field">细分龙头（Y/N）<select name="niche_leader"><option value="">不限</option><option value="yes">Y（是）</option><option value="no">N（否）</option></select></label></div>
-            <div class="financial-section-title">综合评分</div><div class="range-grid">
+            <div class="financial-section-title">综合评分</div><p class="filter-note">财务分数范围仅比较同一模型、同一报告期；综合分须同时限定年度期和季度期。普通工商单一模型、单一期间可自动沿用既有口径。</p><div class="range-grid">
+              <label class="filter-field">评分模型<select name="financial_model_code"><option value="">全部模型（不可用于总分范围）</option><option value="general">普通工商模型</option><option value="bank">银行模型</option><option value="securities">证券模型</option></select></label>
+              <label class="filter-field">年度报告期<input name="annual_period" type="text" inputmode="text" placeholder="例如 2025A"></label>
+              <label class="filter-field">季度报告期<input name="quarterly_period" type="text" inputmode="text" placeholder="例如 2026Q3 / 2026H1"></label>
               <label class="filter-field">综合分（5年 + 当季）<div class="range-pair"><input name="composite_total_min" type="number" min="0" max="100" step="0.1" placeholder="最小"><b>—</b><input name="composite_total_max" type="number" min="0" max="100" step="0.1" placeholder="最大"></div></label>
             </div>
-            <div class="financial-section-title">五年评分</div><div class="range-grid">
+            <div class="financial-section-title">五年评分</div><p class="filter-note">普通工商、银行、证券使用不同评分模型；分数阈值按各自模型解释，不作跨模型裸分排名。</p><div class="range-grid">
               <label class="filter-field">五年总分<div class="range-pair"><input name="annual_total_min" type="number" min="0" max="100" placeholder="最小"><b>—</b><input name="annual_total_max" type="number" min="0" max="100" placeholder="最大"></div></label>
               <label class="filter-field">核心增长质量（20）<div class="range-pair"><input name="annual_growth_quality_min" type="number" min="0" max="20" placeholder="最小"><b>—</b><input name="annual_growth_quality_max" type="number" min="0" max="20" placeholder="最大"></div></label>
               <label class="filter-field">盈利能力（20）<div class="range-pair"><input name="annual_profitability_min" type="number" min="0" max="20" placeholder="最小"><b>—</b><input name="annual_profitability_max" type="number" min="0" max="20" placeholder="最大"></div></label>
@@ -398,7 +401,7 @@
         </form>
       </aside>
       <section class="filter-results-panel" aria-labelledby="filter-results-title">
-        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><button class="dist-link" type="button" id="open-industry-distribution" disabled>行业分布</button><button class="watchlist-add-button" type="button" id="add-to-watchlist" disabled>加自选</button><span id="watchlist-selected-count" class="selected-count">已选 0 只</span><button class="dist-link" type="button" id="open-eps-distribution">板块股价收益比分布</button><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（降序）</option><option value="quarterly_total">当季总分（降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm" data-order="asc" selected>PE-TTM（升序）</option><option value="pe_percentile_5y" data-order="asc">PE五年分位（升序）</option><option value="price_percentile_5y" data-order="asc">股价5年分位（升序）</option><option value="turnover_percentile_1y">7日截尾均值换手分位（降序）</option><option value="eps_ratio_5y">股价收益比（降序）</option></select></div></div>
+        <div class="results-toolbar"><div class="result-heading"><h3 id="filter-results-title">筛选结果</h3><span>共 <strong id="match-count">—</strong> 只股票</span></div><div class="results-controls"><button class="dist-link" type="button" id="open-industry-distribution" disabled>行业分布</button><button class="watchlist-add-button" type="button" id="add-to-watchlist" disabled>加自选</button><span id="watchlist-selected-count" class="selected-count">已选 0 只</span><button class="dist-link" type="button" id="open-eps-distribution">板块股价收益比分布</button><label class="sort-label" for="sort">排序方式</label><select id="sort" class="sort-select" name="sort" form="filter-form"><option value="rps_total">RPS Total（降序）</option><option value="mrs_score">相对大盘强弱 MRS（降序）</option><option value="excess_return_20_pp">ER20（跑赢大盘，降序）</option><option value="annual_total">五年总分（按模型与报告期分组，组内降序）</option><option value="quarterly_total">当季总分（按模型与报告期分组，组内降序）</option><option value="price">现价（降序）</option><option value="total_market_cap">总市值（降序）</option><option value="pe_ttm" data-order="asc" selected>PE-TTM（升序）</option><option value="pe_percentile_5y" data-order="asc">PE五年分位（升序）</option><option value="price_percentile_5y" data-order="asc">股价5年分位（升序）</option><option value="turnover_percentile_1y">7日截尾均值换手分位（降序）</option><option value="eps_ratio_5y">股价收益比（降序）</option></select></div></div>
         <div id="status" class="filter-status">正在加载全市场筛选快照…</div>
         <p id="watchlist-feedback" class="watchlist-feedback" role="status" aria-live="polite"></p>
         <div class="result-wrap"><table class="filter-table"><thead><tr><th class="select-cell">选择</th><th>股票</th><th>行业</th><th class="num">现价</th><th>PE / PS（TTM）</th><th class="num">换手分位</th><th>相对大盘强弱</th><th>五年健康</th><th>当季健康</th><th class="num">总市值</th><th>波峰波谷结构</th></tr></thead><tbody id="results"></tbody></table></div>
@@ -456,7 +459,7 @@
   <script src="/price-trend-chart.js?v=20261111-a"></script>
   <script src="/stock-filter-history-capabilities.js?v=20261122-v3"></script>
   <script src="/quarterly-financial-chart.js?v=20261122-v1"></script>
-  <script src="/stock-filter.js?v=20261123-financial-recovery-v1"></script>
+  <script src="/stock-filter.js?v=20261123-sector-financial-v1"></script>
   <script src="/stock-filter-market-temperature.js?v=20261117-index-history-b"></script>
   <script src="/stock-filter-distribution.js?v=20261101"></script>
 <div class="filter-tip" id="filter-tip" role="tooltip" aria-hidden="true"></div></body>

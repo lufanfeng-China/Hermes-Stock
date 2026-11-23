@@ -820,6 +820,50 @@
     }).join('')}`;
   }
 
+  function sectorFinancialPresentation(payload) {
+    const model = payload?.financial_model || { code: 'general', label: '通用工商模型' };
+    const update = payload?.financial_update || {};
+    const health = payload?.health || {};
+    const monitor = payload?.quarterly_monitor || {};
+    const isSector = model.code === 'bank' || model.code === 'securities';
+    if (!isSector) return { isSector: false, hideGenericModules: false, model, update };
+    const statusLabels = {
+      up_to_date: '数据最新', queued: '等待更新', processing: '处理中', not_started: '尚未更新',
+      download_failed: '下载失败', parse_failed: '解析失败', validation_failed: '校验失败',
+      publish_failed: '发布失败', insufficient_evidence: '证据不足', failed: '更新失败'
+    };
+    const annualPeriod = health.periods?.at?.(-1) || '—';
+    const scoredPeriod = update.latest_scored_period || monitor.latest_period || null;
+    const announcedPeriod = update.latest_announced_period || monitor.latest_period || null;
+    const stale = update.using_previous_score === true ||
+      Boolean(announcedPeriod && scoredPeriod && announcedPeriod !== scoredPeriod) ||
+      monitor?.realtime_score?.score == null;
+    const currentQuarterlyScore = stale ? null : monitor?.realtime_score?.score ?? null;
+    const currentQuarterlyPeriod = stale ? announcedPeriod : scoredPeriod;
+    const previousQuarterlyScore = update.previous_quarterly_score ?? null;
+    const previousQuarterlyPeriod = update.previous_quarterly_period || null;
+    const status = statusLabels[update.status] || (stale ? '待更新' : '');
+    const contextParts = stale
+      ? [model.label, announcedPeriod ? `最新公告 ${announcedPeriod}` : '', status,
+         previousQuarterlyScore == null ? '' : `上一可信 ${Number(previousQuarterlyScore).toFixed(1)}（${previousQuarterlyPeriod || '未知期间'}）`]
+      : [model.label, `年度评分期 ${annualPeriod}`, `季度评分期 ${currentQuarterlyPeriod || '—'}`, status];
+    return {
+      isSector: true,
+      hideGenericModules: true,
+      model,
+      update,
+      annualPeriod,
+      currentQuarterlyScore,
+      currentQuarterlyPeriod,
+      previousQuarterlyScore,
+      previousQuarterlyPeriod,
+      statusLabel: status,
+      annualDimensions: health.dimensions || [],
+      quarterlyDimensions: monitor?.realtime_score?.breakdown || [],
+      contextText: contextParts.filter(Boolean).join('｜'),
+    };
+  }
+
   function compactQuarterPeriod(period) {
     const normalized = String(period || '').trim();
     if (!/^\d{4}Q[1-4]$/.test(normalized)) return '季度监测';
@@ -1252,7 +1296,11 @@
     const value = Number(composite?.score);
     score.innerHTML = Number.isFinite(value) ? `${value.toFixed(1)} <small>/ 100</small>` : '— <small>/ 100</small>';
     const mode = composite?.mode;
-    status.textContent = mode === 'blended'
+    status.textContent = mode === 'sector_blended'
+      ? `${labels[level]}｜行业专用年度与季度模型共同判断`
+      : mode === 'sector_annual_only'
+        ? `${labels[level]}｜季度监管证据不足，仅采用行业专用年度模型`
+        : mode === 'blended'
       ? `${labels[level]}｜长期基础与最新当季共同判断`
       : mode === 'annual_only'
         ? `${labels[level]}｜最新当季数据不足，未加入当季修正`
@@ -1260,7 +1308,11 @@
           ? `${labels[level]}｜成立期或非五年样本，仅展示当季监测分`
           : '数据不足｜暂不生成综合判断';
     const formatScore = (item) => Number.isFinite(Number(item)) ? Number(item).toFixed(1) : '—';
-    if (mode === 'blended') {
+    if (mode === 'sector_blended') {
+      detail.textContent = `专用年度模型 ${formatScore(composite.annual_score)} × ${(Number(composite.annual_weight) * 100).toFixed(0)}% + 专用季度模型 ${formatScore(composite.quarterly_score)} × ${(Number(composite.quarterly_weight) * 100).toFixed(0)}%。`;
+    } else if (mode === 'sector_annual_only') {
+      detail.textContent = `专用年度模型 ${formatScore(composite.annual_score)} × 100%｜最新季度监管证据未达到计分门槛。`;
+    } else if (mode === 'blended') {
       detail.textContent = `五年基础 ${formatScore(composite.annual_score)} × ${(Number(composite.annual_weight) * 100).toFixed(0)}% + 当季脉冲 ${formatScore(composite.quarterly_score)} × ${(Number(composite.quarterly_weight) * 100).toFixed(0)}%｜最新 ${composite.quarterly_period || '—'}｜当季覆盖 ${composite.quarterly_coverage_weight ?? '—'} / 100。`;
     } else if (mode === 'annual_only') {
       detail.textContent = `五年基础 ${formatScore(composite?.annual_score)} × 100%｜当季监测覆盖 ${composite?.quarterly_coverage_weight ?? '—'} / 100，未达合成门槛。`;
@@ -1315,11 +1367,30 @@
     svg.innerHTML=`${grid}<path d="${path}" fill="none" stroke="#62b8ff" stroke-width="3"/>${markerSvg}${ticks}`; meta.textContent=`原始价收盘趋势｜${rows[0].trading_day} 至 ${rows.at(-1).trading_day}｜标记为 T+1 开盘、区间最高/最低及当前价。`; dialog.showModal();
   }
 
-  function renderHealthComparisonTable(health, monitor) {
+  function renderHealthComparisonTable(health, monitor, financialModel, financialUpdate) {
     const target = document.getElementById('health-comparison-body');
-    if (!target) return;
-    state.healthComparison = { health, monitor };
+    const head = document.getElementById('health-comparison-head');
+    const context = document.getElementById('financial-model-context');
+    if (!target || !head) return;
+    const view = sectorFinancialPresentation({ financial_model: financialModel, financial_update: financialUpdate, health, quarterly_monitor: monitor });
+    state.healthComparison = { health, monitor, financialModel, financialUpdate, view };
     const unavailable = '<span class="comparison-unavailable">—</span>';
+    const number = (value) => value === null || value === undefined || !Number.isFinite(Number(value)) ? unavailable : Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1);
+    if (context) context.textContent = view.isSector ? view.contextText : '通用工商模型｜年度使用完整年报，季度使用最新可比披露期。';
+    if (view.isSector) {
+      const dimensionList = (items) => items.length ? `<div class="sector-dimension-list">${items.map((item) => {
+        const value = item.points ?? item.score;
+        const max = item.max_points ?? item.weight;
+        return `<span><strong>${escapeHtml(item.title || item.code)}</strong> ${number(value)}${max == null ? '' : ` / ${escapeHtml(max)}`}</span>`;
+      }).join('')}</div>` : unavailable;
+      const annualFlags = (health?.red_flags || []).length;
+      const quarterlyStatus = view.statusLabel || '状态未知';
+      head.innerHTML = '<tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th><th>专用模型维度／监管指标</th><th>风险／更新状态</th></tr>';
+      target.innerHTML = `<tr><td class="comparison-annual"><strong>${escapeHtml(`${view.model.label}｜年度 ${view.annualPeriod}`)}</strong></td><td>${number(health?.score)}</td><td>${number(health?.coverage_weight)}</td><td>${dimensionList(view.annualDimensions)}</td><td>${annualFlags ? `${annualFlags} 项红旗` : '未触发红旗'}</td></tr>` +
+        `<tr><td class="comparison-quarter"><strong>${escapeHtml(`${view.model.label}｜季度 ${view.currentQuarterlyPeriod || '待更新'}`)}</strong></td><td>${number(view.currentQuarterlyScore)}</td><td>${number(monitor?.realtime_score?.coverage_weight)}</td><td>${dimensionList(view.quarterlyDimensions)}</td><td>${escapeHtml(quarterlyStatus)}${view.previousQuarterlyScore == null ? '' : `<br><small>上一可信 ${number(view.previousQuarterlyScore)} · ${escapeHtml(view.previousQuarterlyPeriod || '未知期间')}</small>`}</td></tr>`;
+      return;
+    }
+    head.innerHTML = '<tr><th>监测口径</th><th>总分（100）</th><th>覆盖度（100）</th><th>核心增长质量（20）</th><th>盈利能力（20）</th><th>现金含金量（20）</th><th>营运资本（15）</th><th>再投资效率（10）</th><th>财务风险（15）</th><th>已触发红旗</th><th>待调查事项</th></tr>';
     const points = (item) => { const value = item?.points ?? item?.score; return item?.available === false || value === null || value === undefined || !Number.isFinite(Number(value))
       ? unavailable : Number(value).toFixed(Number.isInteger(Number(value)) ? 0 : 1); };
     const annualDimension = (code) => (health?.dimensions || []).find((item) => item.code === code);
@@ -1338,6 +1409,25 @@
       cells('comparison-annual', annualPeriod, 'annual', annualScore, health ? String(health.coverage_weight ?? 0) : unavailable, [annualDimension('growth_quality'), annualDimension('profitability'), annualDimension('cash_quality'), annualDimension('working_capital'), annualDimension('reinvestment'), annualDimension('financial_risk')].map((item) => scoreDetailButton('annual', item)), annualFlags, annualInvestigations),
       cells('comparison-quarter', quarterPeriod, 'quarterly', quarterlyScore, monitor?.realtime_score ? String(monitor.realtime_score.coverage_weight ?? 0) : unavailable, [quarterlyDimension('growth'), quarterlyDimension('profitability'), quarterlyDimension('cash'), quarterlyDimension('working_capital'), quarterlyDimension('reinvestment'), quarterlyDimension('financial_risk')].map((item) => scoreDetailButton('quarterly', item)), quarterlyAlerts, quarterlyInvestigations),
     ].join('');
+  }
+
+  function renderFinancialModelPresentation(payload) {
+    const view = sectorFinancialPresentation(payload || {});
+    const questionSection = document.getElementById('health-question-section');
+    const seriesSection = document.getElementById('health-series-section');
+    const latestTitle = document.getElementById('latest-report-change-title');
+    const latestPeriod = document.getElementById('latest-report-change-period');
+    const latestSummary = document.getElementById('latest-report-change-summary');
+    if (questionSection) questionSection.hidden = view.hideGenericModules;
+    if (seriesSection) seriesSection.hidden = view.hideGenericModules;
+    if (!view.isSector) {
+      if (latestTitle) latestTitle.textContent = '最新财报变化';
+      return view;
+    }
+    if (latestTitle) latestTitle.textContent = '监管财报更新状态';
+    if (latestPeriod) latestPeriod.textContent = view.currentQuarterlyPeriod || '待更新';
+    if (latestSummary) latestSummary.innerHTML = `<article class="latest-report-change-item stable"><strong>${escapeHtml(view.contextText)}</strong><p>最新有效期：${escapeHtml(view.update.latest_valid_period || '—')}；最新计分期：${escapeHtml(view.update.latest_scored_period || '—')}。</p>${view.previousQuarterlyScore == null ? '' : `<span class="latest-report-change-basis">上一可信 ${Number(view.previousQuarterlyScore).toFixed(1)} · ${escapeHtml(view.previousQuarterlyPeriod || '未知期间')}</span>`}</article>`;
+    return view;
   }
 
   function renderQuarterlyMonitor(monitor) {
@@ -1625,7 +1715,8 @@
     renderFinancialReversalBadge(null);
     state.reportReleasePriceTrend = null;
     renderReportReleasePricePerformance(null);
-    renderHealthComparisonTable(null, null);
+    renderHealthComparisonTable(null, null, null, null);
+    renderFinancialModelPresentation(null);
     renderValuationPerformanceLinkage(null, null, null);
     renderIndustryFinancialPosition(null);
     renderLatestReportChanges(null);
@@ -1681,11 +1772,14 @@
       state.reportReleasePriceTrend = payload.report_release_price_trend || null;
       renderReportReleasePricePerformance(payload.report_release_price_performance);
       renderValuationPerformanceLinkage(valuation, payload.health, payload.quarterly_monitor);
-      renderHealthComparisonTable(payload.health, payload.quarterly_monitor);
+      renderHealthComparisonTable(payload.health, payload.quarterly_monitor, payload.financial_model, payload.financial_update);
       renderIndustryFinancialPosition(payload.industry_financial_position);
-      renderLatestReportChanges(payload.quarterly_monitor);
-      renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report);
-      renderHealthQuestions(payload.health);
+      const financialView = renderFinancialModelPresentation(payload);
+      if (!financialView.isSector) {
+        renderLatestReportChanges(payload.quarterly_monitor);
+        renderHealthMetrics(payload.health, payload.quarterly_monitor, payload.latest_report);
+        renderHealthQuestions(payload.health);
+      }
       const annualPeriods = new Set(payload.health?.periods || []);
       const evidenceReports = payload.reports.filter((row) => String(row?.period || '').endsWith('A'));
       const healthEvidenceReports = annualPeriods.size ? evidenceReports.filter((row) => annualPeriods.has(String(row.period))) : evidenceReports;
@@ -1699,7 +1793,8 @@
     } catch (error) {
       if (financialRequestId !== state.financialRequestId) return;
       if (error.name === 'AbortError') return;
-      renderHealthComparisonTable(null, null);
+      renderHealthComparisonTable(null, null, null, null);
+      renderFinancialModelPresentation(null);
       renderLatestReportChanges(null);
       for (const id of chartIds) document.getElementById(id).textContent = `加载失败：${error.message}`;
     }

@@ -117,9 +117,14 @@ class FinancialReversalPresetTest(unittest.TestCase):
         self.assertEqual(result["reason"], "t_plus_one_open_unavailable")
 
     def test_composite_score_range_filters_api_rows(self):
-        high = self._row(symbol="000001", composite_total=80, annual_dimensions={}, quarterly_dimensions={})
-        low = self._row(symbol="000002", composite_total=40, annual_dimensions={}, quarterly_dimensions={})
+        periods = {"financial_model_code": "general", "annual_period": "2025A", "quarterly_period": "2026Q3"}
+        high = self._row(symbol="000001", composite_total=80, annual_dimensions={}, quarterly_dimensions={}, **periods)
+        low = self._row(symbol="000002", composite_total=40, annual_dimensions={}, quarterly_dimensions={}, **periods)
         with patch("app.stock_filter._universe", return_value=([high, low], "2026-10-15")):
-            response = filter_response({"composite_total_min": ["70"], "page": ["1"], "page_size": ["50"]})
+            response = filter_response({
+                "financial_model_code": ["general"], "annual_period": ["2025A"],
+                "quarterly_period": ["2026Q3"], "composite_total_min": ["70"],
+                "page": ["1"], "page_size": ["50"],
+            })
         self.assertTrue(response["ok"])
         self.assertEqual([row["symbol"] for row in response["rows"]], ["000001"])

@@ -22,6 +22,10 @@ MEMBER_METRIC_FIELDS = (
     'annual_total', 'annual_period', 'annual_score_basis_track',
     'annual_growth_quality_basis', 'annual_cash_quality_basis',
     'quarterly_total', 'quarterly_period',
+    'financial_model_code', 'financial_model_label', 'financial_update_status',
+    'financial_latest_announced_period', 'financial_latest_valid_period',
+    'financial_latest_scored_period', 'financial_using_previous_score',
+    'financial_previous_quarterly_period', 'financial_previous_quarterly_score',
 )
 
 

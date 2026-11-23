@@ -15,7 +15,7 @@ def test_long_builders_get_a_hour_and_everything_else_keeps_thirty_minutes():
     assert _task_timeout("build_industry_temperature") == 3600
     assert _task_timeout("refresh_rps_daily") == 1800
     assert _task_timeout("build_stock_filter_fundamental_history") == 7200
-    assert set(LONG_TASK_TIMEOUTS) == {"build_stock_filter_fundamental_history", "build_wyckoff_snapshot", "build_swing_snapshot", "build_swing_state_runs", "build_concept_temperature", "build_industry_temperature"}
+    assert set(LONG_TASK_TIMEOUTS) == {"build_stock_filter_fundamental_history", "build_wyckoff_snapshot", "build_swing_snapshot", "build_swing_state_runs", "build_concept_temperature", "build_industry_temperature", "update_financial_sector_external"}
 
 
 def test_runner_uses_the_per_task_timeout_for_both_subprocess_paths():

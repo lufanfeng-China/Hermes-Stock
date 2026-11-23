@@ -685,14 +685,49 @@
     wyckoffToggle.textContent = showAllEvents ? `收起历史事件（共 ${count} 条）` : `查看全部历史事件（共 ${count} 条，默认显示最新 3 条）`;
     wyckoffToggle.setAttribute('aria-expanded', String(showAllEvents));
   }
+  function sectorFinancialPreview(payload) {
+    const model = payload?.financial_model || {};
+    const update = payload?.financial_update || {};
+    const isSector = model.code === 'bank' || model.code === 'securities';
+    if (!isSector) return null;
+    const annualPeriod = payload.health?.periods?.at?.(-1) || '—';
+    const quarterlyPeriod = update.latest_announced_period || (payload.quarterly_monitor && payload.quarterly_monitor.latest_period) || '—';
+    const stale = update.using_previous_score === true ||
+      Boolean(update.latest_announced_period && update.latest_scored_period && update.latest_announced_period !== update.latest_scored_period) ||
+      payload.quarterly_monitor?.realtime_score?.score == null;
+    const status = { up_to_date:'数据最新', queued:'等待更新', processing:'处理中', parse_failed:'解析失败',
+      download_failed:'下载失败', validation_failed:'校验失败', publish_failed:'发布失败',
+      insufficient_evidence:'证据不足', not_started:'尚未更新', failed:'更新失败' }[update.status] || (stale ? '待更新' : '');
+    const previous = update.previous_quarterly_score == null ? '' :
+      `｜上一可信 ${Number(update.previous_quarterly_score).toFixed(1)}（${update.previous_quarterly_period || '未知期间'}）`;
+    const compositeMode = payload.composite_financial_health?.mode;
+    return {
+      modelLabel: model.label || (model.code === 'bank' ? '银行模型' : '证券模型'),
+      annualPeriod,
+      quarterlyPeriod,
+      stale,
+      status,
+      previous,
+      annualScore: payload.health?.score ?? null,
+      currentQuarterlyScore: stale ? null : payload.quarterly_monitor?.realtime_score?.score ?? null,
+      sectorComposite: compositeMode === 'sector_blended' || compositeMode === 'sector_annual_only',
+    };
+  }
+
   function renderSummary() {
     pendingSummary = false;
     const basicGrid = byId('basic-market-grid');
     const relativeGrid = byId('market-relative-strength-grid');
-    const annual = scoreRow(0), quarter = scoreRow(1);
+    const sectorPreview = sectorFinancialPreview(overviewFinancialPayload);
+    const annual = sectorPreview
+      ? { label: sectorPreview.annualPeriod, value: sectorPreview.annualScore != null && Number.isFinite(Number(sectorPreview.annualScore)) ? String(sectorPreview.annualScore) : '—' }
+      : scoreRow(0);
+    const quarter = sectorPreview
+      ? { label: sectorPreview.quarterlyPeriod, value: sectorPreview.currentQuarterlyScore != null && Number.isFinite(Number(sectorPreview.currentQuarterlyScore)) ? String(sectorPreview.currentQuarterlyScore) : '—' }
+      : scoreRow(1);
     const compositeRaw = byId('financial-health-composite-score')?.textContent.trim() || '—';
     const compositeStatus = byId('financial-health-composite-status')?.textContent.trim() || '数据不足';
-    const composite = /数据不足|暂不生成/.test(compositeStatus) ? '—' : compositeRaw;
+    const composite = sectorPreview?.sectorComposite || !/数据不足|暂不生成/.test(compositeStatus) ? compositeRaw : '—';
     const score = Number.parseFloat(composite);
     const scored = composite !== '—' && Number.isFinite(score) && score >= 0 && score <= 100;
     byId('preview-gauge-value').textContent = scored ? String(score) : '—';
@@ -707,9 +742,11 @@
       dot.setAttribute('cy', point.y);
     }
     const annualAsOf = byId('basic-market-period')?.textContent.match(/20\d{2}A/)?.[0];
-    byId('preview-financial-period').textContent = `年报：${annual.value === '—' ? '评分不可用' : (annualAsOf || annual.label)} ｜ 季度：${quarter.value === '—' ? '评分不可用' : quarter.label}`;
+    byId('preview-financial-period').textContent = sectorPreview
+      ? `${sectorPreview.modelLabel}｜年报 ${sectorPreview.annualPeriod}｜季度 ${sectorPreview.quarterlyPeriod} ${sectorPreview.status}${sectorPreview.previous}`
+      : `年报：${annual.value === '—' ? '评分不可用' : (annualAsOf || annual.label)} ｜ 季度：${quarter.value === '—' ? '评分不可用' : quarter.label}`;
     const annualData = overviewFinancialPayload?.health;
-    const annualScoreBasisLabel = ({
+    const annualScoreBasisLabel = sectorPreview?.modelLabel || ({
       recovery_track: '恢复型',
       deteriorating_track: '恶化型',
       not_applicable: '不适用',
@@ -731,7 +768,7 @@
     const annualTone = annual.value === '—' ? '' : ({ green: 'strong', yellow: 'watch', red: 'risk' }[annualData?.status] || '');
     setCards(byId('preview-financial-summary'), [
       summaryCard('年报评分', annual.value, annualScoreBasisLabel, 'financial', annualTone, 'annual'),
-      summaryCard('季度评分', quarter.value, null, 'financial', '', 'quarter'),
+      summaryCard('季度评分', quarter.value, sectorPreview ? `${sectorPreview.quarterlyPeriod} ${sectorPreview.status}${sectorPreview.previous}` : null, 'financial', '', 'quarter'),
       summaryCard('营收复合', financialMetric(annualDerived?.revenue_cagr), null, 'financial', negativeFinancialTone(annualDerived?.revenue_cagr), 'revenue'),
       summaryCard('扣归复合', financialMetric(annualDerived?.ex_net_profit_cagr), null, 'financial', negativeFinancialTone(annualDerived?.ex_net_profit_cagr), 'exProfit'),
       summaryCard('扣非ROE TTM', financialMetric(roeReport?.metrics?.roe_ex), null, 'financial', negativeFinancialTone(roeReport?.metrics?.roe_ex), 'roe'),

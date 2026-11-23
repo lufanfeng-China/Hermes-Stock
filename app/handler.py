@@ -29,6 +29,7 @@ from app.tdx.percentile import compute_stock_price_percentile
 from app.relative_valuation.daily_pe_percentile import load_stock_daily_pe_percentile
 from app.financial.reports import load_recent_three_year_financial_reports
 from app.financial.ai_report import generate_stock_ai_report, generate_sub_indicator_ai_explanation
+from app.financial.sector_external_update import FinancialSectorStatusStore
 from app.pipeline.state import (
     DATA_UPDATE_LOCK, DATA_UPDATE_JOB_STATE, _data_update_job_snapshot,
     _update_data_update_job_state, _append_data_update_job_output,
@@ -39,6 +40,43 @@ from app.pipeline.task_freshness import task_freshness
 from app.pipeline.task_eta import load_duration_history, task_estimates
 from app.pipeline.runner import start_data_update_job, start_data_update_task, run_full_data_update
 from app.industry.templates import _industry_template_tags, _build_industry_valuation_percentile_payload
+
+
+FINANCIAL_SECTOR_STATUS_DIR = PROJECT_ROOT / "data" / "derived" / "financial_sector" / "update_status"
+
+
+def financial_sector_expected_symbols() -> list[str]:
+    return sorted(financial_sector_expected_stock_metadata())
+
+
+def financial_sector_expected_stock_metadata() -> dict[str, dict[str, str]]:
+    from app.stock_filter import _universe
+
+    rows, _ = _universe()
+    result: dict[str, dict[str, str]] = {}
+    for row in rows:
+        industry = str(row.get("industry_level_2_name") or row.get("industry") or "")
+        if industry in {"地方性银行", "全国性银行"}:
+            sector = "bank"
+        elif industry == "证券":
+            sector = "securities"
+        else:
+            continue
+        symbol = str(row.get("symbol") or "")
+        if symbol.isdigit():
+            result[symbol] = {
+                "symbol": symbol,
+                "name": str(row.get("stock_name") or symbol),
+                "market": str(row.get("market") or ""),
+                "sector_model": sector,
+            }
+    return result
+
+
+def start_financial_sector_symbol_retry(symbol: str, *, report_period: str = "", source_type: str = "") -> dict[str, object]:
+    from app.financial.sector_external_runtime import start_symbol_retry
+
+    return start_symbol_retry(symbol, report_period=report_period, source_type=source_type)
 
 # Bottleneck discovery module
 from app.bottleneck import (
@@ -555,6 +593,8 @@ DATA_UPDATE_TASK_PLAN: list[dict[str, str]] = [
             {'id': 'build_stock_filter_market_snapshot', 'name': '构建股票筛选行情快照', 'desc': '将前复权日线预计算为每股收益、换手率、量价信号与周/月趋势，避免筛选页启动时重算全量日线'},
             {'id': 'build_market_relative_strength', 'name': '重建相对大盘强弱（MRS）', 'desc': '全A每日等权基准，按 4:3:2:1 加权 20/40/60/120 日相对强弱与抗跌度；此前只在命令表执行、计划页缺失，现补齐为可见可单独重试'},
             {'id': 'update_financial_ts', 'name': '更新财报时序库', 'desc': '检测通达信本地财报更新，增量追加到 Parquet 仓库'},
+            {'id': 'update_financial_sector_external', 'name': '更新银行/证券外部财报字段', 'desc': '逐股发现巨潮年报、季报和第三支柱报告，提取监管字段并保存90只股票状态；单股失败不阻断其他股票，可在明细中独立重试'},
+            {'id': 'build_financial_sector_health_snapshot', 'name': '构建银行/证券专用健康快照', 'desc': '合并五年通达信财报与已验证监管证据，生成银行/证券独立年度分和每股最新季报分；证据不足不出分'},
             {'id': 'build_strict_financial_health_snapshot', 'name': '重建股票筛选季报快照', 'desc': '每只股票取自己最近一期已披露季报（三季报优先，缺失则往前找），供当季健康展示与筛选'}, {'id': 'build_financial_health_peer_snapshot', 'name': '增量更新行业财务健康度快照', 'desc': '只重算本次新增或修订财报涉及的股票；失败可独立重试且不阻断技术数据更新'},
             {'id': 'build_financial_snapshot', 'name': '构建财务快照', 'desc': '基于最新财报生成全市场六维评分快照'},
             {'id': 'build_industry_metric_snapshot', 'name': '构建行业财务指标同业快照', 'desc': '发布二级行业同业指标分区快照；失败不阻断 RPS/MACD 技术数据更新'},
@@ -703,6 +743,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/data-update-plan":
             self.handle_data_update_plan()
             return
+        if parsed.path == "/api/financial-sector-update-status":
+            self.handle_financial_sector_update_status(parsed.query)
+            return
         if parsed.path == "/api/technical-eval":
             self.handle_technical_eval(parsed.query)
             return
@@ -810,6 +853,9 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/data-update-task":
             self.handle_data_update_task()
+            return
+        if parsed.path == "/api/financial-sector-update-retry":
+            self.handle_financial_sector_update_retry()
             return
         # ── End Bottleneck ──
         if parsed.path == "/api/save-capital-flow":
@@ -2522,6 +2568,65 @@ class StockDashboardHandler(BaseHTTPRequestHandler):
             },
             'tasks': tasks,
         })
+
+    def handle_financial_sector_update_status(self, query: str) -> None:
+        params = parse_qs(query)
+        sector = str(params.get("sector", [""])[0]).strip()
+        status_filter = str(params.get("status", [""])[0]).strip()
+        keyword = str(params.get("query", [""])[0]).strip().lower()
+        expected = financial_sector_expected_symbols()
+        metadata = financial_sector_expected_stock_metadata()
+        store = FinancialSectorStatusStore(FINANCIAL_SECTOR_STATUS_DIR)
+        summary = store.build_summary(expected)
+        stocks: list[dict[str, object]] = []
+        for symbol in expected:
+            record = {**metadata.get(symbol, {}), **store.load_symbol_status(symbol)}
+            if not record:
+                record = {"symbol": symbol, "status": "pending", "latest_announced_period": None,
+                          "latest_valid_period": None, "latest_scored_period": None}
+            else:
+                record.setdefault("symbol", symbol)
+                record.setdefault("status", "pending")
+            if sector and record.get("sector_model") != sector:
+                continue
+            if status_filter and record.get("status") != status_filter:
+                continue
+            if keyword and keyword not in symbol.lower() and keyword not in str(record.get("name") or "").lower():
+                continue
+            stocks.append(record)
+        stocks.sort(key=lambda item: str(item.get("symbol") or ""))
+        self.respond_json(HTTPStatus.OK, {"ok": True, "summary": summary, "stocks": stocks})
+
+    def handle_financial_sector_update_retry(self) -> None:
+        if not _is_allowed_local_origin(self.headers.get('Origin'), self.headers.get('Referer')):
+            self.respond_json(HTTPStatus.FORBIDDEN, {"ok": False, "error": {
+                "code": "forbidden_origin", "message": "仅允许本地页面触发金融行业单股重试"}})
+            return
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length) or b'{}')
+        except (ValueError, json.JSONDecodeError):
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {
+                "code": "invalid_json", "message": "请求JSON不合法"}})
+            return
+        symbol = str(body.get("symbol") or "").strip()
+        report_period = str(body.get("report_period") or "").strip()
+        source_type = str(body.get("source_type") or "").strip()
+        if not re.fullmatch(r"\d{6}", symbol):
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {
+                "code": "invalid_symbol", "message": "symbol必须为六位股票代码"}})
+            return
+        if report_period and not re.fullmatch(r"20\d{2}(?:Q[1-3]|H1|A)", report_period):
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {
+                "code": "invalid_period", "message": "report_period不合法"}})
+            return
+        allowed_sources = {"", "annual_report", "quarterly_report", "half_year_report", "pillar3_report"}
+        if source_type not in allowed_sources:
+            self.respond_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": {
+                "code": "invalid_source_type", "message": "source_type不合法"}})
+            return
+        payload = start_financial_sector_symbol_retry(symbol, report_period=report_period, source_type=source_type)
+        self.respond_json(HTTPStatus.OK if payload.get("ok") else HTTPStatus.CONFLICT, payload)
 
     def handle_data_update_run(self) -> None:
         self._handle_data_update_start(retry_failed=False)

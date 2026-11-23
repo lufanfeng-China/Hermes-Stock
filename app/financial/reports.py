@@ -4,11 +4,124 @@ import json
 import re
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 
 from app.financial.health import build_financial_health
 from app.financial.quarterly_monitor import build_quarterly_financial_monitor
 from app.financial.industry_position import build_industry_financial_position
 from app.financial.composite_health import build_composite_financial_health
+
+
+SECTOR_HEALTH_PATH = Path(__file__).resolve().parents[2] / "data" / "derived" / "financial_sector" / "sector_health_snapshot.json"
+SECTOR_DIMENSION_LABELS = {
+    "asset_quality": "资产质量", "capital_adequacy": "资本充足", "profitability_efficiency": "盈利与效率",
+    "liquidity_funding": "流动性与负债稳定", "earnings_stability": "收入与利润稳定", "risk_buffer": "风险抵补",
+    "capital_and_risk_coverage": "净资本与风险覆盖", "income_structure": "收入结构与稳定",
+    "market_risk": "自营与市场风险", "leverage_liquidity": "杠杆与流动性", "credit_impairment": "信用与减值风险",
+    "npl_ratio": "不良贷款率", "provision_coverage_ratio": "拨备覆盖率",
+    "cet1_ratio": "核心一级资本充足率", "tier1_ratio": "一级资本充足率",
+    "capital_adequacy_ratio": "资本充足率", "net_interest_margin": "净利息收益率",
+    "cost_income_ratio": "成本收入比", "liquidity_coverage_ratio": "流动性覆盖率",
+    "net_stable_funding_ratio": "净稳定资金率", "risk_coverage_ratio": "风险覆盖率",
+    "capital_leverage_ratio": "资本杠杆率", "net_capital_ratio": "净资本／净资产",
+    "net_capital_to_net_assets_pct": "净资本／净资产",
+    "margin_credit_risk": "融资融券与信用减值风险",
+    "margin_financing_risk": "融资融券与信用减值风险",
+}
+
+
+@lru_cache(maxsize=4)
+def _read_sector_health_snapshot(path: str, mtime_ns: int, size: int) -> dict[str, object]:
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) and payload.get("schema_version") == "financial-sector-health-v1" else {}
+
+
+def _sector_health_record(symbol: str) -> dict[str, object] | None:
+    try:
+        stat = SECTOR_HEALTH_PATH.stat()
+    except OSError:
+        return None
+    payload = _read_sector_health_snapshot(str(SECTOR_HEALTH_PATH), stat.st_mtime_ns, stat.st_size)
+    stocks = payload.get("stocks")
+    record = stocks.get(symbol) if isinstance(stocks, dict) else None
+    return record if isinstance(record, dict) else None
+
+
+def _sector_health_api(record: dict[str, object]) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+    annual = record.get("annual_score") if isinstance(record.get("annual_score"), dict) else {}
+    quarterly = record.get("quarterly_score") if isinstance(record.get("quarterly_score"), dict) else {}
+    dimensions = annual.get("dimensions") if isinstance(annual.get("dimensions"), dict) else {}
+    annual_dimension_rows = [
+        {
+            "code": str(code), "title": SECTOR_DIMENSION_LABELS.get(str(code), str(code)),
+            "score": item.get("score"), "points": item.get("score"), "available": item.get("status") == "available",
+            "status": "stable" if item.get("status") == "available" else "insufficient",
+            "reason": None if item.get("status") == "available" else "核心监管证据不足",
+        }
+        for code, item in dimensions.items() if isinstance(item, dict)
+    ]
+    parts = quarterly.get("parts") if isinstance(quarterly.get("parts"), dict) else {}
+    quarterly_breakdown = [
+        {
+            "code": str(code), "title": SECTOR_DIMENSION_LABELS.get(str(code), str(code)),
+            "points": item.get("score"), "max_points": item.get("weight"),
+        }
+        for code, item in parts.items() if isinstance(item, dict)
+    ]
+    health = {
+        "status": annual.get("status"),
+        "assessment_track": "five_year",
+        "score_basis_track": f"{record.get('sector_model')}_sector_model",
+        "score_comparable": annual.get("score") is not None,
+        "score_comparability": annual.get("score_comparability"),
+        "score": annual.get("score"),
+        "coverage_weight": annual.get("coverage_weight"),
+        "score_version": annual.get("score_version"),
+        "periods": ["2021A", "2022A", "2023A", "2024A", "2025A"],
+        "dimensions": annual_dimension_rows,
+        "score_breakdown": annual_dimension_rows,
+        "derived": record.get("annual_inputs") or {},
+        "series": {},
+        "red_flags": annual.get("red_flags") or [],
+        "reason": None if annual.get("score") is not None else "sector_annual_score_unavailable",
+    }
+    quarterly_monitor = {
+        "status": "available" if quarterly.get("score") is not None else "insufficient_evidence",
+        "latest_period": quarterly.get("report_period"),
+        "dimensions": [],
+        "alerts": [],
+        "realtime_score": {
+            "score": quarterly.get("score"),
+            "coverage_weight": quarterly.get("coverage_weight"),
+            "status": quarterly.get("status"),
+            "score_version": quarterly.get("score_version"),
+            "breakdown": quarterly_breakdown,
+            "reason": None if quarterly.get("score") is not None else "sector_quarterly_score_unavailable",
+        },
+        "reason": None if quarterly.get("score") is not None else "sector_quarterly_score_unavailable",
+    }
+    annual_score = annual.get("score")
+    quarterly_score = quarterly.get("score")
+    composite_score = None
+    mode = "unavailable"
+    if isinstance(annual_score, (int, float)) and isinstance(quarterly_score, (int, float)):
+        composite_score = round(float(annual_score) * 0.7 + float(quarterly_score) * 0.3, 1)
+        mode = "sector_blended"
+    elif isinstance(annual_score, (int, float)):
+        composite_score, mode = float(annual_score), "sector_annual_only"
+    composite = {
+        "version": "sector-composite-health-v1", "mode": mode, "score": composite_score,
+        "annual_score": annual_score, "quarterly_score": quarterly_score,
+        "annual_weight": 0.7 if mode == "sector_blended" else 1.0 if annual_score is not None else 0.0,
+        "quarterly_weight": 0.3 if mode == "sector_blended" else 0.0,
+        "score_status": "excellent" if composite_score is not None and composite_score >= 80 else "stable" if composite_score is not None and composite_score >= 65 else "watch" if composite_score is not None else "unavailable",
+        "display_status": "excellent" if composite_score is not None and composite_score >= 80 else "stable" if composite_score is not None and composite_score >= 65 else "watch" if composite_score is not None else "unavailable",
+        "risk_overlay": {"status": "watch" if annual.get("red_flags") else "none", "annual_red_flag_count": len(annual.get("red_flags") or []), "quarterly_alert_count": 0},
+    }
+    return health, quarterly_monitor, composite
 
 
 def _normalize_industry_market(value: object) -> str:
@@ -358,22 +471,31 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "level_1": str(industry_row.get("industry_level_1_name") or "").strip() or None,
         "level_2": str(industry_row.get("industry_level_2_name") or "").strip() or None,
     }
-    health = build_financial_health(
-        reports,
-        industry_level_1=industry["level_1"],
-        industry_level_2=industry["level_2"],
-    )
-
-    quarterly_monitor = build_quarterly_financial_monitor(
-        reports,
-        industry_level_1=industry["level_1"],
-    )
-    composite_financial_health = build_composite_financial_health(health, quarterly_monitor)
-    financial_reversal = build_financial_reversal_indicator(health, quarterly_monitor)
+    sector_record = _sector_health_record(symbol)
+    if sector_record is not None:
+        health, quarterly_monitor, composite_financial_health = _sector_health_api(sector_record)
+        financial_reversal = {
+            "status": "not_applicable", "reason": "sector_model_uses_regulatory_quarterly_monitor"
+        }
+        industry_position = {
+            "status": "unavailable", "reason": "sector_peer_ranking_requires_same_model_and_period"
+        }
+    else:
+        health = build_financial_health(
+            reports,
+            industry_level_1=industry["level_1"],
+            industry_level_2=industry["level_2"],
+        )
+        quarterly_monitor = build_quarterly_financial_monitor(
+            reports,
+            industry_level_1=industry["level_1"],
+        )
+        composite_financial_health = build_composite_financial_health(health, quarterly_monitor)
+        financial_reversal = build_financial_reversal_indicator(health, quarterly_monitor)
+        industry_position = build_industry_financial_position(market, symbol, search_index._load_financial_snapshot() or {})
     report_release_price = build_latest_report_release_price_performance(search_index, market, symbol, latest_report)
     report_release_price_performance = report_release_price["performance"]
     report_release_price_trend = report_release_price["trend"]
-    industry_position = build_industry_financial_position(market, symbol, search_index._load_financial_snapshot() or {})
 
     return {
         "ok": True,
@@ -384,6 +506,20 @@ def load_recent_three_year_financial_reports(market: str, symbol: str, years: in
         "latest_period_label": latest_period_label,
         "reports": reports,
         "industry": industry,
+        "financial_model": (sector_record.get("financial_model") if sector_record else {"code": "general", "label": "通用工商模型"}),
+        "financial_update": ({
+            "status": sector_record.get("update_status"),
+            "latest_announced_period": sector_record.get("latest_announced_period"),
+            "latest_valid_period": sector_record.get("latest_valid_period"),
+            "latest_scored_period": sector_record.get("latest_scored_period"),
+            "using_previous_score": bool(
+                sector_record.get("latest_announced_period") and sector_record.get("latest_scored_period")
+                and sector_record.get("latest_announced_period") != sector_record.get("latest_scored_period")
+            ),
+            "previous_quarterly_period": sector_record.get("previous_quarterly_period"),
+            "previous_quarterly_score": sector_record.get("previous_quarterly_score"),
+            "error": sector_record.get("last_error"),
+        } if sector_record else None),
         "health": health,
         "quarterly_monitor": quarterly_monitor,
         "composite_financial_health": composite_financial_health,

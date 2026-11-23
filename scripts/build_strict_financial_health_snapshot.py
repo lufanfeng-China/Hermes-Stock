@@ -25,11 +25,12 @@ if str(ROOT) not in sys.path:
 from app.financial.industry_metric_snapshot import SUPPORTED_METRICS, build_metric_cells
 from app.financial.reports import _materialize_financial_report, _load_raw_daily_bars, build_report_release_price_performance
 from app.search import index as search_index
-from app.stock_filter_snapshot import build_strict_financial_record
+from app.stock_filter_snapshot import build_sector_strict_financial_record, build_strict_financial_record
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE = ROOT / "data" / "derived" / "financial_ts" / "by_quarter"
 OUT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__latest_quarter.json"
+SECTOR_HEALTH = ROOT / "data" / "derived" / "financial_sector" / "sector_health_snapshot.json"
 LEGACY_OUT = ROOT / "data" / "derived" / "datasets" / "final" / "strict_financial_health_snapshot_2025A__2026Q2.json"
 # Quarterly frames are deliberately consecutive: each one needs its own year-ago
 # frame for the same-basis year-on-year comparison (2026Q3 vs 2025Q3, 2026Q2 vs
@@ -107,8 +108,24 @@ def _report(period: str, row: pd.Series) -> dict:
     })
 
 
+def _load_sector_health_snapshot() -> dict[str, dict]:
+    if not SECTOR_HEALTH.exists():
+        return {}
+    try:
+        payload = json.loads(SECTOR_HEALTH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    stocks = payload.get("stocks")
+    if payload.get("schema_version") != "financial-sector-health-v1" or not isinstance(stocks, dict):
+        return {}
+    return {str(symbol).zfill(6): record for symbol, record in stocks.items() if isinstance(record, dict)}
+
+
 def build_snapshot() -> dict:
     frames, industries = _read_periods(), _industry_map()
+    sector_health = _load_sector_health_snapshot()
     # Membership only requires the five annual frames: a stock that skipped an
     # earlier quarter still belongs in the pool, its quarterly track just starts
     # from the newest period it actually filed.
@@ -122,10 +139,16 @@ def build_snapshot() -> dict:
         reports = [_report(period, frames[period].loc[symbol])
                    for period in PERIODS if symbol in frames[period].index]
         industry_l1, industry_l2 = industries.get((market, symbol), (None, None))
-        record = build_strict_financial_record(
-            reports, industry_level_1=industry_l1, annual_anchor="2025A",
-            quarterly_anchor=QUARTERLY_PERIODS[-1],
-        )
+        sector_source = sector_health.get(symbol)
+        if sector_source is not None:
+            record = build_sector_strict_financial_record(
+                sector_source, annual_anchor="2025A", quarterly_anchor=QUARTERLY_PERIODS[-1],
+            )
+        else:
+            record = build_strict_financial_record(
+                reports, industry_level_1=industry_l1, annual_anchor="2025A",
+                quarterly_anchor=QUARTERLY_PERIODS[-1],
+            )
         # Persist raw, period-labelled peer cells once at snapshot build time.  The
         # click-path API will only map industry members and read these cells.
         record["peer_metrics"] = {metric: build_metric_cells(reports, metric) for metric in sorted(SUPPORTED_METRICS)}
@@ -143,12 +166,17 @@ def build_snapshot() -> dict:
         period = ((record.get("quarterly") or {}).get("period")
                   or (record.get("quarterly") or {}).get("anchor_period") or "unavailable")
         periods_used[period] = periods_used.get(period, 0) + 1
+    model_counts: dict[str, int] = {}
+    for record in stocks.values():
+        model_code = str(((record.get("financial_model") or {}).get("code") or "general"))
+        model_counts[model_code] = model_counts.get(model_code, 0) + 1
     return {
-        "schema_version": "stock-filter-strict-financial-v3-recovery-track",
+        "schema_version": "stock-filter-strict-financial-v4-sector-models",
         "annual_anchor": "2025A",
         "quarterly_mode": "per_stock_latest",
         "quarterly_newest_period": QUARTERLY_PERIODS[-1],
         "quarterly_periods_used": dict(sorted(periods_used.items())),
+        "financial_model_counts": dict(sorted(model_counts.items())),
         "periods_loaded": list(PERIODS),
         "stocks": stocks,
     }

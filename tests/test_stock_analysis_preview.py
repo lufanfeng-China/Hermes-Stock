@@ -258,7 +258,24 @@ def test_market_header_replaces_evidence_strip_with_industry_and_concept_actions
     assert 'temperature_previous' in script and 'temperature_change' in script
     assert 'temperature_trend_label' in script
     assert 'stock-concept-temperature-table' in script
-    assert 'stock-analysis-preview.js?v=20261123-financial-recovery-v1' in html
+    assert 'stock-analysis-preview.js?v=20261123-sector-financial-v3' in html
+
+
+def test_sector_financial_preview_uses_api_model_periods_and_previous_trusted_score():
+    script = (WEB / 'stock-analysis-preview.js').read_text(encoding='utf-8')
+    assert 'function sectorFinancialPreview(payload)' in script
+    for token in (
+        'financial_model', 'financial_update', 'latest_announced_period', 'latest_scored_period',
+        'previous_quarterly_score', 'previous_quarterly_period', 'quarterly_monitor.latest_period',
+    ):
+        assert token in script
+    assert '上一可信' in script
+    assert 'sector_blended' in script
+    assert 'sector_annual_only' in script
+    assert 'annualScore: payload.health?.score ?? null' in script
+    assert 'currentQuarterlyScore: stale ? null : payload.quarterly_monitor?.realtime_score?.score ?? null' in script
+    assert 'const annual = sectorPreview' in script
+    assert 'sectorPreview.currentQuarterlyScore != null' in script
 
 
 def test_valuation_summary_has_auditable_price_and_turnover_percentiles():
